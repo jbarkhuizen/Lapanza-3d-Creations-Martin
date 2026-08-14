@@ -82,6 +82,8 @@ export function getDb() {
     const catalogJsonPath = path.join(root, 'data', 'catalog.json');
     import('./migrate-json.js').then(({ migrateFromCatalogJson }) => {
       migrateFromCatalogJson(db, catalogJsonPath);
+    }).catch(() => {
+      // migrate-json.js not available yet, will be implemented in later task
     });
   }
   return db;

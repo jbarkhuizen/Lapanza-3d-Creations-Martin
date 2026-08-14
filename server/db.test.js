@@ -1,6 +1,9 @@
 ﻿import { test } from 'node:test';
 import assert from 'node:assert';
-import { openDb, ensureSchema } from './db.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { openDb, ensureSchema, getDb, closeAllCachedDbs } from './db.js';
 
 test('ensureSchema creates all four tables', () => {
   const db = openDb(':memory:');
@@ -33,4 +36,60 @@ test('filament_colours cascades delete when filament_types row is removed', () =
   const remaining = db.prepare('SELECT COUNT(*) AS n FROM filament_colours').get();
   assert.strictEqual(remaining.n, 0);
   db.close();
+});
+
+test('getDb() caches per resolved path: different cwds get separate instances', async (t) => {
+  const origCwd = process.cwd();
+  const tmpDir1 = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-test-'));
+  const tmpDir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-test-'));
+
+  await t.after(() => {
+    closeAllCachedDbs();
+    process.chdir(origCwd);
+    try {
+      fs.rmSync(tmpDir1, { recursive: true, force: true });
+      fs.rmSync(tmpDir2, { recursive: true, force: true });
+    } catch (e) {
+      // ignore cleanup errors
+    }
+  });
+
+  process.chdir(tmpDir1);
+  const db1a = getDb();
+
+  process.chdir(tmpDir2);
+  const db2 = getDb();
+
+  process.chdir(tmpDir1);
+  const db1b = getDb();
+
+  // db1a and db1b should be the SAME cached instance (same cwd)
+  assert.strictEqual(db1a, db1b, 'getDb() should return cached instance for same cwd');
+
+  // db1a and db2 should be DIFFERENT instances (different cwds)
+  assert.notStrictEqual(db1a, db2, 'getDb() should return different instances for different cwds');
+});
+
+test('getDb() caches per resolved path: same cwd returns same instance', async (t) => {
+  const origCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-test-'));
+
+  await t.after(() => {
+    closeAllCachedDbs();
+    process.chdir(origCwd);
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      // ignore cleanup errors
+    }
+  });
+
+  process.chdir(tmpDir);
+  const db1 = getDb();
+  const db2 = getDb();
+  const db3 = getDb();
+
+  // All three calls should return the same cached instance
+  assert.strictEqual(db1, db2, 'getDb() should return same instance on second call');
+  assert.strictEqual(db2, db3, 'getDb() should return same instance on third call');
 });
