@@ -1,24 +1,30 @@
 import express from 'express';
 import cors from 'cors';
-import bcrypt from 'bcryptjs';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
-import {
-  loadCatalog,
-  saveCatalog,
-  getProduct,
-  upsertProduct,
-  deleteProduct,
-  updateSettings,
-  randomUUID,
-  now,
-} from './store.js';
+import { randomUUID } from 'crypto';
+import { getDb } from './db.js';
+import { getSettings, updateSettings, publicSettings } from './settings.js';
 import { FONT_OPTIONS } from './settings-defaults.js';
+import { hasAnyAdmin, listAdmins, createAdmin, deleteAdmin, resetPassword, verifyLogin } from './admins.js';
+import {
+  listFilaments,
+  getFilament,
+  createFilament,
+  updateFilament,
+  deleteFilament,
+  addColour,
+  updateColour,
+  deleteColour,
+  setColourImage,
+} from './filaments.js';
+import { uploadFilamentImage } from './uploads.js';
+import { syncPublicJson, readCategoryProducts } from './export.js';
+import { loadCatalog, saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, '..');
+const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
 const PORT = Number(process.env.ADMIN_PORT || 8787);
 const SESSION_COOKIE = 'lapanza_admin_session';
 
@@ -26,15 +32,9 @@ const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
+app.use('/uploads', express.static(path.join(root, 'public', 'uploads')));
 
 const sessions = new Map();
-
-function checkPassword(candidate) {
-  if (!candidate) return false;
-  if (process.env.ADMIN_PASSWORD) return candidate === process.env.ADMIN_PASSWORD;
-  const catalog = loadCatalog();
-  return bcrypt.compareSync(candidate, catalog.settings.adminPasswordHash || '');
-}
 
 function requireAuth(req, res, next) {
   const token = req.cookies[SESSION_COOKIE];
@@ -44,22 +44,40 @@ function requireAuth(req, res, next) {
   next();
 }
 
+function startSession(res) {
+  const token = randomUUID();
+  sessions.set(token, { createdAt: Date.now() });
+  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 12 });
+}
+
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'lapanza-admin', time: now() });
+  res.json({ ok: true, service: 'lapanza-admin', time: new Date().toISOString() });
+});
+
+app.get('/api/setup/status', (_req, res) => {
+  res.json({ needsSetup: !hasAnyAdmin() });
+});
+
+app.post('/api/setup', (req, res) => {
+  if (hasAnyAdmin()) return res.status(409).json({ error: 'Setup already completed' });
+  const { username, password } = req.body || {};
+  if (!username || !password || password.length < 8) {
+    return res.status(400).json({ error: 'Username and an 8+ character password are required' });
+  }
+  try {
+    createAdmin({ username, password });
+    startSession(res);
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { password } = req.body || {};
-  if (!checkPassword(password)) {
-    return res.status(401).json({ error: 'Invalid password' });
-  }
-  const token = randomUUID();
-  sessions.set(token, { createdAt: Date.now() });
-  res.cookie(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 12,
-  });
+  const { username, password } = req.body || {};
+  const admin = verifyLogin(username, password);
+  if (!admin) return res.status(401).json({ error: 'Invalid username or password' });
+  startSession(res);
   res.json({ ok: true });
 });
 
@@ -75,20 +93,54 @@ app.get('/api/auth/me', (req, res) => {
   res.json({ authenticated: Boolean(token && sessions.has(token)) });
 });
 
+app.get('/api/admins', requireAuth, (_req, res) => {
+  res.json({ admins: listAdmins() });
+});
+
+app.post('/api/admins', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ admin: createAdmin(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admins/:id', requireAuth, (req, res) => {
+  try {
+    const ok = deleteAdmin(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Admin not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/admins/:id/reset-password', requireAuth, (req, res) => {
+  try {
+    const ok = resetPassword(req.params.id, (req.body || {}).password);
+    if (!ok) return res.status(404).json({ error: 'Admin not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.get('/api/dashboard', requireAuth, (_req, res) => {
-  const catalog = loadCatalog();
-  const products = catalog.products;
-  const filaments = products.filter((p) => p.kind === 'filament');
-  const categories = products.filter((p) => p.kind === 'category');
-  const colourCount = filaments.reduce((n, p) => n + (p.colours?.length || 0), 0);
-  const itemCount = categories.reduce((n, p) => n + (p.items?.length || 0), 0);
-  const draftCount = products.filter((p) => p.status === 'draft').length;
-  const publishedCount = products.filter((p) => p.status === 'published').length;
+  const filaments = listFilaments();
+  const categories = readCategoryProducts();
+  const colourCount = filaments.reduce((n, f) => n + f.colours.length, 0);
+  const itemCount = categories.reduce((n, c) => n + (c.items?.length || 0), 0);
+  const draftCount = filaments.filter((f) => f.status === 'draft').length;
+  const publishedCount = filaments.filter((f) => f.status === 'published').length;
+  const recent = [...filaments]
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .slice(0, 8)
+    .map((f) => ({ id: f.id, name: f.name, kind: 'filament', status: f.status, updatedAt: f.updatedAt, slug: f.slug }));
 
   res.json({
-    updatedAt: catalog.updatedAt,
+    updatedAt: new Date().toISOString(),
     totals: {
-      products: products.length,
+      products: filaments.length + categories.length,
       filaments: filaments.length,
       categories: categories.length,
       colours: colourCount,
@@ -96,54 +148,102 @@ app.get('/api/dashboard', requireAuth, (_req, res) => {
       published: publishedCount,
       drafts: draftCount,
     },
-    recent: [...products]
-      .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
-      .slice(0, 8)
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        kind: p.kind,
-        status: p.status,
-        updatedAt: p.updatedAt,
-        slug: p.slug,
-      })),
+    recent,
   });
 });
+
+app.get('/api/filaments', requireAuth, (_req, res) => {
+  res.json({ filaments: listFilaments() });
+});
+
+app.get('/api/filaments/:id', requireAuth, (req, res) => {
+  const filament = getFilament(req.params.id);
+  if (!filament) return res.status(404).json({ error: 'Filament not found' });
+  res.json({ filament });
+});
+
+app.post('/api/filaments', requireAuth, (req, res) => {
+  const filament = createFilament(req.body || {});
+  syncPublicJson(getDb());
+  res.status(201).json({ filament });
+});
+
+app.put('/api/filaments/:id', requireAuth, (req, res) => {
+  const filament = updateFilament(req.params.id, req.body || {});
+  if (!filament) return res.status(404).json({ error: 'Filament not found' });
+  syncPublicJson(getDb());
+  res.json({ filament });
+});
+
+app.delete('/api/filaments/:id', requireAuth, (req, res) => {
+  const ok = deleteFilament(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Filament not found' });
+  syncPublicJson(getDb());
+  res.json({ ok: true });
+});
+
+app.post('/api/filaments/:id/colours', requireAuth, (req, res) => {
+  const filament = addColour(req.params.id, req.body || {});
+  if (!filament) return res.status(404).json({ error: 'Filament not found' });
+  syncPublicJson(getDb());
+  res.status(201).json({ filament });
+});
+
+app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) => {
+  const filament = updateColour(req.params.filamentId, req.params.colourId, req.body || {});
+  if (!filament) return res.status(404).json({ error: 'Colour not found' });
+  syncPublicJson(getDb());
+  res.json({ filament });
+});
+
+app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) => {
+  const ok = deleteColour(req.params.filamentId, req.params.colourId);
+  if (!ok) return res.status(404).json({ error: 'Colour not found' });
+  syncPublicJson(getDb());
+  res.json({ ok: true });
+});
+
+app.post(
+  '/api/filaments/:filamentId/colours/:colourId/image',
+  requireAuth,
+  // Looks up the colour's sku BEFORE multer runs, so uploadFilamentImage's
+  // storage.filename callback can build a SKU-traceable filename instead of
+  // falling back to the colour's opaque UUID (Task 6 review finding).
+  (req, res, next) => {
+    const filament = getFilament(req.params.filamentId);
+    const colour = filament?.colours.find((c) => c.id === req.params.colourId);
+    if (!colour) return res.status(404).json({ error: 'Colour not found' });
+    req.colourSku = colour.sku;
+    next();
+  },
+  uploadFilamentImage.single('image'),
+  (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const imagePath = `/uploads/filaments/${req.file.filename}`;
+    const filament = setColourImage(req.params.filamentId, req.params.colourId, imagePath);
+    if (!filament) return res.status(404).json({ error: 'Colour not found' });
+    syncPublicJson(getDb());
+    res.json({ filament });
+  },
+);
 
 app.get('/api/products', requireAuth, (req, res) => {
   const catalog = loadCatalog();
   let list = [...catalog.products];
-  const { kind, status, q, parent } = req.query;
-
-  if (kind) list = list.filter((p) => p.kind === kind);
-  if (status) list = list.filter((p) => p.status === status);
+  const { q, parent } = req.query;
   if (parent) list = list.filter((p) => p.parent === parent);
   if (q) {
     const needle = String(q).toLowerCase();
     list = list.filter((p) => {
-      const hay = [
-        p.name,
-        p.slug,
-        p.description,
-        ...(p.colours || []).flatMap((c) => [c.name, c.sku, c.price]),
-        ...(p.items || []).flatMap((i) => [i.name, i.sku, i.details]),
-      ]
+      const hay = [p.name, p.slug, p.description, ...(p.items || []).flatMap((i) => [i.name, i.sku, i.details])]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return hay.includes(needle);
     });
   }
-
-  list.sort((a, b) => {
-    if (a.kind !== b.kind) return a.kind.localeCompare(b.kind);
-    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name);
-  });
-
-  res.json({
-    products: list,
-    count: list.length,
-  });
+  list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  res.json({ products: list, count: list.length });
 });
 
 app.get('/api/products/:id', requireAuth, (req, res) => {
@@ -154,27 +254,15 @@ app.get('/api/products/:id', requireAuth, (req, res) => {
 
 app.post('/api/products', requireAuth, (req, res) => {
   const body = req.body || {};
-  const kind = body.kind === 'category' ? 'category' : 'filament';
   const product = {
     id: randomUUID(),
-    kind,
-    status: body.status === 'draft' ? 'draft' : 'published',
-    featured: Boolean(body.featured),
-    sortOrder: Number(body.sortOrder) || 0,
+    kind: 'category',
     slug: slugify(body.slug || body.name || 'product'),
     name: body.name || 'Untitled product',
     description: body.description || '',
-    colourNote: body.colourNote || '',
     crumbs: body.crumbs || '',
     parent: body.parent || null,
-    seoTitle: body.seoTitle || '',
-    seoDescription: body.seoDescription || '',
-    internalNotes: body.internalNotes || '',
-    specs: normalizeSpecs(body.specs),
-    colours: normalizeColours(body.colours),
     items: normalizeItems(body.items),
-    createdAt: now(),
-    updatedAt: now(),
   };
   upsertProduct(product);
   res.status(201).json({ product });
@@ -188,11 +276,8 @@ app.put('/api/products/:id', requireAuth, (req, res) => {
     ...existing,
     ...body,
     id: existing.id,
-    kind: body.kind === 'category' || body.kind === 'filament' ? body.kind : existing.kind,
+    kind: 'category',
     slug: slugify(body.slug || existing.slug),
-    name: body.name ?? existing.name,
-    specs: normalizeSpecs(body.specs ?? existing.specs),
-    colours: normalizeColours(body.colours ?? existing.colours),
     items: normalizeItems(body.items ?? existing.items),
   };
   upsertProduct(product);
@@ -205,71 +290,38 @@ app.delete('/api/products/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/products/:id/duplicate', requireAuth, (req, res) => {
-  const existing = getProduct(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Product not found' });
-  const copy = structuredClone(existing);
-  copy.id = randomUUID();
-  copy.name = `${existing.name} (copy)`;
-  copy.slug = slugify(`${existing.slug}-copy`);
-  copy.status = 'draft';
-  copy.createdAt = now();
-  copy.updatedAt = now();
-  copy.specs = (copy.specs || []).map((s) => ({ ...s, id: randomUUID() }));
-  copy.colours = (copy.colours || []).map((c) => ({ ...c, id: randomUUID() }));
-  copy.items = (copy.items || []).map((i) => ({ ...i, id: randomUUID() }));
-  upsertProduct(copy);
-  res.status(201).json({ product: copy });
-});
-
 app.get('/api/settings', requireAuth, (_req, res) => {
-  const { adminPassword, adminPasswordHash, ...safe } = loadCatalog().settings;
-  res.json({ settings: safe, fonts: FONT_OPTIONS });
+  res.json({ settings: publicSettings(getSettings()), fonts: FONT_OPTIONS });
 });
 
 app.put('/api/settings', requireAuth, (req, res) => {
   const body = req.body || {};
   const allowed = [
-    'siteName',
-    'tagline',
-    'phoneDisplay',
-    'phoneTel',
-    'email',
-    'address',
-    'hours',
-    'whatsapp',
-    'facebook',
-    'instagram',
-    'adminPassword',
-    'useUniversalFont',
-    'universalFont',
-    'fontSans',
-    'fontSerif',
-    'defaultTheme',
-    'homeTiles',
+    'siteName', 'tagline', 'phoneDisplay', 'phoneTel', 'email', 'address', 'hours', 'whatsapp',
+    'facebook', 'instagram', 'useUniversalFont', 'universalFont', 'fontSans', 'fontSerif',
+    'defaultTheme', 'homeTiles',
   ];
   const patch = {};
   for (const key of allowed) {
     if (body[key] !== undefined) patch[key] = body[key];
   }
   if (typeof patch.useUniversalFont === 'string') {
-    patch.useUniversalFont = patch.useUniversalFont === 'true' || patch.useUniversalFont === true;
+    patch.useUniversalFont = patch.useUniversalFont === 'true';
   }
-  if (patch.adminPassword) {
-    patch.adminPasswordHash = bcrypt.hashSync(patch.adminPassword, 10);
-  }
-  delete patch.adminPassword;
   if (patch.homeTiles) {
-    patch.homeTiles = normalizeHomeTiles(patch.homeTiles);
+    patch.homeTiles = patch.homeTiles.slice(0, 3).map((t) => ({
+      eyebrow: t.eyebrow || '',
+      title: t.title || '',
+      description: t.description || '',
+    }));
   }
   const settings = updateSettings(patch);
-  const { adminPassword, adminPasswordHash, ...safe } = settings;
-  res.json({ settings: safe });
+  syncPublicJson(getDb());
+  res.json({ settings: publicSettings(settings) });
 });
 
 app.post('/api/publish', requireAuth, async (_req, res) => {
-  const catalog = loadCatalog();
-  saveCatalog(catalog); // re-sync site data
+  syncPublicJson(getDb());
   try {
     await runGenerate();
     res.json({ ok: true, message: 'Site pages regenerated from catalog.' });
@@ -288,42 +340,13 @@ app.get('/', (_req, res) => {
 });
 
 function slugify(value) {
-  return String(value || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '') || 'product';
-}
-
-function normalizeSpecs(list) {
-  if (!Array.isArray(list)) return [];
-  return list.map((s, i) => ({
-    id: s.id || randomUUID(),
-    label: s.label || `Spec ${i + 1}`,
-    value: s.value || '',
-  }));
-}
-
-function normalizeColours(list) {
-  if (!Array.isArray(list)) return [];
-  return list.map((c) => ({
-    id: c.id || randomUUID(),
-    name: c.name || '',
-    sku: c.sku || '',
-    price: c.price || '',
-    hex: c.hex || '',
-    inStock: c.inStock !== false,
-    notes: c.notes || '',
-  }));
-}
-
-function normalizeHomeTiles(list) {
-  if (!Array.isArray(list)) return undefined;
-  return list.slice(0, 3).map((t) => ({
-    eyebrow: t.eyebrow || '',
-    title: t.title || '',
-    description: t.description || '',
-  }));
+  return (
+    String(value || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'product'
+  );
 }
 
 function normalizeItems(list) {
@@ -356,10 +379,13 @@ function runGenerate() {
   });
 }
 
-// Ensure catalog exists on boot
-loadCatalog();
+getDb();
 
-app.listen(PORT, () => {
-  console.log(`\n▸ Lapanza Admin API  http://localhost:${PORT}/admin/`);
-  console.log(`  Default password: lapanza-admin\n`);
-});
+const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+if (isMainModule) {
+  app.listen(PORT, () => {
+    console.log(`\n> Lapanza Admin API  http://localhost:${PORT}/admin/\n`);
+  });
+}
+
+export default app;
