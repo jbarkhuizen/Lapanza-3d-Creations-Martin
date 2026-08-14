@@ -36,7 +36,7 @@ export const uploadFilamentImage = multer({
       ensureUploadDir();
       cb(null, UPLOAD_DIR);
     },
-    filename: (req, file, cb) => cb(null, buildImageFilename(req.params.colourId, file.originalname)),
+    filename: (req, file, cb) => cb(null, buildImageFilename(req.colourSku || req.params.colourId, file.originalname)),
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),
