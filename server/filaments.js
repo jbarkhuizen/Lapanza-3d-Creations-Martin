@@ -50,6 +50,11 @@ function slugify(value) {
 
 const colourStmtFor = (db) => db.prepare('SELECT * FROM filament_colours WHERE filament_type_id = ? ORDER BY sort_order ASC');
 
+function toNumberOr(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export function listFilaments(db = getDb()) {
   const types = db.prepare('SELECT * FROM filament_types ORDER BY sort_order ASC, name ASC').all();
   const colourStmt = colourStmtFor(db);
@@ -170,10 +175,10 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
     name: data.name ?? existing.name,
     hex: data.hex ?? existing.hex,
     sku: data.sku ?? existing.sku,
-    weight_g: data.weightG != null ? Number(data.weightG) : existing.weight_g,
-    roll_length_m: data.rollLengthM != null && data.rollLengthM !== '' ? Number(data.rollLengthM) : existing.roll_length_m,
-    price_rand: data.priceRand != null ? Number(data.priceRand) : existing.price_rand,
-    stock_qty: data.stockQty != null ? Number(data.stockQty) : existing.stock_qty,
+    weight_g: data.weightG != null ? toNumberOr(data.weightG, existing.weight_g) : existing.weight_g,
+    roll_length_m: data.rollLengthM != null && data.rollLengthM !== '' ? toNumberOr(data.rollLengthM, existing.roll_length_m) : existing.roll_length_m,
+    price_rand: data.priceRand != null ? toNumberOr(data.priceRand, existing.price_rand) : existing.price_rand,
+    stock_qty: data.stockQty != null ? toNumberOr(data.stockQty, existing.stock_qty) : existing.stock_qty,
     notes: data.notes ?? existing.notes,
     updated_at: new Date().toISOString(),
   });

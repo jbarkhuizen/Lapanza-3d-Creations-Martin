@@ -95,3 +95,17 @@ test('updateFilament preserves fields not included in the patch', () => {
   assert.strictEqual(updated.description, 'Original');
   db.close();
 });
+
+test('updateColour with non-numeric input does not throw and preserves existing value', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1', weightG: 1000, priceRand: 299, stockQty: 5 }, db);
+  const colourId = withColour.colours[0].id;
+  // Pass invalid numeric values - should not throw and should preserve existing values
+  const updated = updateColour(f.id, colourId, { weightG: 'abc', priceRand: 'xyz', stockQty: 'invalid', rollLengthM: 'bad' }, db);
+  assert.strictEqual(updated.colours[0].weightG, 1000);
+  assert.strictEqual(updated.colours[0].priceRand, 299);
+  assert.strictEqual(updated.colours[0].stockQty, 5);
+  assert.strictEqual(updated.colours[0].rollLengthM, null);
+  db.close();
+});
