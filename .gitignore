@@ -4,3 +4,4 @@ dist
 *.log
 data/catalog.json
 .worktrees
+.superpowers/
