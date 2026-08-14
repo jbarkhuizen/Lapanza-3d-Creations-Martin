@@ -1,4 +1,4 @@
-/** Curated Google font pairs / singles for site-wide typography */
+﻿/** Curated Google font pairs / singles for site-wide typography */
 export const FONT_OPTIONS = [
   { id: 'dm-sans', label: 'DM Sans', family: 'DM Sans', google: 'DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700' },
   { id: 'fraunces', label: 'Fraunces', family: 'Fraunces', google: 'Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800' },
@@ -26,10 +26,6 @@ export const DEFAULT_SETTINGS = {
     'https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%20new%203D%20site.',
   facebook: 'https://www.facebook.com/Lapanzaloeferox',
   instagram: 'https://www.instagram.com/lapanza_beauty_lifestyle/',
-  // Bcrypt hash of the admin password. Empty means "not set yet" — store.js
-  // lazily hashes the default password ('lapanza-admin') into this field on
-  // first load, and migrates any legacy plaintext adminPassword field.
-  adminPasswordHash: '',
   /** When true, one font is used for body + headings */
   useUniversalFont: false,
   universalFont: 'dm-sans',
@@ -47,10 +43,4 @@ export const DEFAULT_SETTINGS = {
 
 export function findFont(id) {
   return FONT_OPTIONS.find((f) => f.id === id) || FONT_OPTIONS[0];
-}
-
-export function publicSettings(settings) {
-  const s = { ...DEFAULT_SETTINGS, ...settings };
-  const { adminPasswordHash, adminPassword, ...safe } = s;
-  return safe;
 }
