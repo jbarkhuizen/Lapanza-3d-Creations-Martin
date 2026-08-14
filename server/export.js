@@ -1,0 +1,72 @@
+import fs from 'fs';
+import path from 'path';
+import { listFilaments } from './filaments.js';
+import { getSettings, publicSettings } from './settings.js';
+
+const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
+
+const DEFAULT_PATHS = {
+  catalogJsonPath: path.join(root, 'data', 'catalog.json'),
+  filamentsSrc: path.join(root, 'src', 'data', 'filaments.json'),
+  categoriesSrc: path.join(root, 'src', 'data', 'categories.json'),
+  settingsSrc: path.join(root, 'src', 'data', 'settings.json'),
+  settingsPublic: path.join(root, 'public', 'site-settings.json'),
+};
+
+export function readCategoryProducts(catalogJsonPath = DEFAULT_PATHS.catalogJsonPath) {
+  if (!fs.existsSync(catalogJsonPath)) return [];
+  const catalog = JSON.parse(fs.readFileSync(catalogJsonPath, 'utf8'));
+  return (catalog.products || []).filter((p) => p.kind === 'category');
+}
+
+export function syncPublicJson(db, paths = DEFAULT_PATHS) {
+  const filaments = listFilaments(db).map((f) => ({
+    slug: f.slug,
+    name: f.name,
+    description: f.description,
+    specs: f.specs,
+    colourNote: f.colourNote,
+    colours: f.colours.map((c) => ({
+      name: c.name,
+      sku: c.sku,
+      price: `R${c.priceRand}`,
+      weightG: c.weightG,
+      rollLengthM: c.rollLengthM,
+      stockQty: c.stockQty,
+      imageUrl: c.imagePath || '',
+    })),
+  }));
+
+  const categories = {};
+  readCategoryProducts(paths.catalogJsonPath)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .forEach((p) => {
+      categories[p.slug] = {
+        slug: p.slug,
+        name: p.name,
+        description: p.description,
+        crumbs: p.crumbs || `Home / ${p.name}`,
+        ...(p.parent ? { parent: p.parent } : {}),
+        items: (p.items || []).map((item) => ({
+          name: item.name,
+          details: item.details,
+          material: item.material,
+          size: item.size,
+          finish: item.finish,
+          price: item.price,
+          sku: item.sku,
+          imageUrl: item.imageUrl,
+          available: item.available !== false,
+        })),
+      };
+    });
+
+  const settings = publicSettings(getSettings(db));
+
+  fs.writeFileSync(paths.filamentsSrc, JSON.stringify(filaments, null, 2));
+  fs.writeFileSync(paths.categoriesSrc, JSON.stringify(categories, null, 2));
+  fs.writeFileSync(paths.settingsSrc, JSON.stringify(settings, null, 2));
+  fs.writeFileSync(paths.settingsPublic, JSON.stringify(settings, null, 2));
+}
+
+export { DEFAULT_PATHS };
