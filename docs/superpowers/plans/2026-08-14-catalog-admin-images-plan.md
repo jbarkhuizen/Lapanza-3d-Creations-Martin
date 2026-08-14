@@ -106,7 +106,7 @@ git commit -m "chore: add test script, gitignore SQLite db files"
 - Test: `server/db.test.js`
 
 **Interfaces:**
-- Produces: `openDb(dbPath)` -> opens/creates a db at `dbPath` with schema applied, returns the `better-sqlite3` `Database` instance. `getDb()` -> singleton using `data/lapanza.db`, auto-runs migration on first creation. `ensureSchema(db)` -> idempotent `CREATE TABLE IF NOT EXISTS` for all 4 tables.
+- Produces: `openDb(dbPath)` -> opens/creates a db at `dbPath` with schema applied, returns the `better-sqlite3` `Database` instance. `getDb()` -> connection cached per resolved `data/lapanza.db` path under the current `process.cwd()` (not a single global singleton -- so cwd-isolated tests within one process each get their own DB), auto-runs migration on first creation of that path. `ensureSchema(db)` -> idempotent `CREATE TABLE IF NOT EXISTS` for all 4 tables. `closeAllCachedDbs()` -> test-only helper that closes and clears every cached connection.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -163,12 +163,7 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 
-const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
-const DB_PATH = path.join(root, 'data', 'lapanza.db');
-const CATALOG_JSON_PATH = path.join(root, 'data', 'catalog.json');
-
-function ensureDataDir() {
-  const dir = path.join(root, 'data');
+function ensureDataDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
@@ -224,28 +219,41 @@ export function ensureSchema(db) {
 }
 
 export function openDb(dbPath) {
-  if (dbPath !== ':memory:') ensureDataDir();
+  if (dbPath !== ':memory:') ensureDataDir(path.dirname(dbPath));
   const db = new Database(dbPath);
   if (dbPath !== ':memory:') db.pragma('journal_mode = WAL');
   ensureSchema(db);
   return db;
 }
 
-let _db = null;
+// Cached per resolved path (not a single global), so multiple cwd-isolated
+// tests within one process (e.g. several test() blocks in index.test.js
+// each calling process.chdir()) each get their own DB instance instead of
+// silently sharing whichever one was opened first.
+const _dbCache = new Map();
 
 export function getDb() {
-  if (_db) return _db;
-  const isNew = !fs.existsSync(DB_PATH);
-  _db = openDb(DB_PATH);
+  const root = process.cwd();
+  const dbPath = path.join(root, 'data', 'lapanza.db');
+  if (_dbCache.has(dbPath)) return _dbCache.get(dbPath);
+  const isNew = !fs.existsSync(dbPath);
+  const db = openDb(dbPath);
+  _dbCache.set(dbPath, db);
   if (isNew) {
+    const catalogJsonPath = path.join(root, 'data', 'catalog.json');
     import('./migrate-json.js').then(({ migrateFromCatalogJson }) => {
-      migrateFromCatalogJson(_db, CATALOG_JSON_PATH);
+      migrateFromCatalogJson(db, catalogJsonPath);
     });
   }
-  return _db;
+  return db;
 }
 
-export { DB_PATH, CATALOG_JSON_PATH };
+// Test-only: closes every cached connection so a temp directory holding one
+// can be deleted afterward (Windows locks open file handles, unlike POSIX).
+export function closeAllCachedDbs() {
+  for (const db of _dbCache.values()) db.close();
+  _dbCache.clear();
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1405,6 +1413,7 @@ import assert from 'node:assert';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { closeAllCachedDbs } from './db.js';
 
 test('upsertProduct adds a category product and getProduct retrieves it', async (t) => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'store-test-'));
@@ -1415,6 +1424,7 @@ test('upsertProduct adds a category product and getProduct retrieves it', async 
   process.chdir(tmpRoot);
 
   t.after(() => {
+    closeAllCachedDbs(); // release the SQLite file handle before deleting its directory (Windows locks open handles)
     process.chdir(originalCwd);
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   });
@@ -1545,6 +1555,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import request from 'supertest';
+import { closeAllCachedDbs } from './db.js';
 
 async function freshApp() {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'index-test-'));
@@ -1556,7 +1567,14 @@ async function freshApp() {
   const originalCwd = process.cwd();
   process.chdir(tmpRoot);
   const mod = await import(`./index.js?t=${Date.now()}-${Math.random()}`);
-  return { app: mod.default, cleanup: () => { process.chdir(originalCwd); fs.rmSync(tmpRoot, { recursive: true, force: true }); } };
+  return {
+    app: mod.default,
+    cleanup: () => {
+      closeAllCachedDbs(); // each freshApp() call opens its own cache entry (Task 2's getDb is keyed per cwd) -- release it before deleting its directory
+      process.chdir(originalCwd);
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    },
+  };
 }
 
 test('setup status is true before any admin exists, false after', async (t) => {
