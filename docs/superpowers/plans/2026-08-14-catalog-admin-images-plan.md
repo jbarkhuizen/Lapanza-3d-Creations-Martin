@@ -1900,6 +1900,16 @@ app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, re
 app.post(
   '/api/filaments/:filamentId/colours/:colourId/image',
   requireAuth,
+  // Looks up the colour's sku BEFORE multer runs, so uploadFilamentImage's
+  // storage.filename callback can build a SKU-traceable filename instead of
+  // falling back to the colour's opaque UUID (Task 6 review finding).
+  (req, res, next) => {
+    const filament = getFilament(req.params.filamentId);
+    const colour = filament?.colours.find((c) => c.id === req.params.colourId);
+    if (!colour) return res.status(404).json({ error: 'Colour not found' });
+    req.colourSku = colour.sku;
+    next();
+  },
   uploadFilamentImage.single('image'),
   (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
