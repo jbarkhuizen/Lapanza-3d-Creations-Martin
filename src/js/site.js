@@ -11,6 +11,26 @@ function syncYear() {
   });
 }
 
+/** Homepage "shop the range" tile copy is admin-editable; hydrate at runtime
+ *  since index.html is hand-crafted and skipped by the page generator. */
+async function hydrateHomeTiles() {
+  const targets = document.querySelectorAll('[data-tile][data-tile-field]');
+  if (!targets.length) return;
+  try {
+    const res = await fetch('/site-settings.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const settings = await res.json();
+    if (!Array.isArray(settings.homeTiles)) return;
+    targets.forEach((el) => {
+      const tile = settings.homeTiles[Number(el.dataset.tile)];
+      const value = tile?.[el.dataset.tileField];
+      if (value) el.textContent = value;
+    });
+  } catch {
+    /* keep the static copy already in the HTML */
+  }
+}
+
 function wireThemeButtons() {
   document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
     if (btn.dataset.bound) return;
@@ -49,4 +69,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   mountWhatsAppFab();
   enhanceColourCards();
   syncYear();
+  hydrateHomeTiles();
 });

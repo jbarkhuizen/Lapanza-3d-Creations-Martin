@@ -246,6 +246,7 @@ app.put('/api/settings', requireAuth, (req, res) => {
     'fontSans',
     'fontSerif',
     'defaultTheme',
+    'homeTiles',
   ];
   const patch = {};
   for (const key of allowed) {
@@ -258,6 +259,9 @@ app.put('/api/settings', requireAuth, (req, res) => {
     patch.adminPasswordHash = bcrypt.hashSync(patch.adminPassword, 10);
   }
   delete patch.adminPassword;
+  if (patch.homeTiles) {
+    patch.homeTiles = normalizeHomeTiles(patch.homeTiles);
+  }
   const settings = updateSettings(patch);
   const { adminPassword, adminPasswordHash, ...safe } = settings;
   res.json({ settings: safe });
@@ -310,6 +314,15 @@ function normalizeColours(list) {
     hex: c.hex || '',
     inStock: c.inStock !== false,
     notes: c.notes || '',
+  }));
+}
+
+function normalizeHomeTiles(list) {
+  if (!Array.isArray(list)) return undefined;
+  return list.slice(0, 3).map((t) => ({
+    eyebrow: t.eyebrow || '',
+    title: t.title || '',
+    description: t.description || '',
   }));
 }
 

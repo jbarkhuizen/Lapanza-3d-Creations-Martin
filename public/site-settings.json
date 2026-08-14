@@ -13,5 +13,22 @@
   "universalFont": "dm-sans",
   "fontSans": "dm-sans",
   "fontSerif": "dm-sans",
-  "defaultTheme": "system"
+  "defaultTheme": "system",
+  "homeTiles": [
+    {
+      "eyebrow": "20 types",
+      "title": "Filament",
+      "description": "PLA, PETG, ABS, TPU, PRO CPE and more — real colours, real specs."
+    },
+    {
+      "eyebrow": "GWM · Landrover",
+      "title": "Car Parts",
+      "description": "Custom and replacement 3D printed parts for your vehicle."
+    },
+    {
+      "eyebrow": "Toys · Home · Phones",
+      "title": "Everything Else",
+      "description": "Toys, homeware and phone accessories, printed to order."
+    }
+  ]
 }

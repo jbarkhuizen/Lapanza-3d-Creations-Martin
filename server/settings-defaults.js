@@ -37,6 +37,12 @@ export const DEFAULT_SETTINGS = {
   fontSerif: 'fraunces',
   /** Default appearance for visitors who haven't chosen yet */
   defaultTheme: 'system',
+  /** The 3 "Shop the range" tiles on the homepage — design (colour/rotation/link) stays in index.html, only copy is catalog-driven */
+  homeTiles: [
+    { eyebrow: '20 types', title: 'Filament', description: 'PLA, PETG, ABS, TPU, PRO CPE and more — real colours, real specs.' },
+    { eyebrow: 'GWM · Landrover', title: 'Car Parts', description: 'Custom and replacement 3D printed parts for your vehicle.' },
+    { eyebrow: 'Toys · Home · Phones', title: 'Everything Else', description: 'Toys, homeware and phone accessories, printed to order.' },
+  ],
 };
 
 export function findFont(id) {

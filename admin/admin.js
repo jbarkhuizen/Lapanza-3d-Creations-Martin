@@ -754,6 +754,22 @@ async function renderSettings() {
       </div>
 
       <div class="panel stack gap-3">
+        <div class="section-head"><h3>Homepage tiles</h3></div>
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
+          The 3 "Shop the range" cards on the homepage. Colours, links and layout stay fixed — only the copy below is editable.
+        </p>
+        ${(s.homeTiles && s.homeTiles.length ? s.homeTiles : [{}, {}, {}]).map((t, i) => `
+        <div class="stack gap-2" style="padding:0.75rem 0;border-top:1px dashed var(--line)">
+          <strong style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted)">Tile ${i + 1}</strong>
+          <div class="grid-2">
+            <label class="field"><span>Eyebrow label</span><input data-tile-index="${i}" data-tile-field="eyebrow" value="${escapeAttr(t.eyebrow || '')}" /></label>
+            <label class="field"><span>Title</span><input data-tile-index="${i}" data-tile-field="title" value="${escapeAttr(t.title || '')}" /></label>
+          </div>
+          <label class="field"><span>Description</span><input data-tile-index="${i}" data-tile-field="description" value="${escapeAttr(t.description || '')}" /></label>
+        </div>`).join('')}
+      </div>
+
+      <div class="panel stack gap-3">
         <div class="section-head"><h3>Public site contact</h3></div>
         <div class="grid-2">
           <label class="field"><span>Site name</span><input data-setting="siteName" value="${escapeAttr(s.siteName || '')}" /></label>
@@ -803,6 +819,13 @@ async function renderSettings() {
       if (input.type === 'checkbox') patch[input.dataset.setting] = input.checked;
       else patch[input.dataset.setting] = input.value;
     });
+    const tiles = [];
+    $$('[data-tile-index]').forEach((input) => {
+      const i = Number(input.dataset.tileIndex);
+      tiles[i] = tiles[i] || {};
+      tiles[i][input.dataset.tileField] = input.value;
+    });
+    if (tiles.length) patch.homeTiles = tiles;
     try {
       await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
       toast('Settings saved — refresh the public site to see fonts/theme defaults');
