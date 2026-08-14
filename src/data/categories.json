@@ -1,0 +1,209 @@
+{
+  "toys": {
+    "slug": "toys",
+    "name": "Toys",
+    "description": "3D printed toys — add your catalogue here.",
+    "crumbs": "Home / Toys",
+    "items": [
+      {
+        "name": "Toys piece 1",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Toys piece 2",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Toys piece 3",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      }
+    ]
+  },
+  "homeware": {
+    "slug": "homeware",
+    "name": "Homeware",
+    "description": "Practical and decorative homeware pieces — add your catalogue here.",
+    "crumbs": "Home / Homeware",
+    "items": [
+      {
+        "name": "Homeware piece 1",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Homeware piece 2",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Homeware piece 3",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      }
+    ]
+  },
+  "phones": {
+    "slug": "phones",
+    "name": "Phones",
+    "description": "Phone cases, stands and accessories — add your catalogue here.",
+    "crumbs": "Home / Phones",
+    "items": [
+      {
+        "name": "Phones piece 1",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Phones piece 2",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Phones piece 3",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      }
+    ]
+  },
+  "gwm": {
+    "slug": "gwm",
+    "name": "GWM",
+    "description": "Custom and replacement 3D printed parts for GWM vehicles.",
+    "crumbs": "Home / Car Parts / GWM",
+    "parent": "car-parts",
+    "items": [
+      {
+        "name": "GWM piece 1",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "GWM piece 2",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "GWM piece 3",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      }
+    ]
+  },
+  "landrover": {
+    "slug": "landrover",
+    "name": "Landrover",
+    "description": "Custom and replacement 3D printed parts for Land Rover vehicles.",
+    "crumbs": "Home / Car Parts / Landrover",
+    "parent": "car-parts",
+    "items": [
+      {
+        "name": "Landrover piece 1",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Landrover piece 2",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      },
+      {
+        "name": "Landrover piece 3",
+        "details": "Custom printed to order — material, size and finish on request.",
+        "material": "",
+        "size": "",
+        "finish": "",
+        "price": "",
+        "sku": "",
+        "imageUrl": "",
+        "available": true
+      }
+    ]
+  }
+}

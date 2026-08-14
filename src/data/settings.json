@@ -1,0 +1,17 @@
+{
+  "siteName": "Lapanza 3D Creative Lab",
+  "tagline": "Custom 3D Printing & SA Filament",
+  "phoneDisplay": "082 663 9608",
+  "phoneTel": "+27826639608",
+  "email": "lapanzaonline@gmail.com",
+  "address": "23 Gladiator Rd, Pierre van Ryneveld, Centurion",
+  "hours": "By appointment",
+  "whatsapp": "https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%20new%203D%20site.",
+  "facebook": "https://www.facebook.com/Lapanzaloeferox",
+  "instagram": "https://www.instagram.com/lapanza_beauty_lifestyle/",
+  "useUniversalFont": false,
+  "universalFont": "dm-sans",
+  "fontSans": "dm-sans",
+  "fontSerif": "dm-sans",
+  "defaultTheme": "system"
+}

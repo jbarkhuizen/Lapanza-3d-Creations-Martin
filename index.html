@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lapanza 3D Creative Lab — Custom 3D Printing & SA Filament</title>
+<meta name="description" content="Custom 3D printed creations, car parts, toys and SA-manufactured 3D filament. A small, family-run creative lab in Pierre van Ryneveld, Centurion.">
+<meta name="theme-color" content="#f7f3eb">
+<meta property="og:title" content="Lapanza 3D Creative Lab — Custom 3D Printing & SA Filament">
+<meta property="og:description" content="Custom 3D printed creations, car parts, toys and SA-manufactured 3D filament. A small, family-run creative lab in Pierre van Ryneveld, Centurion.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>
+(function(){try{var t=localStorage.getItem('lapanza-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
+</script>
+<script>window.__PAGE_DEPTH__=0;window.__PAGE_PATH__="index.html";</script>
+<script type="module" src="src/js/home-entry.js"></script>
+</head>
+
+<body class="font-sans antialiased">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="site-grain" aria-hidden="true"></div>
+
+  <header class="fixed top-0 left-0 right-0 md:left-72 z-40 nav-blur border-b border-charcoal/8">
+    <div class="max-w-7xl mx-auto px-6 md:px-10 py-4 flex items-center justify-between gap-4">
+      <a href="index.html" class="md:hidden brand-mark font-serif text-xl tracking-tight font-semibold">Lapanza <span class="mark-3d">3D</span></a>
+      <nav class="hidden md:flex items-center gap-10 text-sm font-medium tracking-wide" aria-label="Primary">
+        <a href="story.html" class="hover:text-terracotta transition-colors">Our Story</a>
+        <a href="#range" class="hover:text-terracotta transition-colors">Shop the range</a>
+        <a href="#contact" class="hover:text-terracotta transition-colors">Contact</a>
+      </nav>
+      <div class="flex items-center gap-2 ml-auto">
+        <button type="button" class="theme-toggle-btn md:hidden" data-theme-toggle aria-label="Toggle dark mode">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"/></svg>
+        </button>
+        <button type="button" onclick="toggleDrawer()"
+                class="md:hidden border-2 border-charcoal rounded-full px-4 py-2 text-xs uppercase tracking-wide font-semibold"
+                aria-controls="sidebar-drawer" aria-expanded="false">
+          Menu
+        </button>
+        <a href="https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%20new%203D%20site."
+           class="hidden md:inline-block text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors"
+           target="_blank" rel="noopener noreferrer">
+          Get in touch
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <div id="sidebar-drawer" class="hidden md:hidden fixed inset-0 z-50 bg-cream overflow-y-auto px-6 py-6">
+    <div class="flex justify-end mb-4">
+      <button type="button" onclick="toggleDrawer(false)"
+              class="border-2 border-charcoal rounded-full px-4 py-2 text-xs uppercase tracking-wide font-semibold">Close</button>
+    </div>
+    <nav data-site-nav class="site-sidebar text-sm" aria-label="Catalogue"></nav>
+  </div>
+
+  <div class="md:flex">
+    <aside class="aside-panel hidden md:block w-72 shrink-0 sticky top-0 h-screen overflow-y-auto px-6 pt-10 pb-10" aria-label="Catalogue">
+      <nav data-site-nav class="site-sidebar text-sm"></nav>
+    </aside>
+    <div class="flex-1 min-w-0" id="main">
+
+  <section class="relative h-screen min-h-[680px] w-full flex items-center justify-center overflow-hidden" aria-label="Hero">
+    <canvas id="hero-canvas" aria-hidden="true"></canvas>
+    <div class="hero-vignette absolute inset-0 pointer-events-none"></div>
+
+    <div class="relative z-10 text-center px-6 max-w-3xl">
+      <p class="hero-line eyebrow mb-7">3D Printing · SA Filament · Centurion</p>
+      <h1 class="hero-line font-serif text-[14vw] leading-[0.9] md:text-[6.5rem] md:leading-[0.9] font-extrabold text-charcoal mb-8 tracking-[-0.03em]">
+        Ideas in.<br><span class="highlight">Objects out.</span>
+      </h1>
+      <p class="hero-line text-base md:text-xl text-espresso/75 max-w-md mx-auto mb-11 leading-relaxed">
+        Custom prints, car parts, toys &amp; SA-made filament.<br class="hidden sm:block"> Real specs, real colours, real turnaround.
+      </p>
+      <div class="hero-line flex flex-wrap items-center justify-center gap-4">
+        <a id="magnetic-cta" href="#range"
+           class="magnetic-btn inline-flex items-center gap-3 bg-charcoal text-cream rounded-full px-8 py-4 text-sm font-semibold tracking-wide brutal hover:bg-terracotta">
+          See the range <span aria-hidden="true">&rarr;</span>
+        </a>
+        <a href="story.html" class="inline-flex items-center gap-2 text-sm font-semibold underline decoration-2 decoration-terracotta/80 underline-offset-[6px] hover:text-terracotta transition-colors">
+          Our story
+        </a>
+      </div>
+    </div>
+
+    <div class="scroll-cue absolute bottom-8 left-1/2 text-[0.65rem] tracking-[0.35em] text-espresso/55 uppercase font-bold">
+      Scroll
+    </div>
+  </section>
+
+  <div class="bg-charcoal text-cream py-5 overflow-hidden border-y-2 border-charcoal brand-lock" aria-hidden="true">
+    <div class="marquee-track text-2xl md:text-[2rem] font-serif italic font-semibold whitespace-nowrap">
+      <span class="px-6">Custom 3D Printing <span class="text-lime not-italic">✦</span> SA-Made Filament <span class="text-lime not-italic">✦</span> GWM &amp; Landrover Parts <span class="text-lime not-italic">✦</span> Toys <span class="text-lime not-italic">✦</span> Homeware <span class="text-lime not-italic">✦</span> Phone Accessories <span class="text-lime not-italic">✦</span></span>
+      <span class="px-6">Custom 3D Printing <span class="text-lime not-italic">✦</span> SA-Made Filament <span class="text-lime not-italic">✦</span> GWM &amp; Landrover Parts <span class="text-lime not-italic">✦</span> Toys <span class="text-lime not-italic">✦</span> Homeware <span class="text-lime not-italic">✦</span> Phone Accessories <span class="text-lime not-italic">✦</span></span>
+    </div>
+  </div>
+
+  <section id="range" class="max-w-7xl mx-auto px-6 md:px-10 py-24 md:py-32">
+    <div class="reveal-head mb-14">
+      <p class="eyebrow mb-4">Shop the range</p>
+      <h2 class="font-serif text-3xl md:text-5xl leading-[1.05] mb-5 max-w-xl tracking-[-0.02em]">Everything lives in the menu. Here's where to start.</h2>
+      <p class="text-espresso/65 max-w-md leading-relaxed">Full catalogues, real colours and specs — one click away in the sidebar.</p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-8 md:gap-7">
+      <a href="filament/pla.html" class="tile group block bg-charcoal text-cream rounded-sm p-8 md:p-9 brutal-lg rotate-[-1.5deg]">
+        <div class="flex items-start justify-between mb-8">
+          <p class="text-lime font-bold text-[0.65rem] uppercase tracking-[0.22em]">20 types</p>
+          <span class="font-serif text-lime/40 text-4xl leading-none">01</span>
+        </div>
+        <h3 class="font-serif text-3xl md:text-4xl mb-4 tracking-tight">Filament</h3>
+        <p class="text-cream/65 mb-10 leading-relaxed">PLA, PETG, ABS, TPU, PRO CPE and more — real colours, real specs.</p>
+        <span class="inline-flex items-center gap-2 font-semibold text-sm group-hover:gap-3 transition-all">Browse filament <span aria-hidden="true">&rarr;</span></span>
+      </a>
+      <a href="car-parts/gwm.html" class="tile group block bg-terracotta text-cream rounded-sm p-8 md:p-9 brutal-lg rotate-[1deg] md:mt-12">
+        <div class="flex items-start justify-between mb-8">
+          <p class="text-charcoal/70 font-bold text-[0.65rem] uppercase tracking-[0.22em]">GWM · Landrover</p>
+          <span class="font-serif text-charcoal/25 text-4xl leading-none">02</span>
+        </div>
+        <h3 class="font-serif text-3xl md:text-4xl mb-4 tracking-tight">Car Parts</h3>
+        <p class="text-cream/85 mb-10 leading-relaxed">Custom and replacement 3D printed parts for your vehicle.</p>
+        <span class="inline-flex items-center gap-2 font-semibold text-sm group-hover:gap-3 transition-all">Browse car parts <span aria-hidden="true">&rarr;</span></span>
+      </a>
+      <a href="toys.html" class="tile group block bg-lime text-charcoal rounded-sm p-8 md:p-9 brutal-lg rotate-[-1deg]">
+        <div class="flex items-start justify-between mb-8">
+          <p class="text-charcoal/55 font-bold text-[0.65rem] uppercase tracking-[0.22em]">Toys · Home · Phones</p>
+          <span class="font-serif text-charcoal/20 text-4xl leading-none">03</span>
+        </div>
+        <h3 class="font-serif text-3xl md:text-4xl mb-4 tracking-tight">Everything Else</h3>
+        <p class="text-charcoal/75 mb-10 leading-relaxed">Toys, homeware and phone accessories, printed to order.</p>
+        <span class="inline-flex items-center gap-2 font-semibold text-sm group-hover:gap-3 transition-all">Browse more <span aria-hidden="true">&rarr;</span></span>
+      </a>
+    </div>
+  </section>
+
+  <section class="border-y-2 border-charcoal bg-linen relative overflow-hidden">
+    <div class="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-terracotta/10 pointer-events-none" aria-hidden="true"></div>
+    <div class="max-w-7xl mx-auto px-6 md:px-10 py-16 md:py-20 flex flex-col md:flex-row items-start md:items-center justify-between gap-8 relative">
+      <div class="max-w-xl reveal-head">
+        <p class="eyebrow mb-4">Who's behind it</p>
+        <h2 class="font-serif text-2xl md:text-[2.35rem] leading-tight tracking-[-0.02em]">A small, family-run creative lab — not a big-box print farm.</h2>
+      </div>
+      <a href="story.html" class="shrink-0 inline-flex items-center gap-3 bg-charcoal text-cream rounded-full px-7 py-4 text-sm font-semibold brutal hover:bg-terracotta transition-colors">
+        Read our story <span aria-hidden="true">&rarr;</span>
+      </a>
+    </div>
+  </section>
+
+  <section id="contact" class="max-w-7xl mx-auto px-6 md:px-10 py-24 md:py-32">
+    <div class="grid md:grid-cols-2 gap-16 md:gap-20">
+      <div class="fade-up">
+        <p class="eyebrow mb-4">Get in touch</p>
+        <h2 class="font-serif text-3xl md:text-5xl leading-[1.05] mb-10 tracking-[-0.02em]">We reply fastest<br>on WhatsApp.</h2>
+        <div class="flex flex-col max-w-sm text-espresso/85 text-lg">
+          <a href="tel:+27826639608" class="contact-link font-medium">082 663 9608</a>
+          <a href="https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%20new%203D%20site." class="contact-link font-medium" target="_blank" rel="noopener noreferrer">WhatsApp us</a>
+          <a href="mailto:lapanzaonline@gmail.com" class="contact-link font-medium">lapanzaonline@gmail.com</a>
+          <p class="pt-5 text-espresso/55 text-sm leading-relaxed">23 Gladiator Rd, Pierre van Ryneveld<br>By appointment</p>
+        </div>
+      </div>
+      <div class="fade-up bg-charcoal text-cream rounded-sm p-8 md:p-10 brutal-lg relative overflow-hidden brand-lock">
+        <div class="absolute -left-10 -bottom-10 w-40 h-40 rounded-full bg-lime/15 pointer-events-none" aria-hidden="true"></div>
+        <p class="uppercase text-[0.65rem] tracking-[0.28em] text-lime font-bold mb-3 relative">Stay in the loop</p>
+        <h3 class="font-serif text-2xl mb-6 relative tracking-tight">New filament drops &amp; custom work.</h3>
+        <form id="newsletter-form" class="flex flex-col gap-3 mb-3 relative">
+          <label class="sr-only" for="newsletter-email">Email</label>
+          <input id="newsletter-email" name="email" type="email" required placeholder="you@email.com"
+                 class="bg-cream/10 border-2 border-cream/20 text-cream placeholder-cream/40 rounded-full px-5 py-3.5 text-sm focus:outline-none focus:border-lime">
+          <button type="submit" class="bg-lime text-charcoal rounded-full px-6 py-3.5 text-sm font-semibold hover:bg-cream transition-colors">Sign up</button>
+        </form>
+        <p id="newsletter-note" class="text-xs text-cream/45 relative">We'll only email you about new work and filament stock.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="border-t-2 border-charcoal py-14">
+    <div class="max-w-7xl mx-auto px-6 md:px-10 grid md:grid-cols-4 gap-10 items-start">
+      <div class="brand-mark font-serif text-xl font-semibold">Lapanza <span class="mark-3d">3D</span></div>
+      <a href="story.html" class="text-sm text-espresso/70 hover:text-terracotta transition-colors">Our Story</a>
+      <div class="text-sm text-espresso/70 space-y-1">
+        <p>&copy; <span data-year>2026</span> Lapanza 3D Creative Lab</p>
+        <p>lapanzaonline@gmail.com · 082 663 9608</p>
+      </div>
+      <div class="flex md:justify-end gap-5 text-sm">
+        <a href="https://www.facebook.com/Lapanzaloeferox" target="_blank" rel="noopener noreferrer" class="hover:text-terracotta transition-colors">Facebook</a>
+        <a href="https://www.instagram.com/lapanza_beauty_lifestyle/" target="_blank" rel="noopener noreferrer" class="hover:text-terracotta transition-colors">Instagram</a>
+      </div>
+    </div>
+  </footer>
+    </div>
+  </div>
+</body>
+</html>
