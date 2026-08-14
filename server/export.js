@@ -3,23 +3,24 @@ import path from 'path';
 import { listFilaments } from './filaments.js';
 import { getSettings, publicSettings } from './settings.js';
 
-const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
+function defaultPaths() {
+  const root = process.cwd();
+  return {
+    catalogJsonPath: path.join(root, 'data', 'catalog.json'),
+    filamentsSrc: path.join(root, 'src', 'data', 'filaments.json'),
+    categoriesSrc: path.join(root, 'src', 'data', 'categories.json'),
+    settingsSrc: path.join(root, 'src', 'data', 'settings.json'),
+    settingsPublic: path.join(root, 'public', 'site-settings.json'),
+  };
+}
 
-const DEFAULT_PATHS = {
-  catalogJsonPath: path.join(root, 'data', 'catalog.json'),
-  filamentsSrc: path.join(root, 'src', 'data', 'filaments.json'),
-  categoriesSrc: path.join(root, 'src', 'data', 'categories.json'),
-  settingsSrc: path.join(root, 'src', 'data', 'settings.json'),
-  settingsPublic: path.join(root, 'public', 'site-settings.json'),
-};
-
-export function readCategoryProducts(catalogJsonPath = DEFAULT_PATHS.catalogJsonPath) {
+export function readCategoryProducts(catalogJsonPath = defaultPaths().catalogJsonPath) {
   if (!fs.existsSync(catalogJsonPath)) return [];
   const catalog = JSON.parse(fs.readFileSync(catalogJsonPath, 'utf8'));
   return (catalog.products || []).filter((p) => p.kind === 'category');
 }
 
-export function syncPublicJson(db, paths = DEFAULT_PATHS) {
+export function syncPublicJson(db, paths = defaultPaths()) {
   const filaments = listFilaments(db).map((f) => ({
     slug: f.slug,
     name: f.name,
@@ -69,4 +70,4 @@ export function syncPublicJson(db, paths = DEFAULT_PATHS) {
   fs.writeFileSync(paths.settingsPublic, JSON.stringify(settings, null, 2));
 }
 
-export { DEFAULT_PATHS };
+export { defaultPaths };
