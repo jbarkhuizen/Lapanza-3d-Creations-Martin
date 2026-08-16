@@ -4,12 +4,22 @@ import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 import { syncPublicJson } from './export.js';
 
-const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
-const DATA_DIR = path.join(root, 'data');
-const CATALOG_PATH = path.join(DATA_DIR, 'catalog.json');
+// cwd-based (not __dirname) so tests can isolate via process.chdir() --
+// computed fresh on every call (not cached at module scope) because a
+// module is only evaluated once per process: index.test.js imports this
+// module indirectly, through several cache-busted index.js instances that
+// each process.chdir() to their own temp dir, so a module-level `root`
+// would freeze on whichever test's cwd happened to trigger the first
+// import and silently point every later test at that stale, since-deleted
+// directory (the same class of bug already fixed in db.js and export.js).
+function paths() {
+  const root = process.cwd();
+  const dataDir = path.join(root, 'data');
+  return { root, dataDir, catalogPath: path.join(dataDir, 'catalog.json') };
+}
 
-function ensureDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+function ensureDir({ root, dataDir } = paths()) {
+  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   if (!fs.existsSync(path.join(root, 'public'))) fs.mkdirSync(path.join(root, 'public'), { recursive: true });
 }
 
@@ -18,19 +28,21 @@ function now() {
 }
 
 export function loadCatalog() {
-  ensureDir();
-  if (!fs.existsSync(CATALOG_PATH)) {
+  const p = paths();
+  ensureDir(p);
+  if (!fs.existsSync(p.catalogPath)) {
     const seeded = { version: 1, updatedAt: now(), products: [] };
-    fs.writeFileSync(CATALOG_PATH, JSON.stringify(seeded, null, 2));
+    fs.writeFileSync(p.catalogPath, JSON.stringify(seeded, null, 2));
     return seeded;
   }
-  return JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
+  return JSON.parse(fs.readFileSync(p.catalogPath, 'utf8'));
 }
 
 export function saveCatalog(catalog, db = getDb()) {
-  ensureDir();
+  const p = paths();
+  ensureDir(p);
   catalog.updatedAt = now();
-  fs.writeFileSync(CATALOG_PATH, JSON.stringify(catalog, null, 2));
+  fs.writeFileSync(p.catalogPath, JSON.stringify(catalog, null, 2));
   syncPublicJson(db);
   return catalog;
 }

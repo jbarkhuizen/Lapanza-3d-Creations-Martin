@@ -18,6 +18,9 @@ async function freshApp() {
   const mod = await import(`./index.js?t=${Date.now()}-${Math.random()}`);
   return {
     app: mod.default,
+    // Exposed so fix-round regression tests can reach the isolated data dir
+    // directly (via tmpRoot) instead of calling process.cwd() again later.
+    tmpRoot,
     cleanup: () => {
       closeAllCachedDbs(); // each freshApp() call opens its own cache entry (Task 2's getDb is keyed per cwd) -- release it before deleting its directory
       process.chdir(originalCwd);
@@ -129,4 +132,115 @@ test('settings PUT/GET round-trip has no adminPassword field anymore', async (t)
   assert.strictEqual(put.body.settings.siteName, 'New Name');
   assert.strictEqual(put.body.settings.adminPassword, undefined);
   assert.strictEqual(put.body.settings.adminPasswordHash, undefined);
+});
+
+// -- Fix-round regression tests (reviewer findings on Task 10) --------------
+
+test('GET /api/products never returns a filament-kind row, even one injected directly into catalog.json', async (t) => {
+  const { app, cleanup, tmpRoot } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const createdCategory = await request(app).post('/api/products').set('Cookie', cookie).send({ name: 'Category A' });
+  assert.strictEqual(createdCategory.status, 201);
+  const categoryId = createdCategory.body.product.id;
+
+  // Simulate a stray filament-kind row surviving in catalog.json (e.g. a
+  // failed/skipped migration) by writing one directly into the file,
+  // bypassing the API's write-path kind:'category' guard entirely. Uses
+  // tmpRoot (captured before any chdir race) rather than process.cwd().
+  const catalogPath = path.join(tmpRoot, 'data', 'catalog.json');
+  const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+  const strayId = 'stray-filament-id';
+  catalog.products.push({ id: strayId, kind: 'filament', name: 'Stray Filament', slug: 'stray-filament' });
+  fs.writeFileSync(catalogPath, JSON.stringify(catalog, null, 2));
+
+  const list = await request(app).get('/api/products').set('Cookie', cookie);
+  assert.strictEqual(list.body.products.some((p) => p.id === strayId), false);
+  assert.strictEqual(list.body.products.some((p) => p.id === categoryId), true);
+
+  const single = await request(app).get(`/api/products/${strayId}`).set('Cookie', cookie);
+  assert.strictEqual(single.status, 404);
+});
+
+test('removing an admin revokes their live session', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const loginJohan = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const johanCookie = loginJohan.headers['set-cookie'];
+
+  await request(app).post('/api/admins').set('Cookie', johanCookie).send({ username: 'linandi', password: 'correcthorsebattery2' });
+  const loginLinandi = await request(app).post('/api/auth/login').send({ username: 'linandi', password: 'correcthorsebattery2' });
+  const linandiCookie = loginLinandi.headers['set-cookie'];
+
+  const list = await request(app).get('/api/admins').set('Cookie', johanCookie);
+  const linandiId = list.body.admins.find((a) => a.username === 'linandi').id;
+
+  // sanity check: linandi's session works before removal
+  const before = await request(app).get('/api/filaments').set('Cookie', linandiCookie);
+  assert.strictEqual(before.status, 200);
+
+  await request(app).delete(`/api/admins/${linandiId}`).set('Cookie', johanCookie);
+
+  const after = await request(app).get('/api/filaments').set('Cookie', linandiCookie);
+  assert.strictEqual(after.status, 401);
+});
+
+test('resetting an admin password revokes their live session', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const loginJohan = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const johanCookie = loginJohan.headers['set-cookie'];
+
+  await request(app).post('/api/admins').set('Cookie', johanCookie).send({ username: 'linandi', password: 'correcthorsebattery2' });
+  const loginLinandi = await request(app).post('/api/auth/login').send({ username: 'linandi', password: 'correcthorsebattery2' });
+  const linandiCookie = loginLinandi.headers['set-cookie'];
+
+  const list = await request(app).get('/api/admins').set('Cookie', johanCookie);
+  const linandiId = list.body.admins.find((a) => a.username === 'linandi').id;
+
+  await request(app)
+    .post(`/api/admins/${linandiId}/reset-password`)
+    .set('Cookie', johanCookie)
+    .send({ password: 'brandnewpassword1' });
+
+  const after = await request(app).get('/api/filaments').set('Cookie', linandiCookie);
+  assert.strictEqual(after.status, 401);
+});
+
+test('a session older than 12h is rejected server-side even with a valid cookie', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+
+  const realNow = Date.now;
+  const THIRTEEN_HOURS_AGO = Date.now() - 13 * 60 * 60 * 1000;
+  Date.now = () => THIRTEEN_HOURS_AGO;
+  let login;
+  try {
+    login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  } finally {
+    Date.now = realNow;
+  }
+  assert.strictEqual(login.status, 200);
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app).get('/api/filaments').set('Cookie', cookie);
+  assert.strictEqual(res.status, 401);
+});
+
+test('login with a missing or non-string password returns 401, not 500', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+
+  const missing = await request(app).post('/api/auth/login').send({ username: 'johan' });
+  assert.strictEqual(missing.status, 401);
+
+  const nonString = await request(app).post('/api/auth/login').send({ username: 'johan', password: 12345678 });
+  assert.strictEqual(nonString.status, 401);
 });

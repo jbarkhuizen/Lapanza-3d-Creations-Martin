@@ -22,11 +22,12 @@ import {
 } from './filaments.js';
 import { uploadFilamentImage } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
-import { loadCatalog, saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
+import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
 
 const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
 const PORT = Number(process.env.ADMIN_PORT || 8787);
 const SESSION_COOKIE = 'lapanza_admin_session';
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12h -- shared between the cookie maxAge and the server-side expiry check
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -38,16 +39,30 @@ const sessions = new Map();
 
 function requireAuth(req, res, next) {
   const token = req.cookies[SESSION_COOKIE];
-  if (!token || !sessions.has(token)) {
+  const session = token && sessions.get(token);
+  if (!session) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (Date.now() - session.createdAt >= SESSION_TTL_MS) {
+    sessions.delete(token); // stale -- treat exactly like a missing session
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
 }
 
-function startSession(res) {
+function startSession(res, adminId) {
   const token = randomUUID();
-  sessions.set(token, { createdAt: Date.now() });
-  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 12 });
+  sessions.set(token, { createdAt: Date.now(), adminId });
+  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
+}
+
+// Revokes every live session belonging to a given admin -- used when that
+// admin is removed or has their password reset, so a stolen/stale cookie
+// can't keep working for up to SESSION_TTL_MS afterward.
+function revokeSessionsForAdmin(adminId) {
+  for (const [token, session] of sessions) {
+    if (session.adminId === adminId) sessions.delete(token);
+  }
 }
 
 app.get('/api/health', (_req, res) => {
@@ -65,8 +80,8 @@ app.post('/api/setup', (req, res) => {
     return res.status(400).json({ error: 'Username and an 8+ character password are required' });
   }
   try {
-    createAdmin({ username, password });
-    startSession(res);
+    const admin = createAdmin({ username, password });
+    startSession(res, admin.id);
     res.status(201).json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -75,9 +90,15 @@ app.post('/api/setup', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const { username, password } = req.body || {};
+  // bcryptjs throws (not rejects) when compareSync gets a non-string, so a
+  // missing/malformed password must be rejected before it ever reaches
+  // verifyLogin -- otherwise the thrown error becomes an unhandled 500.
+  if (typeof username !== 'string' || !username || typeof password !== 'string' || !password) {
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
   const admin = verifyLogin(username, password);
   if (!admin) return res.status(401).json({ error: 'Invalid username or password' });
-  startSession(res);
+  startSession(res, admin.id);
   res.json({ ok: true });
 });
 
@@ -109,6 +130,7 @@ app.delete('/api/admins/:id', requireAuth, (req, res) => {
   try {
     const ok = deleteAdmin(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Admin not found' });
+    revokeSessionsForAdmin(req.params.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -119,6 +141,7 @@ app.post('/api/admins/:id/reset-password', requireAuth, (req, res) => {
   try {
     const ok = resetPassword(req.params.id, (req.body || {}).password);
     if (!ok) return res.status(404).json({ error: 'Admin not found' });
+    revokeSessionsForAdmin(req.params.id);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -228,8 +251,12 @@ app.post(
 );
 
 app.get('/api/products', requireAuth, (req, res) => {
-  const catalog = loadCatalog();
-  let list = [...catalog.products];
+  // Sourced from readCategoryProducts() (not loadCatalog()) so this route
+  // can never surface a stray filament-kind row -- the write path already
+  // forces kind:'category', but that's only a write-time guarantee; the
+  // read path needs its own filter in case a non-category row ever ends up
+  // in catalog.json (e.g. an interrupted/failed migration).
+  let list = readCategoryProducts();
   const { q, parent } = req.query;
   if (parent) list = list.filter((p) => p.parent === parent);
   if (q) {
@@ -248,7 +275,7 @@ app.get('/api/products', requireAuth, (req, res) => {
 
 app.get('/api/products/:id', requireAuth, (req, res) => {
   const product = getProduct(req.params.id);
-  if (!product) return res.status(404).json({ error: 'Product not found' });
+  if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
   res.json({ product });
 });
 
