@@ -5,83 +5,129 @@
     "description": "PLA (Polylactic Acid) is a biodegradable (under the correct conditions) thermoplastic derived from renewable resources such as corn starch or sugarcane. It is one of the most popular bioplastics, used for many applications ranging from plastic cups to medical implants. PLA in its raw form is also FDA and EU commission regulation approved as Food Contact Safe.",
     "specs": [
       {
+        "id": "e0849d68-40c5-4fd6-9220-3fc7e634ab11",
         "label": "Print Temp",
         "value": "190–220°C"
       },
       {
+        "id": "1536e16c-147e-41dc-ace5-d358ee5efd09",
         "label": "Bed Temp",
         "value": "45–60°C"
       },
       {
+        "id": "d9ae3ce7-4abc-4952-94c6-fc0f43a88b66",
         "label": "Density",
         "value": "1.24 g/cm³"
       },
       {
+        "id": "c0009592-4825-4699-90f4-254502ea21e5",
         "label": "Heat Distortion Temp",
         "value": "55°C"
       },
       {
+        "id": "d89d5b12-81ba-4c5a-859a-6f01cec33b49",
         "label": "Tensile Strength",
         "value": "45 MPa"
       },
       {
+        "id": "03fac6af-24c6-4514-be19-becbeccdd23a",
         "label": "Elongation at Break",
         "value": "9%"
       }
     ],
+    "colourNote": "Full range includes pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "White",
         "sku": "SA-F-PLA-A01-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black",
         "sku": "SA-F-PLA-A02-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-PLA-A03-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Clear (Natural)",
         "sku": "SA-F-PLA-A17-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-PLA-A04-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Red",
         "sku": "SA-F-PLA-A05-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Yellow",
         "sku": "SA-F-PLA-A06-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Green",
         "sku": "SA-F-PLA-A07-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Orange",
         "sku": "SA-F-PLA-A08-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Purple",
         "sku": "SA-F-PLA-A11-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range includes pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "pla-hyper",
@@ -89,78 +135,120 @@
     "description": "SA Filament PLA Hyper is a superior choice compared to standard PLA filament due to several key enhancements that cater to both professional and hobbyist 3D printing needs. With SA Filament PLA Hyper, printing speeds of up to 600mm/s is a breeze without compensating on strength and quality.",
     "specs": [
       {
+        "id": "f4af169b-9f1b-48bd-adc1-321326ff63b3",
         "label": "Print Temp",
         "value": "190–230°C"
       },
       {
+        "id": "b5b46a00-932b-4032-86a3-64e740b7cecc",
         "label": "Bed Temp",
         "value": "60–65°C"
       },
       {
+        "id": "265b974e-6828-44bc-b1c7-088f034cdaae",
         "label": "Density",
         "value": "1.24 g/cm³"
       },
       {
+        "id": "2cbe9425-7d27-49a2-842c-7afc9c75d8fb",
         "label": "Heat Distortion Temp",
         "value": "60°C"
       },
       {
+        "id": "aca2671f-ed49-4152-a685-2dddd3a11fe9",
         "label": "Tensile Strength",
         "value": "50 MPa"
       },
       {
+        "id": "88911f89-df52-406e-a61a-8da4a53b5f77",
         "label": "Elongation at Break",
         "value": "5%"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Cool White",
         "sku": "SA-F-PLAHYP-A0135-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black",
         "sku": "SA-F-PLAHYP-A02-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-PLAHYP-A03-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Dark Grey",
         "sku": "SA-F-PLAHYP-B0301-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Light Grey",
         "sku": "SA-F-PLAHYP-B0302-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Red",
         "sku": "SA-F-PLAHYP-A05-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-PLAHYP-A04-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Yellow",
         "sku": "SA-F-PLAHYP-A06-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Orange",
         "sku": "SA-F-PLAHYP-A08-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "pla-hyper-silk",
@@ -168,104 +256,164 @@
     "description": "SA Filament PLA Hyper Silk is a specialty version of PLA designed to combine the glossy “silk” appearance with the faster-printing characteristics of modern high-speed PLA formulations. It produces a shiny, reflective surface that hides layer lines better than standard PLA — popular for decorative prints, cosplay props, display pieces and gifts. “Hyper” PLA formulations are designed for faster printers and can handle much higher print speeds than normal silk PLA, up to 500mm/s.",
     "specs": [
       {
+        "id": "80b7f424-147b-467b-a57e-7051ef899b04",
         "label": "Print Temp",
         "value": "190–220°C"
       },
       {
+        "id": "6f635d5c-a6fd-411a-b6e6-eba3d699db83",
         "label": "Bed Temp",
         "value": "55–70°C"
       },
       {
+        "id": "488bc730-e38c-42ab-ac01-2879d298f686",
         "label": "Cooling Fan",
         "value": "On"
       },
       {
+        "id": "769d10f3-01e8-40e3-a099-667bf5c7b742",
         "label": "Speed",
         "value": "Normal up to high-speed profiles, printer-dependent"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Gold",
         "sku": "SA-F-PLAHYP-C20-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Copper",
         "sku": "SA-F-PLAHYP-C0032-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Platinum",
         "sku": "SA-F-PLAHYP-C59-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-PLAHYP-C01-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Graphite",
         "sku": "SA-F-PLAHYP-C60-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Velvet Pink",
         "sku": "SA-F-PLAHYP-C1044-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Electric Blue",
         "sku": "SA-F-PLAHYP-C0444-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "pla-premium",
     "name": "PLA Premium",
     "description": "SA Filament PLA Premium is focused on bringing world class filament to everyone without breaking the bank. Our PREMIUM formula with increased layer adhesion, better accuracy and incredible quality makes this not only the best filament to work with, but brings out the best in what your printer can do. Easily recognisable by its unique transparent spool.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Crystal Glass (Very Clear)",
         "sku": "SA-F-PLAPRE-B#08-075175PG",
-        "price": "R349"
+        "price": "R349",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Galaxy Black",
         "sku": "SA-F-PLAPRE-B0227-075175PG",
-        "price": "R349"
+        "price": "R349",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Glitter Red",
         "sku": "SA-F-PLAPRE-A05-075175PG",
-        "price": "R349"
+        "price": "R349",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Glitter Purple",
         "sku": "SA-F-PLAPRE-A11-075175PG",
-        "price": "R349"
+        "price": "R349",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Glitter Green",
         "sku": "SA-F-PLAPRE-A07-075175PG",
-        "price": "R349"
+        "price": "R349",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Glitter Blue",
         "sku": "SA-F-PLAPRE-A04-075175PG",
-        "price": "R349"
+        "price": "R349",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Glitter Black",
         "sku": "SA-F-PLAPRE-A02-075175PG",
-        "price": "R349"
+        "price": "R349",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "silk-pla-plus",
@@ -273,102 +421,156 @@
     "description": "SA Filament Silk PLA+ takes PLA to the next level. If you want breathtakingly beautiful shiny, silky prints, look no further. With higher heat deflection temperature, impact strength and improved durability, Silk PLA+ is the perfect PLA alternative for anyone who wants more “wow factor” from their prints. Silk PLA is normally known for poor layer adhesion and slow printing — SA Filament's formula prints at normal PLA temperatures and speeds.",
     "specs": [
       {
+        "id": "abaf30ee-8e27-4a57-912e-6063fd82d373",
         "label": "Print Temp",
         "value": "190–230°C"
       },
       {
+        "id": "fe345e1e-fd2d-4b91-b1dc-e4dd21adc8e1",
         "label": "Bed Temp",
         "value": "50–65°C"
       },
       {
+        "id": "2bbe837c-29b1-4e01-ab23-2726dd37a6d2",
         "label": "Density",
         "value": "1.25 g/cm³"
       },
       {
+        "id": "f3428546-22c2-4e36-95e3-3d27b625e834",
         "label": "Heat Distortion Temp",
         "value": "61°C"
       },
       {
+        "id": "1a18e370-756c-406f-9921-6c49c4032656",
         "label": "Tensile Strength",
         "value": "35 MPa"
       },
       {
+        "id": "45ec0774-2914-44f8-b254-302fd7afdecf",
         "label": "Elongation at Break",
         "value": "25%"
       }
     ],
+    "colourNote": "Also available as Dual Colour and Tri Colour spools (e.g. Blue Blood, Golden Aurora, Northern Lights) — ask us for the full specialty range.",
     "colours": [
       {
         "name": "Gloss Black",
         "sku": "SA-F-PLAPLUS-C0226-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Gloss White",
         "sku": "SA-F-PLAPLUS-C0126-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Gunmetal",
         "sku": "SA-F-PLAPLUS-B#13-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Gloss Grey",
         "sku": "SA-F-PLAPLUS-C03-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Steel Blue",
         "sku": "SA-F-PLAPLUS-C0434-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Chrome Silver",
         "sku": "SA-F-PLAPLUS-H21-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Chrome Blue",
         "sku": "SA-F-PLAPLUS-H04-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Pearl White",
         "sku": "SA-F-PLAPLUS-B0105-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Sky Blue",
         "sku": "SA-F-PLAPLUS-C0403-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Royal Blue",
         "sku": "SA-F-PLAPLUS-C0436-100175PG",
-        "price": "R329"
+        "price": "R329",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Also available as Dual Colour and Tri Colour spools (e.g. Blue Blood, Golden Aurora, Northern Lights) — ask us for the full specialty range."
+    ]
   },
   {
     "slug": "eco-pla",
     "name": "Eco PLA",
     "description": "An economical PLA line for everyday printing where budget matters more than premium finish.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black",
         "sku": "SA-F-PLAECO-A02-100175PG",
-        "price": "R269"
+        "price": "R269",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-PLAECO-A01-100175PG",
-        "price": "R269"
+        "price": "R269",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "petg",
@@ -376,32 +578,38 @@
     "description": "SA Filament PETG (polyethylene terephthalate glycol-modified) is a transparent type of copolyester. PETG combines strength and ductility, which is why it's used in so many mechanical parts and robotics. It has great chemical resistance with good water, acidic and alkaline resistance. PETG in its raw form is also FDA and EU commission regulation approved as Food Contact Safe.",
     "specs": [
       {
+        "id": "9c40959f-ce70-4a2e-90c8-8b26f15e629e",
         "label": "Print Temp",
         "value": "235–255°C"
       },
       {
+        "id": "f987a6d1-a79d-42df-b54e-a7442162cfa4",
         "label": "Bed Temp",
         "value": "60–80°C"
       },
       {
+        "id": "c4732a2d-e364-4385-a438-4fd3376c65c5",
         "label": "Density",
         "value": "1.27 g/cm³"
       },
       {
+        "id": "5e411430-07f2-4394-8063-8d61c2913764",
         "label": "Heat Distortion Temp",
         "value": "70°C"
       },
       {
+        "id": "71439bb6-659f-4139-a6fd-719c4fa3e580",
         "label": "Tensile Strength",
         "value": "49 MPa"
       },
       {
+        "id": "d34670cd-5561-4cfc-9326-4f536552e948",
         "label": "Elongation at Break",
         "value": "250%"
       }
     ],
-    "colours": [],
-    "colourNote": ""
+    "colourNote": "",
+    "colours": []
   },
   {
     "slug": "petg-speed",
@@ -409,83 +617,129 @@
     "description": "SA Filament PETG Speed is designed for effortless high-speed printing — delivering the strength and durability of PETG while printing as easily as PLA, at speeds of up to 500mm/s.",
     "specs": [
       {
+        "id": "1212a4c7-bb4b-472e-805e-2395c31f3058",
         "label": "Print Temp",
         "value": "225–255°C"
       },
       {
+        "id": "a2d18862-279e-48b1-9566-c341e059b3ec",
         "label": "Bed Temp",
         "value": "70–80°C"
       },
       {
+        "id": "d6f3c5ca-7c51-40ea-9e2c-afb2fb63d911",
         "label": "Density",
         "value": "1.27 g/cm³"
       },
       {
+        "id": "6762f84c-1c80-4567-91b6-a1b55f85dd77",
         "label": "Heat Distortion Temp",
         "value": "70°C"
       },
       {
+        "id": "c33774fc-56b0-4667-bf73-bc113885412b",
         "label": "Tensile Strength",
         "value": "49 MPa"
       },
       {
+        "id": "a11d0cf5-1602-4d18-84a6-5d367898f0ef",
         "label": "Elongation at Break",
         "value": "136%"
       }
     ],
+    "colourNote": "Also available in 2.5kg spools (Black, Grey, White) and translucent colours — ask us for the full list.",
     "colours": [
       {
         "name": "Black",
         "sku": "SA-F-PETGSP-A02-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-PETGSP-A04-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-PETGSP-A03-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-PETGSP-A01-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Clear",
         "sku": "SA-F-PETGSP-A17-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Fire Engine Red",
         "sku": "SA-F-PETGSP-B0518-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Green",
         "sku": "SA-F-PETGSP-A07-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Orange",
         "sku": "SA-F-PETGSP-A08-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Silver",
         "sku": "SA-F-PETGSP-A21-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Sky Blue",
         "sku": "SA-F-PETGSP-B0403-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Also available in 2.5kg spools (Black, Grey, White) and translucent colours — ask us for the full list."
+    ]
   },
   {
     "slug": "petg-speed-cf",
@@ -493,57 +747,75 @@
     "description": "SA Filament PETG Speed CF is designed for effortless high-speed printing — delivering the strength and durability of PETG infused with carbon fibre while printing as easily as PLA, at speeds of up to 500mm/s.",
     "specs": [
       {
+        "id": "ad283c13-fd2f-4ee5-80a5-02802357f25f",
         "label": "Print Temp",
         "value": "230–260°C"
       },
       {
+        "id": "3d58ea56-e28b-480a-9ff2-53b0992456f3",
         "label": "Bed Temp",
         "value": "75°C"
       },
       {
+        "id": "01dcc4cb-6efd-4978-84c7-a3d8b52b4a40",
         "label": "Density",
         "value": "1.27 g/cm³"
       },
       {
+        "id": "c4758e7a-11c7-40cc-93d3-0eecbf797bc2",
         "label": "Heat Distortion Temp",
         "value": "75°C"
       },
       {
+        "id": "764e312a-1c0b-4dfe-8b53-90798eabbd98",
         "label": "Tensile Strength",
         "value": "58 MPa"
       },
       {
+        "id": "9441616a-9a55-47e6-bcd9-e5cf97ae8083",
         "label": "Elongation at Break",
         "value": "30%"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black (500g)",
         "sku": "SA-F-PETGSP-K02-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black (1kg)",
         "sku": "SA-F-PETGSP-K02-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "petg-eco",
     "name": "PETG Eco",
     "description": "An economical PETG line for everyday functional printing.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black",
         "sku": "SA-F-PETGECO-A02-100175PG",
-        "price": "R249"
+        "price": "R249",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "abs-premium",
@@ -551,122 +823,187 @@
     "description": "SA Filament ABS (Acrylonitrile Butadiene Styrene) is a common thermoplastic well known in the injection moulding industry — used for applications such as LEGO, electronic housings, and automotive bumper parts. SA Filament has developed an ABS formula that stands out above the rest.",
     "specs": [
       {
+        "id": "fbd45669-fe51-4494-97ec-23dce7dd81e4",
         "label": "Print Temp",
         "value": "230–250°C"
       },
       {
+        "id": "418af691-2509-4a94-9c1e-0a2af8ec11c8",
         "label": "Bed Temp",
         "value": "80–110°C"
       },
       {
+        "id": "9e1a1efc-1442-4f74-9225-2475e3c983e4",
         "label": "Density",
         "value": "1.04 g/cm³"
       },
       {
+        "id": "cd3625e0-ed31-4e1a-a75e-8f71704e8a44",
         "label": "Tensile Strength",
         "value": "32 MPa"
       },
       {
+        "id": "27c90e6f-6235-47e5-a3b1-e2d5c8542482",
         "label": "Elongation at Break",
         "value": "30%"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "White",
         "sku": "SA-F-ABSPRE-A01-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black",
         "sku": "SA-F-ABSPRE-A02-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Cool White",
         "sku": "SA-F-ABSPRE-A26-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Silver",
         "sku": "SA-F-ABSPRE-A21-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-ABSPRE-A03-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Red",
         "sku": "SA-F-ABSPRE-A05-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-ABSPRE-A04-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Orange",
         "sku": "SA-F-ABSPRE-A08-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Green",
         "sku": "SA-F-ABSPRE-A07-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Natural/Ivory",
         "sku": "SA-F-ABSPRE-A14-100175PG",
-        "price": "R275"
+        "price": "R275",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "abs-eco",
     "name": "ABS Eco",
     "description": "An economical ABS line for everyday functional printing.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "White",
         "sku": "SA-F-ABSECO-A01-100175PG",
-        "price": "R249"
+        "price": "R249",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black",
         "sku": "SA-F-ABSECO-A02-100175PG",
-        "price": "R249"
+        "price": "R249",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-ABSECO-A03-100175PG",
-        "price": "R249"
+        "price": "R249",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "asa",
     "name": "ASA",
     "description": "ASA is a UV- and weather-resistant engineering filament, commonly used as an outdoor-durable alternative to ABS.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black",
         "sku": "SA-F-ASA-A02-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Ivory White",
         "sku": "SA-F-ASA-A0142-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "sbs",
@@ -674,151 +1011,237 @@
     "description": "SA Filament SBS (Styrene-Butadiene-Styrene), also known as SBC, is engineered with our own proprietary formulation to deliver enhanced flexibility, superior surface quality, and outstanding durability. Developed specifically for functional and aesthetic applications, SBS offers the performance of engineering-grade materials with the ease-of-use of everyday filaments.",
     "specs": [
       {
+        "id": "4b7b9fc5-c98c-485c-9a29-596fcd50e640",
         "label": "Print Temp",
         "value": "190–230°C"
       },
       {
+        "id": "11081a58-16f8-4370-b831-e784e19b269b",
         "label": "Bed Temp",
         "value": "70–80°C"
       },
       {
+        "id": "d3996e24-b6f2-4aed-8d2a-df2f16051ff0",
         "label": "Density",
         "value": "1.02 g/cm³"
       },
       {
+        "id": "05d42ee6-346b-4029-a37c-d9923f4198f4",
         "label": "Heat Distortion Temp",
         "value": "67°C"
       },
       {
+        "id": "753a1d22-83fc-4ab8-9d3d-37b4ea7a13dc",
         "label": "Tensile Strength",
         "value": "23 MPa"
       },
       {
+        "id": "d793311d-8c7a-4dce-a553-622c3f8965ad",
         "label": "Elongation at Break",
         "value": "200%"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Hyper Black",
         "sku": "SA-F-SBSHYP-A02-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-SBS-A01-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Dark Grey",
         "sku": "SA-F-SBS-B0301-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-SBS-A03-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black",
         "sku": "SA-F-SBS-A02-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Silver",
         "sku": "SA-F-SBS-A21-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Red",
         "sku": "SA-F-SBS-A05-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-SBS-A04-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Orange",
         "sku": "SA-F-SBS-A08-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Yellow",
         "sku": "SA-F-SBS-A06-100175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "tpu-95a",
     "name": "TPU 95A",
     "description": "SA Filament 95A TPU is a high-quality flexible filament designed to meet the needs of professional and hobbyist 3D printing applications. With a Shore hardness of 95A, this TPU strikes an excellent balance between flexibility and rigidity, offering versatility across a wide range of use cases.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black (500g)",
         "sku": "SA-F-TPU95A-A02-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black (1kg)",
         "sku": "SA-F-TPU95A-A02-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-TPU95A-A01-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Clear",
         "sku": "SA-F-TPU95A-A17-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-TPU95A-A03-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-TPU95A-A04-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Red",
         "sku": "SA-F-TPU95A-A05-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Lunar Yellow",
         "sku": "SA-F-TPU95A-D06-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "tpu-98a",
     "name": "TPU 98A",
     "description": "A higher-hardness 98A variant of our flexible TPU line — less flexible than 95A, more rigid for demanding functional parts.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black (500g)",
         "sku": "SA-F-TPU98A-A02-050175PG",
-        "price": "R299"
+        "price": "R299",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Black (1kg)",
         "sku": "SA-F-TPU98A-A02-100175PG",
-        "price": "R449"
+        "price": "R449",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "pro-cpe",
@@ -826,58 +1249,84 @@
     "description": "PRO CPE (Standard Copolymer) — part of SA Filament's PRO engineering series.",
     "specs": [
       {
+        "id": "3efd7e5d-e5c8-470c-b8f5-af41c150b636",
         "label": "Print Temp",
         "value": "235–265°C"
       },
       {
+        "id": "a0b4951f-282e-4742-b4cb-105fe9dee7a3",
         "label": "Bed Temp",
         "value": "65–85°C"
       },
       {
+        "id": "9941da21-d9ce-4173-a25c-c42cfafc6b3c",
         "label": "Density",
         "value": "1.25 g/cm³"
       },
       {
+        "id": "214c83ba-ad9d-4729-bfb6-51cbd033d2ca",
         "label": "Heat Distortion Temp",
         "value": "81°C"
       },
       {
+        "id": "a655740f-3350-4c38-afbb-2e7424f06c76",
         "label": "Tensile Strength",
         "value": "54 MPa"
       },
       {
+        "id": "cfb3bb91-f57c-44bb-ad48-4992eede7bd0",
         "label": "Elongation at Break",
         "value": "230%"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black",
         "sku": "SA-F-CPEPRO-A02-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-CPEPRO-A01-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-CPEPRO-A03-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Ruby Red",
         "sku": "SA-F-CPEPRO-A05-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-CPEPRO-A04-100175PG",
-        "price": "R399"
+        "price": "R399",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "pro-cpe-plus",
@@ -885,63 +1334,93 @@
     "description": "PRO CPE+ (High Strength and Temperature) — reinforced copolymer for demanding functional parts.",
     "specs": [
       {
+        "id": "1f8ded0f-15d8-42ac-9787-6d7421f4f15d",
         "label": "Print Temp",
         "value": "235–265°C"
       },
       {
+        "id": "33a53b27-3593-40f4-ae99-7228fa98fff9",
         "label": "Bed Temp",
         "value": "70–100°C"
       },
       {
+        "id": "e649a543-f908-4c6a-9349-a14591c311e8",
         "label": "Density",
         "value": "1.25 g/cm³"
       },
       {
+        "id": "95da4c12-b4ff-428f-8187-e9a8bd85eebf",
         "label": "Heat Distortion Temp",
         "value": "83°C"
       },
       {
+        "id": "274fa9da-2f53-40d8-bd96-73fb75ede3a2",
         "label": "Tensile Strength",
         "value": "48 MPa"
       },
       {
+        "id": "34413fee-4edb-4163-8f68-c3a2a218bf07",
         "label": "Elongation at Break",
         "value": "250%"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black",
         "sku": "SA-F-CPEPRO+-A02-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-CPEPRO+-A01-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-CPEPRO+-A03-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Ruby Red",
         "sku": "SA-F-CPEPRO+-A05-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-CPEPRO+-A04-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Natural",
         "sku": "SA-F-CPEPRO+-A14-100175PG",
-        "price": "R499"
+        "price": "R499",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "pro-cpe-ht",
@@ -949,71 +1428,101 @@
     "description": "PRO CPE-HT (High Temperature) — SA Filament's highest heat-resistance copolymer, for parts that need to survive sustained high temperatures.",
     "specs": [
       {
+        "id": "03e03683-80ce-4021-bc51-f7ff527e8e16",
         "label": "Print Temp",
         "value": "235–275°C"
       },
       {
+        "id": "31822dde-41b2-4e83-9a27-b2cfe449bde7",
         "label": "Bed Temp",
         "value": "75–110°C"
       },
       {
+        "id": "4f4a191f-e77f-441b-b76b-3a3f740e88ef",
         "label": "Density",
         "value": "1.27 g/cm³"
       },
       {
+        "id": "a6775020-499c-455c-a481-b85935773b53",
         "label": "Heat Distortion Temp",
         "value": "97°C"
       },
       {
+        "id": "93dab87b-6110-4dc6-9457-24e8b408bc39",
         "label": "Tensile Strength",
         "value": "48 MPa"
       },
       {
+        "id": "fbf3b622-5915-4ba5-a8bf-15969a0c3d20",
         "label": "Elongation at Break",
         "value": "150%"
       }
     ],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Black",
         "sku": "SA-F-CPEHT-A02-100175PG",
-        "price": "R549"
+        "price": "R549",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "White",
         "sku": "SA-F-CPEHT-A01-100175PG",
-        "price": "R549"
+        "price": "R549",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Grey",
         "sku": "SA-F-CPEHT-A03-100175PG",
-        "price": "R549"
+        "price": "R549",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Ruby Red",
         "sku": "SA-F-CPEHT-A05-100175PG",
-        "price": "R549"
+        "price": "R549",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       },
       {
         "name": "Blue",
         "sku": "SA-F-CPEHT-A04-100175PG",
-        "price": "R549"
+        "price": "R549",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   },
   {
     "slug": "signage",
     "name": "Signage",
     "description": "SA Filament has developed a range of filament specifically for use in the signage industry — an easy-printing co-polymer that is UV stable, extremely transparent, and has a high heat deflection temperature.",
     "specs": [],
+    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list.",
     "colours": [
       {
         "name": "Opal (2.5kg)",
         "sku": "SA-F-SIGNLT-A#-250175PG",
-        "price": "R999"
+        "price": "R999",
+        "weightG": 0,
+        "rollLengthM": null,
+        "stockQty": 1,
+        "imageUrl": ""
       }
-    ],
-    "colourNote": "Full range may include pastel, UV neon and translucent colours — ask us for the complete swatch list."
+    ]
   }
 ]
