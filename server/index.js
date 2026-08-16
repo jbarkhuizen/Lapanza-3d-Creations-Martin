@@ -213,10 +213,15 @@ app.post('/api/filaments', requireAuth, (req, res) => {
 });
 
 app.put('/api/filaments/:id', requireAuth, (req, res) => {
-  const filament = updateFilament(req.params.id, req.body || {});
-  if (!filament) return res.status(404).json({ error: 'Filament not found' });
-  syncPublicJson(getDb());
-  res.json({ filament });
+  try {
+    const filament = updateFilament(req.params.id, req.body || {});
+    if (!filament) return res.status(404).json({ error: 'Filament not found' });
+    syncPublicJson(getDb());
+    res.json({ filament });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
+    throw err;
+  }
 });
 
 app.delete('/api/filaments/:id', requireAuth, (req, res) => {
@@ -349,6 +354,19 @@ app.put('/api/products/:id', requireAuth, (req, res) => {
     crumbs: body.crumbs ?? existing.crumbs,
     parent: body.parent ?? existing.parent,
     items: normalizeItems(body.items ?? existing.items),
+    // upsertProduct() does a full-record replacement (not a merge), so any
+    // field left out here is silently deleted from the stored record on
+    // every save -- not just ignored. status/featured/sortOrder/seoTitle/
+    // seoDescription/internalNotes are real, editable fields on category
+    // products (see admin/admin.js's category editor) and must be carried
+    // forward the same way the fields above are, or a PUT that only
+    // touches e.g. description would wipe all of them.
+    status: body.status ?? existing.status,
+    featured: body.featured ?? existing.featured,
+    sortOrder: body.sortOrder ?? existing.sortOrder,
+    seoTitle: body.seoTitle ?? existing.seoTitle,
+    seoDescription: body.seoDescription ?? existing.seoDescription,
+    internalNotes: body.internalNotes ?? existing.internalNotes,
   };
   upsertProduct(product);
   res.json({ product });
@@ -379,11 +397,18 @@ app.put('/api/settings', requireAuth, (req, res) => {
     patch.useUniversalFont = patch.useUniversalFont === 'true';
   }
   if (Array.isArray(patch.homeTiles)) {
-    patch.homeTiles = patch.homeTiles.slice(0, 3).map((t) => ({
-      eyebrow: t.eyebrow || '',
-      title: t.title || '',
-      description: t.description || '',
-    }));
+    // Guard each element too, not just the array itself -- a malformed
+    // entry (e.g. null, or a non-object) must be defaulted rather than
+    // crashing the whole request when read as `t.eyebrow`/`t.title`/
+    // `t.description`.
+    patch.homeTiles = patch.homeTiles.slice(0, 3).map((t) => {
+      const tile = t && typeof t === 'object' ? t : {};
+      return {
+        eyebrow: tile.eyebrow || '',
+        title: tile.title || '',
+        description: tile.description || '',
+      };
+    });
   } else {
     delete patch.homeTiles;
   }

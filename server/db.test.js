@@ -112,6 +112,57 @@ test('getDb() surfaces a migration error loudly instead of silently leaving an e
   assert.throws(() => getDb(), /UNIQUE constraint failed/);
 });
 
+test('getDb() removes the broken db file after a failed migration so the next boot retries', async (t) => {
+  const origCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-test-'));
+
+  await t.after(() => {
+    closeAllCachedDbs();
+    process.chdir(origCwd);
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      // ignore cleanup errors
+    }
+  });
+
+  process.chdir(tmpDir);
+  fs.mkdirSync(path.join(tmpDir, 'data'), { recursive: true });
+  // Same duplicate-SKU catalog as above, guaranteed to fail migration.
+  const catalog = {
+    version: 1,
+    products: [
+      {
+        kind: 'filament',
+        slug: 'pla',
+        name: 'PLA',
+        colours: [{ name: 'White', sku: 'DUPLICATE-SKU' }],
+      },
+      {
+        kind: 'filament',
+        slug: 'petg',
+        name: 'PETG',
+        colours: [{ name: 'Black', sku: 'DUPLICATE-SKU' }],
+      },
+    ],
+  };
+  fs.writeFileSync(path.join(tmpDir, 'data', 'catalog.json'), JSON.stringify(catalog, null, 2));
+
+  const dbPath = path.join(tmpDir, 'data', 'lapanza.db');
+
+  assert.throws(() => getDb(), /UNIQUE constraint failed/);
+  // The just-created db file must not survive a failed migration -- if it
+  // did, the next getDb() call would see `!fs.existsSync(dbPath)` as false,
+  // skip migration entirely, and silently boot with an empty database.
+  assert.strictEqual(fs.existsSync(dbPath), false, 'broken db file should be removed after failed migration');
+
+  // A second boot attempt should therefore see isNew === true again and
+  // retry migration (and fail the same way) rather than silently succeeding
+  // with an empty db.
+  assert.throws(() => getDb(), /UNIQUE constraint failed/);
+  assert.strictEqual(fs.existsSync(dbPath), false, 'broken db file should still be removed after the retry');
+});
+
 test('getDb() caches per resolved path: same cwd returns same instance', async (t) => {
   const origCwd = process.cwd();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-test-'));

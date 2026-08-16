@@ -95,6 +95,21 @@ export function getDb() {
       console.error('Catalog migration failed:', err);
       _dbCache.delete(dbPath);
       db.close();
+      // Also delete the just-created (now known-broken) db file itself.
+      // Without this, the file left on disk makes `isNew` (`!fs.existsSync`)
+      // false on the NEXT boot attempt, so a restart after a failed
+      // migration would silently skip migration entirely and proceed with
+      // an empty database instead of retrying -- defeating the point of
+      // throwing loudly here in the first place.
+      try {
+        fs.rmSync(dbPath, { force: true });
+        // WAL mode may also leave -wal/-shm sidecar files; clean those up
+        // too so a retry starts from a truly clean slate.
+        fs.rmSync(`${dbPath}-wal`, { force: true });
+        fs.rmSync(`${dbPath}-shm`, { force: true });
+      } catch (cleanupErr) {
+        console.error('Failed to remove broken db file after migration failure:', cleanupErr);
+      }
       throw err;
     }
   }

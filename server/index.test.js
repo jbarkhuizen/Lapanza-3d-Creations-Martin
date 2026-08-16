@@ -251,6 +251,23 @@ test('duplicate filament slug returns clean 400 JSON, not a raw 500 HTML page', 
   assert.match(dup.body.error, /slug/i);
 });
 
+test('updating a filament to a slug that collides with another filament returns clean 400 JSON, not a raw 500 HTML page', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA', slug: 'pla' });
+  const second = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PETG', slug: 'petg' });
+  const secondId = second.body.filament.id;
+
+  const dup = await request(app).put(`/api/filaments/${secondId}`).set('Cookie', cookie).send({ slug: 'pla' });
+  assert.strictEqual(dup.status, 400);
+  assert.match(dup.headers['content-type'], /json/);
+  assert.match(dup.body.error, /slug/i);
+});
+
 test('duplicate colour SKU (on create and on update) returns clean 400 JSON, not a raw 500 HTML page', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
@@ -327,6 +344,28 @@ test('PUT /api/settings with a non-array homeTiles is rejected/ignored instead o
   assert.strictEqual(res.status, 200);
 });
 
+test('PUT /api/settings with a homeTiles array containing a null/non-object element is defaulted instead of 500ing', async (t) => {
+  // Regression test: the array-level Array.isArray(patch.homeTiles) guard
+  // only checks the array itself -- an element like `null` inside it still
+  // crashes when the code reads `.eyebrow`/`.title`/`.description` off it.
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({ homeTiles: [null, 'not an object', { eyebrow: 'Real', title: 'Tile', description: 'Kept' }] });
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(res.body.settings.homeTiles, [
+    { eyebrow: '', title: '', description: '' },
+    { eyebrow: '', title: '', description: '' },
+    { eyebrow: 'Real', title: 'Tile', description: 'Kept' },
+  ]);
+});
+
 test('PUT /api/products/:id only persists allowlisted fields, not arbitrary request-body keys', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
@@ -346,6 +385,65 @@ test('PUT /api/products/:id only persists allowlisted fields, not arbitrary requ
 
   const refetched = await request(app).get(`/api/products/${productId}`).set('Cookie', cookie);
   assert.strictEqual(refetched.body.product.evilKey, undefined);
+});
+
+test('PUT /api/products/:id touching only one field preserves status/featured/sortOrder/SEO fields', async (t) => {
+  // Regression test: upsertProduct() in store.js does a full-record
+  // replacement, not a merge, so any field the PUT allowlist omits is
+  // silently deleted on every save -- not just left alone. This proves a
+  // PUT that only intends to change `description` doesn't wipe out the
+  // other real, editable category-product fields.
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app).post('/api/products').set('Cookie', cookie).send({ name: 'Category A' });
+  const productId = created.body.product.id;
+
+  // Seed all the fields under test via a PUT (POST /api/products doesn't
+  // accept them yet), then confirm they actually landed.
+  const seeded = await request(app)
+    .put(`/api/products/${productId}`)
+    .set('Cookie', cookie)
+    .send({
+      name: 'Category A',
+      description: 'original description',
+      status: 'published',
+      featured: true,
+      sortOrder: 7,
+      seoTitle: 'Original SEO title',
+      seoDescription: 'Original SEO description',
+      internalNotes: 'do not show to customers',
+    });
+  assert.strictEqual(seeded.status, 200);
+  assert.strictEqual(seeded.body.product.status, 'published');
+  assert.strictEqual(seeded.body.product.featured, true);
+  assert.strictEqual(seeded.body.product.sortOrder, 7);
+
+  // Now touch only `description` -- everything else must survive.
+  const updated = await request(app)
+    .put(`/api/products/${productId}`)
+    .set('Cookie', cookie)
+    .send({ description: 'new description' });
+  assert.strictEqual(updated.status, 200);
+  const product = updated.body.product;
+  assert.strictEqual(product.description, 'new description');
+  assert.strictEqual(product.status, 'published');
+  assert.strictEqual(product.featured, true);
+  assert.strictEqual(product.sortOrder, 7);
+  assert.strictEqual(product.seoTitle, 'Original SEO title');
+  assert.strictEqual(product.seoDescription, 'Original SEO description');
+  assert.strictEqual(product.internalNotes, 'do not show to customers');
+
+  const refetched = await request(app).get(`/api/products/${productId}`).set('Cookie', cookie);
+  assert.strictEqual(refetched.body.product.status, 'published');
+  assert.strictEqual(refetched.body.product.featured, true);
+  assert.strictEqual(refetched.body.product.sortOrder, 7);
+  assert.strictEqual(refetched.body.product.seoTitle, 'Original SEO title');
+  assert.strictEqual(refetched.body.product.seoDescription, 'Original SEO description');
+  assert.strictEqual(refetched.body.product.internalNotes, 'do not show to customers');
 });
 
 test('login with a missing or non-string password returns 401, not 500', async (t) => {
