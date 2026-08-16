@@ -302,14 +302,42 @@ async function loadApp() {
   await Promise.all([renderDashboard(), refreshProducts()]);
 }
 
+// Filaments and category products now live behind separate endpoints
+// (server/index.js Task 10 route rewrite: /api/filaments* vs /api/products*),
+// neither of which supports the combined q/kind/status filtering the catalog
+// view previously got from a single /api/products call. So both lists are
+// fetched in full and merged + filtered here instead.
 async function refreshProducts() {
-  const params = new URLSearchParams();
-  if (state.filters.q) params.set('q', state.filters.q);
-  if (state.filters.kind) params.set('kind', state.filters.kind);
-  if (state.filters.status) params.set('status', state.filters.status);
-  const data = await api(`/api/products?${params}`);
-  state.products = data.products;
-  return data;
+  const [{ filaments }, { products }] = await Promise.all([
+    api('/api/filaments'),
+    api('/api/products'),
+  ]);
+  let list = [
+    ...filaments.map((f) => ({ ...f, kind: 'filament' })),
+    ...products, // already carry kind: 'category' (server/store.js upsertProduct)
+  ];
+  const { q, kind, status } = state.filters;
+  if (kind) list = list.filter((p) => p.kind === kind);
+  if (status) list = list.filter((p) => p.status === status);
+  if (q) {
+    const needle = q.toLowerCase();
+    list = list.filter((p) => {
+      const hay = [
+        p.name,
+        p.slug,
+        p.description,
+        ...(p.colours || []).flatMap((c) => [c.name, c.sku]),
+        ...(p.items || []).flatMap((i) => [i.name, i.sku, i.details]),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return hay.includes(needle);
+    });
+  }
+  list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  state.products = list;
+  return { products: list, count: list.length };
 }
 
 async function renderDashboard() {
@@ -332,7 +360,7 @@ async function renderDashboard() {
         <div class="section-head"><h3>Recently edited</h3></div>
         <div class="recent-list">
           ${data.recent.map((p) => `
-            <div class="recent-item" data-id="${p.id}">
+            <div class="recent-item" data-id="${p.id}" data-kind="${p.kind}">
               <div>
                 <strong>${escapeHtml(p.name)}</strong>
                 <div class="muted" style="font-size:0.8rem">${p.kind} · ${p.status}</div>
@@ -345,7 +373,7 @@ async function renderDashboard() {
     </div>
   `;
   $$('.recent-item', $('#view-dashboard')).forEach((row) => {
-    row.addEventListener('click', () => openEditor(row.dataset.id));
+    row.addEventListener('click', () => openEditor(row.dataset.id, row.dataset.kind));
   });
 }
 
@@ -357,7 +385,7 @@ async function renderCatalog() {
         ? `${p.colours?.length || 0} colours · ${p.specs?.length || 0} specs`
         : `${p.items?.length || 0} items${p.parent ? ` · ${p.parent}` : ''}`;
     return `
-      <tr data-id="${p.id}">
+      <tr data-id="${p.id}" data-kind="${p.kind}">
         <td>
           <strong>${escapeHtml(p.name)}</strong>
           <div class="muted" style="font-size:0.8rem">/${escapeHtml(p.slug)}</div>
@@ -422,9 +450,9 @@ async function renderCatalog() {
   $$('#view-catalog tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', (e) => {
       if (e.target.closest('button')) return;
-      openEditor(tr.dataset.id);
+      openEditor(tr.dataset.id, tr.dataset.kind);
     });
-    tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditor(tr.dataset.id));
+    tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditor(tr.dataset.id, tr.dataset.kind));
     tr.querySelector('[data-action="dup"]')?.addEventListener('click', async (e) => {
       e.stopPropagation();
       const res = await api(`/api/products/${tr.dataset.id}/duplicate`, { method: 'POST' });
@@ -466,9 +494,14 @@ async function openNew(kind) {
   renderEditor();
 }
 
-async function openEditor(id) {
-  const { product } = await api(`/api/products/${id}`);
-  state.draft = structuredClone(product);
+async function openEditor(id, kind) {
+  if (kind === 'filament') {
+    const { filament } = await api(`/api/filaments/${id}`);
+    state.draft = { ...structuredClone(filament), kind: 'filament' };
+  } else {
+    const { product } = await api(`/api/products/${id}`);
+    state.draft = structuredClone(product);
+  }
   state.editingId = id;
   setRoute('editor', { id });
   renderEditor();
@@ -528,7 +561,7 @@ function renderEditor() {
           <p class="muted" style="margin-top:0;font-size:0.88rem;line-height:1.5">
             These fields power the public site pages:
             ${isFilament
-              ? '<strong>name, slug, description, specs[], colours[{name,sku,price}], colourNote</strong>.'
+              ? '<strong>name, slug, description, specs[], colours[{name,sku,weightG,rollLengthM,priceRand,stockQty,imagePath}], colourNote</strong>.'
               : '<strong>name, slug, description, crumbs, parent, items[{name,details,material,size,finish,price,sku,imageUrl}]</strong>.'}
           </p>
           <div class="meta-list" style="margin-top:1rem">
@@ -582,21 +615,29 @@ function renderFilamentSections(p) {
         ${(p.colours || []).map((c, i) => `
           <div class="row-card" data-colour-index="${i}">
             <div class="row-card-actions">
-              <div class="swatch-preview" style="background:${escapeAttr(c.hex || guessHex(c.name))}"></div>
+              <div class="flex items-center gap-3">
+                ${c.imagePath
+                  ? `<img src="${escapeAttr(c.imagePath)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" />`
+                  : `<div class="swatch-preview" style="background:${escapeAttr(c.hex || guessHex(c.name))}"></div>`}
+                ${c._isNew
+                  ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'
+                  : `<input type="file" accept="image/jpeg,image/png,image/webp" data-colour-image="${c.id}" style="max-width:200px" />`}
+              </div>
               <button class="btn small btn-danger" data-remove-colour type="button">Remove</button>
             </div>
             <div class="grid-3">
               <label class="field"><span>Colour name</span><input data-colour="name" value="${escapeAttr(c.name)}" /></label>
               <label class="field"><span>SKU</span><input data-colour="sku" value="${escapeAttr(c.sku)}" /></label>
-              <label class="field"><span>Price</span><input data-colour="price" value="${escapeAttr(c.price)}" placeholder="R299" /></label>
+              <label class="field"><span>Hex override</span><input data-colour="hex" value="${escapeAttr(c.hex || '')}" placeholder="#c24b28" /></label>
             </div>
             <div class="grid-3">
-              <label class="field"><span>Hex override</span><input data-colour="hex" value="${escapeAttr(c.hex || '')}" placeholder="#c24b28" /></label>
+              <label class="field"><span>Weight (g)</span><input data-colour="weightG" type="number" min="0" step="1" value="${c.weightG ?? 0}" /></label>
+              <label class="field"><span>Roll length (m, optional)</span><input data-colour="rollLengthM" type="number" min="0" step="0.1" value="${c.rollLengthM ?? ''}" /></label>
+              <label class="field"><span>Price per roll (R)</span><input data-colour="priceRand" type="number" min="0" step="1" value="${c.priceRand ?? 0}" /></label>
+            </div>
+            <div class="grid-2">
+              <label class="field"><span>Stock quantity</span><input data-colour="stockQty" type="number" min="0" step="1" value="${c.stockQty ?? 0}" /></label>
               <label class="field"><span>Notes</span><input data-colour="notes" value="${escapeAttr(c.notes || '')}" /></label>
-              <label class="field checkbox" style="margin-top:1.5rem">
-                <input data-colour="inStock" type="checkbox" ${c.inStock !== false ? 'checked' : ''} />
-                <span>In stock</span>
-              </label>
             </div>
           </div>
         `).join('') || '<div class="empty">No colours yet</div>'}
@@ -684,16 +725,33 @@ function bindEditorEvents() {
     e.target.dataset.touched = '1';
   });
 
+  // Note: syncNestedFromDom() is deliberately NOT called here before render.
+  // The [data-spec]/[data-colour] input listeners below already keep p.specs
+  // /p.colours continuously in sync with the DOM on every keystroke, so by
+  // the time this handler runs, the array already reflects any live edits.
+  // Calling syncNestedFromDom() again here would rebuild the array from the
+  // *pre-render* DOM (which doesn't have a row for the item just pushed) and
+  // silently drop it before renderEditor() ever draws it.
   $('#add-spec')?.addEventListener('click', () => {
     p.specs = p.specs || [];
     p.specs.push({ id: uid(), label: '', value: '' });
-    syncNestedFromDom();
     renderEditor();
   });
   $('#add-colour')?.addEventListener('click', () => {
     p.colours = p.colours || [];
-    p.colours.push({ id: uid(), name: '', sku: '', price: '', hex: '', inStock: true, notes: '' });
-    syncNestedFromDom();
+    p.colours.push({
+      id: uid(),
+      name: '',
+      sku: '',
+      hex: '',
+      notes: '',
+      weightG: 0,
+      rollLengthM: null,
+      priceRand: 0,
+      stockQty: 0,
+      imagePath: null,
+      _isNew: true, // not yet persisted -- Save will POST this as a new colour, not PUT
+    });
     renderEditor();
   });
   $('#add-item')?.addEventListener('click', () => {
@@ -724,9 +782,27 @@ function bindEditorEvents() {
     });
   });
   $$('[data-remove-colour]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       syncNestedFromDom();
       const idx = Number(btn.closest('[data-colour-index]').dataset.colourIndex);
+      const colour = p.colours[idx];
+      if (!colour) return;
+      // Colours aren't part of the bulk product payload (server/filaments.js
+      // has its own per-colour add/update/delete endpoints -- updateFilament
+      // silently ignores a `colours` field), so a colour that's already been
+      // saved needs its own immediate DELETE call. A colour added via
+      // "+ Colour" but never saved (_isNew) only exists client-side, so it's
+      // safe to just drop it from the array with no server round-trip.
+      if (!colour._isNew) {
+        if (!confirm(`Remove colour “${colour.name || 'Untitled'}”? This cannot be undone.`)) return;
+        try {
+          await api(`/api/filaments/${p.id}/colours/${colour.id}`, { method: 'DELETE' });
+          toast('Colour removed');
+        } catch (ex) {
+          toast(ex.message);
+          return;
+        }
+      }
       p.colours.splice(idx, 1);
       renderEditor();
     });
@@ -753,6 +829,37 @@ function bindEditorEvents() {
     input.addEventListener('change', () => syncNestedFromDom());
   });
 
+  // Colour photo upload -- fires immediately on file selection (simplest UX,
+  // no separate "upload" button to forget to click). Only rendered for
+  // already-persisted colours (see renderFilamentSections), so p.id here is
+  // always the real, server-assigned filament id by the time this can fire.
+  // Uses fetch() directly rather than the api() helper: api() always sets
+  // Content-Type: application/json, which would stop the browser from
+  // attaching its own multipart/form-data boundary header.
+  $$('[data-colour-image]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const colourId = input.dataset.colourImage;
+      const formData = new FormData();
+      formData.append('image', file);
+      try {
+        const res = await fetch(`/api/filaments/${p.id}/colours/${colourId}/image`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        state.draft = { ...data.filament, kind: 'filament' };
+        toast('Photo uploaded');
+        renderEditor();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
   $('#back-catalog').addEventListener('click', async () => {
     setRoute('catalog');
     await renderCatalog();
@@ -763,17 +870,20 @@ function bindEditorEvents() {
     if (!p.name.trim()) return toast('Name is required');
     if (!p.slug.trim()) p.slug = slugify(p.name);
     try {
-      if (p._isNew) {
+      if (p.kind === 'filament') {
+        await saveFilament(p);
+      } else if (p._isNew) {
         const { _isNew, ...payload } = p;
         const res = await api('/api/products', { method: 'POST', body: JSON.stringify(payload) });
         state.draft = res.product;
         toast('Product created');
+        renderEditor();
       } else {
         const res = await api(`/api/products/${p.id}`, { method: 'PUT', body: JSON.stringify(p) });
         state.draft = res.product;
         toast('Product saved');
+        renderEditor();
       }
-      renderEditor();
     } catch (ex) {
       toast(ex.message);
     }
@@ -782,7 +892,11 @@ function bindEditorEvents() {
   $('#delete-product')?.addEventListener('click', async () => {
     if (!confirm(`Delete “${p.name}”? This cannot be undone.`)) return;
     try {
-      await api(`/api/products/${p.id}`, { method: 'DELETE' });
+      if (p.kind === 'filament') {
+        await api(`/api/filaments/${p.id}`, { method: 'DELETE' });
+      } else {
+        await api(`/api/products/${p.id}`, { method: 'DELETE' });
+      }
       toast('Product deleted');
       setRoute('catalog');
       await renderCatalog();
@@ -790,6 +904,53 @@ function bindEditorEvents() {
       toast(ex.message);
     }
   });
+}
+
+// Filament type-level fields (name, slug, description, specs, colourNote,
+// SEO, status, featured, sortOrder) live on POST/PUT /api/filaments[/:id].
+// Colours do NOT travel with that payload -- server/filaments.js's
+// updateFilament()/createFilament() never read a `colours` field at all;
+// each colour has its own POST (add) / PUT (update) / DELETE endpoint. So
+// saving a filament is: save the type-level row, then reconcile each colour
+// row against its own endpoint (POST for a new, not-yet-persisted row --
+// marked `_isNew` when pushed by "+ Colour" -- PUT for an existing one),
+// then re-fetch the canonical filament so ids assigned by the server (new
+// colours get a server-generated id, not the client-side uid() placeholder)
+// and the freshly-computed timestamps land back in state.draft.
+async function saveFilament(p) {
+  const { _isNew, colours, items, ...payload } = p;
+  let filamentId = p.id;
+  if (p._isNew) {
+    const res = await api('/api/filaments', { method: 'POST', body: JSON.stringify(payload) });
+    filamentId = res.filament.id;
+    toast('Filament created');
+  } else {
+    await api(`/api/filaments/${filamentId}`, { method: 'PUT', body: JSON.stringify(payload) });
+    toast('Filament saved');
+  }
+
+  for (const c of p.colours || []) {
+    const body = JSON.stringify({
+      name: c.name,
+      hex: c.hex,
+      sku: c.sku,
+      weightG: c.weightG,
+      rollLengthM: c.rollLengthM,
+      priceRand: c.priceRand,
+      stockQty: c.stockQty,
+      notes: c.notes,
+    });
+    if (c._isNew) {
+      await api(`/api/filaments/${filamentId}/colours`, { method: 'POST', body });
+    } else {
+      await api(`/api/filaments/${filamentId}/colours/${c.id}`, { method: 'PUT', body });
+    }
+  }
+
+  const { filament } = await api(`/api/filaments/${filamentId}`);
+  state.draft = { ...filament, kind: 'filament' };
+  state.editingId = filamentId;
+  renderEditor();
 }
 
 function syncNestedFromDom() {
@@ -802,15 +963,27 @@ function syncNestedFromDom() {
     value: $('[data-spec="value"]', row)?.value || '',
   }));
 
-  p.colours = $$('[data-colour-index]').map((row) => ({
-    id: p.colours?.[Number(row.dataset.colourIndex)]?.id || uid(),
-    name: $('[data-colour="name"]', row)?.value || '',
-    sku: $('[data-colour="sku"]', row)?.value || '',
-    price: $('[data-colour="price"]', row)?.value || '',
-    hex: $('[data-colour="hex"]', row)?.value || '',
-    notes: $('[data-colour="notes"]', row)?.value || '',
-    inStock: $('[data-colour="inStock"]', row)?.checked !== false,
-  }));
+  p.colours = $$('[data-colour-index]').map((row) => {
+    const prev = p.colours?.[Number(row.dataset.colourIndex)] || {};
+    const rollRaw = $('[data-colour="rollLengthM"]', row)?.value;
+    return {
+      id: prev.id || uid(),
+      name: $('[data-colour="name"]', row)?.value || '',
+      sku: $('[data-colour="sku"]', row)?.value || '',
+      hex: $('[data-colour="hex"]', row)?.value || '',
+      notes: $('[data-colour="notes"]', row)?.value || '',
+      weightG: Number($('[data-colour="weightG"]', row)?.value) || 0,
+      // Optional field -- blank must stay null (not fall through to 0),
+      // matching server/filaments.js's rollLengthM != null && !== '' check.
+      rollLengthM: rollRaw === '' || rollRaw == null ? null : Number(rollRaw),
+      priceRand: Number($('[data-colour="priceRand"]', row)?.value) || 0,
+      // Number('') is 0, so an explicit 0 and a blank field both save as 0
+      // here -- matches the server's own toNumberOr()/`|| 0` fallback.
+      stockQty: Number($('[data-colour="stockQty"]', row)?.value) || 0,
+      imagePath: prev.imagePath ?? null,
+      _isNew: prev._isNew ?? false,
+    };
+  });
 
   p.items = $$('[data-item-index]').map((row, i) => ({
     id: p.items?.[Number(row.dataset.itemIndex)]?.id || uid(),
