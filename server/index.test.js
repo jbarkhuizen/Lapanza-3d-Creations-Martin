@@ -233,6 +233,121 @@ test('a session older than 12h is rejected server-side even with a valid cookie'
   assert.strictEqual(res.status, 401);
 });
 
+// -- Final-review fix-wave regression tests ---------------------------------
+
+test('duplicate filament slug returns clean 400 JSON, not a raw 500 HTML page', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const first = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA', slug: 'pla' });
+  assert.strictEqual(first.status, 201);
+
+  const dup = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA Again', slug: 'pla' });
+  assert.strictEqual(dup.status, 400);
+  assert.match(dup.headers['content-type'], /json/);
+  assert.match(dup.body.error, /slug/i);
+});
+
+test('duplicate colour SKU (on create and on update) returns clean 400 JSON, not a raw 500 HTML page', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA' });
+  const filamentId = filament.body.filament.id;
+
+  const first = await request(app)
+    .post(`/api/filaments/${filamentId}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'White', sku: 'SKU-1' });
+  assert.strictEqual(first.status, 201);
+
+  const dupCreate = await request(app)
+    .post(`/api/filaments/${filamentId}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'Off-White', sku: 'SKU-1' });
+  assert.strictEqual(dupCreate.status, 400);
+  assert.match(dupCreate.headers['content-type'], /json/);
+  assert.match(dupCreate.body.error, /sku/i);
+
+  const second = await request(app)
+    .post(`/api/filaments/${filamentId}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'Black', sku: 'SKU-2' });
+  const secondColourId = second.body.filament.colours.find((c) => c.sku === 'SKU-2').id;
+
+  const dupUpdate = await request(app)
+    .put(`/api/filaments/${filamentId}/colours/${secondColourId}`)
+    .set('Cookie', cookie)
+    .send({ sku: 'SKU-1' });
+  assert.strictEqual(dupUpdate.status, 400);
+  assert.match(dupUpdate.headers['content-type'], /json/);
+  assert.match(dupUpdate.body.error, /sku/i);
+});
+
+test('uploading an image over the 5MB limit returns clean 400 JSON, not a raw 500 HTML page', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA' });
+  const filamentId = filament.body.filament.id;
+  const colour = await request(app)
+    .post(`/api/filaments/${filamentId}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'White', sku: 'SKU-1' });
+  const colourId = colour.body.filament.colours[0].id;
+
+  const oversized = Buffer.alloc(6 * 1024 * 1024, 1); // 6MB, over uploads.js's 5MB limit
+  const res = await request(app)
+    .post(`/api/filaments/${filamentId}/colours/${colourId}/image`)
+    .set('Cookie', cookie)
+    .attach('image', oversized, { filename: 'big.jpg', contentType: 'image/jpeg' });
+
+  assert.strictEqual(res.status, 400);
+  assert.match(res.headers['content-type'], /json/);
+  assert.match(res.body.error, /5MB/i);
+});
+
+test('PUT /api/settings with a non-array homeTiles is rejected/ignored instead of 500ing', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app).put('/api/settings').set('Cookie', cookie).send({ homeTiles: { a: 1 } });
+  assert.strictEqual(res.status, 200);
+});
+
+test('PUT /api/products/:id only persists allowlisted fields, not arbitrary request-body keys', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app).post('/api/products').set('Cookie', cookie).send({ name: 'Category A' });
+  const productId = created.body.product.id;
+
+  const updated = await request(app)
+    .put(`/api/products/${productId}`)
+    .set('Cookie', cookie)
+    .send({ name: 'Category A', evilKey: 'malicious value', __proto__: { polluted: true } });
+  assert.strictEqual(updated.status, 200);
+  assert.strictEqual(updated.body.product.evilKey, undefined);
+
+  const refetched = await request(app).get(`/api/products/${productId}`).set('Cookie', cookie);
+  assert.strictEqual(refetched.body.product.evilKey, undefined);
+});
+
 test('login with a missing or non-string password returns 401, not 500', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

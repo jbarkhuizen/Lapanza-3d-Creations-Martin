@@ -20,6 +20,7 @@ import {
   deleteColour,
   setColourImage,
 } from './filaments.js';
+import multer from 'multer';
 import { uploadFilamentImage } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
@@ -36,6 +37,21 @@ app.use(cookieParser());
 app.use('/uploads', express.static(path.join(root, 'public', 'uploads')));
 
 const sessions = new Map();
+
+// better-sqlite3 throws a raw SqliteError (not something route handlers can
+// turn into clean JSON on their own) when a duplicate slug or SKU hits a
+// UNIQUE column. Without catching this, Express's default handler returns a
+// raw 500 HTML page instead of a usable error message.
+function isUniqueConstraintError(err) {
+  return Boolean(err) && (err.code === 'SQLITE_CONSTRAINT_UNIQUE' || /UNIQUE constraint failed/.test(err.message || ''));
+}
+
+function uniqueConstraintMessage(err) {
+  const msg = err.message || '';
+  if (msg.includes('.slug')) return 'That slug is already in use';
+  if (msg.includes('.sku')) return 'That SKU is already in use';
+  return 'That value is already in use';
+}
 
 function requireAuth(req, res, next) {
   const token = req.cookies[SESSION_COOKIE];
@@ -186,9 +202,14 @@ app.get('/api/filaments/:id', requireAuth, (req, res) => {
 });
 
 app.post('/api/filaments', requireAuth, (req, res) => {
-  const filament = createFilament(req.body || {});
-  syncPublicJson(getDb());
-  res.status(201).json({ filament });
+  try {
+    const filament = createFilament(req.body || {});
+    syncPublicJson(getDb());
+    res.status(201).json({ filament });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
+    throw err;
+  }
 });
 
 app.put('/api/filaments/:id', requireAuth, (req, res) => {
@@ -206,17 +227,27 @@ app.delete('/api/filaments/:id', requireAuth, (req, res) => {
 });
 
 app.post('/api/filaments/:id/colours', requireAuth, (req, res) => {
-  const filament = addColour(req.params.id, req.body || {});
-  if (!filament) return res.status(404).json({ error: 'Filament not found' });
-  syncPublicJson(getDb());
-  res.status(201).json({ filament });
+  try {
+    const filament = addColour(req.params.id, req.body || {});
+    if (!filament) return res.status(404).json({ error: 'Filament not found' });
+    syncPublicJson(getDb());
+    res.status(201).json({ filament });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
+    throw err;
+  }
 });
 
 app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) => {
-  const filament = updateColour(req.params.filamentId, req.params.colourId, req.body || {});
-  if (!filament) return res.status(404).json({ error: 'Colour not found' });
-  syncPublicJson(getDb());
-  res.json({ filament });
+  try {
+    const filament = updateColour(req.params.filamentId, req.params.colourId, req.body || {});
+    if (!filament) return res.status(404).json({ error: 'Colour not found' });
+    syncPublicJson(getDb());
+    res.json({ filament });
+  } catch (err) {
+    if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
+    throw err;
+  }
 });
 
 app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) => {
@@ -247,6 +278,16 @@ app.post(
     if (!filament) return res.status(404).json({ error: 'Colour not found' });
     syncPublicJson(getDb());
     res.json({ filament });
+  },
+  // Multer errors (e.g. exceeding uploads.js's 5MB limit) are passed to
+  // next(err) by the multer middleware above, not thrown, so without this
+  // handler Express's default error handler would return a raw 500 HTML
+  // page instead of clean JSON.
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: 'Image must be under 5MB' });
+    }
+    next(err);
   },
 );
 
@@ -300,11 +341,13 @@ app.put('/api/products/:id', requireAuth, (req, res) => {
   if (!existing) return res.status(404).json({ error: 'Product not found' });
   const body = req.body || {};
   const product = {
-    ...existing,
-    ...body,
     id: existing.id,
     kind: 'category',
     slug: slugify(body.slug || existing.slug),
+    name: body.name ?? existing.name,
+    description: body.description ?? existing.description,
+    crumbs: body.crumbs ?? existing.crumbs,
+    parent: body.parent ?? existing.parent,
     items: normalizeItems(body.items ?? existing.items),
   };
   upsertProduct(product);
@@ -335,12 +378,14 @@ app.put('/api/settings', requireAuth, (req, res) => {
   if (typeof patch.useUniversalFont === 'string') {
     patch.useUniversalFont = patch.useUniversalFont === 'true';
   }
-  if (patch.homeTiles) {
+  if (Array.isArray(patch.homeTiles)) {
     patch.homeTiles = patch.homeTiles.slice(0, 3).map((t) => ({
       eyebrow: t.eyebrow || '',
       title: t.title || '',
       description: t.description || '',
     }));
+  } else {
+    delete patch.homeTiles;
   }
   const settings = updateSettings(patch);
   syncPublicJson(getDb());

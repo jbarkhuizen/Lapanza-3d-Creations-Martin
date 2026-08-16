@@ -1,6 +1,7 @@
 ﻿import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
+import { migrateFromCatalogJson } from './migrate-json.js';
 
 function ensureDataDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -80,11 +81,22 @@ export function getDb() {
   _dbCache.set(dbPath, db);
   if (isNew) {
     const catalogJsonPath = path.join(root, 'data', 'catalog.json');
-    import('./migrate-json.js').then(({ migrateFromCatalogJson }) => {
+    try {
       migrateFromCatalogJson(db, catalogJsonPath);
-    }).catch(() => {
-      // migrate-json.js not available yet, will be implemented in later task
-    });
+    } catch (err) {
+      // Migration must not fail silently: a swallowed error here would leave
+      // a fresh, empty database masquerading as a successful first boot
+      // (needsSetup: true, no filaments, no visible cause), and the first
+      // admin action afterward would overwrite the git-tracked
+      // src/data/filaments.json with that empty state. Log loudly and
+      // remove the just-opened db from the cache before rethrowing so a
+      // retry (e.g. a subsequent getDb() call) doesn't see a half-migrated
+      // connection cached as if it were healthy.
+      console.error('Catalog migration failed:', err);
+      _dbCache.delete(dbPath);
+      db.close();
+      throw err;
+    }
   }
   return db;
 }

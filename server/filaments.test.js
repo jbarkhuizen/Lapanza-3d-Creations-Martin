@@ -96,6 +96,41 @@ test('updateFilament preserves fields not included in the patch', () => {
   db.close();
 });
 
+test('updateColour clears a previously-set rollLengthM back to null when the patch sends null', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1', rollLengthM: 330 }, db);
+  const colourId = withColour.colours[0].id;
+  assert.strictEqual(withColour.colours[0].rollLengthM, 330);
+
+  const cleared = updateColour(f.id, colourId, { rollLengthM: null }, db);
+  assert.strictEqual(cleared.colours[0].rollLengthM, null);
+  db.close();
+});
+
+test('updateColour preserves rollLengthM when the patch omits the key entirely', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1', rollLengthM: 330 }, db);
+  const colourId = withColour.colours[0].id;
+
+  const updated = updateColour(f.id, colourId, { stockQty: 9 }, db);
+  assert.strictEqual(updated.colours[0].rollLengthM, 330);
+  assert.strictEqual(updated.colours[0].stockQty, 9);
+  db.close();
+});
+
+test('updateFilament preserves draft status when a partial update omits the status field', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA', status: 'draft' }, db);
+  assert.strictEqual(f.status, 'draft');
+
+  const updated = updateFilament(f.id, { description: 'New description' }, db);
+  assert.strictEqual(updated.status, 'draft');
+  assert.strictEqual(updated.description, 'New description');
+  db.close();
+});
+
 test('updateColour with non-numeric input does not throw and preserves existing value', () => {
   const db = openDb(':memory:');
   const f = createFilament({ name: 'PLA' }, db);

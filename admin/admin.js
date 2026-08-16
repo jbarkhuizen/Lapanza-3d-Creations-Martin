@@ -396,7 +396,6 @@ async function renderCatalog() {
         <td class="muted">${formatDate(p.updatedAt)}</td>
         <td>
           <button class="btn small" data-action="edit" type="button">Edit</button>
-          <button class="btn small" data-action="dup" type="button">Duplicate</button>
         </td>
       </tr>`;
   }).join('');
@@ -453,12 +452,6 @@ async function renderCatalog() {
       openEditor(tr.dataset.id, tr.dataset.kind);
     });
     tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => openEditor(tr.dataset.id, tr.dataset.kind));
-    tr.querySelector('[data-action="dup"]')?.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const res = await api(`/api/products/${tr.dataset.id}/duplicate`, { method: 'POST' });
-      toast(`Duplicated as ${res.product.name}`);
-      openEditor(res.product.id);
-    });
   });
 }
 

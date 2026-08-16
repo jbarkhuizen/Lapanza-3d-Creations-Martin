@@ -114,7 +114,12 @@ export function updateFilament(id, data, db = getDb()) {
     seo_title: data.seoTitle ?? existing.seoTitle,
     seo_description: data.seoDescription ?? existing.seoDescription,
     internal_notes: data.internalNotes ?? existing.internalNotes,
-    status: data.status === 'draft' ? 'draft' : 'published',
+    // Unlike every other field here, status previously forced 'published'
+    // whenever the patch didn't explicitly say 'draft' -- so a partial
+    // update that only touched e.g. description would silently flip a
+    // draft filament to published. Preserve the existing status when the
+    // patch omits the field entirely, matching the ?? pattern used above.
+    status: data.status !== undefined ? (data.status === 'draft' ? 'draft' : 'published') : existing.status,
     featured: data.featured !== undefined ? (data.featured ? 1 : 0) : (existing.featured ? 1 : 0),
     sort_order: data.sortOrder ?? existing.sortOrder,
     updated_at: new Date().toISOString(),
@@ -176,7 +181,16 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
     hex: data.hex ?? existing.hex,
     sku: data.sku ?? existing.sku,
     weight_g: data.weightG != null ? toNumberOr(data.weightG, existing.weight_g) : existing.weight_g,
-    roll_length_m: data.rollLengthM != null && data.rollLengthM !== '' ? toNumberOr(data.rollLengthM, existing.roll_length_m) : existing.roll_length_m,
+    // Distinguishes "rollLengthM omitted from the patch" (preserve existing)
+    // from "rollLengthM present but null/empty" (explicitly clear it) --
+    // admin.js sends null for a blank input specifically to clear a
+    // previously-set roll length, which the old `!= null` check could never
+    // satisfy since both branches fell through to "keep existing".
+    roll_length_m: !('rollLengthM' in data)
+      ? existing.roll_length_m
+      : (data.rollLengthM == null || data.rollLengthM === '')
+        ? null
+        : toNumberOr(data.rollLengthM, existing.roll_length_m),
     price_rand: data.priceRand != null ? toNumberOr(data.priceRand, existing.price_rand) : existing.price_rand,
     stock_qty: data.stockQty != null ? toNumberOr(data.stockQty, existing.stock_qty) : existing.stock_qty,
     notes: data.notes ?? existing.notes,

@@ -10,8 +10,26 @@ export function ensureUploadDir() {
   if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
-export function buildImageFilename(sku, originalName) {
-  const ext = (path.extname(originalName || '') || '.jpg').toLowerCase();
+// Maps a VALIDATED mimetype to its stored extension. The extension must
+// never come from the client-supplied original filename: fileFilter only
+// checks mimetype (also client-supplied, but a common convention respected
+// by browsers/clients and simpler to spoof-detect), and if the two are
+// never cross-checked, an attacker can upload e.g. "evil.svg" with a spoofed
+// image/png Content-Type and have it stored (and served, with a
+// content-type based on its .svg extension) as same-origin SVG -- letting
+// an inline <script> in that "image" execute in the app's own origin.
+const MIME_EXTENSIONS = {
+  'image/jpeg': '.jpg',
+  'image/png': '.png',
+  'image/webp': '.webp',
+};
+
+export function buildImageFilename(sku, mimetype) {
+  // Falls back to '.jpg' only when mimetype is missing or not one of the
+  // three fileFilter already restricts uploads to -- that branch shouldn't
+  // be reachable through the real upload route, but keep a safe default
+  // rather than trusting the original filename's extension.
+  const ext = MIME_EXTENSIONS[mimetype] || '.jpg';
   const safeSku =
     String(sku || 'colour')
       .toLowerCase()
@@ -36,7 +54,7 @@ export const uploadFilamentImage = multer({
       ensureUploadDir();
       cb(null, UPLOAD_DIR);
     },
-    filename: (req, file, cb) => cb(null, buildImageFilename(req.colourSku || req.params.colourId, file.originalname)),
+    filename: (req, file, cb) => cb(null, buildImageFilename(req.colourSku || req.params.colourId, file.mimetype)),
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),

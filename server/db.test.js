@@ -70,6 +70,48 @@ test('getDb() caches per resolved path: different cwds get separate instances', 
   assert.notStrictEqual(db1a, db2, 'getDb() should return different instances for different cwds');
 });
 
+test('getDb() surfaces a migration error loudly instead of silently leaving an empty db', async (t) => {
+  const origCwd = process.cwd();
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-test-'));
+
+  await t.after(() => {
+    closeAllCachedDbs();
+    process.chdir(origCwd);
+    try {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    } catch (e) {
+      // ignore cleanup errors
+    }
+  });
+
+  process.chdir(tmpDir);
+  fs.mkdirSync(path.join(tmpDir, 'data'), { recursive: true });
+  // Two filament products whose colours share a SKU -- violates the
+  // filament_colours.sku UNIQUE constraint, so migration must fail partway
+  // through instead of quietly leaving a fresh, empty database that later
+  // presents as a successful (but data-less) first boot.
+  const catalog = {
+    version: 1,
+    products: [
+      {
+        kind: 'filament',
+        slug: 'pla',
+        name: 'PLA',
+        colours: [{ name: 'White', sku: 'DUPLICATE-SKU' }],
+      },
+      {
+        kind: 'filament',
+        slug: 'petg',
+        name: 'PETG',
+        colours: [{ name: 'Black', sku: 'DUPLICATE-SKU' }],
+      },
+    ],
+  };
+  fs.writeFileSync(path.join(tmpDir, 'data', 'catalog.json'), JSON.stringify(catalog, null, 2));
+
+  assert.throws(() => getDb(), /UNIQUE constraint failed/);
+});
+
 test('getDb() caches per resolved path: same cwd returns same instance', async (t) => {
   const origCwd = process.cwd();
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-test-'));
