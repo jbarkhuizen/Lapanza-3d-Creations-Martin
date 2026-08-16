@@ -87,6 +87,18 @@ function setRoute(route, { id } = {}) {
 async function boot() {
   initTheme();
   bindChrome();
+
+  let setupStatus;
+  try {
+    setupStatus = await api('/api/setup/status');
+  } catch {
+    setupStatus = { needsSetup: false };
+  }
+  if (setupStatus.needsSetup) {
+    renderSetupScreen();
+    return;
+  }
+
   try {
     const me = await api('/api/auth/me');
     state.authenticated = me.authenticated;
@@ -98,11 +110,136 @@ async function boot() {
 }
 
 function renderAuth() {
+  show($('#view-setup'), false);
   show($('#view-login'), !state.authenticated);
   show($('#shell'), state.authenticated);
 }
 
+// Builds a <label class="field"><span>...</span><input .../></label>, matching
+// the markup pattern used throughout the static login form and the editor
+// views (see admin.css .field / .login-card).
+function buildFieldLabel(labelText, type, name, opts = {}) {
+  const label = document.createElement('label');
+  label.className = 'field';
+  const span = document.createElement('span');
+  span.textContent = labelText;
+  const input = document.createElement('input');
+  input.type = type;
+  input.name = name;
+  if (opts.autocomplete) input.autocomplete = opts.autocomplete;
+  if (opts.placeholder) input.placeholder = opts.placeholder;
+  if (opts.required) input.required = true;
+  if (opts.minlength) input.minLength = opts.minlength;
+  label.append(span, input);
+  return label;
+}
+
+// The first-run "create your admin account" screen isn't part of the static
+// index.html markup (only #view-login/#shell are) -- it's built here and
+// inserted once, reusing the same login-screen/login-card/field/btn classes
+// as the existing login form so it looks like it belongs. Built with DOM
+// methods (not innerHTML) since all text here is static/trusted anyway.
+function ensureSetupScreen() {
+  if ($('#view-setup')) return;
+
+  const section = document.createElement('section');
+  section.id = 'view-setup';
+  section.className = 'login-screen hidden';
+
+  const card = document.createElement('div');
+  card.className = 'login-card';
+
+  const eyebrow = document.createElement('p');
+  eyebrow.className = 'eyebrow';
+  eyebrow.textContent = 'Lapanza 3D';
+
+  const heading = document.createElement('h1');
+  heading.textContent = 'Create your admin account';
+
+  const intro = document.createElement('p');
+  intro.className = 'muted';
+  intro.textContent = "This is the first time the admin portal has run — set the username and password you'll use to sign in.";
+
+  const form = document.createElement('form');
+  form.id = 'setup-form';
+  form.className = 'stack gap-3';
+
+  const usernameLabel = buildFieldLabel('Username', 'text', 'username', {
+    autocomplete: 'username',
+    placeholder: 'Choose a username',
+    required: true,
+  });
+  const passwordLabel = buildFieldLabel('Password', 'password', 'password', {
+    autocomplete: 'new-password',
+    placeholder: '8+ characters',
+    required: true,
+    minlength: 8,
+  });
+
+  const submitBtn = document.createElement('button');
+  submitBtn.type = 'submit';
+  submitBtn.className = 'btn btn-primary';
+  submitBtn.textContent = 'Create account';
+
+  const errorEl = document.createElement('p');
+  errorEl.id = 'setup-error';
+  errorEl.className = 'error hidden';
+
+  form.append(usernameLabel, passwordLabel, submitBtn, errorEl);
+  card.append(eyebrow, heading, intro, form);
+  section.append(card);
+  $('#view-login').before(section);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = new FormData(form);
+    const username = String(data.get('username') || '').trim();
+    const password = String(data.get('password') || '');
+    try {
+      await api('/api/setup', { method: 'POST', body: JSON.stringify({ username, password }) });
+      errorEl.classList.add('hidden');
+      state.authenticated = true;
+      renderAuth();
+      await loadApp();
+      toast('Admin account created');
+    } catch (ex) {
+      errorEl.textContent = ex.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+}
+
+function renderSetupScreen() {
+  ensureSetupScreen();
+  show($('#view-login'), false);
+  show($('#shell'), false);
+  show($('#view-setup'), true);
+}
+
+// The static login form in index.html only has a password field (the old
+// single-shared-password model). Task 10 switched auth to named accounts, so
+// a username field is inserted here at runtime -- same reasoning as the setup
+// screen above: only admin.js is in scope for this change.
+function ensureLoginUsernameField() {
+  const form = $('#login-form');
+  if (!form || form.querySelector('[name="username"]')) return;
+  const passwordLabel = form.querySelector('label.field');
+  const usernameLabel = buildFieldLabel('Username', 'text', 'username', {
+    autocomplete: 'username',
+    placeholder: 'Enter username',
+    required: true,
+  });
+  form.insertBefore(usernameLabel, passwordLabel);
+  // The old "Default password: lapanza-admin" hint no longer applies now that
+  // accounts are per-user with no shared default -- drop it rather than leave
+  // stale, misleading text on the login screen.
+  form.querySelector('.hint')?.remove();
+}
+
 function bindChrome() {
+  ensureSetupScreen();
+  ensureLoginUsernameField();
+
   $('#theme-toggle').addEventListener('click', () => {
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     setTheme(next);
@@ -110,10 +247,12 @@ function bindChrome() {
 
   $('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const password = new FormData(e.target).get('password');
+    const data = new FormData(e.target);
+    const username = String(data.get('username') || '').trim();
+    const password = data.get('password');
     const err = $('#login-error');
     try {
-      await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ password }) });
+      await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
       state.authenticated = true;
       err.classList.add('hidden');
       renderAuth();
