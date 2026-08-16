@@ -845,6 +845,7 @@ async function renderSettings() {
     { id: 'ibm-plex-sans', label: 'IBM Plex Sans' },
   ]);
   const s = data.settings;
+  const { admins } = await api('/api/admins');
   const fontOptions = fonts
     .map((f) => `<option value="${f.id}">${escapeHtml(f.label)}</option>`)
     .join('');
@@ -906,6 +907,30 @@ async function renderSettings() {
           </div>
           <label class="field"><span>Description</span><input data-tile-index="${i}" data-tile-field="description" value="${escapeAttr(t.description || '')}" /></label>
         </div>`).join('')}
+      </div>
+
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Admin accounts</h3></div>
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
+          Everyone listed here has full access to this admin portal.
+        </p>
+        <div id="admins-list">
+          ${admins.map((a) => `
+          <div class="row-card" data-admin-id="${a.id}">
+            <div class="row-card-actions">
+              <strong>${escapeHtml(a.username)}</strong>
+              <div style="display:flex;gap:0.5rem">
+                <button class="btn small" data-reset-admin="${a.id}" type="button">Reset password</button>
+                <button class="btn small btn-danger" data-remove-admin="${a.id}" type="button" ${admins.length <= 1 ? 'disabled' : ''}>Remove</button>
+              </div>
+            </div>
+          </div>`).join('')}
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>New admin username</span><input id="new-admin-username" type="text" /></label>
+          <label class="field"><span>New admin password</span><input id="new-admin-password" type="password" placeholder="8+ characters" /></label>
+        </div>
+        <div><button class="btn" id="add-admin" type="button">Add admin</button></div>
       </div>
 
       <div class="panel stack gap-3">
@@ -972,6 +997,45 @@ async function renderSettings() {
     } catch (ex) {
       toast(ex.message);
     }
+  });
+
+  $('#add-admin').addEventListener('click', async () => {
+    const username = $('#new-admin-username').value.trim();
+    const password = $('#new-admin-password').value;
+    try {
+      await api('/api/admins', { method: 'POST', body: JSON.stringify({ username, password }) });
+      toast('Admin added');
+      await renderSettings();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $$('[data-reset-admin]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const password = prompt('New password for this admin (8+ characters):');
+      if (!password) return;
+      try {
+        await api(`/api/admins/${btn.dataset.resetAdmin}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) });
+        toast('Password reset');
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  $$('[data-remove-admin]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (btn.disabled) return;
+      if (!confirm('Remove this admin account?')) return;
+      try {
+        await api(`/api/admins/${btn.dataset.removeAdmin}`, { method: 'DELETE' });
+        toast('Admin removed');
+        await renderSettings();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
   });
 }
 
