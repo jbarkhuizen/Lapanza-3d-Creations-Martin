@@ -762,7 +762,6 @@ function bindEditorEvents() {
       available: true,
       sortOrder: p.items.length,
     });
-    syncNestedFromDom();
     renderEditor();
   });
 
