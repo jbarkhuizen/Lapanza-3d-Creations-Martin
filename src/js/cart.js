@@ -30,7 +30,13 @@ export function getCartCount() {
   return readRaw().reduce((sum, item) => sum + item.quantity, 0);
 }
 
-export function addItem({ productId, name, price, image, quantity = 1 }) {
+// Weight is grams, matching the unit used end to end (filament_colours.weight_g,
+// order_items.weight, data-weight attributes on Add to Cart buttons).
+export function getCartTotalWeight() {
+  return readRaw().reduce((sum, item) => sum + (Number(item.weight) || 0) * item.quantity, 0);
+}
+
+export function addItem({ productId, name, price, image, weight, quantity = 1 }) {
   if (!productId) return getCart();
   const items = readRaw();
   const existing = items.find((i) => i.productId === productId);
@@ -42,6 +48,7 @@ export function addItem({ productId, name, price, image, quantity = 1 }) {
       name: name || 'Item',
       price: Number(price) || 0,
       image: image || '',
+      weight: Number(weight) || 0,
       quantity: Math.max(1, quantity),
     });
   }

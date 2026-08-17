@@ -25,6 +25,28 @@ import multer from 'multer';
 import { uploadFilamentImage } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
+import { listClients, getClient, createClient, updateClient, listOrdersForClient } from './clients.js';
+import {
+  listShippingOptions,
+  getShippingOption,
+  createShippingOption,
+  updateShippingOption,
+  deleteShippingOption,
+  matchShippingForWeight,
+} from './shipping.js';
+import {
+  listOrders,
+  getOrder,
+  createOrder,
+  updateOrderStatus,
+  updateOrderTracking,
+  markOrderPaid,
+  markConfirmationEmailSent,
+  recordPaymentTransaction,
+} from './orders.js';
+import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
+import { sendOrderConfirmationEmail } from './mailer.js';
+import { startAutoCancelJob } from './jobs.js';
 
 const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
 const PORT = Number(process.env.ADMIN_PORT || 8787);
@@ -379,6 +401,201 @@ app.delete('/api/products/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Clients (B) ----
+
+app.get('/api/clients', requireAuth, (req, res) => {
+  res.json({ clients: listClients({ q: req.query.q }) });
+});
+
+app.get('/api/clients/:id', requireAuth, (req, res) => {
+  const client = getClient(req.params.id);
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  res.json({ client, orders: listOrdersForClient(req.params.id) });
+});
+
+app.post('/api/clients', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ client: createClient(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/clients/:id', requireAuth, (req, res) => {
+  try {
+    const client = updateClient(req.params.id, req.body || {});
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    res.json({ client });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ---- Shipping options (C) ----
+
+app.get('/api/shipping-options', requireAuth, (_req, res) => {
+  res.json({ shippingOptions: listShippingOptions() });
+});
+
+app.post('/api/shipping-options', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ shippingOption: createShippingOption(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/shipping-options/:id', requireAuth, (req, res) => {
+  try {
+    const option = updateShippingOption(req.params.id, req.body || {});
+    if (!option) return res.status(404).json({ error: 'Shipping option not found' });
+    res.json({ shippingOption: option });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/shipping-options/:id', requireAuth, (req, res) => {
+  const ok = deleteShippingOption(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Shipping option not found' });
+  res.json({ ok: true });
+});
+
+// Public (no auth) -- checkout page needs this before the customer is an
+// authenticated admin, obviously. Only returns the matched bracket's public
+// fields (name/price), never anything else in the shipping_options table.
+app.get('/api/shipping-match', (req, res) => {
+  const weight = Number(req.query.weight);
+  if (!Number.isFinite(weight) || weight < 0) return res.status(400).json({ error: 'Invalid weight' });
+  const match = matchShippingForWeight(weight);
+  if (!match) return res.status(404).json({ error: 'No shipping option available for this order weight — please contact us.' });
+  res.json({ shippingOption: { id: match.id, name: match.name, price: match.price } });
+});
+
+// ---- Orders (D/E/F) ----
+
+app.get('/api/orders', requireAuth, (req, res) => {
+  res.json({ orders: listOrders({ status: req.query.status, q: req.query.q }) });
+});
+
+app.get('/api/orders/:id', requireAuth, (req, res) => {
+  const order = getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json({ order });
+});
+
+app.put('/api/orders/:id/status', requireAuth, (req, res) => {
+  try {
+    const order = updateOrderStatus(req.params.id, (req.body || {}).status);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    res.json({ order });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/orders/:id/tracking', requireAuth, (req, res) => {
+  const order = updateOrderTracking(req.params.id, (req.body || {}).trackingNumber);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json({ order });
+});
+
+// F.4/H.2: (re)send is the same helper for both the automatic send at
+// checkout and this manual admin action -- one code path, no drift between
+// what the automatic email looks like and what "resend" produces.
+app.post('/api/orders/:id/send-confirmation', requireAuth, async (req, res) => {
+  const order = getOrder(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  try {
+    await sendOrderConfirmationEmail(order);
+    markConfirmationEmailSent(order.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('send-confirmation failed:', err);
+    res.status(500).json({ error: err.message || 'Failed to send email' });
+  }
+});
+
+// F.3: print-friendly packing slip. Deliberately not JSON -- this is a
+// browser-rendered page an admin opens and prints/screenshots, matching
+// "A print-friendly HTML view is enough" from the spec.
+app.get('/api/orders/:id/packing-slip', requireAuth, (req, res) => {
+  const order = getOrder(req.params.id);
+  if (!order) return res.status(404).send('Order not found');
+  res.send(renderPackingSlipHtml(order));
+});
+
+// ---- Checkout (D/E) -- public, no admin auth ----
+
+app.post('/api/checkout', async (req, res) => {
+  const body = req.body || {};
+  try {
+    const order = createOrder({
+      client: body.client || {},
+      items: body.items || [],
+      shippingOptionId: body.shippingOptionId,
+      paymentMethod: body.paymentMethod,
+    });
+
+    let emailSent = false;
+    try {
+      await sendOrderConfirmationEmail(order);
+      emailSent = true;
+      markConfirmationEmailSent(order.id);
+    } catch (err) {
+      // A failed confirmation email must not fail the checkout -- the order
+      // is already placed and (for Payfast) about to redirect to payment.
+      // The admin "resend" action (H.2) exists specifically to recover
+      // from this.
+      console.error(`Order ${order.id} confirmation email failed to send:`, err.message);
+    }
+
+    if (body.paymentMethod === 'manual_eft') {
+      return res.status(201).json({ order, emailSent, redirect: null });
+    }
+
+    const siteUrl = process.env.SITE_URL || `${req.protocol}://${req.get('host')}`;
+    const payfast = buildPayfastRedirect({ order, siteUrl, paymentMethod: body.paymentMethod });
+    res.status(201).json({ order, emailSent, redirect: payfast });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ---- Payfast ITN webhook ----
+
+app.post('/api/payfast/itn', express.urlencoded({ extended: false }), async (req, res) => {
+  // Payfast expects a bare 200 regardless of outcome -- it will retry on
+  // anything else, which is not what we want once we've already decided a
+  // payload is invalid/unverifiable.
+  res.sendStatus(200);
+
+  const order = getOrder(req.body.m_payment_id);
+  if (!order) {
+    console.error('Payfast ITN for unknown order:', req.body.m_payment_id);
+    return;
+  }
+
+  const rawBody = new URLSearchParams(req.body).toString();
+  const result = await verifyItn(rawBody, req.body, order.total, req.ip);
+  if (!result.valid) {
+    console.error('Payfast ITN failed validation:', result);
+    return;
+  }
+
+  recordPaymentTransaction({
+    orderId: order.id,
+    gateway: 'payfast',
+    gatewayReference: result.pfPaymentId,
+    rawPayload: JSON.stringify(req.body),
+    status: result.paymentStatus,
+  });
+
+  if (result.paymentStatus === 'COMPLETE') {
+    markOrderPaid(order.id);
+  }
+});
+
 app.get('/api/settings', requireAuth, (_req, res) => {
   res.json({ settings: publicSettings(getSettings()), fonts: FONT_OPTIONS });
 });
@@ -456,6 +673,48 @@ app.get('/', (_req, res) => {
   res.redirect('/admin/');
 });
 
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[c]);
+}
+
+// F.3: a minimal print-friendly page, not a PDF -- "A print-friendly HTML
+// view is enough" per spec. Uses the browser's own print dialog (window.print()).
+function renderPackingSlipHtml(order) {
+  const rows = order.items
+    .map((i) => `<tr><td>${escapeHtml(i.productName)}</td><td style="text-align:right">${i.quantity}</td><td style="text-align:right">${i.weight * i.quantity}g</td></tr>`)
+    .join('');
+  const addr = order.client
+    ? [order.client.street, order.client.suburb, order.client.city, order.client.province, order.client.postalCode, order.client.country]
+        .filter(Boolean)
+        .join(', ')
+    : '';
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Packing slip — ${escapeHtml(order.id)}</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; color: #1a1612; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+  .muted { color: #666; font-size: 0.9rem; }
+  .totals { font-weight: 600; }
+  @media print { button { display: none; } }
+</style></head>
+<body>
+  <button onclick="window.print()">Print</button>
+  <h1>Packing slip</h1>
+  <p class="muted">Order ${escapeHtml(order.id)} — ${escapeHtml(order.createdAt)}</p>
+  <p><strong>${escapeHtml(order.client?.name || '')}</strong><br>${escapeHtml(addr)}<br>${escapeHtml(order.client?.phone || '')}</p>
+  <table>
+    <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Weight</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr class="totals"><td>Total parcel weight</td><td></td><td style="text-align:right">${order.totalWeight}g</td></tr></tfoot>
+  </table>
+  <p>Shipping method: ${escapeHtml(order.shippingOption?.name || '—')}</p>
+</body></html>`;
+}
+
 function slugify(value) {
   return (
     String(value || '')
@@ -478,6 +737,9 @@ function normalizeItems(list) {
     price: item.price || '',
     sku: item.sku || '',
     imageUrl: item.imageUrl || '',
+    // Grams -- matches filament_colours.weight_g and every other weight
+    // field end to end (order_items.weight, cart.js, data-weight attrs).
+    weight: Number(item.weight) || 0,
     available: item.available !== false,
     sortOrder: item.sortOrder ?? i,
   }));
@@ -503,6 +765,7 @@ if (isMainModule) {
   app.listen(PORT, () => {
     console.log(`\n> Lapanza Admin API  http://localhost:${PORT}/admin/\n`);
   });
+  startAutoCancelJob();
 }
 
 export default app;

@@ -174,12 +174,16 @@ function parsePrice(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function addToCartButton({ productId, name, price, image, extraClass = 'w-full' }) {
+function addToCartButton({ productId, name, price, image, weight, extraClass = 'w-full' }) {
+  // Weight is grams end to end (matches filament_colours.weight_g /
+  // order_items.weight / cart.js) so the cart's total-weight math and the
+  // server's shipping-bracket matching agree with what's shown here.
   return `<button type="button" class="${extraClass} mt-2 text-xs font-semibold bg-charcoal text-cream rounded-full px-3 py-2 hover:bg-terracotta transition-colors"
             data-add-to-cart
             data-product-id="${escapeAttr(productId)}"
             data-name="${escapeAttr(name)}"
             data-price="${parsePrice(price)}"
+            data-weight="${Number(weight) || 0}"
             data-image="${escapeAttr(image || '')}">Add to Cart</button>`;
 }
 
@@ -201,6 +205,7 @@ function colourCards(colours, filament) {
                     name: `${filament.name} — ${c.name}`,
                     price: c.price,
                     image: c.imageUrl,
+                    weight: c.weightG,
                   })}
                 </div>`,
     )
@@ -252,6 +257,7 @@ function catalogueItems(label, items, categorySlug) {
                         name,
                         price: item.price,
                         image: item.imageUrl,
+                        weight: item.weight,
                       })
                     : ''
                 }

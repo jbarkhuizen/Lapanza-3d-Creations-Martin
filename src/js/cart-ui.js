@@ -62,6 +62,7 @@ export function mountCartUI() {
           <span class="text-sm font-semibold uppercase tracking-wide">Total</span>
           <span id="cart-total" class="font-serif text-xl text-terracotta">R0</span>
         </div>
+        <a id="cart-checkout" href="#" class="block text-center text-xs font-semibold bg-charcoal text-cream rounded-full px-4 py-2.5 hover:bg-terracotta transition-colors mb-3">Checkout</a>
         <button type="button" id="cart-clear" class="w-full text-center text-xs text-espresso/50 hover:text-terracotta transition-colors uppercase tracking-wide">Clear cart</button>
       </div>
     </aside>`;
@@ -74,6 +75,9 @@ export function mountCartUI() {
   const linesEl = document.getElementById('cart-lines');
   const emptyEl = document.getElementById('cart-empty');
   const totalEl = document.getElementById('cart-total');
+
+  const depth = (window.__PAGE_DEPTH__ ?? 0) | 0;
+  document.getElementById('cart-checkout').href = `${'../'.repeat(depth)}checkout.html`;
 
   gsap.set(drawer, { xPercent: 100 });
 
@@ -138,6 +142,7 @@ export function mountCartUI() {
       name: btn.dataset.name,
       price: btn.dataset.price,
       image: btn.dataset.image,
+      weight: btn.dataset.weight,
     });
     gsap.fromTo(badge, { scale: 1.5 }, { scale: 1, duration: 0.3, ease: 'back.out(3)' });
   });

@@ -66,16 +66,31 @@ function show(el, on = true) {
 function setRoute(route, { id } = {}) {
   state.route = route;
   state.editingId = id || null;
-  $$('.nav-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.route === route || (route === 'editor' && btn.dataset.route === 'catalog')));
+  $$('.nav-btn').forEach((btn) =>
+    btn.classList.toggle(
+      'active',
+      btn.dataset.route === route ||
+        (route === 'editor' && btn.dataset.route === 'catalog') ||
+        (route === 'order-detail' && btn.dataset.route === 'orders'),
+    ),
+  );
   show($('#view-dashboard'), route === 'dashboard');
   show($('#view-catalog'), route === 'catalog');
   show($('#view-editor'), route === 'editor');
+  show($('#view-orders'), route === 'orders');
+  show($('#view-order-detail'), route === 'order-detail');
+  show($('#view-clients'), route === 'clients');
+  show($('#view-shipping'), route === 'shipping');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
     dashboard: ['Overview', 'Dashboard'],
     catalog: ['Inventory', 'Product catalog'],
     editor: ['Editor', 'Edit product'],
+    orders: ['Sales', 'Orders'],
+    'order-detail': ['Sales', 'Order detail'],
+    clients: ['Sales', 'Clients'],
+    shipping: ['Sales', 'Shipping options'],
     settings: ['Configuration', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
@@ -281,6 +296,15 @@ function bindChrome() {
       } else if (btn.dataset.route === 'settings') {
         setRoute('settings');
         await renderSettings();
+      } else if (btn.dataset.route === 'orders') {
+        setRoute('orders');
+        await renderOrders();
+      } else if (btn.dataset.route === 'clients') {
+        setRoute('clients');
+        await renderClients();
+      } else if (btn.dataset.route === 'shipping') {
+        setRoute('shipping');
+        await renderShipping();
       }
     });
   });
@@ -677,8 +701,11 @@ function renderCategorySections(p) {
               <label class="field"><span>Size</span><input data-item="size" value="${escapeAttr(item.size || '')}" /></label>
               <label class="field"><span>Finish</span><input data-item="finish" value="${escapeAttr(item.finish || '')}" /></label>
             </div>
-            <div class="grid-3">
+            <div class="grid-2">
               <label class="field"><span>Price</span><input data-item="price" value="${escapeAttr(item.price || '')}" placeholder="R450" /></label>
+              <label class="field"><span>Weight (g)</span><input data-item="weight" type="number" min="0" step="1" value="${item.weight ?? 0}" /></label>
+            </div>
+            <div class="grid-2">
               <label class="field"><span>Image URL</span><input data-item="imageUrl" value="${escapeAttr(item.imageUrl || '')}" /></label>
               <label class="field checkbox" style="margin-top:1.5rem">
                 <input data-item="available" type="checkbox" ${item.available !== false ? 'checked' : ''} />
@@ -759,6 +786,7 @@ function bindEditorEvents() {
       price: '',
       sku: '',
       imageUrl: '',
+      weight: 0,
       available: true,
       sortOrder: p.items.length,
     });
@@ -987,6 +1015,7 @@ function syncNestedFromDom() {
     price: $('[data-item="price"]', row)?.value || '',
     sku: $('[data-item="sku"]', row)?.value || '',
     imageUrl: $('[data-item="imageUrl"]', row)?.value || '',
+    weight: Number($('[data-item="weight"]', row)?.value) || 0,
     available: $('[data-item="available"]', row)?.checked !== false,
     sortOrder: i,
   }));
@@ -1202,6 +1231,369 @@ async function renderSettings() {
       }
     });
   });
+}
+
+// ---- Orders (F) ----
+
+function statusBadge(status) {
+  const s = escapeHtml(status);
+  return `<span class="badge ${s === 'paid' || s === 'completed' ? 'published' : s === 'cancelled' ? 'draft' : ''}">${s}</span>`;
+}
+
+async function renderOrders() {
+  state.orderFilters = state.orderFilters || { status: '', q: '' };
+  const { orders } = await api(
+    `/api/orders?${new URLSearchParams({ status: state.orderFilters.status, q: state.orderFilters.q })}`,
+  );
+  const rows = orders
+    .map(
+      (o) => `
+        <tr data-id="${escapeAttr(o.id)}">
+          <td><code>${escapeHtml(o.id.slice(0, 8))}</code></td>
+          <td>${statusBadge(o.status)}</td>
+          <td>R${escapeHtml(String(o.total))}</td>
+          <td>${escapeHtml(o.paymentMethod)}</td>
+          <td>${escapeHtml(formatDate(o.createdAt))}</td>
+          <td><button class="btn small" data-action="view" type="button">View</button></td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-orders').innerHTML = `
+    <div class="toolbar">
+      <input id="order-filter-q" type="search" placeholder="Search order id, client name/email/code…" value="${escapeAttr(state.orderFilters.q)}" />
+      <select id="order-filter-status">
+        <option value="">All statuses</option>
+        <option value="pending_payment" ${state.orderFilters.status === 'pending_payment' ? 'selected' : ''}>Pending payment</option>
+        <option value="paid" ${state.orderFilters.status === 'paid' ? 'selected' : ''}>Paid</option>
+        <option value="shipped" ${state.orderFilters.status === 'shipped' ? 'selected' : ''}>Shipped</option>
+        <option value="completed" ${state.orderFilters.status === 'completed' ? 'selected' : ''}>Completed</option>
+        <option value="cancelled" ${state.orderFilters.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+      </select>
+      <span class="muted">${escapeHtml(String(orders.length))} results</span>
+    </div>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Order</th><th>Status</th><th>Total</th><th>Payment</th><th>Placed</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No orders match your filters</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  const applyFilters = async () => {
+    state.orderFilters.q = $('#order-filter-q').value.trim();
+    state.orderFilters.status = $('#order-filter-status').value;
+    await renderOrders();
+  };
+  $('#order-filter-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
+  $('#order-filter-status').addEventListener('change', applyFilters);
+
+  $$('#view-orders tbody tr[data-id]').forEach((tr) => {
+    tr.addEventListener('click', () => openOrderDetail(tr.dataset.id));
+  });
+}
+
+async function openOrderDetail(id) {
+  setRoute('order-detail');
+  await renderOrderDetail(id);
+}
+
+async function renderOrderDetail(id) {
+  const { order } = await api(`/api/orders/${id}`);
+  const c = order.client || {};
+  const addr = [c.street, c.suburb, c.city, c.province, c.postalCode, c.country].filter(Boolean).join(', ');
+
+  const itemRows = order.items
+    .map(
+      (i) => `<tr><td>${escapeHtml(i.productName)}</td><td>${escapeHtml(String(i.quantity))}</td><td>R${escapeHtml(String(i.price))}</td><td>${escapeHtml(String(i.weight))}g</td><td>R${escapeHtml(String(i.price * i.quantity))}</td></tr>`,
+    )
+    .join('');
+
+  const txRows = order.transactions.length
+    ? order.transactions
+        .map(
+          (t) =>
+            `<tr><td>${escapeHtml(t.gateway)}</td><td>${escapeHtml(t.gateway_reference || '—')}</td><td>${escapeHtml(t.status)}</td><td>${escapeHtml(formatDate(t.created_at))}</td></tr>`,
+        )
+        .join('')
+    : '<tr><td colspan="4"><div class="empty">No payment transactions yet</div></td></tr>';
+
+  $('#view-order-detail').innerHTML = `
+    <button class="btn btn-ghost" id="back-to-orders" type="button">&larr; Back to orders</button>
+    <div class="stack gap-4" style="max-width:900px">
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Order ${escapeHtml(order.id)}</h3>${statusBadge(order.status)}</div>
+        <div class="grid-3">
+          <label class="field"><span>Status</span>
+            <select id="order-status">
+              <option value="pending_payment" ${order.status === 'pending_payment' ? 'selected' : ''}>Pending payment</option>
+              <option value="paid" ${order.status === 'paid' ? 'selected' : ''}>Paid</option>
+              <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>Shipped</option>
+              <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>Completed</option>
+              ${order.status === 'cancelled' ? '<option value="cancelled" selected>Cancelled (automatic)</option>' : ''}
+            </select>
+          </label>
+          <label class="field"><span>Tracking number</span><input id="order-tracking" value="${escapeAttr(order.trackingNumber || '')}" /></label>
+          <div class="field"><span>&nbsp;</span><button class="btn btn-primary" id="save-order" type="button">Save</button></div>
+        </div>
+        <p class="muted" style="font-size:0.85rem">
+          Confirmation email: ${order.confirmationEmailSentAt ? `sent ${escapeHtml(formatDate(order.confirmationEmailSentAt))}` : 'not sent'}
+          &nbsp;·&nbsp; <button class="btn small" id="resend-email" type="button">${order.confirmationEmailSentAt ? 'Resend' : 'Send'} confirmation email</button>
+          &nbsp;·&nbsp; <a href="/api/orders/${escapeAttr(order.id)}/packing-slip" target="_blank" rel="noopener">Print packing slip</a>
+        </p>
+      </div>
+
+      <div class="panel stack gap-2">
+        <div class="section-head"><h3>Client</h3></div>
+        <p><strong>${escapeHtml(c.name || '')}</strong> (${escapeHtml(c.clientCode || '')})<br>
+           ${escapeHtml(c.email || '')} &middot; ${escapeHtml(c.phone || '')}<br>
+           ${escapeHtml(addr)}</p>
+      </div>
+
+      <div class="panel table-wrap">
+        <div class="section-head"><h3>Items</h3></div>
+        <table class="catalog">
+          <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Weight</th><th>Line total</th></tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+        <p style="text-align:right;margin-top:0.5rem">
+          Subtotal: R${escapeHtml(String(order.subtotal))} &middot; Shipping (${escapeHtml(order.shippingOption?.name || '—')}): R${escapeHtml(String(order.shippingPrice))} &middot;
+          <strong>Total: R${escapeHtml(String(order.total))}</strong> &middot; Weight: ${escapeHtml(String(order.totalWeight))}g
+        </p>
+      </div>
+
+      <div class="panel table-wrap">
+        <div class="section-head"><h3>Payment transactions</h3></div>
+        <table class="catalog">
+          <thead><tr><th>Gateway</th><th>Reference</th><th>Status</th><th>Recorded</th></tr></thead>
+          <tbody>${txRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  $('#back-to-orders').addEventListener('click', async () => { setRoute('orders'); await renderOrders(); });
+
+  $('#save-order').addEventListener('click', async () => {
+    try {
+      const status = $('#order-status').value;
+      if (status !== order.status) await api(`/api/orders/${order.id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+      const trackingNumber = $('#order-tracking').value;
+      if (trackingNumber !== (order.trackingNumber || '')) {
+        await api(`/api/orders/${order.id}/tracking`, { method: 'PUT', body: JSON.stringify({ trackingNumber }) });
+      }
+      toast('Order updated');
+      await renderOrderDetail(order.id);
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $('#resend-email').addEventListener('click', async () => {
+    try {
+      await api(`/api/orders/${order.id}/send-confirmation`, { method: 'POST' });
+      toast('Confirmation email sent');
+      await renderOrderDetail(order.id);
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+}
+
+// ---- Clients (B) ----
+
+function blankClient() {
+  return { id: null, name: '', email: '', phone: '', street: '', suburb: '', city: '', province: '', postalCode: '', country: 'South Africa' };
+}
+
+async function renderClients() {
+  state.clientQ = state.clientQ || '';
+  state.editingClient = state.editingClient || null;
+  const { clients } = await api(`/api/clients?${new URLSearchParams({ q: state.clientQ })}`);
+
+  const rows = clients
+    .map(
+      (c) => `
+        <tr data-id="${escapeAttr(c.id)}">
+          <td><code>${escapeHtml(c.clientCode)}</code></td>
+          <td>${escapeHtml(c.name || '—')}</td>
+          <td>${escapeHtml(c.email)}</td>
+          <td>${escapeHtml(c.phone || '—')}</td>
+          <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
+        </tr>`,
+    )
+    .join('');
+
+  const form = state.editingClient;
+  $('#view-clients').innerHTML = `
+    <div class="toolbar">
+      <input id="client-q" type="search" placeholder="Search name, email, client code…" value="${escapeAttr(state.clientQ)}" />
+      <button class="btn btn-primary" id="new-client" type="button">+ Client</button>
+      <span class="muted">${escapeHtml(String(clients.length))} results</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:700px">
+        <div class="section-head"><h3>${form.id ? `Edit client (${escapeHtml(form.clientCode || '')})` : 'New client'}</h3></div>
+        <div class="grid-2">
+          <label class="field"><span>Name</span><input id="cf-name" value="${escapeAttr(form.name)}" /></label>
+          <label class="field"><span>Email *</span><input id="cf-email" type="email" required value="${escapeAttr(form.email)}" /></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Phone</span><input id="cf-phone" value="${escapeAttr(form.phone)}" /></label>
+          <label class="field"><span>Country</span><input id="cf-country" value="${escapeAttr(form.country)}" /></label>
+        </div>
+        <label class="field"><span>Street</span><input id="cf-street" value="${escapeAttr(form.street)}" /></label>
+        <div class="grid-3">
+          <label class="field"><span>Suburb</span><input id="cf-suburb" value="${escapeAttr(form.suburb)}" /></label>
+          <label class="field"><span>City</span><input id="cf-city" value="${escapeAttr(form.city)}" /></label>
+          <label class="field"><span>Province</span><input id="cf-province" value="${escapeAttr(form.province)}" /></label>
+        </div>
+        <label class="field" style="max-width:200px"><span>Postal code</span><input id="cf-postal" value="${escapeAttr(form.postalCode)}" /></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-client" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-client" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Code</th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No clients yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#client-q').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    state.clientQ = $('#client-q').value.trim();
+    await renderClients();
+  });
+  $('#new-client').addEventListener('click', async () => { state.editingClient = blankClient(); await renderClients(); });
+  $$('#view-clients tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const { client } = await api(`/api/clients/${tr.dataset.id}`);
+      state.editingClient = client;
+      await renderClients();
+    });
+  });
+
+  if (form) {
+    $('#cancel-client').addEventListener('click', async () => { state.editingClient = null; await renderClients(); });
+    $('#save-client').addEventListener('click', async () => {
+      const payload = {
+        name: $('#cf-name').value,
+        email: $('#cf-email').value,
+        phone: $('#cf-phone').value,
+        street: $('#cf-street').value,
+        suburb: $('#cf-suburb').value,
+        city: $('#cf-city').value,
+        province: $('#cf-province').value,
+        postalCode: $('#cf-postal').value,
+        country: $('#cf-country').value,
+      };
+      try {
+        if (form.id) await api(`/api/clients/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/api/clients', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Client saved');
+        state.editingClient = null;
+        await renderClients();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
+}
+
+// ---- Shipping options (C) ----
+
+function blankShippingOption() {
+  return { id: null, name: '', minWeight: 0, maxWeight: '', price: 0, active: true };
+}
+
+async function renderShipping() {
+  state.editingShipping = state.editingShipping || null;
+  const { shippingOptions } = await api('/api/shipping-options');
+
+  const rows = shippingOptions
+    .map(
+      (o) => `
+        <tr data-id="${escapeAttr(o.id)}">
+          <td>${escapeHtml(o.name)}</td>
+          <td>${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}</td>
+          <td>R${escapeHtml(String(o.price))}</td>
+          <td>${o.active ? '<span class="badge published">active</span>' : '<span class="badge draft">inactive</span>'}</td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  const form = state.editingShipping;
+  $('#view-shipping').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-shipping" type="button">+ Shipping option</button>
+      <span class="muted">${escapeHtml(String(shippingOptions.length))} options</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:600px">
+        <div class="section-head"><h3>${form.id ? 'Edit shipping option' : 'New shipping option'}</h3></div>
+        <label class="field"><span>Name</span><input id="sf-name" value="${escapeAttr(form.name)}" /></label>
+        <div class="grid-3">
+          <label class="field"><span>Min weight (g)</span><input id="sf-min" type="number" min="0" step="1" value="${escapeAttr(String(form.minWeight))}" /></label>
+          <label class="field"><span>Max weight (g, blank = no limit)</span><input id="sf-max" type="number" min="0" step="1" value="${escapeAttr(String(form.maxWeight ?? ''))}" /></label>
+          <label class="field"><span>Price (R)</span><input id="sf-price" type="number" min="0" step="1" value="${escapeAttr(String(form.price))}" /></label>
+        </div>
+        <label class="field checkbox"><input id="sf-active" type="checkbox" ${form.active ? 'checked' : ''} /><span>Active</span></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-shipping" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-shipping" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Name</th><th>Weight bracket</th><th>Price</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No shipping options yet — checkout can\'t complete until at least one active bracket exists</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#new-shipping').addEventListener('click', async () => { state.editingShipping = blankShippingOption(); await renderShipping(); });
+  $$('#view-shipping tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
+      const o = shippingOptions.find((x) => x.id === tr.dataset.id);
+      state.editingShipping = { ...o, maxWeight: o.maxWeight ?? '' };
+      renderShipping();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this shipping option?')) return;
+      try {
+        await api(`/api/shipping-options/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Deleted');
+        await renderShipping();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (form) {
+    $('#cancel-shipping').addEventListener('click', async () => { state.editingShipping = null; await renderShipping(); });
+    $('#save-shipping').addEventListener('click', async () => {
+      const payload = {
+        name: $('#sf-name').value,
+        minWeight: Number($('#sf-min').value) || 0,
+        maxWeight: $('#sf-max').value === '' ? null : Number($('#sf-max').value),
+        price: Number($('#sf-price').value) || 0,
+        active: $('#sf-active').checked,
+      };
+      try {
+        if (form.id) await api(`/api/shipping-options/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/api/shipping-options', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Shipping option saved');
+        state.editingShipping = null;
+        await renderShipping();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
 }
 
 function slugify(value) {

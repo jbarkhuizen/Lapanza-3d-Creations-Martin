@@ -55,6 +55,95 @@ export function ensureSchema(db) {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    -- Checkout/orders schema. This project has no migration framework --
+    -- schema changes live here as idempotent CREATE TABLE IF NOT EXISTS,
+    -- the same pattern already used for every table above, run on every
+    -- boot via getDb()/openDb(). Weight is stored in GRAMS everywhere
+    -- (matches filament_colours.weight_g already above) -- every weight
+    -- column/field in this feature (clients... no; shipping brackets,
+    -- order_items, orders.total_weight, cart.js, data-weight attributes)
+    -- uses grams consistently end to end.
+
+    CREATE TABLE IF NOT EXISTS clients (
+      id TEXT PRIMARY KEY,
+      client_code TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL DEFAULT '',
+      street TEXT NOT NULL DEFAULT '',
+      suburb TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      province TEXT NOT NULL DEFAULT '',
+      postal_code TEXT NOT NULL DEFAULT '',
+      country TEXT NOT NULL DEFAULT 'South Africa',
+      created_at TEXT NOT NULL
+    );
+    -- Case-insensitive email matching (B.3) is done in application code via
+    -- LOWER(email) = LOWER(?), so this index accelerates that lookup;
+    -- SQLite has no case-insensitive UNIQUE constraint for arbitrary
+    -- unicode without a COLLATE NOCASE column, which would also affect
+    -- ordering/display -- an index is enough since the app is the only
+    -- writer and always checks-then-inserts inside one transaction.
+    CREATE INDEX IF NOT EXISTS idx_clients_email ON clients (email);
+
+    CREATE TABLE IF NOT EXISTS shipping_options (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      min_weight INTEGER NOT NULL,
+      max_weight INTEGER,
+      price INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL REFERENCES clients(id),
+      status TEXT NOT NULL DEFAULT 'pending_payment',
+      subtotal INTEGER NOT NULL DEFAULT 0,
+      shipping_option_id TEXT REFERENCES shipping_options(id),
+      shipping_price INTEGER NOT NULL DEFAULT 0,
+      total INTEGER NOT NULL DEFAULT 0,
+      total_weight INTEGER NOT NULL DEFAULT 0,
+      payment_method TEXT NOT NULL,
+      payment_status TEXT NOT NULL DEFAULT 'pending',
+      tracking_number TEXT NOT NULL DEFAULT '',
+      confirmation_email_sent_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_orders_client ON orders (client_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
+
+    CREATE TABLE IF NOT EXISTS order_items (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL,
+      product_name TEXT NOT NULL,
+      price INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      weight INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
+
+    CREATE TABLE IF NOT EXISTS payment_transactions (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      gateway TEXT NOT NULL,
+      gateway_reference TEXT,
+      raw_payload TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_payment_transactions_order ON payment_transactions (order_id);
+    -- Payfast can resend the same ITN (their docs explicitly warn of this);
+    -- gateway+gateway_reference+status is the natural idempotency key so a
+    -- duplicate ITN for a reference already recorded at that status is a
+    -- no-op instead of a second row.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_transactions_idempotent
+      ON payment_transactions (gateway, gateway_reference, status);
   `);
 }
 

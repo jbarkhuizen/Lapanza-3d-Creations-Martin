@@ -13,6 +13,8 @@ function htmlEntries() {
     toys: resolve(__dirname, 'toys.html'),
     homeware: resolve(__dirname, 'homeware.html'),
     phones: resolve(__dirname, 'phones.html'),
+    checkout: resolve(__dirname, 'checkout.html'),
+    checkoutComplete: resolve(__dirname, 'checkout-complete.html'),
   };
 
   for (const dir of ['filament', 'car-parts']) {
@@ -36,5 +38,12 @@ export default defineConfig({
   server: {
     open: '/index.html',
     port: 5173,
+    // The public site (this dev server, 5173) and the admin/checkout API
+    // (server/index.js, 8787) are two separate processes -- proxying /api
+    // here is what lets checkout.html's relative fetch('/api/...') calls
+    // reach the Express server instead of 404ing against Vite itself.
+    proxy: {
+      '/api': 'http://localhost:8787',
+    },
   },
 });

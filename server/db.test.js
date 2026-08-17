@@ -5,13 +5,23 @@ import os from 'os';
 import path from 'path';
 import { openDb, ensureSchema, getDb, closeAllCachedDbs } from './db.js';
 
-test('ensureSchema creates all four tables', () => {
+test('ensureSchema creates every expected table', () => {
   const db = openDb(':memory:');
   const tables = db
     .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     .all()
     .map((r) => r.name);
-  assert.deepStrictEqual(tables, ['admins', 'filament_colours', 'filament_types', 'settings']);
+  assert.deepStrictEqual(tables, [
+    'admins',
+    'clients',
+    'filament_colours',
+    'filament_types',
+    'order_items',
+    'orders',
+    'payment_transactions',
+    'settings',
+    'shipping_options',
+  ]);
   db.close();
 });
 

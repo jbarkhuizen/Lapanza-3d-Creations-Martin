@@ -57,6 +57,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
           price: item.price,
           sku: item.sku,
           imageUrl: item.imageUrl,
+          weight: Number(item.weight) || 0,
           available: item.available !== false,
         })),
       };

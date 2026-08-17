@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Checkout — Lapanza 3D Creative Lab</title>
+<meta name="description" content="Complete your order — Lapanza 3D Creative Lab.">
+<meta name="theme-color" content="#f7f3eb">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>
+(function(){try{var t=localStorage.getItem('lapanza-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
+</script>
+<script>window.__PAGE_DEPTH__=0;window.__PAGE_PATH__="checkout.html";</script>
+<script type="module" src="src/js/checkout-entry.js"></script>
+</head>
+<body class="font-sans antialiased">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="site-grain" aria-hidden="true"></div>
+
+  <div class="md:hidden sticky top-0 z-30 nav-blur border-b border-charcoal/10 flex items-center justify-between px-4 py-3 gap-2">
+    <a href="index.html" class="brand-mark font-serif text-lg tracking-tight font-semibold">Lapanza <span class="mark-3d">3D</span></a>
+  </div>
+
+  <header class="hidden md:flex items-center justify-between px-10 py-6 border-b border-charcoal/10">
+    <a href="index.html" class="brand-mark font-serif text-xl tracking-tight font-semibold">Lapanza <span class="mark-3d">3D</span></a>
+    <a href="index.html" class="text-sm text-espresso/60 hover:text-terracotta transition-colors">&larr; Continue shopping</a>
+  </header>
+
+  <main id="main" class="px-6 sm:px-10 lg:px-16 py-10 md:py-14 max-w-4xl mx-auto">
+    <p class="eyebrow mb-3">Checkout</p>
+    <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-10">Complete your order</h1>
+
+    <div id="checkout-empty" class="hidden panel p-8 text-center">
+      <p class="text-espresso/70 mb-4">Your cart is empty.</p>
+      <a href="index.html" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors">Back to shop</a>
+    </div>
+
+    <div id="checkout-success" class="hidden panel p-8"></div>
+
+    <form id="checkout-form" class="grid md:grid-cols-[1.4fr_1fr] gap-8 items-start">
+      <div class="stack gap-6">
+        <div class="panel p-6 border border-charcoal/10 rounded-sm">
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Your items</h2>
+          <ul id="checkout-lines" class="stack gap-3"></ul>
+          <p class="text-sm text-espresso/60 mt-4">Total weight: <span id="checkout-weight">0g</span></p>
+        </div>
+
+        <div class="panel p-6 border border-charcoal/10 rounded-sm">
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Your details</h2>
+          <div class="grid sm:grid-cols-2 gap-4">
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Full name</span>
+              <input name="name" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Email *</span>
+              <input name="email" type="email" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+          </div>
+          <label class="block text-sm mt-4"><span class="block mb-1 text-espresso/70">Phone</span>
+            <input name="phone" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+          </label>
+          <label class="block text-sm mt-4"><span class="block mb-1 text-espresso/70">Street address</span>
+            <input name="street" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+          </label>
+          <div class="grid sm:grid-cols-3 gap-4 mt-4">
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Suburb</span>
+              <input name="suburb" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">City</span>
+              <input name="city" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Province</span>
+              <input name="province" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4 mt-4">
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Postal code</span>
+              <input name="postalCode" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Country</span>
+              <input name="country" value="South Africa" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="stack gap-6">
+        <div class="panel p-6 border border-charcoal/10 rounded-sm">
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping</h2>
+          <div id="checkout-shipping">Calculating…</div>
+        </div>
+
+        <div class="panel p-6 border border-charcoal/10 rounded-sm">
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Payment method</h2>
+          <div class="stack gap-2 text-sm">
+            <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_card" checked /> Payfast — Card</label>
+            <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_eft" /> Payfast — Instant EFT</label>
+            <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="manual_eft" /> Manual EFT</label>
+          </div>
+        </div>
+
+        <div class="panel p-6 border-2 border-charcoal rounded-sm brutal">
+          <div class="flex justify-between text-sm mb-1"><span>Subtotal</span><span id="checkout-subtotal">R0</span></div>
+          <div class="flex justify-between text-sm mb-3"><span>Shipping</span><span id="checkout-shipping-price">R0</span></div>
+          <div class="flex justify-between font-serif text-xl mb-4"><span>Total</span><span id="checkout-total" class="text-terracotta">R0</span></div>
+          <p id="checkout-error" class="hidden text-sm text-terracotta mb-3"></p>
+          <button type="submit" id="checkout-submit" class="w-full text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-3 hover:bg-terracotta transition-colors">Place order</button>
+        </div>
+      </div>
+    </form>
+  </main>
+
+  <footer class="border-t border-charcoal/10 py-10 mt-10">
+    <div class="mx-auto max-w-5xl px-6 sm:px-10 text-xs text-espresso/60 text-center">
+      &copy; <span data-year>2026</span> Lapanza 3D Creative Lab
+    </div>
+  </footer>
+</body>
+</html>
