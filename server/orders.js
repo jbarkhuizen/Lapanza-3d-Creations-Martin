@@ -4,8 +4,12 @@ import { findOrCreateClientForCheckout, getClient } from './clients.js';
 import { matchShippingForWeight, getShippingOption } from './shipping.js';
 import { readCategoryProducts } from './export.js';
 
-const ALLOWED_STATUSES = ['pending_payment', 'paid', 'shipped', 'completed'];
-const ALLOWED_PAYMENT_METHODS = ['payfast_card', 'payfast_eft', 'manual_eft'];
+// 'cancelled' is reachable two ways: automatically (see cancelStalePendingOrders
+// below) and now also as an explicit admin action (updateOrderStatus) --
+// per user instruction this reverses the original "automatic-only" design.
+const ALLOWED_STATUSES = ['pending_payment', 'paid', 'shipped', 'completed', 'cancelled'];
+const ALLOWED_PAYMENT_METHODS = ['payfast_card', 'payfast_eft', 'manual_eft', 'cash_on_collection'];
+const ALLOWED_SHIPPING_METHODS = ['courier', 'own_courier', 'collect'];
 
 function parseRand(value) {
   const n = parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''));
@@ -38,7 +42,9 @@ export function resolveProductSnapshot(productId, db = getDb()) {
       productId,
       name: `${row.filament_name} — ${row.name}`,
       price: row.price_rand,
-      weight: row.weight_g,
+      // Shipping weight, not the item's own weight_g -- see db.js's
+      // ensureCheckoutColumns comment for why these are separate.
+      weight: row.shipping_weight_g ?? row.weight_g,
     };
   }
   if (raw.startsWith('category:')) {
@@ -56,7 +62,7 @@ export function resolveProductSnapshot(productId, db = getDb()) {
       productId,
       name: item.name || category.name,
       price: parseRand(item.price),
-      weight: Number(item.weight) || 0,
+      weight: Number(item.shippingWeight ?? item.weight) || 0,
     };
   }
   return null;
@@ -71,6 +77,7 @@ function rowToOrder(row) {
     subtotal: row.subtotal,
     shippingOptionId: row.shipping_option_id,
     shippingPrice: row.shipping_price,
+    shippingMethod: row.shipping_method,
     total: row.total,
     totalWeight: row.total_weight,
     paymentMethod: row.payment_method,
@@ -128,8 +135,17 @@ export function listOrders({ status, q } = {}, db = getDb()) {
 // order + order_items in a single transaction so a failure partway through
 // (e.g. a bad shipping option) can't leave an order with no items or a
 // client with no order.
-export function createOrder({ client: clientData, items: cartItems, shippingOptionId, paymentMethod }, db = getDb()) {
+export function createOrder(
+  { client: clientData, items: cartItems, shippingMethod = 'courier', shippingOptionId, paymentMethod },
+  db = getDb(),
+) {
   if (!ALLOWED_PAYMENT_METHODS.includes(paymentMethod)) throw new Error('Invalid payment method');
+  if (!ALLOWED_SHIPPING_METHODS.includes(shippingMethod)) throw new Error('Invalid shipping method');
+  // Cash on Collection only makes sense when the order is actually being
+  // collected -- otherwise there's no point at which cash changes hands.
+  if (paymentMethod === 'cash_on_collection' && shippingMethod !== 'collect') {
+    throw new Error('Cash on Collection is only available when collecting from the store.');
+  }
   if (!Array.isArray(cartItems) || cartItems.length === 0) throw new Error('Cart is empty');
 
   const resolved = cartItems.map((line) => {
@@ -142,18 +158,25 @@ export function createOrder({ client: clientData, items: cartItems, shippingOpti
   const totalWeight = resolved.reduce((sum, i) => sum + i.weight * i.quantity, 0);
   const subtotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
-  const shippingOption = shippingOptionId ? getShippingOption(shippingOptionId, db) : matchShippingForWeight(totalWeight, db);
-  if (!shippingOption) throw new Error('No shipping option available for this order weight — contact us to arrange shipping.');
-  // The client picks from options the server already matched to the cart's
-  // weight, but re-verify server-side rather than trusting whatever id came
-  // back in the POST body -- a forged shippingOptionId could otherwise pick
-  // an unrelated (cheaper, or inactive) bracket.
-  const validMatch = matchShippingForWeight(totalWeight, db);
-  if (!validMatch || validMatch.id !== shippingOption.id) {
-    throw new Error('Selected shipping option does not match this order\'s weight.');
+  // Only the 'courier' method actually charges shipping -- own_courier and
+  // collect are both R0 from us (the customer either sends their own
+  // courier to fetch it, or fetches it themselves).
+  let shippingOption = null;
+  if (shippingMethod === 'courier') {
+    shippingOption = shippingOptionId ? getShippingOption(shippingOptionId, db) : matchShippingForWeight(totalWeight, db);
+    if (!shippingOption) throw new Error('No shipping option available for this order weight — contact us to arrange shipping.');
+    // The client picks from options the server already matched to the
+    // cart's weight, but re-verify server-side rather than trusting
+    // whatever id came back in the POST body -- a forged shippingOptionId
+    // could otherwise pick an unrelated (cheaper, or inactive) bracket.
+    const validMatch = matchShippingForWeight(totalWeight, db);
+    if (!validMatch || validMatch.id !== shippingOption.id) {
+      throw new Error('Selected shipping option does not match this order\'s weight.');
+    }
   }
 
-  const total = subtotal + shippingOption.price;
+  const shippingPrice = shippingOption?.price || 0;
+  const total = subtotal + shippingPrice;
 
   const tx = db.transaction(() => {
     const client = findOrCreateClientForCheckout(clientData, db);
@@ -161,17 +184,18 @@ export function createOrder({ client: clientData, items: cartItems, shippingOpti
     const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO orders
-        (id, client_id, status, subtotal, shipping_option_id, shipping_price, total, total_weight,
+        (id, client_id, status, subtotal, shipping_option_id, shipping_price, shipping_method, total, total_weight,
          payment_method, payment_status, tracking_number, created_at, updated_at)
        VALUES
-        (@id, @client_id, 'pending_payment', @subtotal, @shipping_option_id, @shipping_price, @total, @total_weight,
+        (@id, @client_id, 'pending_payment', @subtotal, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
          @payment_method, 'pending', '', @created_at, @updated_at)`,
     ).run({
       id: orderId,
       client_id: client.id,
       subtotal,
-      shipping_option_id: shippingOption.id,
-      shipping_price: shippingOption.price,
+      shipping_option_id: shippingOption?.id || null,
+      shipping_price: shippingPrice,
+      shipping_method: shippingMethod,
       total,
       total_weight: totalWeight,
       payment_method: paymentMethod,

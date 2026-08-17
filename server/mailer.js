@@ -35,10 +35,18 @@ function buildOrderEmailBody(order) {
   const lines = order.items
     .map((i) => `  ${i.quantity} x ${i.productName} — ${formatRand(i.price)} each = ${formatRand(i.price * i.quantity)}`)
     .join('\n');
-  const paymentNote =
-    order.paymentMethod === 'manual_eft'
-      ? `\nPayment method: Manual EFT\n\n${BANKING_DETAILS}\n`
-      : `\nPayment method: ${order.paymentMethod === 'payfast_card' ? 'Payfast (Card)' : 'Payfast (Instant EFT)'}\n`;
+  const paymentLabels = {
+    manual_eft: `Manual EFT\n\n${BANKING_DETAILS}\n`,
+    cash_on_collection: 'Cash on Collection — pay when you collect your order in store.',
+    payfast_card: 'Payfast (Card)',
+    payfast_eft: 'Payfast (Instant EFT)',
+  };
+  const shippingLabels = {
+    courier: order.shippingOption?.name || 'Our shipping',
+    own_courier: "Customer's own courier (no delivery charge)",
+    collect: 'Collect from store (no delivery charge)',
+  };
+  const paymentNote = `\nPayment method: ${paymentLabels[order.paymentMethod] || order.paymentMethod}\n`;
 
   return `Hi ${order.client?.name || 'there'},
 
@@ -50,7 +58,7 @@ Items:
 ${lines}
 
 Subtotal: ${formatRand(order.subtotal)}
-Shipping (${order.shippingOption?.name || 'n/a'}): ${formatRand(order.shippingPrice)}
+Shipping (${shippingLabels[order.shippingMethod] || order.shippingMethod}): ${formatRand(order.shippingPrice)}
 Total: ${formatRand(order.total)}
 ${paymentNote}
 We'll be in touch once your order is on its way.

@@ -52,8 +52,16 @@
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
           <h2 class="font-serif text-xl mb-4 tracking-tight">Your details</h2>
           <div class="grid sm:grid-cols-2 gap-4">
-            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Full name</span>
-              <input name="name" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">First name *</span>
+              <input name="firstName" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Surname *</span>
+              <input name="lastName" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4 mt-4">
+            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Business name (optional)</span>
+              <input name="businessName" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
             </label>
             <label class="block text-sm"><span class="block mb-1 text-espresso/70">Email *</span>
               <input name="email" type="email" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
@@ -62,34 +70,41 @@
           <label class="block text-sm mt-4"><span class="block mb-1 text-espresso/70">Phone</span>
             <input name="phone" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
           </label>
-          <label class="block text-sm mt-4"><span class="block mb-1 text-espresso/70">Street address</span>
-            <input name="street" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
-          </label>
-          <div class="grid sm:grid-cols-3 gap-4 mt-4">
-            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Suburb</span>
-              <input name="suburb" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+          <div id="checkout-address-fields">
+            <label class="block text-sm mt-4"><span class="block mb-1 text-espresso/70">Street address</span>
+              <input name="street" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
             </label>
-            <label class="block text-sm"><span class="block mb-1 text-espresso/70">City</span>
-              <input name="city" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
-            </label>
-            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Province</span>
-              <input name="province" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
-            </label>
-          </div>
-          <div class="grid sm:grid-cols-2 gap-4 mt-4">
-            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Postal code</span>
-              <input name="postalCode" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
-            </label>
-            <label class="block text-sm"><span class="block mb-1 text-espresso/70">Country</span>
-              <input name="country" value="South Africa" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
-            </label>
+            <div class="grid sm:grid-cols-3 gap-4 mt-4">
+              <label class="block text-sm"><span class="block mb-1 text-espresso/70">Suburb</span>
+                <input name="suburb" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+              <label class="block text-sm"><span class="block mb-1 text-espresso/70">City</span>
+                <input name="city" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+              <label class="block text-sm"><span class="block mb-1 text-espresso/70">Province</span>
+                <input name="province" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+            </div>
+            <div class="grid sm:grid-cols-2 gap-4 mt-4">
+              <label class="block text-sm"><span class="block mb-1 text-espresso/70">Postal code</span>
+                <input name="postalCode" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+              <label class="block text-sm"><span class="block mb-1 text-espresso/70">Country</span>
+                <input name="country" value="South Africa" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="stack gap-6">
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping</h2>
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping method</h2>
+          <div class="stack gap-2 text-sm mb-4">
+            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="courier" checked /> Our shipping (courier)</label>
+            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="own_courier" /> I'll arrange my own courier</label>
+            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="collect" /> Collect from store</label>
+          </div>
           <div id="checkout-shipping">Calculating…</div>
         </div>
 
@@ -99,6 +114,7 @@
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_card" checked /> Payfast — Card</label>
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_eft" /> Payfast — Instant EFT</label>
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="manual_eft" /> Manual EFT</label>
+            <label id="checkout-coc-label" class="hidden items-center gap-2"><input type="radio" name="paymentMethod" value="cash_on_collection" /> Cash on Collection</label>
           </div>
         </div>
 

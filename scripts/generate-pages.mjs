@@ -205,7 +205,7 @@ function colourCards(colours, filament) {
                     name: `${filament.name} — ${c.name}`,
                     price: c.price,
                     image: c.imageUrl,
-                    weight: c.weightG,
+                    weight: c.shippingWeightG ?? c.weightG,
                   })}
                 </div>`,
     )
@@ -257,7 +257,7 @@ function catalogueItems(label, items, categorySlug) {
                         name,
                         price: item.price,
                         image: item.imageUrl,
-                        weight: item.weight,
+                        weight: item.shippingWeight ?? item.weight,
                       })
                     : ''
                 }

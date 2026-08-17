@@ -647,8 +647,11 @@ function renderFilamentSections(p) {
               <label class="field"><span>SKU</span><input data-colour="sku" value="${escapeAttr(c.sku)}" /></label>
               <label class="field"><span>Hex override</span><input data-colour="hex" value="${escapeAttr(c.hex || '')}" placeholder="#c24b28" /></label>
             </div>
-            <div class="grid-3">
-              <label class="field"><span>Weight (g)</span><input data-colour="weightG" type="number" min="0" step="1" value="${c.weightG ?? 0}" /></label>
+            <div class="grid-2">
+              <label class="field"><span>Filament weight (g)</span><input data-colour="weightG" type="number" min="0" step="1" value="${c.weightG ?? 0}" /></label>
+              <label class="field"><span>Shipping weight (g)</span><input data-colour="shippingWeightG" type="number" min="0" step="1" value="${c.shippingWeightG ?? c.weightG ?? 0}" /></label>
+            </div>
+            <div class="grid-2">
               <label class="field"><span>Roll length (m, optional)</span><input data-colour="rollLengthM" type="number" min="0" step="0.1" value="${c.rollLengthM ?? ''}" /></label>
               <label class="field"><span>Price per roll (R)</span><input data-colour="priceRand" type="number" min="0" step="1" value="${c.priceRand ?? 0}" /></label>
             </div>
@@ -701,9 +704,10 @@ function renderCategorySections(p) {
               <label class="field"><span>Size</span><input data-item="size" value="${escapeAttr(item.size || '')}" /></label>
               <label class="field"><span>Finish</span><input data-item="finish" value="${escapeAttr(item.finish || '')}" /></label>
             </div>
-            <div class="grid-2">
+            <div class="grid-3">
               <label class="field"><span>Price</span><input data-item="price" value="${escapeAttr(item.price || '')}" placeholder="R450" /></label>
               <label class="field"><span>Weight (g)</span><input data-item="weight" type="number" min="0" step="1" value="${item.weight ?? 0}" /></label>
+              <label class="field"><span>Shipping weight (g)</span><input data-item="shippingWeight" type="number" min="0" step="1" value="${item.shippingWeight ?? item.weight ?? 0}" /></label>
             </div>
             <div class="grid-2">
               <label class="field"><span>Image URL</span><input data-item="imageUrl" value="${escapeAttr(item.imageUrl || '')}" /></label>
@@ -766,6 +770,7 @@ function bindEditorEvents() {
       hex: '',
       notes: '',
       weightG: 0,
+      shippingWeightG: 0,
       rollLengthM: null,
       priceRand: 0,
       stockQty: 0,
@@ -787,6 +792,7 @@ function bindEditorEvents() {
       sku: '',
       imageUrl: '',
       weight: 0,
+      shippingWeight: 0,
       available: true,
       sortOrder: p.items.length,
     });
@@ -955,6 +961,7 @@ async function saveFilament(p) {
       hex: c.hex,
       sku: c.sku,
       weightG: c.weightG,
+      shippingWeightG: c.shippingWeightG,
       rollLengthM: c.rollLengthM,
       priceRand: c.priceRand,
       stockQty: c.stockQty,
@@ -993,6 +1000,7 @@ function syncNestedFromDom() {
       hex: $('[data-colour="hex"]', row)?.value || '',
       notes: $('[data-colour="notes"]', row)?.value || '',
       weightG: Number($('[data-colour="weightG"]', row)?.value) || 0,
+      shippingWeightG: Number($('[data-colour="shippingWeightG"]', row)?.value) || 0,
       // Optional field -- blank must stay null (not fall through to 0),
       // matching server/filaments.js's rollLengthM != null && !== '' check.
       rollLengthM: rollRaw === '' || rollRaw == null ? null : Number(rollRaw),
@@ -1016,6 +1024,7 @@ function syncNestedFromDom() {
     sku: $('[data-item="sku"]', row)?.value || '',
     imageUrl: $('[data-item="imageUrl"]', row)?.value || '',
     weight: Number($('[data-item="weight"]', row)?.value) || 0,
+    shippingWeight: Number($('[data-item="shippingWeight"]', row)?.value) || 0,
     available: $('[data-item="available"]', row)?.checked !== false,
     sortOrder: i,
   }));
@@ -1235,6 +1244,12 @@ async function renderSettings() {
 
 // ---- Orders (F) ----
 
+const SHIPPING_METHOD_LABELS = {
+  courier: 'Our shipping',
+  own_courier: "Customer's own courier",
+  collect: 'Collect from store',
+};
+
 function statusBadge(status) {
   const s = escapeHtml(status);
   return `<span class="badge ${s === 'paid' || s === 'completed' ? 'published' : s === 'cancelled' ? 'draft' : ''}">${s}</span>`;
@@ -1329,7 +1344,7 @@ async function renderOrderDetail(id) {
               <option value="paid" ${order.status === 'paid' ? 'selected' : ''}>Paid</option>
               <option value="shipped" ${order.status === 'shipped' ? 'selected' : ''}>Shipped</option>
               <option value="completed" ${order.status === 'completed' ? 'selected' : ''}>Completed</option>
-              ${order.status === 'cancelled' ? '<option value="cancelled" selected>Cancelled (automatic)</option>' : ''}
+              ${order.status === 'cancelled' ? '<option value="cancelled" selected>Cancelled</option>' : ''}
             </select>
           </label>
           <label class="field"><span>Tracking number</span><input id="order-tracking" value="${escapeAttr(order.trackingNumber || '')}" /></label>
@@ -1339,12 +1354,13 @@ async function renderOrderDetail(id) {
           Confirmation email: ${order.confirmationEmailSentAt ? `sent ${escapeHtml(formatDate(order.confirmationEmailSentAt))}` : 'not sent'}
           &nbsp;·&nbsp; <button class="btn small" id="resend-email" type="button">${order.confirmationEmailSentAt ? 'Resend' : 'Send'} confirmation email</button>
           &nbsp;·&nbsp; <a href="/api/orders/${escapeAttr(order.id)}/packing-slip" target="_blank" rel="noopener">Print packing slip</a>
+          ${order.status !== 'cancelled' ? '&nbsp;·&nbsp; <button class="btn small btn-danger" id="cancel-order" type="button">Cancel order</button>' : ''}
         </p>
       </div>
 
       <div class="panel stack gap-2">
         <div class="section-head"><h3>Client</h3></div>
-        <p><strong>${escapeHtml(c.name || '')}</strong> (${escapeHtml(c.clientCode || '')})<br>
+        <p><strong>${escapeHtml(c.name || '')}</strong>${c.businessName ? ` &middot; ${escapeHtml(c.businessName)}` : ''} (${escapeHtml(c.clientCode || '')})<br>
            ${escapeHtml(c.email || '')} &middot; ${escapeHtml(c.phone || '')}<br>
            ${escapeHtml(addr)}</p>
       </div>
@@ -1356,7 +1372,7 @@ async function renderOrderDetail(id) {
           <tbody>${itemRows}</tbody>
         </table>
         <p style="text-align:right;margin-top:0.5rem">
-          Subtotal: R${escapeHtml(String(order.subtotal))} &middot; Shipping (${escapeHtml(order.shippingOption?.name || '—')}): R${escapeHtml(String(order.shippingPrice))} &middot;
+          Subtotal: R${escapeHtml(String(order.subtotal))} &middot; Shipping (${escapeHtml(SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}): R${escapeHtml(String(order.shippingPrice))} &middot;
           <strong>Total: R${escapeHtml(String(order.total))}</strong> &middot; Weight: ${escapeHtml(String(order.totalWeight))}g
         </p>
       </div>
@@ -1396,12 +1412,26 @@ async function renderOrderDetail(id) {
       toast(ex.message);
     }
   });
+
+  $('#cancel-order')?.addEventListener('click', async () => {
+    if (!confirm('Cancel this order? This cannot be undone from here.')) return;
+    try {
+      await api(`/api/orders/${order.id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'cancelled' }) });
+      toast('Order cancelled');
+      await renderOrderDetail(order.id);
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
 }
 
 // ---- Clients (B) ----
 
 function blankClient() {
-  return { id: null, name: '', email: '', phone: '', street: '', suburb: '', city: '', province: '', postalCode: '', country: 'South Africa' };
+  return {
+    id: null, name: '', firstName: '', lastName: '', businessName: '', email: '', phone: '',
+    street: '', suburb: '', city: '', province: '', postalCode: '', country: 'South Africa',
+  };
 }
 
 async function renderClients() {
@@ -1433,7 +1463,11 @@ async function renderClients() {
       <div class="panel stack gap-3" style="max-width:700px">
         <div class="section-head"><h3>${form.id ? `Edit client (${escapeHtml(form.clientCode || '')})` : 'New client'}</h3></div>
         <div class="grid-2">
-          <label class="field"><span>Name</span><input id="cf-name" value="${escapeAttr(form.name)}" /></label>
+          <label class="field"><span>First name</span><input id="cf-first-name" value="${escapeAttr(form.firstName || '')}" /></label>
+          <label class="field"><span>Surname</span><input id="cf-last-name" value="${escapeAttr(form.lastName || '')}" /></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Business name (optional)</span><input id="cf-business-name" value="${escapeAttr(form.businessName || '')}" /></label>
           <label class="field"><span>Email *</span><input id="cf-email" type="email" required value="${escapeAttr(form.email)}" /></label>
         </div>
         <div class="grid-2">
@@ -1476,8 +1510,13 @@ async function renderClients() {
   if (form) {
     $('#cancel-client').addEventListener('click', async () => { state.editingClient = null; await renderClients(); });
     $('#save-client').addEventListener('click', async () => {
+      const firstName = $('#cf-first-name').value;
+      const lastName = $('#cf-last-name').value;
       const payload = {
-        name: $('#cf-name').value,
+        name: `${firstName} ${lastName}`.trim(),
+        firstName,
+        lastName,
+        businessName: $('#cf-business-name').value,
         email: $('#cf-email').value,
         phone: $('#cf-phone').value,
         street: $('#cf-street').value,

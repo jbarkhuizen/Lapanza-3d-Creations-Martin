@@ -9,6 +9,11 @@ function rowToColour(row) {
     hex: row.hex,
     sku: row.sku,
     weightG: row.weight_g,
+    // Shipping weight is what drives shipping-bracket matching, separate
+    // from weightG (the item's own "Filament Weight"). Falls back to
+    // weightG when null so a colour created before this column existed
+    // (or one where the admin hasn't set it) still ships correctly.
+    shippingWeightG: row.shipping_weight_g ?? row.weight_g,
     rollLengthM: row.roll_length_m,
     priceRand: row.price_rand,
     stockQty: row.stock_qty,
@@ -143,18 +148,22 @@ export function addColour(filamentTypeId, data, db = getDb()) {
   const maxSort = db
     .prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM filament_colours WHERE filament_type_id = ?')
     .get(filamentTypeId).m;
+  const weightG = Number(data.weightG) || 0;
   db.prepare(
     `INSERT INTO filament_colours
-      (id, filament_type_id, name, hex, sku, weight_g, roll_length_m, price_rand, stock_qty, image_path, notes, sort_order, created_at, updated_at)
+      (id, filament_type_id, name, hex, sku, weight_g, shipping_weight_g, roll_length_m, price_rand, stock_qty, image_path, notes, sort_order, created_at, updated_at)
      VALUES
-      (@id, @filament_type_id, @name, @hex, @sku, @weight_g, @roll_length_m, @price_rand, @stock_qty, @image_path, @notes, @sort_order, @created_at, @updated_at)`,
+      (@id, @filament_type_id, @name, @hex, @sku, @weight_g, @shipping_weight_g, @roll_length_m, @price_rand, @stock_qty, @image_path, @notes, @sort_order, @created_at, @updated_at)`,
   ).run({
     id,
     filament_type_id: filamentTypeId,
     name: data.name || '',
     hex: data.hex || '',
     sku: data.sku || id.slice(0, 8),
-    weight_g: Number(data.weightG) || 0,
+    weight_g: weightG,
+    // Defaults to weightG when the admin hasn't set a distinct shipping
+    // weight yet, same fallback rowToColour applies on read.
+    shipping_weight_g: data.shippingWeightG != null && data.shippingWeightG !== '' ? Number(data.shippingWeightG) : weightG,
     roll_length_m: data.rollLengthM != null && data.rollLengthM !== '' ? Number(data.rollLengthM) : null,
     price_rand: Number(data.priceRand) || 0,
     stock_qty: Number(data.stockQty) || 0,
@@ -172,7 +181,7 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
   if (!existing) return null;
   db.prepare(
     `UPDATE filament_colours SET
-      name = @name, hex = @hex, sku = @sku, weight_g = @weight_g, roll_length_m = @roll_length_m,
+      name = @name, hex = @hex, sku = @sku, weight_g = @weight_g, shipping_weight_g = @shipping_weight_g, roll_length_m = @roll_length_m,
       price_rand = @price_rand, stock_qty = @stock_qty, notes = @notes, updated_at = @updated_at
      WHERE id = @id`,
   ).run({
@@ -181,6 +190,9 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
     hex: data.hex ?? existing.hex,
     sku: data.sku ?? existing.sku,
     weight_g: data.weightG != null ? toNumberOr(data.weightG, existing.weight_g) : existing.weight_g,
+    shipping_weight_g: data.shippingWeightG != null
+      ? toNumberOr(data.shippingWeightG, existing.shipping_weight_g)
+      : existing.shipping_weight_g,
     // Distinguishes "rollLengthM omitted from the patch" (preserve existing)
     // from "rollLengthM present but null/empty" (explicitly clear it) --
     // admin.js sends null for a blank input specifically to clear a

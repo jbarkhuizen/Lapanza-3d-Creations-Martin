@@ -32,6 +32,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
       sku: c.sku,
       price: `R${c.priceRand}`,
       weightG: c.weightG,
+      shippingWeightG: c.shippingWeightG,
       rollLengthM: c.rollLengthM,
       stockQty: c.stockQty,
       imageUrl: c.imagePath || '',
@@ -58,6 +59,9 @@ export function syncPublicJson(db, paths = defaultPaths()) {
           sku: item.sku,
           imageUrl: item.imageUrl,
           weight: Number(item.weight) || 0,
+          // Falls back to weight when unset, same as filament colours --
+          // drives shipping-bracket matching, weight is just the spec.
+          shippingWeight: item.shippingWeight != null && item.shippingWeight !== '' ? Number(item.shippingWeight) : Number(item.weight) || 0,
           available: item.available !== false,
         })),
       };

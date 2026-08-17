@@ -52,18 +52,25 @@ function submitToPayfast({ actionUrl, fields }) {
   form.submit();
 }
 
-function showManualEftSuccess(order) {
+function showOrderPlacedSuccess(order, paymentMethod) {
   document.getElementById('checkout-form').classList.add('hidden');
   const box = document.getElementById('checkout-success');
   box.classList.remove('hidden');
+  const paymentNote =
+    paymentMethod === 'manual_eft'
+      ? `<div class="border border-charcoal/10 rounded-sm p-4 bg-linen text-sm mb-4">
+          <p><strong>Order reference:</strong> ${escapeHtml(order.id)}</p>
+          <p><strong>Amount:</strong> ${escapeHtml(formatPrice(order.total))}</p>
+          <p class="mt-2 text-espresso/60">Please pay via EFT using your order reference. Banking details have also been emailed to you.</p>
+        </div>`
+      : `<div class="border border-charcoal/10 rounded-sm p-4 bg-linen text-sm mb-4">
+          <p><strong>Order reference:</strong> ${escapeHtml(order.id)}</p>
+          <p><strong>Amount due on collection:</strong> ${escapeHtml(formatPrice(order.total))}</p>
+          <p class="mt-2 text-espresso/60">We'll let you know when your order is ready to collect. Pay in cash when you pick it up.</p>
+        </div>`;
   box.innerHTML = `
     <h2 class="font-serif text-2xl mb-3">Order placed — ${escapeHtml(order.id.slice(0, 8))}</h2>
-    <p class="text-espresso/70 mb-4">Please pay via EFT using the details below, using your order reference. We'll confirm once payment reflects.</p>
-    <div class="border border-charcoal/10 rounded-sm p-4 bg-linen text-sm mb-4">
-      <p><strong>Order reference:</strong> ${escapeHtml(order.id)}</p>
-      <p><strong>Amount:</strong> ${escapeHtml(formatPrice(order.total))}</p>
-      <p class="mt-2 text-espresso/60">Banking details have also been emailed to you.</p>
-    </div>
+    ${paymentNote}
     <a href="index.html" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors">Back to shop</a>`;
 }
 
@@ -81,30 +88,86 @@ async function init() {
   document.getElementById('checkout-weight').textContent = `${weight}g`;
   document.getElementById('checkout-subtotal').textContent = formatPrice(subtotal);
 
+  const form = document.getElementById('checkout-form');
   const shippingBox = document.getElementById('checkout-shipping');
+  const addressFields = document.getElementById('checkout-address-fields');
+  const cocLabel = document.getElementById('checkout-coc-label');
   const submitBtn = document.getElementById('checkout-submit');
+
   let shippingOption = null;
-  try {
-    const { shippingOption: match } = await api(`/api/shipping-match?weight=${weight}`);
-    shippingOption = match;
-    shippingBox.innerHTML = `<p class="text-sm">${escapeHtml(match.name)} — ${escapeHtml(formatPrice(match.price))}</p>`;
-    document.getElementById('checkout-shipping-price').textContent = formatPrice(match.price);
-    document.getElementById('checkout-total').textContent = formatPrice(subtotal + match.price);
-  } catch (err) {
-    shippingBox.innerHTML = `<p class="text-sm text-terracotta">${escapeHtml(err.message)}</p>`;
-    submitBtn.disabled = true;
-    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+  let shippingReady = false;
+
+  function setAddressRequired(required) {
+    addressFields.querySelectorAll('input').forEach((input) => {
+      if (input.name === 'country') return; // has a sensible default either way
+      input.required = required;
+    });
+    addressFields.classList.toggle('opacity-50', !required);
   }
 
-  document.getElementById('checkout-form').addEventListener('submit', async (e) => {
+  async function updateShipping() {
+    const method = form.shippingMethod.value;
+    shippingReady = false;
+    submitBtn.disabled = true;
+
+    if (method !== 'courier') {
+      shippingOption = null;
+      shippingReady = true;
+      submitBtn.disabled = false;
+      setAddressRequired(false);
+      shippingBox.innerHTML = `<p class="text-sm text-espresso/60">${
+        method === 'collect' ? 'No delivery charge — collect from our store.' : "No delivery charge — you'll arrange your own courier collection."
+      }</p>`;
+      document.getElementById('checkout-shipping-price').textContent = formatPrice(0);
+      document.getElementById('checkout-total').textContent = formatPrice(subtotal);
+      return;
+    }
+
+    setAddressRequired(true);
+    shippingBox.textContent = 'Calculating…';
+    try {
+      const { shippingOption: match } = await api(`/api/shipping-match?weight=${weight}`);
+      shippingOption = match;
+      shippingReady = true;
+      shippingBox.innerHTML = `<p class="text-sm">${escapeHtml(match.name)} — ${escapeHtml(formatPrice(match.price))}</p>`;
+      document.getElementById('checkout-shipping-price').textContent = formatPrice(match.price);
+      document.getElementById('checkout-total').textContent = formatPrice(subtotal + match.price);
+      submitBtn.disabled = false;
+    } catch (err) {
+      shippingBox.innerHTML = `<p class="text-sm text-terracotta">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function updatePaymentOptions() {
+    const isCollect = form.shippingMethod.value === 'collect';
+    cocLabel.classList.toggle('hidden', !isCollect);
+    cocLabel.classList.toggle('flex', isCollect);
+    // Cash on Collection only makes sense when actually collecting -- if the
+    // customer had it selected and then switches to a shipped method, fall
+    // back to a sane default rather than submitting an invalid combination.
+    if (!isCollect && form.paymentMethod.value === 'cash_on_collection') {
+      form.querySelector('[name="paymentMethod"][value="payfast_card"]').checked = true;
+    }
+  }
+
+  form.querySelectorAll('[name="shippingMethod"]').forEach((r) =>
+    r.addEventListener('change', () => { updateShipping(); updatePaymentOptions(); }),
+  );
+  await updateShipping();
+  updatePaymentOptions();
+
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const errorEl = document.getElementById('checkout-error');
     errorEl.classList.add('hidden');
-    if (!shippingOption) return;
+    if (!shippingReady) return;
 
-    const data = new FormData(e.target);
+    const data = new FormData(form);
     const client = {
-      name: data.get('name'),
+      name: `${data.get('firstName')} ${data.get('lastName')}`.trim(),
+      firstName: data.get('firstName'),
+      lastName: data.get('lastName'),
+      businessName: data.get('businessName'),
       email: data.get('email'),
       phone: data.get('phone'),
       street: data.get('street'),
@@ -115,6 +178,7 @@ async function init() {
       country: data.get('country'),
     };
     const paymentMethod = data.get('paymentMethod');
+    const shippingMethod = data.get('shippingMethod');
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Placing order…';
@@ -124,14 +188,15 @@ async function init() {
         body: JSON.stringify({
           client,
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-          shippingOptionId: shippingOption.id,
+          shippingMethod,
+          shippingOptionId: shippingOption?.id || null,
           paymentMethod,
         }),
       });
 
-      if (paymentMethod === 'manual_eft') {
+      if (paymentMethod === 'manual_eft' || paymentMethod === 'cash_on_collection') {
         clearCart();
-        showManualEftSuccess(order);
+        showOrderPlacedSuccess(order, paymentMethod);
       } else {
         // Cart is cleared on the return_url page (checkout-complete.html),
         // not here -- clearing it before the customer has actually reached

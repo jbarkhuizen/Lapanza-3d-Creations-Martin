@@ -533,6 +533,7 @@ app.post('/api/checkout', async (req, res) => {
     const order = createOrder({
       client: body.client || {},
       items: body.items || [],
+      shippingMethod: body.shippingMethod,
       shippingOptionId: body.shippingOptionId,
       paymentMethod: body.paymentMethod,
     });
@@ -550,7 +551,7 @@ app.post('/api/checkout', async (req, res) => {
       console.error(`Order ${order.id} confirmation email failed to send:`, err.message);
     }
 
-    if (body.paymentMethod === 'manual_eft') {
+    if (body.paymentMethod === 'manual_eft' || body.paymentMethod === 'cash_on_collection') {
       return res.status(201).json({ order, emailSent, redirect: null });
     }
 
@@ -705,15 +706,21 @@ function renderPackingSlipHtml(order) {
   <button onclick="window.print()">Print</button>
   <h1>Packing slip</h1>
   <p class="muted">Order ${escapeHtml(order.id)} — ${escapeHtml(order.createdAt)}</p>
-  <p><strong>${escapeHtml(order.client?.name || '')}</strong><br>${escapeHtml(addr)}<br>${escapeHtml(order.client?.phone || '')}</p>
+  <p><strong>${escapeHtml(order.client?.name || '')}</strong>${order.client?.businessName ? ` (${escapeHtml(order.client.businessName)})` : ''}<br>${escapeHtml(addr)}<br>${escapeHtml(order.client?.phone || '')}</p>
   <table>
     <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Weight</th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr class="totals"><td>Total parcel weight</td><td></td><td style="text-align:right">${order.totalWeight}g</td></tr></tfoot>
   </table>
-  <p>Shipping method: ${escapeHtml(order.shippingOption?.name || '—')}</p>
+  <p>Shipping method: ${escapeHtml(SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}</p>
 </body></html>`;
 }
+
+const SHIPPING_METHOD_LABELS = {
+  courier: 'Our shipping',
+  own_courier: "Customer's own courier",
+  collect: 'Collect from store',
+};
 
 function slugify(value) {
   return (
@@ -740,6 +747,9 @@ function normalizeItems(list) {
     // Grams -- matches filament_colours.weight_g and every other weight
     // field end to end (order_items.weight, cart.js, data-weight attrs).
     weight: Number(item.weight) || 0,
+    // Separate from weight -- what actually drives shipping-bracket
+    // matching, so packaging etc can differ from the item's own weight.
+    shippingWeight: item.shippingWeight != null && item.shippingWeight !== '' ? Number(item.shippingWeight) : undefined,
     available: item.available !== false,
     sortOrder: item.sortOrder ?? i,
   }));

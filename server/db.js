@@ -145,6 +145,50 @@ export function ensureSchema(db) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_transactions_idempotent
       ON payment_transactions (gateway, gateway_reference, status);
   `);
+  ensureCheckoutColumns(db);
+}
+
+function hasColumn(db, tableInfoStatement, column) {
+  return db.prepare(tableInfoStatement).all().some((c) => c.name === column);
+}
+
+// SQLite has no "ADD COLUMN IF NOT EXISTS", so columns added to an
+// already-shipped table (as opposed to a brand new CREATE TABLE above) go
+// here as guarded ALTER TABLEs -- same idempotent-on-every-boot philosophy
+// as the rest of this file, just at column granularity. PRAGMA doesn't
+// support bound parameters for identifiers, so each table name is a plain
+// hardcoded literal below rather than interpolated.
+function ensureCheckoutColumns(db) {
+  // Filament colours already had weight_g ("Filament Weight" -- the
+  // product's own net weight, shown as a spec). shipping_weight_g is a
+  // separate figure admins can set when the parcel weight for shipping
+  // differs from the item's own weight (packaging, etc); it's what
+  // drives shipping-bracket matching, not weight_g. Backfilled from
+  // weight_g so existing catalog data keeps working with no admin action
+  // required until they want to override it.
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'shipping_weight_g')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN shipping_weight_g INTEGER');
+    db.exec('UPDATE filament_colours SET shipping_weight_g = weight_g WHERE shipping_weight_g IS NULL');
+  }
+  // Client name is now captured as first/last (+ optional business name)
+  // at checkout, but `name` is kept and still populated (see clients.js)
+  // so every existing read site (admin list, packing slip, order emails)
+  // keeps working unchanged.
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'first_name')) {
+    db.exec("ALTER TABLE clients ADD COLUMN first_name TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'last_name')) {
+    db.exec("ALTER TABLE clients ADD COLUMN last_name TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'business_name')) {
+    db.exec("ALTER TABLE clients ADD COLUMN business_name TEXT NOT NULL DEFAULT ''");
+  }
+  // Every order placed before this column existed was implicitly our-
+  // courier (it was the only option), so backfill to 'courier' rather
+  // than leaving historical rows with an empty/null method.
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'shipping_method')) {
+    db.exec("ALTER TABLE orders ADD COLUMN shipping_method TEXT NOT NULL DEFAULT 'courier'");
+  }
 }
 
 export function openDb(dbPath) {

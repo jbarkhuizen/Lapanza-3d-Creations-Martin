@@ -7,6 +7,9 @@ function rowToClient(row) {
     id: row.id,
     clientCode: row.client_code,
     name: row.name,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    businessName: row.business_name,
     email: row.email,
     phone: row.phone,
     street: row.street,
@@ -47,13 +50,20 @@ export function findClientByEmail(email, db = getDb()) {
 function insertClient(db, data) {
   const id = randomUUID();
   const clientCode = nextClientCode(db);
+  // `name` is kept as a single display field (used by admin list, packing
+  // slip, order emails) regardless of whether the caller sent firstName/
+  // lastName (checkout) or just name (admin's own client form).
+  const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim();
   db.prepare(
-    `INSERT INTO clients (id, client_code, name, email, phone, street, suburb, city, province, postal_code, country, created_at)
-     VALUES (@id, @client_code, @name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @created_at)`,
+    `INSERT INTO clients (id, client_code, name, first_name, last_name, business_name, email, phone, street, suburb, city, province, postal_code, country, created_at)
+     VALUES (@id, @client_code, @name, @first_name, @last_name, @business_name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @created_at)`,
   ).run({
     id,
     client_code: clientCode,
-    name: data.name || '',
+    name,
+    first_name: data.firstName || '',
+    last_name: data.lastName || '',
+    business_name: data.businessName || '',
     email: String(data.email || '').trim(),
     phone: data.phone || '',
     street: data.street || '',
@@ -79,11 +89,15 @@ export function updateClient(id, data, db = getDb()) {
   const email = data.email !== undefined ? String(data.email).trim() : existing.email;
   if (!email) throw new Error('Email is required');
   db.prepare(
-    `UPDATE clients SET name = @name, email = @email, phone = @phone, street = @street, suburb = @suburb,
+    `UPDATE clients SET name = @name, first_name = @first_name, last_name = @last_name, business_name = @business_name,
+      email = @email, phone = @phone, street = @street, suburb = @suburb,
       city = @city, province = @province, postal_code = @postal_code, country = @country WHERE id = @id`,
   ).run({
     id,
     name: data.name ?? existing.name,
+    first_name: data.firstName ?? existing.firstName,
+    last_name: data.lastName ?? existing.lastName,
+    business_name: data.businessName ?? existing.businessName,
     email,
     phone: data.phone ?? existing.phone,
     street: data.street ?? existing.street,

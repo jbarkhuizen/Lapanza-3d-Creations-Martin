@@ -42,6 +42,7 @@
         "sku": "SA-F-PLA-A01-100175PG",
         "price": "R299",
         "weightG": 1000,
+        "shippingWeightG": 1000,
         "rollLengthM": 333,
         "stockQty": 10,
         "imageUrl": "/uploads/filaments/sa-f-pla-a01-100175pg-3b38dee9.png"
@@ -51,6 +52,7 @@
         "sku": "SA-F-PLA-A02-100175PG",
         "price": "R299",
         "weightG": 1000,
+        "shippingWeightG": 1000,
         "rollLengthM": 333,
         "stockQty": 5,
         "imageUrl": "/uploads/filaments/sa-f-pla-a02-100175pg-489cde31.png"
@@ -60,6 +62,7 @@
         "sku": "SA-F-PLA-A03-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -69,6 +72,7 @@
         "sku": "SA-F-PLA-A17-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -78,6 +82,7 @@
         "sku": "SA-F-PLA-A04-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -87,6 +92,7 @@
         "sku": "SA-F-PLA-A05-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -96,6 +102,7 @@
         "sku": "SA-F-PLA-A06-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -105,6 +112,7 @@
         "sku": "SA-F-PLA-A07-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -114,6 +122,7 @@
         "sku": "SA-F-PLA-A08-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -123,6 +132,7 @@
         "sku": "SA-F-PLA-A11-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -172,6 +182,7 @@
         "sku": "SA-F-PLAHYP-A0135-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -181,6 +192,7 @@
         "sku": "SA-F-PLAHYP-A02-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -190,6 +202,7 @@
         "sku": "SA-F-PLAHYP-A03-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -199,6 +212,7 @@
         "sku": "SA-F-PLAHYP-B0301-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -208,6 +222,7 @@
         "sku": "SA-F-PLAHYP-B0302-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -217,6 +232,7 @@
         "sku": "SA-F-PLAHYP-A05-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -226,6 +242,7 @@
         "sku": "SA-F-PLAHYP-A04-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -235,6 +252,7 @@
         "sku": "SA-F-PLAHYP-A06-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -244,6 +262,7 @@
         "sku": "SA-F-PLAHYP-A08-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -283,6 +302,7 @@
         "sku": "SA-F-PLAHYP-C20-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -292,6 +312,7 @@
         "sku": "SA-F-PLAHYP-C0032-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -301,6 +322,7 @@
         "sku": "SA-F-PLAHYP-C59-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -310,6 +332,7 @@
         "sku": "SA-F-PLAHYP-C01-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -319,6 +342,7 @@
         "sku": "SA-F-PLAHYP-C60-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -328,6 +352,7 @@
         "sku": "SA-F-PLAHYP-C1044-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -337,6 +362,7 @@
         "sku": "SA-F-PLAHYP-C0444-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -355,6 +381,7 @@
         "sku": "SA-F-PLAPRE-B#08-075175PG",
         "price": "R349",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -364,6 +391,7 @@
         "sku": "SA-F-PLAPRE-B0227-075175PG",
         "price": "R349",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -373,6 +401,7 @@
         "sku": "SA-F-PLAPRE-A05-075175PG",
         "price": "R349",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -382,6 +411,7 @@
         "sku": "SA-F-PLAPRE-A11-075175PG",
         "price": "R349",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -391,6 +421,7 @@
         "sku": "SA-F-PLAPRE-A07-075175PG",
         "price": "R349",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -400,6 +431,7 @@
         "sku": "SA-F-PLAPRE-A04-075175PG",
         "price": "R349",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -409,6 +441,7 @@
         "sku": "SA-F-PLAPRE-A02-075175PG",
         "price": "R349",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -458,6 +491,7 @@
         "sku": "SA-F-PLAPLUS-C0226-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -467,6 +501,7 @@
         "sku": "SA-F-PLAPLUS-C0126-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -476,6 +511,7 @@
         "sku": "SA-F-PLAPLUS-B#13-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -485,6 +521,7 @@
         "sku": "SA-F-PLAPLUS-C03-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -494,6 +531,7 @@
         "sku": "SA-F-PLAPLUS-C0434-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -503,6 +541,7 @@
         "sku": "SA-F-PLAPLUS-H21-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -512,6 +551,7 @@
         "sku": "SA-F-PLAPLUS-H04-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -521,6 +561,7 @@
         "sku": "SA-F-PLAPLUS-B0105-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -530,6 +571,7 @@
         "sku": "SA-F-PLAPLUS-C0403-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -539,6 +581,7 @@
         "sku": "SA-F-PLAPLUS-C0436-100175PG",
         "price": "R329",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -557,6 +600,7 @@
         "sku": "SA-F-PLAECO-A02-100175PG",
         "price": "R269",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -566,6 +610,7 @@
         "sku": "SA-F-PLAECO-A01-100175PG",
         "price": "R269",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -654,6 +699,7 @@
         "sku": "SA-F-PETGSP-A02-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -663,6 +709,7 @@
         "sku": "SA-F-PETGSP-A04-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -672,6 +719,7 @@
         "sku": "SA-F-PETGSP-A03-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -681,6 +729,7 @@
         "sku": "SA-F-PETGSP-A01-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -690,6 +739,7 @@
         "sku": "SA-F-PETGSP-A17-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -699,6 +749,7 @@
         "sku": "SA-F-PETGSP-B0518-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -708,6 +759,7 @@
         "sku": "SA-F-PETGSP-A07-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -717,6 +769,7 @@
         "sku": "SA-F-PETGSP-A08-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -726,6 +779,7 @@
         "sku": "SA-F-PETGSP-A21-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -735,6 +789,7 @@
         "sku": "SA-F-PETGSP-B0403-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -784,6 +839,7 @@
         "sku": "SA-F-PETGSP-K02-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -793,6 +849,7 @@
         "sku": "SA-F-PETGSP-K02-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -811,6 +868,7 @@
         "sku": "SA-F-PETGECO-A02-100175PG",
         "price": "R249",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -855,6 +913,7 @@
         "sku": "SA-F-ABSPRE-A01-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -864,6 +923,7 @@
         "sku": "SA-F-ABSPRE-A02-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -873,6 +933,7 @@
         "sku": "SA-F-ABSPRE-A26-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -882,6 +943,7 @@
         "sku": "SA-F-ABSPRE-A21-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -891,6 +953,7 @@
         "sku": "SA-F-ABSPRE-A03-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -900,6 +963,7 @@
         "sku": "SA-F-ABSPRE-A05-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -909,6 +973,7 @@
         "sku": "SA-F-ABSPRE-A04-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -918,6 +983,7 @@
         "sku": "SA-F-ABSPRE-A08-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -927,6 +993,7 @@
         "sku": "SA-F-ABSPRE-A07-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -936,6 +1003,7 @@
         "sku": "SA-F-ABSPRE-A14-100175PG",
         "price": "R275",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -954,6 +1022,7 @@
         "sku": "SA-F-ABSECO-A01-100175PG",
         "price": "R249",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -963,6 +1032,7 @@
         "sku": "SA-F-ABSECO-A02-100175PG",
         "price": "R249",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -972,6 +1042,7 @@
         "sku": "SA-F-ABSECO-A03-100175PG",
         "price": "R249",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -990,6 +1061,7 @@
         "sku": "SA-F-ASA-A02-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -999,6 +1071,7 @@
         "sku": "SA-F-ASA-A0142-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1048,6 +1121,7 @@
         "sku": "SA-F-SBSHYP-A02-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1057,6 +1131,7 @@
         "sku": "SA-F-SBS-A01-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1066,6 +1141,7 @@
         "sku": "SA-F-SBS-B0301-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1075,6 +1151,7 @@
         "sku": "SA-F-SBS-A03-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1084,6 +1161,7 @@
         "sku": "SA-F-SBS-A02-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1093,6 +1171,7 @@
         "sku": "SA-F-SBS-A21-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1102,6 +1181,7 @@
         "sku": "SA-F-SBS-A05-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1111,6 +1191,7 @@
         "sku": "SA-F-SBS-A04-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1120,6 +1201,7 @@
         "sku": "SA-F-SBS-A08-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1129,6 +1211,7 @@
         "sku": "SA-F-SBS-A06-100175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1147,6 +1230,7 @@
         "sku": "SA-F-TPU95A-A02-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1156,6 +1240,7 @@
         "sku": "SA-F-TPU95A-A02-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1165,6 +1250,7 @@
         "sku": "SA-F-TPU95A-A01-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1174,6 +1260,7 @@
         "sku": "SA-F-TPU95A-A17-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1183,6 +1270,7 @@
         "sku": "SA-F-TPU95A-A03-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1192,6 +1280,7 @@
         "sku": "SA-F-TPU95A-A04-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1201,6 +1290,7 @@
         "sku": "SA-F-TPU95A-A05-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1210,6 +1300,7 @@
         "sku": "SA-F-TPU95A-D06-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1228,6 +1319,7 @@
         "sku": "SA-F-TPU98A-A02-050175PG",
         "price": "R299",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1237,6 +1329,7 @@
         "sku": "SA-F-TPU98A-A02-100175PG",
         "price": "R449",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1286,6 +1379,7 @@
         "sku": "SA-F-CPEPRO-A02-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1295,6 +1389,7 @@
         "sku": "SA-F-CPEPRO-A01-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1304,6 +1399,7 @@
         "sku": "SA-F-CPEPRO-A03-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1313,6 +1409,7 @@
         "sku": "SA-F-CPEPRO-A05-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1322,6 +1419,7 @@
         "sku": "SA-F-CPEPRO-A04-100175PG",
         "price": "R399",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1371,6 +1469,7 @@
         "sku": "SA-F-CPEPRO+-A02-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1380,6 +1479,7 @@
         "sku": "SA-F-CPEPRO+-A01-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1389,6 +1489,7 @@
         "sku": "SA-F-CPEPRO+-A03-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1398,6 +1499,7 @@
         "sku": "SA-F-CPEPRO+-A05-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1407,6 +1509,7 @@
         "sku": "SA-F-CPEPRO+-A04-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1416,6 +1519,7 @@
         "sku": "SA-F-CPEPRO+-A14-100175PG",
         "price": "R499",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1465,6 +1569,7 @@
         "sku": "SA-F-CPEHT-A02-100175PG",
         "price": "R549",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1474,6 +1579,7 @@
         "sku": "SA-F-CPEHT-A01-100175PG",
         "price": "R549",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1483,6 +1589,7 @@
         "sku": "SA-F-CPEHT-A03-100175PG",
         "price": "R549",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1492,6 +1599,7 @@
         "sku": "SA-F-CPEHT-A05-100175PG",
         "price": "R549",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1501,6 +1609,7 @@
         "sku": "SA-F-CPEHT-A04-100175PG",
         "price": "R549",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
@@ -1519,6 +1628,7 @@
         "sku": "SA-F-SIGNLT-A#-250175PG",
         "price": "R999",
         "weightG": 0,
+        "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
         "imageUrl": ""
