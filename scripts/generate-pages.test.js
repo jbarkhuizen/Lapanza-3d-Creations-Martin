@@ -42,3 +42,28 @@ test('generate-pages renders an <img> for a colour with imageUrl, placeholder te
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+test('generate-pages skips category pages missing from categories.json instead of crashing', () => {
+  const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
+  const warningsPath = path.join(root, 'data', 'publish-warnings.json');
+  const backup = fs.readFileSync(categoriesPath, 'utf8');
+
+  try {
+    // Simulates an unseeded/fresh catalog (server/export.js writes {} when
+    // catalog.json has zero kind:'category' rows) — this used to crash the
+    // whole publish with a TypeError partway through the category loop.
+    fs.writeFileSync(categoriesPath, JSON.stringify({}));
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    assert.ok(fs.existsSync(path.join(root, 'story.html')), 'story.html should still be generated');
+
+    const warnings = JSON.parse(fs.readFileSync(warningsPath, 'utf8'));
+    assert.deepStrictEqual(
+      [...warnings.skippedCategories].sort(),
+      ['gwm', 'homeware', 'landrover', 'phones', 'toys'],
+    );
+  } finally {
+    fs.writeFileSync(categoriesPath, backup);
+  }
+});

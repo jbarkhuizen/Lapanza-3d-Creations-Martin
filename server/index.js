@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
@@ -421,11 +422,30 @@ app.post('/api/publish', requireAuth, async (_req, res) => {
   syncPublicJson(getDb());
   try {
     await runGenerate();
-    res.json({ ok: true, message: 'Site pages regenerated from catalog.' });
+    const warnings = readPublishWarnings();
+    const message = warnings.length
+      ? `Site pages regenerated, but ${warnings.length} category page(s) were skipped: ${warnings.join(', ')}. Check that these categories still exist in the catalog.`
+      : 'Site pages regenerated from catalog.';
+    res.json({ ok: true, message, skippedCategories: warnings });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Generate failed' });
   }
 });
+
+// generate-pages.mjs runs as a spawned child (stdio: 'inherit'), so its
+// console.warn output reaches this process's own stdout, not the client —
+// it writes this sidecar file so we can report skipped categories back to
+// the admin instead of a silent 200.
+function readPublishWarnings() {
+  const warningsPath = path.join(root, 'data', 'publish-warnings.json');
+  if (!fs.existsSync(warningsPath)) return [];
+  try {
+    const data = JSON.parse(fs.readFileSync(warningsPath, 'utf8'));
+    return Array.isArray(data.skippedCategories) ? data.skippedCategories : [];
+  } catch {
+    return [];
+  }
+}
 
 app.use('/admin', express.static(path.join(root, 'admin')));
 app.get(/^\/admin(\/.*)?$/, (_req, res) => {

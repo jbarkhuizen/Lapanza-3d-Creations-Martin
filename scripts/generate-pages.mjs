@@ -384,11 +384,47 @@ ${footer({ depth })}`;
 // Handcrafted homepage lives in index.html — do not overwrite it here.
 filaments.forEach(generateFilamentPage);
 generateCategoryPage({ file: 'story.html', depth: 0, pagePath: 'story.html', crumbs: 'Home / Our Story', name: 'Our Story', description: '', kind: 'story' });
-generateCategoryPage({ file: 'toys.html', depth: 0, pagePath: 'toys.html', crumbs: categories.toys.crumbs, name: categories.toys.name, description: 'Playful, durable 3D printed toys — printed locally to order in colours you choose.', kind: 'catalog', items: categories.toys.items });
-generateCategoryPage({ file: 'homeware.html', depth: 0, pagePath: 'homeware.html', crumbs: categories.homeware.crumbs, name: categories.homeware.name, description: 'Practical and decorative homeware — hooks, organisers, planters and more, printed to order.', kind: 'catalog', items: categories.homeware.items });
-generateCategoryPage({ file: 'phones.html', depth: 0, pagePath: 'phones.html', crumbs: categories.phones.crumbs, name: categories.phones.name, description: 'Phone cases, stands and accessories — fitted and finished for everyday use.', kind: 'catalog', items: categories.phones.items });
-generateCategoryPage({ file: 'car-parts/gwm.html', depth: 1, pagePath: 'car-parts/gwm.html', crumbs: categories.gwm.crumbs, name: 'GWM', description: categories.gwm.description, kind: 'catalog', items: categories.gwm.items });
-generateCategoryPage({ file: 'car-parts/landrover.html', depth: 1, pagePath: 'car-parts/landrover.html', crumbs: categories.landrover.crumbs, name: 'Landrover', description: categories.landrover.description, kind: 'catalog', items: categories.landrover.items });
+
+// Each entry pulls its data from categories[slug] (written by server/export.js
+// from catalog.json's kind:'category' rows). That data is per-environment and
+// admin-editable, so a slug can legitimately be missing (fresh checkout,
+// category deleted, etc.) — skip and warn rather than crashing the whole
+// publish partway through.
+const categoryPages = [
+  { slug: 'toys', file: 'toys.html', depth: 0, pagePath: 'toys.html', description: 'Playful, durable 3D printed toys — printed locally to order in colours you choose.' },
+  { slug: 'homeware', file: 'homeware.html', depth: 0, pagePath: 'homeware.html', description: 'Practical and decorative homeware — hooks, organisers, planters and more, printed to order.' },
+  { slug: 'phones', file: 'phones.html', depth: 0, pagePath: 'phones.html', description: 'Phone cases, stands and accessories — fitted and finished for everyday use.' },
+  { slug: 'gwm', file: 'car-parts/gwm.html', depth: 1, pagePath: 'car-parts/gwm.html', name: 'GWM' },
+  { slug: 'landrover', file: 'car-parts/landrover.html', depth: 1, pagePath: 'car-parts/landrover.html', name: 'Landrover' },
+];
+
+const skippedCategories = [];
+for (const page of categoryPages) {
+  const category = categories[page.slug];
+  if (!category) {
+    console.warn(`generate-pages: skipping ${page.file} — no category data for slug "${page.slug}" in categories.json`);
+    skippedCategories.push(page.slug);
+    continue;
+  }
+  generateCategoryPage({
+    file: page.file,
+    depth: page.depth,
+    pagePath: page.pagePath,
+    crumbs: category.crumbs,
+    name: page.name || category.name,
+    description: page.description || category.description,
+    kind: 'catalog',
+    items: category.items,
+  });
+}
+
+// Sidecar file so callers that spawn this script (e.g. POST /api/publish)
+// can report skipped categories to the admin instead of a silent 200 —
+// console.warn above only reaches this process's own stdout.
+fs.writeFileSync(
+  path.join(root, 'data', 'publish-warnings.json'),
+  JSON.stringify({ skippedCategories, generatedAt: new Date().toISOString() }, null, 2),
+);
 
 // Remove old homepage name if still present
 const legacyHome = path.join(root, 'premium.html');
