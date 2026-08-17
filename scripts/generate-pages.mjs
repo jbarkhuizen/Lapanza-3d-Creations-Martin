@@ -159,7 +159,31 @@ function footer({ depth = 0, home = false } = {}) {
 </html>`;
 }
 
-function colourCards(colours) {
+function escapeAttr(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[c]);
+}
+
+function parsePrice(value) {
+  const n = parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function addToCartButton({ productId, name, price, image, extraClass = 'w-full' }) {
+  return `<button type="button" class="${extraClass} mt-2 text-xs font-semibold bg-charcoal text-cream rounded-full px-3 py-2 hover:bg-terracotta transition-colors"
+            data-add-to-cart
+            data-product-id="${escapeAttr(productId)}"
+            data-name="${escapeAttr(name)}"
+            data-price="${parsePrice(price)}"
+            data-image="${escapeAttr(image || '')}">Add to Cart</button>`;
+}
+
+function colourCards(colours, filament) {
   if (!colours?.length) return '';
   return colours
     .map(
@@ -172,6 +196,12 @@ function colourCards(colours) {
                   <p class="font-medium mb-1 tracking-tight">${c.name}</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">${c.sku}</p>
                   <p class="text-terracotta font-semibold">${c.price}</p>
+                  ${addToCartButton({
+                    productId: `filament:${filament.slug}:${c.sku}`,
+                    name: `${filament.name} — ${c.name}`,
+                    price: c.price,
+                    image: c.imageUrl,
+                  })}
                 </div>`,
     )
     .join('\n');
@@ -189,26 +219,42 @@ function specsBlock(specs) {
   return `<div class="mb-12"><h2 class="font-serif text-xl mb-4 tracking-tight">Specifications</h2><div class="spec-panel max-w-md">${rows}</div></div>`;
 }
 
-function catalogueItems(label, items) {
+function catalogueItems(label, items, categorySlug) {
   const list = Array.isArray(items) && items.length ? items : null;
   if (!list) return cataloguePlaceholders(label);
 
   return list
-    .map((item) => {
+    .map((item, i) => {
       const meta = [item.material, item.size, item.finish].filter(Boolean).join(' · ');
       const img = item.imageUrl
         ? `<img src="${item.imageUrl}" alt="${item.name}" class="w-full h-full object-cover" loading="lazy">`
         : `<span class="text-espresso/35 text-xs uppercase tracking-[0.2em]">Photo coming soon</span>`;
+      const name = item.name || `${label} piece`;
+      // Category items don't always have an admin-set sku (it's optional,
+      // unlike filament colour skus which are unique in the DB) — fall back
+      // to a build-time index so the productId is still stable across a
+      // regen as long as item order doesn't change.
+      const canAddToCart = item.price && item.available !== false;
       return `<article class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors">
               <div class="aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden">
                 ${img}
               </div>
               <div class="p-4">
-                <h3 class="font-serif text-lg mb-1">${item.name || `${label} piece`}</h3>
+                <h3 class="font-serif text-lg mb-1">${name}</h3>
                 <p class="text-espresso/60 text-sm mb-2">${item.details || 'Custom printed to order.'}</p>
                 ${meta ? `<p class="text-espresso/45 text-xs mb-2">${meta}</p>` : ''}
                 ${item.price ? `<p class="text-terracotta font-semibold mb-3">${item.price}</p>` : ''}
                 <a href="${SITE.whatsapp}" class="text-sm font-semibold text-terracotta hover:underline" target="_blank" rel="noopener noreferrer">Enquire</a>
+                ${
+                  canAddToCart
+                    ? addToCartButton({
+                        productId: `category:${categorySlug}:${item.sku || i}`,
+                        name,
+                        price: item.price,
+                        image: item.imageUrl,
+                      })
+                    : ''
+                }
               </div>
             </article>`;
     })
@@ -247,7 +293,7 @@ function generateFilamentPage(f) {
     f.colours?.length > 0
       ? `<div>
           <h2 class="font-serif text-xl mb-5 tracking-tight">Colours</h2>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">${colourCards(f.colours)}</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">${colourCards(f.colours, f)}</div>
           ${note}
         </div>`
       : `<div class="border border-dashed border-charcoal/20 rounded-sm p-6 text-sm text-espresso/60">
@@ -281,7 +327,7 @@ ${footer({ depth: 1 })}`;
   write(`filament/${f.slug}.html`, html);
 }
 
-function generateCategoryPage({ file, depth, pagePath, crumbs, name, description, kind, items }) {
+function generateCategoryPage({ file, depth, pagePath, crumbs, name, description, kind, items, slug }) {
   const crumbHtml = crumbs
     .split(' / ')
     .map((part, i, arr) => {
@@ -295,7 +341,7 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
   const body =
     kind === 'story'
       ? null
-      : `<div class="grid grid-cols-2 md:grid-cols-3 gap-5">${catalogueItems(name, items)}</div>
+      : `<div class="grid grid-cols-2 md:grid-cols-3 gap-5">${catalogueItems(name, items, slug)}</div>
       <div class="mt-14 p-7 md:p-8 bg-linen border-2 border-charcoal/10 rounded-sm brutal">
         <p class="eyebrow mb-3">Custom request</p>
         <p class="font-serif text-2xl mb-3 tracking-tight">Need something specific?</p>
@@ -415,6 +461,7 @@ for (const page of categoryPages) {
     description: page.description || category.description,
     kind: 'catalog',
     items: category.items,
+    slug: page.slug,
   });
 }
 

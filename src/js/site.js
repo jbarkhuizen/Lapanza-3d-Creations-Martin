@@ -2,6 +2,7 @@ import '../styles/main.css';
 import { mountNav, mountWhatsAppFab, toggleDrawer } from './nav.js';
 import { enhanceColourCards } from './swatches.js';
 import { initAppearance, toggleTheme, applyTheme } from './appearance.js';
+import { mountCartUI } from './cart-ui.js';
 
 window.toggleDrawer = toggleDrawer;
 
@@ -67,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ensureDesktopThemeToggle();
   wireThemeButtons();
   mountWhatsAppFab();
+  mountCartUI();
   enhanceColourCards();
   syncYear();
   hydrateHomeTiles();
