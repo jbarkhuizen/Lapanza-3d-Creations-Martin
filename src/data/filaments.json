@@ -41,19 +41,19 @@
         "name": "White",
         "sku": "SA-F-PLA-A01-100175PG",
         "price": "R299",
-        "weightG": 0,
-        "rollLengthM": null,
-        "stockQty": 1,
-        "imageUrl": ""
+        "weightG": 1000,
+        "rollLengthM": 333,
+        "stockQty": 10,
+        "imageUrl": "/uploads/filaments/sa-f-pla-a01-100175pg-3b38dee9.png"
       },
       {
         "name": "Black",
         "sku": "SA-F-PLA-A02-100175PG",
         "price": "R299",
-        "weightG": 0,
-        "rollLengthM": null,
-        "stockQty": 1,
-        "imageUrl": ""
+        "weightG": 1000,
+        "rollLengthM": 333,
+        "stockQty": 5,
+        "imageUrl": "/uploads/filaments/sa-f-pla-a02-100175pg-489cde31.png"
       },
       {
         "name": "Grey",
