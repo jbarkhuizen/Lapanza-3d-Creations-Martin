@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { migrateFromCatalogJson } from './migrate-json.js';
+import { dataDir } from './paths.js';
 
 function ensureDataDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -206,14 +207,13 @@ export function openDb(dbPath) {
 const _dbCache = new Map();
 
 export function getDb() {
-  const root = process.cwd();
-  const dbPath = path.join(root, 'data', 'lapanza.db');
+  const dbPath = path.join(dataDir(), 'lapanza.db');
   if (_dbCache.has(dbPath)) return _dbCache.get(dbPath);
   const isNew = !fs.existsSync(dbPath);
   const db = openDb(dbPath);
   _dbCache.set(dbPath, db);
   if (isNew) {
-    const catalogJsonPath = path.join(root, 'data', 'catalog.json');
+    const catalogJsonPath = path.join(dataDir(), 'catalog.json');
     try {
       migrateFromCatalogJson(db, catalogJsonPath);
     } catch (err) {

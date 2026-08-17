@@ -9,10 +9,41 @@ import https from 'https';
 const SANDBOX_MERCHANT_ID = '10000100';
 const SANDBOX_MERCHANT_KEY = '46f0cd694581a';
 
-const MODE = process.env.PAYFAST_MODE === 'live' ? 'live' : 'sandbox';
-const MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID || SANDBOX_MERCHANT_ID;
-const MERCHANT_KEY = process.env.PAYFAST_MERCHANT_KEY || SANDBOX_MERCHANT_KEY;
-const PASSPHRASE = process.env.PAYFAST_PASSPHRASE || '';
+// A function, not frozen top-level constants -- reads process.env fresh on
+// every call rather than capturing it once at module-import time. This
+// matters because .env is loaded via process.loadEnvFile() at the top of
+// index.js's entry sequence, but ESM import statements all execute before
+// any other code in the importing file, including that loadEnvFile() call
+// -- a frozen `const MODE = process.env.PAYFAST_MODE...` evaluated at this
+// module's own import time would freeze to pre-.env values regardless of
+// where the loadEnvFile() call appears in index.js's source.
+//
+// Sandbox and live are separate, mode-gated credential sets (PAYFAST_SANDBOX_*
+// vs PAYFAST_*) rather than one set of env vars reused for both -- real
+// merchant credentials for both modes typically sit permanently in .env
+// while MODE just gets toggled, and a Payfast *sandbox* merchant account
+// (dashboard-visible, own passphrase) is a different, separate account from
+// the live one, not a stand-in value for it. If sandbox mode fell back to
+// reading the live vars, a real live credential could leak into a sandbox
+// request; PAYFAST_SANDBOX_MERCHANT_ID defaults to Payfast's shared public
+// demo account (10000100) when no personal sandbox account is configured.
+function getConfig() {
+  const mode = process.env.PAYFAST_MODE === 'live' ? 'live' : 'sandbox';
+  if (mode === 'live') {
+    return {
+      mode,
+      merchantId: process.env.PAYFAST_MERCHANT_ID || SANDBOX_MERCHANT_ID,
+      merchantKey: process.env.PAYFAST_MERCHANT_KEY || SANDBOX_MERCHANT_KEY,
+      passphrase: process.env.PAYFAST_PASSPHRASE || '',
+    };
+  }
+  return {
+    mode,
+    merchantId: process.env.PAYFAST_SANDBOX_MERCHANT_ID || SANDBOX_MERCHANT_ID,
+    merchantKey: process.env.PAYFAST_SANDBOX_MERCHANT_KEY || SANDBOX_MERCHANT_KEY,
+    passphrase: process.env.PAYFAST_SANDBOX_PASSPHRASE || '',
+  };
+}
 
 export const PAYFAST_URLS = {
   sandbox: { process: 'https://sandbox.payfast.co.za/eng/process', validate: 'https://sandbox.payfast.co.za/eng/query/validate', host: 'sandbox.payfast.co.za' },
@@ -51,17 +82,19 @@ function buildSignature(orderedPairs, passphrase) {
 // full method picker (which would also show options like Zapper that are
 // explicitly out of scope for this build).
 export function buildPayfastRedirect({ order, siteUrl, paymentMethod }) {
-  const urls = PAYFAST_URLS[MODE];
+  const config = getConfig();
+  const urls = PAYFAST_URLS[config.mode];
   const pfMethod = paymentMethod === 'payfast_eft' ? 'eft' : 'cc';
   const amount = (order.total).toFixed(2);
 
   const orderedPairs = [
-    ['merchant_id', MERCHANT_ID],
-    ['merchant_key', MERCHANT_KEY],
+    ['merchant_id', config.merchantId],
+    ['merchant_key', config.merchantKey],
     ['return_url', `${siteUrl}/checkout-complete.html?order=${order.id}`],
     ['cancel_url', `${siteUrl}/checkout.html?cancelled=${order.id}`],
     ['notify_url', `${siteUrl}/api/payfast/itn`],
-    ['name_first', order.client?.name || 'Customer'],
+    ['name_first', order.client?.firstName || order.client?.name || 'Customer'],
+    ['name_last', order.client?.lastName || ''],
     ['email_address', order.client?.email || ''],
     ['m_payment_id', order.id],
     ['amount', amount],
@@ -70,7 +103,7 @@ export function buildPayfastRedirect({ order, siteUrl, paymentMethod }) {
     ['payment_method', pfMethod],
   ];
 
-  const signature = buildSignature(orderedPairs, PASSPHRASE);
+  const signature = buildSignature(orderedPairs, config.passphrase);
   return {
     actionUrl: urls.process,
     // Rendered as hidden form fields in this exact order by the caller --
@@ -93,6 +126,9 @@ function postForm(hostname, urlPath, body) {
       },
     );
     req.on('error', reject);
+    // Without this, an unresponsive Payfast endpoint leaves this promise
+    // (and the ITN handler's background work) hanging indefinitely.
+    req.setTimeout(10_000, () => req.destroy(new Error('Payfast validate request timed out')));
     req.write(data);
     req.end();
   });
@@ -108,15 +144,16 @@ function postForm(hostname, urlPath, body) {
 // enforced. Amount is checked against the order's own total, not trusted
 // from the payload.
 export async function verifyItn(rawBody, parsedBody, expectedAmount, sourceIp) {
+  const config = getConfig();
   const { signature, ...fields } = parsedBody;
   // Use the field order as received (Object.keys on a POST-decoded body
   // preserves insertion order, i.e. the order Payfast sent them in) --
   // re-sorting would break the signature check.
   const orderedPairs = Object.entries(fields);
-  const expectedSignature = buildSignature(orderedPairs, PASSPHRASE);
+  const expectedSignature = buildSignature(orderedPairs, config.passphrase);
   const signatureValid = expectedSignature === signature;
 
-  const urls = PAYFAST_URLS[MODE];
+  const urls = PAYFAST_URLS[config.mode];
   let serverConfirmed = false;
   try {
     const response = await postForm(urls.host, '/eng/query/validate', rawBody);
@@ -139,5 +176,3 @@ export async function verifyItn(rawBody, parsedBody, expectedAmount, sourceIp) {
     pfPaymentId: fields.pf_payment_id,
   };
 }
-
-export { MODE as PAYFAST_MODE };

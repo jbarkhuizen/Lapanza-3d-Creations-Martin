@@ -48,8 +48,24 @@ import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
 import { sendOrderConfirmationEmail } from './mailer.js';
 import { startAutoCancelJob } from './jobs.js';
 
+// Loads .env into process.env for local dev (real Payfast/Gmail secrets
+// never get committed -- see .env.example). Silently no-ops if the file
+// doesn't exist (production hosts set real env vars directly, not via a
+// file) or if this Node version predates loadEnvFile (added Node 20.6).
+// Doesn't need to run before the imports above: payfast.js/mailer.js read
+// process.env lazily inside their functions, not into module-load-time
+// constants, specifically so nothing reads env vars until an actual
+// request comes in -- well after this line and after app.listen() below.
+try {
+  process.loadEnvFile?.('.env');
+} catch {
+  /* no .env file -- fine, env vars may be set directly by the host */
+}
+
 const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
-const PORT = Number(process.env.ADMIN_PORT || 8787);
+// Render (and most PaaS hosts) inject PORT and require the app to bind to
+// it -- ADMIN_PORT is this project's own local-dev override, checked second.
+const PORT = Number(process.env.PORT || process.env.ADMIN_PORT || 8787);
 const SESSION_COOKIE = 'lapanza_admin_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12h -- shared between the cookie maxAge and the server-side expiry check
 
@@ -565,37 +581,47 @@ app.post('/api/checkout', async (req, res) => {
 
 // ---- Payfast ITN webhook ----
 
-app.post('/api/payfast/itn', express.urlencoded({ extended: false }), async (req, res) => {
-  // Payfast expects a bare 200 regardless of outcome -- it will retry on
-  // anything else, which is not what we want once we've already decided a
-  // payload is invalid/unverifiable.
-  res.sendStatus(200);
+app.post(
+  '/api/payfast/itn',
+  // `verify` captures the exact bytes Payfast POSTed before Express parses
+  // them into req.body. Payfast's server-to-server /validate call needs
+  // those original bytes back verbatim -- reconstructing a body string from
+  // the *parsed* req.body (e.g. via `new URLSearchParams(req.body)`) risks
+  // re-encoding some value differently than Payfast sent it, which would
+  // make a legitimate ITN's validate call falsely come back INVALID.
+  express.urlencoded({ extended: false, verify: (req, _res, buf) => { req.rawBody = buf; } }),
+  async (req, res) => {
+    // Payfast expects a bare 200 regardless of outcome -- it will retry on
+    // anything else, which is not what we want once we've already decided a
+    // payload is invalid/unverifiable.
+    res.sendStatus(200);
 
-  const order = getOrder(req.body.m_payment_id);
-  if (!order) {
-    console.error('Payfast ITN for unknown order:', req.body.m_payment_id);
-    return;
-  }
+    const order = getOrder(req.body.m_payment_id);
+    if (!order) {
+      console.error('Payfast ITN for unknown order:', req.body.m_payment_id);
+      return;
+    }
 
-  const rawBody = new URLSearchParams(req.body).toString();
-  const result = await verifyItn(rawBody, req.body, order.total, req.ip);
-  if (!result.valid) {
-    console.error('Payfast ITN failed validation:', result);
-    return;
-  }
+    const rawBody = req.rawBody.toString('utf8');
+    const result = await verifyItn(rawBody, req.body, order.total, req.ip);
+    if (!result.valid) {
+      console.error('Payfast ITN failed validation:', result);
+      return;
+    }
 
-  recordPaymentTransaction({
-    orderId: order.id,
-    gateway: 'payfast',
-    gatewayReference: result.pfPaymentId,
-    rawPayload: JSON.stringify(req.body),
-    status: result.paymentStatus,
-  });
+    recordPaymentTransaction({
+      orderId: order.id,
+      gateway: 'payfast',
+      gatewayReference: result.pfPaymentId,
+      rawPayload: JSON.stringify(req.body),
+      status: result.paymentStatus,
+    });
 
-  if (result.paymentStatus === 'COMPLETE') {
-    markOrderPaid(order.id);
-  }
-});
+    if (result.paymentStatus === 'COMPLETE') {
+      markOrderPaid(order.id);
+    }
+  },
+);
 
 app.get('/api/settings', requireAuth, (_req, res) => {
   res.json({ settings: publicSettings(getSettings()), fonts: FONT_OPTIONS });
