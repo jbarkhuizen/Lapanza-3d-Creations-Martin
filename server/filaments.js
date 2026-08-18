@@ -3,6 +3,15 @@ import { getDb } from './db.js';
 import { deleteImageFile } from './uploads.js';
 
 function rowToColour(row) {
+  // Phase 3 spool tracking: stock_qty is "spools owned" (unchanged meaning,
+  // same as the existing low-stock alert). Total stock in metres/grams is
+  // spools owned x the nominal per-spool spec; remaining/% left are always
+  // computed here from used_m/used_g, never stored, so there's one source
+  // of truth (see db.js's ensureManagementColumns comment).
+  const totalM = (row.stock_qty || 0) * (row.roll_length_m || 0);
+  const totalG = (row.stock_qty || 0) * (row.weight_g || 0);
+  const remainingM = Math.max(0, totalM - (row.used_m || 0));
+  const remainingG = Math.max(0, totalG - (row.used_g || 0));
   return {
     id: row.id,
     name: row.name,
@@ -17,6 +26,11 @@ function rowToColour(row) {
     rollLengthM: row.roll_length_m,
     priceRand: row.price_rand,
     stockQty: row.stock_qty,
+    usedM: row.used_m || 0,
+    usedG: row.used_g || 0,
+    remainingM,
+    remainingG,
+    percentLeft: totalG > 0 ? Math.max(0, Math.min(1, remainingG / totalG)) : null,
     imagePath: row.image_path,
     notes: row.notes,
     sortOrder: row.sort_order,
@@ -209,6 +223,17 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
     updated_at: new Date().toISOString(),
   });
   return getFilament(filamentTypeId, db);
+}
+
+// Phase 3: called by print-jobs.js when a job logged against this colour is
+// saved -- the only writer of used_m/used_g (see rowToColour's comment).
+// Looked up by colour id directly (not scoped to a filamentTypeId) since
+// the Print Jobs form picks a colour, not a type.
+export function incrementFilamentUsage(colourId, { usedM = 0, usedG = 0 }, db = getDb()) {
+  const result = db
+    .prepare('UPDATE filament_colours SET used_m = used_m + ?, used_g = used_g + ?, updated_at = ? WHERE id = ?')
+    .run(Number(usedM) || 0, Number(usedG) || 0, new Date().toISOString(), colourId);
+  return result.changes > 0;
 }
 
 export function deleteColour(filamentTypeId, colourId, db = getDb()) {

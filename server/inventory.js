@@ -26,6 +26,13 @@ export function listInventory(db = getDb()) {
         category: 'Filament',
         stockQty: colour.stockQty,
         price: colour.priceRand,
+        // Phase 3 spool tracking -- read-only here, written only by logging
+        // a print job (see print-jobs.js / filaments.js's incrementFilamentUsage).
+        usedM: colour.usedM,
+        usedG: colour.usedG,
+        remainingM: colour.remainingM,
+        remainingG: colour.remainingG,
+        percentLeft: colour.percentLeft,
       });
     }
   }

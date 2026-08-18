@@ -39,6 +39,28 @@ export const DEFAULT_SETTINGS = {
     { eyebrow: 'GWM · Landrover', title: 'Car Parts', description: 'Custom and replacement 3D printed parts for your vehicle.' },
     { eyebrow: 'Toys · Home · Phones', title: 'Everything Else', description: 'Toys, homeware and phone accessories, printed to order.' },
   ],
+
+  // Phase 3: bank details for the printable invoice (server/index.js's
+  // renderInvoiceHtml) -- from the business's own real Absa account.
+  bankName: 'Absa',
+  bankAccountName: 'J Barkhuizen',
+  bankAccountNumber: '404 950 4269',
+  bankBranchCode: '632005',
+  // Continues the real spreadsheet's existing sequence (last used: INV-0009)
+  // rather than starting a fresh, overlapping INV-0001 -- see orders.js's
+  // nextInvoiceNumber(). Only used until the very first order/invoice is
+  // created here; after that the counter is self-sustaining from orders.
+  invoiceNumberSeed: 10,
+
+  // Phase 3: Print Job Costing tool (server/print-jobs.js) -- internal-only,
+  // never affects storefront product pricing.
+  markupPct: 0,
+  electricityRate: 3.85,
+  printerPowerDraw: 0.15,
+  runningCostsPct: 0.25,
+  designRate: 300,
+  setupRate: 300,
+  postProcessingRate: 300,
 };
 
 export function findFont(id) {

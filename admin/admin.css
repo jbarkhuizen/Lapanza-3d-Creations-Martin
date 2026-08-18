@@ -301,6 +301,11 @@ table.catalog tbody tr:hover { background: var(--bg-soft); }
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
+.grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 .field span, .field-label {
   font-size: 0.78rem;
@@ -413,5 +418,5 @@ table.catalog tbody tr:hover { background: var(--bg-soft); }
     border-bottom: 1px solid var(--line);
   }
   .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
-  .stats, .editor-layout, .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .stats, .editor-layout, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }

@@ -190,9 +190,51 @@ export function ensureSchema(db) {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_design_requests_status ON design_requests (status);
+
+    -- Phase 3: print-job costing (internal-only, never touches storefront
+    -- pricing) and supplier purchase tracking. Both fully separate from
+    -- orders/products.
+
+    CREATE TABLE IF NOT EXISTS print_jobs (
+      id TEXT PRIMARY KEY,
+      item_name TEXT NOT NULL,
+      filament_colour_id TEXT REFERENCES filament_colours(id),
+      model_g REAL NOT NULL DEFAULT 0,
+      support_g REAL NOT NULL DEFAULT 0,
+      purge_g REAL NOT NULL DEFAULT 0,
+      tower_g REAL NOT NULL DEFAULT 0,
+      print_time_minutes INTEGER NOT NULL DEFAULT 0,
+      design_hours REAL NOT NULL DEFAULT 0,
+      setup_hours REAL NOT NULL DEFAULT 0,
+      post_processing_hours REAL NOT NULL DEFAULT 0,
+      markup_pct REAL NOT NULL DEFAULT 0,
+      filament_cost REAL NOT NULL DEFAULT 0,
+      power_cost REAL NOT NULL DEFAULT 0,
+      labour_cost REAL NOT NULL DEFAULT 0,
+      running_cost REAL NOT NULL DEFAULT 0,
+      total_cost REAL NOT NULL DEFAULT 0,
+      markup_amount REAL NOT NULL DEFAULT 0,
+      selling_price REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'printed',
+      date_printed TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_print_jobs_filament ON print_jobs (filament_colour_id);
+
+    CREATE TABLE IF NOT EXISTS purchases (
+      id TEXT PRIMARY KEY,
+      supplier TEXT NOT NULL,
+      goods TEXT NOT NULL DEFAULT '',
+      total_value INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'outstanding',
+      payment_type TEXT NOT NULL DEFAULT '',
+      purchase_date TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
   ensureCheckoutColumns(db);
   ensureClientAuthColumns(db);
+  ensureManagementColumns(db);
 }
 
 function hasColumn(db, tableInfoStatement, column) {
@@ -253,6 +295,53 @@ function ensureClientAuthColumns(db) {
   }
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'verification_token_expires')) {
     db.exec('ALTER TABLE clients ADD COLUMN verification_token_expires TEXT');
+  }
+}
+
+// Phase 3: invoicing, manual orders, client discounts/lead-source, shipping
+// option types, and filament spool consumption -- all additive columns on
+// already-shipped tables, so guarded ALTER TABLEs same as the two functions
+// above.
+function ensureManagementColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'invoice_number')) {
+    db.exec('ALTER TABLE orders ADD COLUMN invoice_number TEXT');
+  }
+  // Discount is applied only on manually-created orders (createManualOrder
+  // in orders.js) -- online checkout orders always have discount_pct = 0.
+  // Stored on the order itself (not just computed from the client's
+  // discount_pct at read time) so the invoice reflects what the discount
+  // actually was at the time of sale, even if the client's discount % is
+  // changed later.
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'discount_pct')) {
+    db.exec('ALTER TABLE orders ADD COLUMN discount_pct REAL NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'discount_amount')) {
+    db.exec('ALTER TABLE orders ADD COLUMN discount_amount INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'discount_pct')) {
+    db.exec('ALTER TABLE clients ADD COLUMN discount_pct REAL NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'discount_note')) {
+    db.exec("ALTER TABLE clients ADD COLUMN discount_note TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'source')) {
+    db.exec("ALTER TABLE clients ADD COLUMN source TEXT NOT NULL DEFAULT ''");
+  }
+  // Cumulative consumption logged by print jobs (server/print-jobs.js) --
+  // remaining/%left are computed at read time from stock_qty * roll_length_m
+  // minus these, never stored, so there's only one source of truth.
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'used_m')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN used_m REAL NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'used_g')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN used_g REAL NOT NULL DEFAULT 0');
+  }
+  // 'auto_weight' = today's matchShippingForWeight bracket matching
+  // (unchanged behavior). 'fixed' = a named flat-price option the customer
+  // or admin picks directly (PUDO lockers, local delivery zones) -- price
+  // doesn't depend on cart weight, so bracket matching doesn't apply.
+  if (!hasColumn(db, 'PRAGMA table_info(shipping_options)', 'option_type')) {
+    db.exec("ALTER TABLE shipping_options ADD COLUMN option_type TEXT NOT NULL DEFAULT 'auto_weight'");
   }
 }
 

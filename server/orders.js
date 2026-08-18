@@ -4,13 +4,33 @@ import { findOrCreateClientForCheckout, getClient } from './clients.js';
 import { matchShippingForWeight, getShippingOption } from './shipping.js';
 import { readCategoryProducts } from './export.js';
 import { getProduct, upsertProduct } from './store.js';
+import { getSettings } from './settings.js';
 
 // 'cancelled' is reachable two ways: automatically (see cancelStalePendingOrders
 // below) and now also as an explicit admin action (updateOrderStatus) --
 // per user instruction this reverses the original "automatic-only" design.
 const ALLOWED_STATUSES = ['pending_payment', 'paid', 'shipped', 'completed', 'cancelled'];
 const ALLOWED_PAYMENT_METHODS = ['payfast_card', 'payfast_eft', 'manual_eft', 'cash_on_collection'];
-const ALLOWED_SHIPPING_METHODS = ['courier', 'own_courier', 'collect'];
+// 'fixed' (Phase 3): a named flat-price shipping_options row (option_type =
+// 'fixed' -- PUDO lockers, local delivery zones) picked directly rather than
+// weight-bracket-matched. Available to both online checkout and manual orders.
+const ALLOWED_SHIPPING_METHODS = ['courier', 'own_courier', 'collect', 'fixed'];
+
+// Phase 3: mirrors clients.js's nextClientCode() exactly -- MAX(CAST(SUBSTR(...)))
+// scoped to callers already inside the same db.transaction() as the INSERT,
+// so it can't race with a concurrent order under this project's synchronous
+// single-connection SQLite model. 4-digit padding (INV-0001) matches the
+// spreadsheet's existing format. This is a fresh, independent counter -- it
+// does NOT know the spreadsheet already has invoices up to INV-0009, so the
+// starting point is seeded from Settings (`invoiceNumberSeed`, default in
+// settings-defaults.js) rather than hardcoded 1, letting the number continue
+// from wherever the spreadsheet's real sequence actually left off.
+function nextInvoiceNumber(db) {
+  const row = db.prepare("SELECT MAX(CAST(SUBSTR(invoice_number, 5) AS INTEGER)) AS maxNum FROM orders WHERE invoice_number IS NOT NULL").get();
+  if (row.maxNum) return `INV-${String(row.maxNum + 1).padStart(4, '0')}`;
+  const seed = Number(getSettings(db).invoiceNumberSeed) || 1;
+  return `INV-${String(seed).padStart(4, '0')}`;
+}
 
 function parseRand(value) {
   const n = parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''));
@@ -73,9 +93,12 @@ function rowToOrder(row) {
   if (!row) return null;
   return {
     id: row.id,
+    invoiceNumber: row.invoice_number,
     clientId: row.client_id,
     status: row.status,
     subtotal: row.subtotal,
+    discountPct: row.discount_pct,
+    discountAmount: row.discount_amount,
     shippingOptionId: row.shipping_option_id,
     shippingPrice: row.shipping_price,
     shippingMethod: row.shipping_method,
@@ -159,11 +182,20 @@ export function createOrder(
   const totalWeight = resolved.reduce((sum, i) => sum + i.weight * i.quantity, 0);
   const subtotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
-  // Only the 'courier' method actually charges shipping -- own_courier and
-  // collect are both R0 from us (the customer either sends their own
-  // courier to fetch it, or fetches it themselves).
+  // 'courier' and 'fixed' both charge shipping -- own_courier and collect
+  // are both R0 from us (the customer either sends their own courier to
+  // fetch it, or fetches it themselves).
   let shippingOption = null;
-  if (shippingMethod === 'courier') {
+  if (shippingMethod === 'fixed') {
+    // Phase 3: a named flat-price option (PUDO locker, local delivery) --
+    // price comes from the option itself, not weight-matched, but still
+    // re-read from the DB server-side (never trust a client-submitted
+    // price) and must actually be an active 'fixed' option.
+    shippingOption = shippingOptionId ? getShippingOption(shippingOptionId, db) : null;
+    if (!shippingOption || shippingOption.optionType !== 'fixed' || !shippingOption.active) {
+      throw new Error('Selected shipping option is not available.');
+    }
+  } else if (shippingMethod === 'courier') {
     shippingOption = shippingOptionId ? getShippingOption(shippingOptionId, db) : matchShippingForWeight(totalWeight, db);
     if (!shippingOption) throw new Error('No shipping option available for this order weight — contact us to arrange shipping.');
     // The client picks from options the server already matched to the
@@ -182,16 +214,18 @@ export function createOrder(
   const tx = db.transaction(() => {
     const client = findOrCreateClientForCheckout(clientData, db);
     const orderId = randomUUID();
+    const invoiceNumber = nextInvoiceNumber(db);
     const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO orders
-        (id, client_id, status, subtotal, shipping_option_id, shipping_price, shipping_method, total, total_weight,
+        (id, invoice_number, client_id, status, subtotal, shipping_option_id, shipping_price, shipping_method, total, total_weight,
          payment_method, payment_status, tracking_number, created_at, updated_at)
        VALUES
-        (@id, @client_id, 'pending_payment', @subtotal, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
+        (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
          @payment_method, 'pending', '', @created_at, @updated_at)`,
     ).run({
       id: orderId,
+      invoice_number: invoiceNumber,
       client_id: client.id,
       subtotal,
       shipping_option_id: shippingOption?.id || null,
@@ -223,6 +257,114 @@ export function createOrder(
 
   const orderId = tx();
   return getOrder(orderId, db);
+}
+
+// Phase 3: admin-only order creation for walk-in/WhatsApp/manual sales that
+// never go through online checkout. Deliberately a separate function from
+// createOrder() rather than a branch inside it -- the trust model is
+// different (an authenticated admin's free-text line items and prices are
+// trusted as-is, unlike online checkout's resolveProductSnapshot re-pricing
+// of every line against the catalog) and mixing the two would make both
+// harder to reason about. Still shares nextInvoiceNumber/getOrder/
+// decrementStockForOrder so every order -- online or manual -- gets a real
+// invoice number and the same stock-decrement behavior once paid.
+export function createManualOrder(
+  { client: clientData, clientId, items, shippingOptionId, shippingPrice: manualShippingPrice, discountPct, paymentMethod, alreadyPaid },
+  db = getDb(),
+) {
+  if (!ALLOWED_PAYMENT_METHODS.includes(paymentMethod)) throw new Error('Invalid payment method');
+  if (!Array.isArray(items) || items.length === 0) throw new Error('Order must have at least one item');
+
+  const resolved = items.map((line) => {
+    if (line.productId) {
+      const snap = resolveProductSnapshot(line.productId, db);
+      if (!snap) throw new Error(`Product no longer available: ${line.productId}`);
+      const quantity = Math.max(1, Number(line.quantity) || 1);
+      return { productId: line.productId, name: snap.name, price: snap.price, weight: snap.weight, quantity };
+    }
+    // Free-text line (a one-off custom job not in the catalog) -- price is
+    // admin-entered and trusted as-is. No stock is tracked for these: the
+    // synthetic `manual:` productId has no filament:/category: prefix, so
+    // decrementStockForOrder's prefix checks skip it entirely.
+    const description = String(line.description || '').trim();
+    if (!description) throw new Error('Each line item needs either a product or a description');
+    const quantity = Math.max(1, Number(line.quantity) || 1);
+    const price = Math.max(0, Math.round(Number(line.unitPrice) || 0));
+    return { productId: `manual:${randomUUID()}`, name: description, price, weight: 0, quantity };
+  });
+
+  const subtotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const totalWeight = resolved.reduce((sum, i) => sum + i.weight * i.quantity, 0);
+
+  let shippingOption = null;
+  let shippingPrice = 0;
+  if (shippingOptionId) {
+    shippingOption = getShippingOption(shippingOptionId, db);
+    if (!shippingOption) throw new Error('Shipping option not found');
+    shippingPrice = shippingOption.price;
+  } else if (manualShippingPrice != null) {
+    shippingPrice = Math.max(0, Math.round(Number(manualShippingPrice) || 0));
+  }
+
+  const discountPctClamped = Math.min(100, Math.max(0, Number(discountPct) || 0));
+  const discountAmount = Math.round(subtotal * (discountPctClamped / 100));
+  const total = Math.max(0, subtotal - discountAmount + shippingPrice);
+
+  const tx = db.transaction(() => {
+    const client = clientId ? getClient(clientId, db) : findOrCreateClientForCheckout(clientData, db);
+    if (!client) throw new Error('Client not found');
+    const orderId = randomUUID();
+    const invoiceNumber = nextInvoiceNumber(db);
+    const now = new Date().toISOString();
+    const status = alreadyPaid ? 'paid' : 'pending_payment';
+    const paymentStatus = alreadyPaid ? 'paid' : 'pending';
+    db.prepare(
+      `INSERT INTO orders
+        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, shipping_option_id, shipping_price,
+         shipping_method, total, total_weight, payment_method, payment_status, tracking_number, created_at, updated_at)
+       VALUES
+        (@id, @invoice_number, @client_id, @status, @subtotal, @discount_pct, @discount_amount, @shipping_option_id, @shipping_price,
+         'fixed', @total, @total_weight, @payment_method, @payment_status, '', @created_at, @updated_at)`,
+    ).run({
+      id: orderId,
+      invoice_number: invoiceNumber,
+      client_id: client.id,
+      status,
+      subtotal,
+      discount_pct: discountPctClamped,
+      discount_amount: discountAmount,
+      shipping_option_id: shippingOption?.id || null,
+      shipping_price: shippingPrice,
+      total,
+      total_weight: totalWeight,
+      payment_method: paymentMethod,
+      payment_status: paymentStatus,
+      created_at: now,
+      updated_at: now,
+    });
+    const insertItem = db.prepare(
+      `INSERT INTO order_items (id, order_id, product_id, product_name, price, quantity, weight)
+       VALUES (@id, @order_id, @product_id, @product_name, @price, @quantity, @weight)`,
+    );
+    for (const item of resolved) {
+      insertItem.run({
+        id: randomUUID(),
+        order_id: orderId,
+        product_id: item.productId,
+        product_name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        weight: item.weight,
+      });
+    }
+    const lowStock = alreadyPaid ? decrementStockForOrder(getOrder(orderId, db), db) : [];
+    return { orderId, lowStock };
+  });
+
+  const { orderId, lowStock } = tx();
+  const order = getOrder(orderId, db);
+  order._lowStock = lowStock;
+  return order;
 }
 
 // F.2: forward-only lifecycle, deliberately excludes 'cancelled' -- that

@@ -96,6 +96,24 @@ async function init() {
 
   let shippingOption = null;
   let shippingReady = false;
+  let fixedOptions = null;
+
+  function renderFixedOptionsPicker() {
+    shippingBox.innerHTML = `
+      <select id="checkout-fixed-shipping" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent text-sm">
+        <option value="">Choose an option…</option>
+        ${fixedOptions.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)} — ${escapeHtml(formatPrice(o.price))}</option>`).join('')}
+      </select>`;
+    const select = document.getElementById('checkout-fixed-shipping');
+    select.addEventListener('change', () => {
+      shippingOption = fixedOptions.find((o) => o.id === select.value) || null;
+      shippingReady = Boolean(shippingOption);
+      submitBtn.disabled = !shippingReady;
+      const price = shippingOption?.price || 0;
+      document.getElementById('checkout-shipping-price').textContent = formatPrice(price);
+      document.getElementById('checkout-total').textContent = formatPrice(subtotal + price);
+    });
+  }
 
   function setAddressRequired(required) {
     addressFields.querySelectorAll('input').forEach((input) => {
@@ -110,7 +128,7 @@ async function init() {
     shippingReady = false;
     submitBtn.disabled = true;
 
-    if (method !== 'courier') {
+    if (method === 'own_courier' || method === 'collect') {
       shippingOption = null;
       shippingReady = true;
       submitBtn.disabled = false;
@@ -120,6 +138,25 @@ async function init() {
       }</p>`;
       document.getElementById('checkout-shipping-price').textContent = formatPrice(0);
       document.getElementById('checkout-total').textContent = formatPrice(subtotal);
+      return;
+    }
+
+    if (method === 'fixed') {
+      setAddressRequired(true);
+      shippingOption = null;
+      shippingReady = false;
+      submitBtn.disabled = true;
+      if (!fixedOptions) {
+        shippingBox.textContent = 'Loading options…';
+        try {
+          const { shippingOptions } = await api('/api/shipping-options/public/fixed');
+          fixedOptions = shippingOptions;
+        } catch (err) {
+          shippingBox.innerHTML = `<p class="text-sm text-terracotta">${escapeHtml(err.message)}</p>`;
+          return;
+        }
+      }
+      renderFixedOptionsPicker();
       return;
     }
 

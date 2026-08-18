@@ -55,6 +55,7 @@ import {
   listOrders,
   getOrder,
   createOrder,
+  createManualOrder,
   updateOrderStatus,
   updateOrderTracking,
   markOrderPaid,
@@ -74,6 +75,8 @@ import { startAutoCancelJob } from './jobs.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
+import { listPrintJobs, getPrintJob, createPrintJob, updatePrintJob, deletePrintJob } from './print-jobs.js';
+import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -614,8 +617,8 @@ app.put('/api/clients/:id', requireAuth, (req, res) => {
 
 // ---- Shipping options (C) ----
 
-app.get('/api/shipping-options', requireAuth, (_req, res) => {
-  res.json({ shippingOptions: listShippingOptions() });
+app.get('/api/shipping-options', requireAuth, (req, res) => {
+  res.json({ shippingOptions: listShippingOptions({ activeOnly: req.query.activeOnly === 'true' }) });
 });
 
 app.post('/api/shipping-options', requireAuth, (req, res) => {
@@ -651,6 +654,14 @@ app.get('/api/shipping-match', (req, res) => {
   const match = matchShippingForWeight(weight);
   if (!match) return res.status(404).json({ error: 'No shipping option available for this order weight — please contact us.' });
   res.json({ shippingOption: { id: match.id, name: match.name, price: match.price } });
+});
+
+// Phase 3: public (no auth) -- checkout's picker for named flat-price
+// options (PUDO lockers, local delivery). Only exposes id/name/price, same
+// as /api/shipping-match above.
+app.get('/api/shipping-options/public/fixed', (_req, res) => {
+  const options = listShippingOptions({ activeOnly: true, optionType: 'fixed' });
+  res.json({ shippingOptions: options.map((o) => ({ id: o.id, name: o.name, price: o.price })) });
 });
 
 // ---- Inventory / Stock Management ----
@@ -842,10 +853,89 @@ app.delete('/api/design-requests/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ---- Print Job Costing (Phase 3, internal-only) ----
+
+app.get('/api/print-jobs', requireAuth, (req, res) => {
+  res.json({ printJobs: listPrintJobs({ status: req.query.status }) });
+});
+
+app.get('/api/print-jobs/:id', requireAuth, (req, res) => {
+  const job = getPrintJob(req.params.id);
+  if (!job) return res.status(404).json({ error: 'Print job not found' });
+  res.json({ printJob: job });
+});
+
+app.post('/api/print-jobs', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ printJob: createPrintJob(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch('/api/print-jobs/:id', requireAuth, (req, res) => {
+  const job = updatePrintJob(req.params.id, req.body || {});
+  if (!job) return res.status(404).json({ error: 'Print job not found' });
+  res.json({ printJob: job });
+});
+
+app.delete('/api/print-jobs/:id', requireAuth, (req, res) => {
+  const ok = deletePrintJob(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Print job not found' });
+  res.json({ ok: true });
+});
+
+// ---- Purchase History (Phase 3, supplier expenses) ----
+
+app.get('/api/purchases', requireAuth, (req, res) => {
+  res.json({ purchases: listPurchases({ status: req.query.status }) });
+});
+
+app.get('/api/purchases/:id', requireAuth, (req, res) => {
+  const purchase = getPurchase(req.params.id);
+  if (!purchase) return res.status(404).json({ error: 'Purchase not found' });
+  res.json({ purchase });
+});
+
+app.post('/api/purchases', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ purchase: createPurchase(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/purchases/:id', requireAuth, (req, res) => {
+  const purchase = updatePurchase(req.params.id, req.body || {});
+  if (!purchase) return res.status(404).json({ error: 'Purchase not found' });
+  res.json({ purchase });
+});
+
+app.delete('/api/purchases/:id', requireAuth, (req, res) => {
+  const ok = deletePurchase(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Purchase not found' });
+  res.json({ ok: true });
+});
+
 // ---- Orders (D/E/F) ----
 
 app.get('/api/orders', requireAuth, (req, res) => {
   res.json({ orders: listOrders({ status: req.query.status, q: req.query.q }) });
+});
+
+// Phase 3: admin-only manual order entry (walk-in/WhatsApp/etc). See
+// orders.js's createManualOrder for why this is a separate function from
+// the public checkout's createOrder rather than a shared code path.
+app.post('/api/orders', requireAuth, async (req, res) => {
+  try {
+    const order = createManualOrder(req.body || {});
+    const lowStock = order._lowStock;
+    delete order._lowStock;
+    res.status(201).json({ order });
+    if (lowStock?.length) await sendLowStockAlerts(lowStock);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.get('/api/orders/:id', requireAuth, (req, res) => {
@@ -896,6 +986,14 @@ app.get('/api/orders/:id/packing-slip', requireAuth, (req, res) => {
   const order = getOrder(req.params.id);
   if (!order) return res.status(404).send('Order not found');
   res.send(renderPackingSlipHtml(order));
+});
+
+// Phase 3: formal numbered invoice, same "print-friendly HTML, no PDF
+// dependency" pattern as the packing slip above.
+app.get('/api/orders/:id/invoice', requireAuth, (req, res) => {
+  const order = getOrder(req.params.id);
+  if (!order) return res.status(404).send('Order not found');
+  res.send(renderInvoiceHtml(order, getSettings()));
 });
 
 // ---- Checkout (D/E) -- public, no admin auth ----
@@ -998,6 +1096,10 @@ app.put('/api/settings', requireAuth, (req, res) => {
     'siteName', 'tagline', 'phoneDisplay', 'phoneTel', 'email', 'address', 'hours', 'whatsapp',
     'facebook', 'instagram', 'useUniversalFont', 'universalFont', 'fontSans', 'fontSerif',
     'defaultTheme', 'homeTiles',
+    // Phase 3
+    'bankName', 'bankAccountName', 'bankAccountNumber', 'bankBranchCode', 'invoiceNumberSeed',
+    'markupPct', 'electricityRate', 'printerPowerDraw', 'runningCostsPct',
+    'designRate', 'setupRate', 'postProcessingRate',
   ];
   const patch = {};
   for (const key of allowed) {
@@ -1111,7 +1213,84 @@ const SHIPPING_METHOD_LABELS = {
   courier: 'Our shipping',
   own_courier: "Customer's own courier",
   collect: 'Collect from store',
+  fixed: 'Shipping',
 };
+
+function formatRand(value) {
+  return `R${Number(value || 0).toFixed(2).replace(/\.00$/, '')}`;
+}
+
+// Phase 3: formal numbered invoice -- same "print-friendly HTML, no PDF
+// dependency" approach as renderPackingSlipHtml above, laid out to match
+// the business's existing spreadsheet invoice (header, bill-to, line items,
+// subtotal/shipping/discount/total, bank details).
+function renderInvoiceHtml(order, settings) {
+  const rows = order.items
+    .map(
+      (i, idx) =>
+        `<tr><td>${idx + 1}</td><td>${escapeHtml(i.productName)}</td><td style="text-align:right">${i.quantity}</td><td style="text-align:right">${formatRand(i.price)}</td><td style="text-align:right">${formatRand(i.price * i.quantity)}</td></tr>`,
+    )
+    .join('');
+  const addr = order.client
+    ? [order.client.street, order.client.suburb, order.client.city, order.client.province, order.client.postalCode, order.client.country]
+        .filter(Boolean)
+        .join(', ')
+    : '';
+  const createdDate = order.createdAt ? new Date(order.createdAt) : new Date();
+  const dueDate = new Date(createdDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const discountRow = order.discountAmount
+    ? `<tr><td colspan="4" style="text-align:right">Discount${order.discountPct ? ` (${order.discountPct}%)` : ''}</td><td style="text-align:right">-${formatRand(order.discountAmount)}</td></tr>`
+    : '';
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Invoice ${escapeHtml(order.invoiceNumber || order.id)}</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; color: #1a1612; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
+  table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
+  .muted { color: #666; font-size: 0.9rem; }
+  .totals td { font-weight: 600; }
+  .header-flex { display: flex; justify-content: space-between; align-items: flex-start; }
+  @media print { button { display: none; } }
+</style></head>
+<body>
+  <button onclick="window.print()">Print</button>
+  <div class="header-flex">
+    <div>
+      <h1>${escapeHtml(settings.siteName || 'Lapanza')}</h1>
+      <p class="muted">${escapeHtml(settings.address || '')}<br>${escapeHtml(settings.phoneDisplay || '')}<br>${escapeHtml(settings.email || '')}</p>
+    </div>
+    <div style="text-align:right">
+      <h1>INVOICE</h1>
+      <p class="muted">Invoice No: ${escapeHtml(order.invoiceNumber || '—')}<br>
+      Invoice Date: ${escapeHtml(createdDate.toLocaleDateString())}<br>
+      Due Date: ${escapeHtml(dueDate.toLocaleDateString())}</p>
+    </div>
+  </div>
+  <p><strong>BILL TO</strong><br>
+  ${escapeHtml(order.client?.name || '')}${order.client?.businessName ? ` (${escapeHtml(order.client.businessName)})` : ''}<br>
+  ${escapeHtml(order.client?.email || '')}<br>
+  ${escapeHtml(addr)}<br>
+  ${escapeHtml(order.client?.phone || '')}</p>
+  <table>
+    <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Amount</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot>
+      <tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${formatRand(order.subtotal)}</td></tr>
+      ${discountRow}
+      <tr><td colspan="4" style="text-align:right">Shipping</td><td style="text-align:right">${formatRand(order.shippingPrice)}</td></tr>
+      <tr class="totals"><td colspan="4" style="text-align:right">TOTAL DUE</td><td style="text-align:right">${formatRand(order.total)}</td></tr>
+    </tfoot>
+  </table>
+  <p><strong>PAYMENT DETAILS</strong><br>
+  Bank: ${escapeHtml(settings.bankName || '')}<br>
+  Account Name: ${escapeHtml(settings.bankAccountName || '')}<br>
+  Account No: ${escapeHtml(settings.bankAccountNumber || '')}<br>
+  Branch Code: ${escapeHtml(settings.bankBranchCode || '')}<br>
+  Reference: ${escapeHtml(order.invoiceNumber || order.id)}</p>
+  <p class="muted">Thank you for your support.</p>
+</body></html>`;
+}
 
 function slugify(value) {
   return (

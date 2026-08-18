@@ -26,6 +26,11 @@ function rowToClient(row) {
     // exposed on the mapped object, only whether one exists.
     hasAccount: Boolean(row.password_hash),
     emailVerified: Boolean(row.email_verified),
+    // Phase 3 -- discountPct only ever applied on manually-created orders
+    // (orders.js's createManualOrder), never automatically at checkout.
+    discountPct: row.discount_pct,
+    discountNote: row.discount_note,
+    source: row.source,
   };
 }
 
@@ -64,8 +69,8 @@ function insertClient(db, data) {
   // lastName (checkout) or just name (admin's own client form).
   const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim();
   db.prepare(
-    `INSERT INTO clients (id, client_code, name, first_name, last_name, business_name, email, phone, street, suburb, city, province, postal_code, country, created_at)
-     VALUES (@id, @client_code, @name, @first_name, @last_name, @business_name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @created_at)`,
+    `INSERT INTO clients (id, client_code, name, first_name, last_name, business_name, email, phone, street, suburb, city, province, postal_code, country, discount_pct, discount_note, source, created_at)
+     VALUES (@id, @client_code, @name, @first_name, @last_name, @business_name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @discount_pct, @discount_note, @source, @created_at)`,
   ).run({
     id,
     client_code: clientCode,
@@ -81,6 +86,9 @@ function insertClient(db, data) {
     province: data.province || '',
     postal_code: data.postalCode || '',
     country: data.country || 'South Africa',
+    discount_pct: Number(data.discountPct) || 0,
+    discount_note: data.discountNote || '',
+    source: data.source || '',
     created_at: new Date().toISOString(),
   });
   return getClient(id, db);
@@ -100,7 +108,8 @@ export function updateClient(id, data, db = getDb()) {
   db.prepare(
     `UPDATE clients SET name = @name, first_name = @first_name, last_name = @last_name, business_name = @business_name,
       email = @email, phone = @phone, street = @street, suburb = @suburb,
-      city = @city, province = @province, postal_code = @postal_code, country = @country WHERE id = @id`,
+      city = @city, province = @province, postal_code = @postal_code, country = @country,
+      discount_pct = @discount_pct, discount_note = @discount_note, source = @source WHERE id = @id`,
   ).run({
     id,
     name: data.name ?? existing.name,
@@ -115,6 +124,9 @@ export function updateClient(id, data, db = getDb()) {
     province: data.province ?? existing.province,
     postal_code: data.postalCode ?? existing.postalCode,
     country: data.country ?? existing.country,
+    discount_pct: data.discountPct !== undefined ? Number(data.discountPct) || 0 : existing.discountPct,
+    discount_note: data.discountNote ?? existing.discountNote,
+    source: data.source ?? existing.source,
   });
   return getClient(id, db);
 }

@@ -85,6 +85,10 @@ function setRoute(route, { id } = {}) {
   show($('#view-stock'), route === 'stock');
   show($('#view-resources'), route === 'resources');
   show($('#view-design-requests'), route === 'design-requests');
+  show($('#view-invoice-history'), route === 'invoice-history');
+  show($('#view-new-order'), route === 'new-order');
+  show($('#view-purchases'), route === 'purchases');
+  show($('#view-print-jobs'), route === 'print-jobs');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -99,6 +103,10 @@ function setRoute(route, { id } = {}) {
     stock: ['Inventory', 'Stock management'],
     resources: ['Content', '3D Resources'],
     'design-requests': ['Content', 'Design requests'],
+    'invoice-history': ['Management', 'Invoice History'],
+    'new-order': ['Management', 'New order'],
+    purchases: ['Management', 'Purchase History'],
+    'print-jobs': ['Management', 'Print Job Costing'],
     settings: ['Configuration', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
@@ -325,6 +333,18 @@ function bindChrome() {
       } else if (btn.dataset.route === 'design-requests') {
         setRoute('design-requests');
         await renderDesignRequests();
+      } else if (btn.dataset.route === 'invoice-history') {
+        setRoute('invoice-history');
+        await renderInvoiceHistory();
+      } else if (btn.dataset.route === 'new-order') {
+        setRoute('new-order');
+        await renderNewOrder();
+      } else if (btn.dataset.route === 'purchases') {
+        setRoute('purchases');
+        await renderPurchases();
+      } else if (btn.dataset.route === 'print-jobs') {
+        setRoute('print-jobs');
+        await renderPrintJobs();
       }
     });
   });
@@ -1178,6 +1198,36 @@ async function renderSettings() {
           <label class="field"><span>Instagram</span><input data-setting="instagram" value="${escapeAttr(s.instagram || '')}" /></label>
         </div>
         <label class="field"><span>Change admin password</span><input data-setting="adminPassword" type="password" placeholder="Leave blank to keep current" /></label>
+      </div>
+
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Invoicing &amp; bank details</h3></div>
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on every printable invoice (Invoice History → Print).</p>
+        <div class="grid-2">
+          <label class="field"><span>Bank name</span><input data-setting="bankName" value="${escapeAttr(s.bankName || '')}" /></label>
+          <label class="field"><span>Account name</span><input data-setting="bankAccountName" value="${escapeAttr(s.bankAccountName || '')}" /></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Account number</span><input data-setting="bankAccountNumber" value="${escapeAttr(s.bankAccountNumber || '')}" /></label>
+          <label class="field"><span>Branch code</span><input data-setting="bankBranchCode" value="${escapeAttr(s.bankBranchCode || '')}" /></label>
+        </div>
+        <label class="field" style="max-width:220px"><span>Next invoice number seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
+      </div>
+
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Print Job Costing rates</h3></div>
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Drives the internal-only cost calculator (Print Job Costing) — never affects storefront prices. Markup/Running costs are fractions (0.25 = 25%).</p>
+        <div class="grid-3">
+          <label class="field"><span>Markup (fraction)</span><input data-setting="markupPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.markupPct ?? 0))}" /></label>
+          <label class="field"><span>Running costs (fraction)</span><input data-setting="runningCostsPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.runningCostsPct ?? 0))}" /></label>
+          <label class="field"><span>Electricity rate (R/kWh)</span><input data-setting="electricityRate" type="number" min="0" step="0.01" value="${escapeAttr(String(s.electricityRate ?? 0))}" /></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>Printer power draw (kWh/hr)</span><input data-setting="printerPowerDraw" type="number" min="0" step="0.01" value="${escapeAttr(String(s.printerPowerDraw ?? 0))}" /></label>
+          <label class="field"><span>Design rate (R/hr)</span><input data-setting="designRate" type="number" min="0" step="1" value="${escapeAttr(String(s.designRate ?? 0))}" /></label>
+          <label class="field"><span>Setup rate (R/hr)</span><input data-setting="setupRate" type="number" min="0" step="1" value="${escapeAttr(String(s.setupRate ?? 0))}" /></label>
+        </div>
+        <label class="field" style="max-width:220px"><span>Post-processing rate (R/hr)</span><input data-setting="postProcessingRate" type="number" min="0" step="1" value="${escapeAttr(String(s.postProcessingRate ?? 0))}" /></label>
         <div>
           <button class="btn btn-primary" id="save-settings" type="button">Save settings</button>
         </div>
@@ -1271,6 +1321,7 @@ const SHIPPING_METHOD_LABELS = {
   courier: 'Our shipping',
   own_courier: "Customer's own courier",
   collect: 'Collect from store',
+  fixed: 'Shipping',
 };
 
 function statusBadge(status) {
@@ -1359,7 +1410,7 @@ async function renderOrderDetail(id) {
     <button class="btn btn-ghost" id="back-to-orders" type="button">&larr; Back to orders</button>
     <div class="stack gap-4" style="max-width:900px">
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Order ${escapeHtml(order.id)}</h3>${statusBadge(order.status)}</div>
+        <div class="section-head"><h3>${escapeHtml(order.invoiceNumber || order.id)}</h3>${statusBadge(order.status)}</div>
         <div class="grid-3">
           <label class="field"><span>Status</span>
             <select id="order-status">
@@ -1377,6 +1428,7 @@ async function renderOrderDetail(id) {
           Confirmation email: ${order.confirmationEmailSentAt ? `sent ${escapeHtml(formatDate(order.confirmationEmailSentAt))}` : 'not sent'}
           &nbsp;·&nbsp; <button class="btn small" id="resend-email" type="button">${order.confirmationEmailSentAt ? 'Resend' : 'Send'} confirmation email</button>
           &nbsp;·&nbsp; <a href="/api/orders/${escapeAttr(order.id)}/packing-slip" target="_blank" rel="noopener">Print packing slip</a>
+          &nbsp;·&nbsp; <a href="/api/orders/${escapeAttr(order.id)}/invoice" target="_blank" rel="noopener">Print invoice</a>
           ${order.status !== 'cancelled' ? '&nbsp;·&nbsp; <button class="btn small btn-danger" id="cancel-order" type="button">Cancel order</button>' : ''}
         </p>
       </div>
@@ -1454,6 +1506,7 @@ function blankClient() {
   return {
     id: null, name: '', firstName: '', lastName: '', businessName: '', email: '', phone: '',
     street: '', suburb: '', city: '', province: '', postalCode: '', country: 'South Africa',
+    discountPct: 0, discountNote: '', source: '',
   };
 }
 
@@ -1545,6 +1598,12 @@ async function renderClients() {
           <label class="field"><span>Province</span><input id="cf-province" value="${escapeAttr(form.province)}" /></label>
         </div>
         <label class="field" style="max-width:200px"><span>Postal code</span><input id="cf-postal" value="${escapeAttr(form.postalCode)}" /></label>
+        <div class="grid-3">
+          <label class="field"><span>Discount %</span><input id="cf-discount-pct" type="number" min="0" max="100" step="0.5" value="${escapeAttr(String(form.discountPct ?? 0))}" /></label>
+          <label class="field"><span>Discount note</span><input id="cf-discount-note" value="${escapeAttr(form.discountNote || '')}" placeholder="e.g. Family, Supplier" /></label>
+          <label class="field"><span>Lead source</span><input id="cf-source" value="${escapeAttr(form.source || '')}" placeholder="e.g. Website, Facebook, WA Group" /></label>
+        </div>
+        <p class="muted" style="font-size:0.8rem">Discount only applies on manually-created orders (New Order) — never automatically at online checkout.</p>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-client" type="button">Save</button>
           <button class="btn btn-ghost" id="cancel-client" type="button">Cancel</button>
@@ -1607,6 +1666,9 @@ async function renderClients() {
         province: $('#cf-province').value,
         postalCode: $('#cf-postal').value,
         country: $('#cf-country').value,
+        discountPct: Number($('#cf-discount-pct').value) || 0,
+        discountNote: $('#cf-discount-note').value,
+        source: $('#cf-source').value,
       };
       try {
         if (form.id) await api(`/api/clients/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -1677,10 +1739,489 @@ async function renderRegisteredUsers() {
   });
 }
 
+// ---- Invoice History (Phase 3) ----
+// A view over the same `orders` table as renderOrders() -- there is no
+// separate invoices table (one order = one invoice, always).
+
+async function renderInvoiceHistory() {
+  state.invoiceFilters = state.invoiceFilters || { status: '', q: '' };
+  const { orders } = await api(
+    `/api/orders?${new URLSearchParams({ status: state.invoiceFilters.status, q: state.invoiceFilters.q })}`,
+  );
+  const rows = orders
+    .map(
+      (o) => `
+        <tr data-id="${escapeAttr(o.id)}">
+          <td>${escapeHtml(o.invoiceNumber || '—')}</td>
+          <td>${escapeHtml(formatDate(o.createdAt))}</td>
+          <td>${escapeHtml(o.client?.name || '')}</td>
+          <td>R${escapeHtml(String(o.total))}</td>
+          <td>${statusBadge(o.paymentStatus)}</td>
+          <td>${escapeHtml(o.paymentMethod)}</td>
+          <td><a href="/api/orders/${escapeAttr(o.id)}/invoice" target="_blank" rel="noopener">Print</a></td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-invoice-history').innerHTML = `
+    <div class="toolbar">
+      <input id="invoice-filter-q" type="search" placeholder="Search order id, client name/email/code…" value="${escapeAttr(state.invoiceFilters.q)}" />
+      <select id="invoice-filter-status">
+        <option value="">All statuses</option>
+        <option value="pending_payment" ${state.invoiceFilters.status === 'pending_payment' ? 'selected' : ''}>Outstanding</option>
+        <option value="paid" ${state.invoiceFilters.status === 'paid' ? 'selected' : ''}>Paid</option>
+      </select>
+      <span class="muted">${escapeHtml(String(orders.length))} invoices</span>
+    </div>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Invoice</th><th>Date</th><th>Client</th><th>Value</th><th>Status</th><th>Payment</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No invoices yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  const applyFilters = async () => {
+    state.invoiceFilters.q = $('#invoice-filter-q').value.trim();
+    state.invoiceFilters.status = $('#invoice-filter-status').value;
+    await renderInvoiceHistory();
+  };
+  $('#invoice-filter-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
+  $('#invoice-filter-status').addEventListener('change', applyFilters);
+
+  $$('#view-invoice-history tbody tr[data-id]').forEach((tr) => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.tagName === 'A') return;
+      openOrderDetail(tr.dataset.id);
+    });
+  });
+}
+
+// ---- New Order (Phase 3, manual/walk-in order entry) ----
+
+function blankNewOrder() {
+  return {
+    clientMode: 'search',
+    clientQuery: '',
+    clientResults: [],
+    selectedClient: null,
+    newClient: { firstName: '', lastName: '', businessName: '', email: '', phone: '' },
+    items: [{ description: '', quantity: 1, unitPrice: 0 }],
+    shippingOptionId: '',
+    manualShippingPrice: '',
+    discountPct: 0,
+    paymentMethod: 'manual_eft',
+    alreadyPaid: false,
+  };
+}
+
+function newOrderTotals(order, shippingOptions) {
+  const subtotal = order.items.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0);
+  const shippingOption = shippingOptions.find((o) => o.id === order.shippingOptionId);
+  const shippingPrice = shippingOption ? shippingOption.price : (Number(order.manualShippingPrice) || 0);
+  const discountAmount = Math.round(subtotal * ((Number(order.discountPct) || 0) / 100));
+  const total = Math.max(0, subtotal - discountAmount + shippingPrice);
+  return { subtotal, shippingPrice, discountAmount, total };
+}
+
+async function renderNewOrder() {
+  state.newOrder = state.newOrder || blankNewOrder();
+  const order = state.newOrder;
+  const { shippingOptions } = await api('/api/shipping-options?activeOnly=true');
+  const totals = newOrderTotals(order, shippingOptions);
+
+  const clientResultsHtml = order.clientResults
+    .map(
+      (c) => `
+        <div class="panel" style="padding:0.6rem 0.9rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem" data-client-id="${escapeAttr(c.id)}">
+          <span>${escapeHtml(c.name || c.email)} <span class="muted">(${escapeHtml(c.email)}${c.discountPct ? ` — ${escapeHtml(String(c.discountPct))}% discount` : ''})</span></span>
+          <button class="btn small" data-action="pick-client" type="button">Use</button>
+        </div>`,
+    )
+    .join('');
+
+  const itemRows = order.items
+    .map(
+      (item, idx) => `
+        <div class="grid-4" data-item-idx="${idx}" style="align-items:end">
+          <label class="field" style="grid-column:span 2"><span>Description</span><input class="ni-desc" value="${escapeAttr(item.description)}" placeholder="Product or custom job description" /></label>
+          <label class="field"><span>Qty</span><input class="ni-qty" type="number" min="1" step="1" value="${escapeAttr(String(item.quantity))}" /></label>
+          <label class="field"><span>Unit price (R)</span><input class="ni-price" type="number" min="0" step="1" value="${escapeAttr(String(item.unitPrice))}" /></label>
+          <button class="btn small btn-danger" data-action="remove-item" type="button" ${order.items.length <= 1 ? 'disabled' : ''}>Remove</button>
+        </div>`,
+    )
+    .join('');
+
+  const shippingOptionsHtml = shippingOptions
+    .map((o) => `<option value="${escapeAttr(o.id)}" ${order.shippingOptionId === o.id ? 'selected' : ''}>${escapeHtml(o.name)} — R${escapeHtml(String(o.price))}</option>`)
+    .join('');
+
+  $('#view-new-order').innerHTML = `
+    <div class="stack gap-4" style="max-width:900px">
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Client</h3></div>
+        <div class="row-card-actions">
+          <button class="btn small ${order.clientMode === 'search' ? 'btn-primary' : ''}" data-action="mode-search" type="button">Existing client</button>
+          <button class="btn small ${order.clientMode === 'new' ? 'btn-primary' : ''}" data-action="mode-new" type="button">New client</button>
+        </div>
+        ${order.clientMode === 'search' ? `
+          ${order.selectedClient ? `
+            <div class="panel" style="padding:0.6rem 0.9rem;display:flex;justify-content:space-between;align-items:center">
+              <span><strong>${escapeHtml(order.selectedClient.name || order.selectedClient.email)}</strong> — ${escapeHtml(order.selectedClient.email)}${order.selectedClient.discountPct ? ` <span class="muted">(${escapeHtml(String(order.selectedClient.discountPct))}% discount)</span>` : ''}</span>
+              <button class="btn small btn-ghost" data-action="clear-client" type="button">Change</button>
+            </div>` : `
+            <input id="no-client-q" type="search" placeholder="Search name, email, client code…" value="${escapeAttr(order.clientQuery)}" />
+            <div class="stack gap-2">${clientResultsHtml}</div>`}
+        ` : `
+          <div class="grid-2">
+            <label class="field"><span>First name</span><input id="no-new-first" value="${escapeAttr(order.newClient.firstName)}" /></label>
+            <label class="field"><span>Surname</span><input id="no-new-last" value="${escapeAttr(order.newClient.lastName)}" /></label>
+          </div>
+          <div class="grid-2">
+            <label class="field"><span>Business name (optional)</span><input id="no-new-business" value="${escapeAttr(order.newClient.businessName)}" /></label>
+            <label class="field"><span>Email *</span><input id="no-new-email" type="email" value="${escapeAttr(order.newClient.email)}" /></label>
+          </div>
+          <label class="field"><span>Phone</span><input id="no-new-phone" value="${escapeAttr(order.newClient.phone)}" /></label>
+        `}
+      </div>
+
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Line items</h3><button class="btn small" id="add-item" type="button">+ Add line</button></div>
+        <div class="stack gap-2">${itemRows}</div>
+      </div>
+
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Shipping &amp; discount</h3></div>
+        <div class="grid-3">
+          <label class="field"><span>Shipping option</span>
+            <select id="no-shipping-option">
+              <option value="">None / manual</option>
+              ${shippingOptionsHtml}
+            </select>
+          </label>
+          <label class="field"><span>Manual shipping price (R, used if no option picked)</span><input id="no-shipping-manual" type="number" min="0" step="1" value="${escapeAttr(String(order.manualShippingPrice))}" ${order.shippingOptionId ? 'disabled' : ''} /></label>
+          <label class="field"><span>Discount %</span><input id="no-discount" type="number" min="0" max="100" step="0.5" value="${escapeAttr(String(order.discountPct))}" /></label>
+        </div>
+      </div>
+
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Payment</h3></div>
+        <div class="grid-3">
+          <label class="field"><span>Payment method</span>
+            <select id="no-payment-method">
+              <option value="manual_eft" ${order.paymentMethod === 'manual_eft' ? 'selected' : ''}>Manual EFT</option>
+              <option value="cash_on_collection" ${order.paymentMethod === 'cash_on_collection' ? 'selected' : ''}>Cash</option>
+              <option value="payfast_card" ${order.paymentMethod === 'payfast_card' ? 'selected' : ''}>Payfast (Card)</option>
+              <option value="payfast_eft" ${order.paymentMethod === 'payfast_eft' ? 'selected' : ''}>Payfast (Instant EFT)</option>
+            </select>
+          </label>
+          <label class="field checkbox" style="align-self:end"><input id="no-already-paid" type="checkbox" ${order.alreadyPaid ? 'checked' : ''} /><span>Already paid</span></label>
+        </div>
+      </div>
+
+      <div class="panel stack gap-2">
+        <div class="section-head"><h3>Total</h3></div>
+        <p>Subtotal: R${escapeHtml(String(totals.subtotal))}</p>
+        ${totals.discountAmount ? `<p>Discount: -R${escapeHtml(String(totals.discountAmount))}</p>` : ''}
+        <p>Shipping: R${escapeHtml(String(totals.shippingPrice))}</p>
+        <p><strong>Total due: R${escapeHtml(String(totals.total))}</strong></p>
+        <button class="btn btn-primary" id="create-order" type="button">Create order</button>
+      </div>
+    </div>`;
+
+  $('[data-action="mode-search"]')?.addEventListener('click', async () => { order.clientMode = 'search'; await renderNewOrder(); });
+  $('[data-action="mode-new"]')?.addEventListener('click', async () => { order.clientMode = 'new'; await renderNewOrder(); });
+  $('[data-action="clear-client"]')?.addEventListener('click', async () => { order.selectedClient = null; order.clientResults = []; await renderNewOrder(); });
+
+  $('#no-client-q')?.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    order.clientQuery = $('#no-client-q').value.trim();
+    if (!order.clientQuery) { order.clientResults = []; return renderNewOrder(); }
+    const { clients } = await api(`/api/clients?${new URLSearchParams({ q: order.clientQuery })}`);
+    order.clientResults = clients;
+    await renderNewOrder();
+  });
+  $$('[data-client-id]').forEach((row) => {
+    row.querySelector('[data-action="pick-client"]').addEventListener('click', async () => {
+      order.selectedClient = order.clientResults.find((c) => c.id === row.dataset.clientId);
+      order.discountPct = order.selectedClient?.discountPct || 0;
+      await renderNewOrder();
+    });
+  });
+
+  $('#add-item')?.addEventListener('click', async () => {
+    order.items.push({ description: '', quantity: 1, unitPrice: 0 });
+    await renderNewOrder();
+  });
+  $$('[data-item-idx]').forEach((row) => {
+    const idx = Number(row.dataset.itemIdx);
+    row.querySelector('.ni-desc').addEventListener('input', (e) => { order.items[idx].description = e.target.value; });
+    row.querySelector('.ni-qty').addEventListener('input', (e) => { order.items[idx].quantity = e.target.value; });
+    row.querySelector('.ni-price').addEventListener('input', (e) => { order.items[idx].unitPrice = e.target.value; });
+    row.querySelector('[data-action="remove-item"]')?.addEventListener('click', async () => {
+      order.items.splice(idx, 1);
+      await renderNewOrder();
+    });
+  });
+
+  $('#no-shipping-option')?.addEventListener('change', async () => {
+    order.shippingOptionId = $('#no-shipping-option').value;
+    await renderNewOrder();
+  });
+  $('#no-shipping-manual')?.addEventListener('input', (e) => { order.manualShippingPrice = e.target.value; });
+  $('#no-discount')?.addEventListener('input', (e) => { order.discountPct = e.target.value; });
+  $('#no-payment-method')?.addEventListener('change', (e) => { order.paymentMethod = e.target.value; });
+  $('#no-already-paid')?.addEventListener('change', (e) => { order.alreadyPaid = e.target.checked; });
+
+  $('#create-order').addEventListener('click', async () => {
+    const items = order.items
+      .filter((i) => i.description.trim())
+      .map((i) => ({ description: i.description, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0 }));
+    if (!items.length) return toast('Add at least one line item');
+
+    const payload = {
+      items,
+      shippingOptionId: order.shippingOptionId || null,
+      shippingPrice: order.shippingOptionId ? null : (Number(order.manualShippingPrice) || 0),
+      discountPct: Number(order.discountPct) || 0,
+      paymentMethod: order.paymentMethod,
+      alreadyPaid: order.alreadyPaid,
+    };
+    if (order.clientMode === 'search') {
+      if (!order.selectedClient) return toast('Pick a client first');
+      payload.clientId = order.selectedClient.id;
+    } else {
+      if (!$('#no-new-email').value.trim()) return toast('Client email is required');
+      payload.client = {
+        firstName: $('#no-new-first').value,
+        lastName: $('#no-new-last').value,
+        businessName: $('#no-new-business').value,
+        email: $('#no-new-email').value,
+        phone: $('#no-new-phone').value,
+      };
+    }
+
+    try {
+      const { order: created } = await api('/api/orders', { method: 'POST', body: JSON.stringify(payload) });
+      toast(`Order created — ${created.invoiceNumber}`);
+      state.newOrder = blankNewOrder();
+      openOrderDetail(created.id);
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+}
+
+// ---- Print Job Costing (Phase 3, internal-only) ----
+// Never touches storefront pricing -- purely a production-cost log mirroring
+// the spreadsheet's Cost Calculator, computed server-side in print-jobs.js.
+
+function blankPrintJob() {
+  return {
+    itemName: '', filamentColourId: '', modelG: 0, supportG: 0, purgeG: 0, towerG: 0,
+    printTimeMinutes: 0, designHours: 0, setupHours: 0, postProcessingHours: 0, markupPct: '',
+  };
+}
+
+async function renderPrintJobs() {
+  state.newPrintJob = state.newPrintJob || blankPrintJob();
+  const draft = state.newPrintJob;
+  const [{ printJobs }, { filaments }] = await Promise.all([api('/api/print-jobs'), api('/api/filaments')]);
+
+  const colourOptions = filaments
+    .flatMap((f) => f.colours.map((c) => ({ id: c.id, label: `${f.name} — ${c.name} (${c.sku})` })))
+    .map((c) => `<option value="${escapeAttr(c.id)}" ${draft.filamentColourId === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`)
+    .join('');
+
+  const rows = printJobs
+    .map(
+      (j) => `
+        <tr>
+          <td>${escapeHtml(j.itemName)}</td>
+          <td>R${escapeHtml(String(j.totalCost))}</td>
+          <td>R${escapeHtml(String(j.sellingPrice))}</td>
+          <td>${escapeHtml(j.status)}</td>
+          <td>${escapeHtml(formatDate(j.datePrinted || j.createdAt))}</td>
+          <td><button class="btn small btn-danger" data-action="delete-job" data-id="${escapeAttr(j.id)}" type="button">Delete</button></td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-print-jobs').innerHTML = `
+    <div class="stack gap-4" style="max-width:900px">
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>Log a print job</h3></div>
+        <div class="grid-2">
+          <label class="field"><span>Item / file name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
+          <label class="field"><span>Filament (optional)</span>
+            <select id="pj-filament"><option value="">— None —</option>${colourOptions}</select>
+          </label>
+        </div>
+        <div class="grid-4">
+          <label class="field"><span>Model (g)</span><input id="pj-model-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.modelG))}" /></label>
+          <label class="field"><span>Support (g)</span><input id="pj-support-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.supportG))}" /></label>
+          <label class="field"><span>Purge (g)</span><input id="pj-purge-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.purgeG))}" /></label>
+          <label class="field"><span>Tower (g)</span><input id="pj-tower-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.towerG))}" /></label>
+        </div>
+        <div class="grid-4">
+          <label class="field"><span>Print time (min)</span><input id="pj-time" type="number" min="0" step="1" value="${escapeAttr(String(draft.printTimeMinutes))}" /></label>
+          <label class="field"><span>Design (hrs)</span><input id="pj-design-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.designHours))}" /></label>
+          <label class="field"><span>Setup (hrs)</span><input id="pj-setup-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.setupHours))}" /></label>
+          <label class="field"><span>Post-processing (hrs)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
+        </div>
+        <label class="field" style="max-width:220px"><span>Markup override (fraction, blank = Settings default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="log-job" type="button">Log job &amp; compute cost</button>
+        </div>
+      </div>
+      <div class="panel table-wrap">
+        <table class="catalog">
+          <thead><tr><th>Item</th><th>Cost</th><th>Selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  $('#log-job').addEventListener('click', async () => {
+    const name = $('#pj-name').value.trim();
+    if (!name) return toast('Item name is required');
+    const payload = {
+      itemName: name,
+      filamentColourId: $('#pj-filament').value || null,
+      modelG: Number($('#pj-model-g').value) || 0,
+      supportG: Number($('#pj-support-g').value) || 0,
+      purgeG: Number($('#pj-purge-g').value) || 0,
+      towerG: Number($('#pj-tower-g').value) || 0,
+      printTimeMinutes: Number($('#pj-time').value) || 0,
+      designHours: Number($('#pj-design-hrs').value) || 0,
+      setupHours: Number($('#pj-setup-hrs').value) || 0,
+      postProcessingHours: Number($('#pj-post-hrs').value) || 0,
+      markupPct: $('#pj-markup').value === '' ? undefined : Number($('#pj-markup').value),
+    };
+    try {
+      const { printJob } = await api('/api/print-jobs', { method: 'POST', body: JSON.stringify(payload) });
+      toast(`Cost: R${printJob.totalCost} — Selling price: R${printJob.sellingPrice}`);
+      state.newPrintJob = blankPrintJob();
+      await renderPrintJobs();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $$('[data-action="delete-job"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Delete this print job?')) return;
+      await api(`/api/print-jobs/${btn.dataset.id}`, { method: 'DELETE' });
+      await renderPrintJobs();
+    });
+  });
+}
+
+// ---- Purchase History (Phase 3, supplier expenses) ----
+
+function blankPurchase() {
+  return { id: null, supplier: '', goods: '', totalValue: 0, status: 'outstanding', paymentType: '', purchaseDate: '' };
+}
+
+async function renderPurchases() {
+  state.editingPurchase = state.editingPurchase || null;
+  const { purchases } = await api('/api/purchases');
+
+  const rows = purchases
+    .map(
+      (p) => `
+        <tr data-id="${escapeAttr(p.id)}">
+          <td>${escapeHtml(p.supplier)}</td>
+          <td>${escapeHtml(p.goods || '—')}</td>
+          <td>R${escapeHtml(String(p.totalValue))}</td>
+          <td>${statusBadge(p.status)}</td>
+          <td>${escapeHtml(p.paymentType || '—')}</td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  const form = state.editingPurchase;
+  $('#view-purchases').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-purchase" type="button">+ Purchase</button>
+      <span class="muted">${escapeHtml(String(purchases.length))} purchases</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:600px">
+        <div class="section-head"><h3>${form.id ? 'Edit purchase' : 'New purchase'}</h3></div>
+        <label class="field"><span>Supplier</span><input id="pu-supplier" value="${escapeAttr(form.supplier)}" /></label>
+        <label class="field"><span>Goods</span><input id="pu-goods" value="${escapeAttr(form.goods)}" /></label>
+        <div class="grid-3">
+          <label class="field"><span>Total value (R)</span><input id="pu-value" type="number" min="0" step="1" value="${escapeAttr(String(form.totalValue))}" /></label>
+          <label class="field"><span>Status</span>
+            <select id="pu-status">
+              <option value="outstanding" ${form.status === 'outstanding' ? 'selected' : ''}>Outstanding</option>
+              <option value="paid" ${form.status === 'paid' ? 'selected' : ''}>Paid</option>
+            </select>
+          </label>
+          <label class="field"><span>Payment type</span><input id="pu-payment-type" value="${escapeAttr(form.paymentType)}" placeholder="e.g. Card, EFT" /></label>
+        </div>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-purchase" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-purchase" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Supplier</th><th>Goods</th><th>Value</th><th>Status</th><th>Payment</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No purchases logged yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#new-purchase').addEventListener('click', async () => { state.editingPurchase = blankPurchase(); await renderPurchases(); });
+  $$('#view-purchases tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const { purchase } = await api(`/api/purchases/${tr.dataset.id}`);
+      state.editingPurchase = purchase;
+      await renderPurchases();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this purchase?')) return;
+      try {
+        await api(`/api/purchases/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Deleted');
+        await renderPurchases();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (form) {
+    $('#cancel-purchase').addEventListener('click', async () => { state.editingPurchase = null; await renderPurchases(); });
+    $('#save-purchase').addEventListener('click', async () => {
+      const payload = {
+        supplier: $('#pu-supplier').value,
+        goods: $('#pu-goods').value,
+        totalValue: Number($('#pu-value').value) || 0,
+        status: $('#pu-status').value,
+        paymentType: $('#pu-payment-type').value,
+      };
+      try {
+        if (form.id) await api(`/api/purchases/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/api/purchases', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Purchase saved');
+        state.editingPurchase = null;
+        await renderPurchases();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
+}
+
 // ---- Shipping options (C) ----
 
 function blankShippingOption() {
-  return { id: null, name: '', minWeight: 0, maxWeight: '', price: 0, active: true };
+  return { id: null, name: '', optionType: 'fixed', minWeight: 0, maxWeight: '', price: 0, active: true };
 }
 
 async function renderShipping() {
@@ -1692,7 +2233,7 @@ async function renderShipping() {
       (o) => `
         <tr data-id="${escapeAttr(o.id)}">
           <td>${escapeHtml(o.name)}</td>
-          <td>${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}</td>
+          <td>${o.optionType === 'fixed' ? '<span class="badge">flat rate</span>' : `${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}`}</td>
           <td>R${escapeHtml(String(o.price))}</td>
           <td>${o.active ? '<span class="badge published">active</span>' : '<span class="badge draft">inactive</span>'}</td>
           <td>
@@ -1704,6 +2245,7 @@ async function renderShipping() {
     .join('');
 
   const form = state.editingShipping;
+  const isFixed = form?.optionType !== 'auto_weight';
   $('#view-shipping').innerHTML = `
     <div class="toolbar">
       <button class="btn btn-primary" id="new-shipping" type="button">+ Shipping option</button>
@@ -1712,12 +2254,19 @@ async function renderShipping() {
     ${form ? `
       <div class="panel stack gap-3" style="max-width:600px">
         <div class="section-head"><h3>${form.id ? 'Edit shipping option' : 'New shipping option'}</h3></div>
-        <label class="field"><span>Name</span><input id="sf-name" value="${escapeAttr(form.name)}" /></label>
-        <div class="grid-3">
+        <label class="field"><span>Name</span><input id="sf-name" value="${escapeAttr(form.name)}" placeholder="e.g. PUDO Locker to Locker (Small)" /></label>
+        <label class="field"><span>Type</span>
+          <select id="sf-type">
+            <option value="fixed" ${isFixed ? 'selected' : ''}>Flat rate — customer/admin picks by name (PUDO, local delivery)</option>
+            <option value="auto_weight" ${!isFixed ? 'selected' : ''}>Weight bracket — auto-matched to cart weight (courier)</option>
+          </select>
+        </label>
+        <div class="grid-3" id="sf-weight-fields" style="${isFixed ? 'display:none' : ''}">
           <label class="field"><span>Min weight (g)</span><input id="sf-min" type="number" min="0" step="1" value="${escapeAttr(String(form.minWeight))}" /></label>
           <label class="field"><span>Max weight (g, blank = no limit)</span><input id="sf-max" type="number" min="0" step="1" value="${escapeAttr(String(form.maxWeight ?? ''))}" /></label>
-          <label class="field"><span>Price (R)</span><input id="sf-price" type="number" min="0" step="1" value="${escapeAttr(String(form.price))}" /></label>
+          <label class="field"><span>Price (R)</span><input id="sf-price-weight" type="number" min="0" step="1" value="${escapeAttr(String(form.price))}" /></label>
         </div>
+        <label class="field" id="sf-price-fixed-field" style="${isFixed ? '' : 'display:none'}"><span>Price (R)</span><input id="sf-price-fixed" type="number" min="0" step="1" value="${escapeAttr(String(form.price))}" /></label>
         <label class="field checkbox"><input id="sf-active" type="checkbox" ${form.active ? 'checked' : ''} /><span>Active</span></label>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-shipping" type="button">Save</button>
@@ -1726,7 +2275,7 @@ async function renderShipping() {
       </div>` : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Name</th><th>Weight bracket</th><th>Price</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>Weight bracket / Type</th><th>Price</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows || '<tr><td colspan="5"><div class="empty">No shipping options yet — checkout can\'t complete until at least one active bracket exists</div></td></tr>'}</tbody>
       </table>
     </div>`;
@@ -1751,13 +2300,19 @@ async function renderShipping() {
   });
 
   if (form) {
+    $('#sf-type').addEventListener('change', () => {
+      state.editingShipping = { ...form, optionType: $('#sf-type').value };
+      renderShipping();
+    });
     $('#cancel-shipping').addEventListener('click', async () => { state.editingShipping = null; await renderShipping(); });
     $('#save-shipping').addEventListener('click', async () => {
+      const optionType = $('#sf-type').value;
       const payload = {
         name: $('#sf-name').value,
-        minWeight: Number($('#sf-min').value) || 0,
-        maxWeight: $('#sf-max').value === '' ? null : Number($('#sf-max').value),
-        price: Number($('#sf-price').value) || 0,
+        optionType,
+        minWeight: optionType === 'fixed' ? 0 : Number($('#sf-min').value) || 0,
+        maxWeight: optionType === 'fixed' ? null : ($('#sf-max').value === '' ? null : Number($('#sf-max').value)),
+        price: Number((optionType === 'fixed' ? $('#sf-price-fixed').value : $('#sf-price-weight').value)) || 0,
         active: $('#sf-active').checked,
       };
       try {
@@ -1792,6 +2347,11 @@ async function renderStock() {
       const stockVal = edit.stockQty ?? item.stockQty;
       const priceVal = edit.price ?? item.price;
       const dirty = edit.stockQty !== undefined || edit.price !== undefined;
+      // Phase 3: spool-level fields only exist for filament rows -- read-only
+      // here, written only by logging a print job (see renderPrintJobs()).
+      const spoolCell = item.kind === 'filament'
+        ? `${escapeHtml(item.remainingG != null ? item.remainingG.toFixed(0) : '—')}g / ${escapeHtml(item.percentLeft != null ? Math.round(item.percentLeft * 100) : '—')}%`
+        : '—';
       return `
         <tr data-id="${escapeAttr(item.id)}" class="${dirty ? 'row-dirty' : ''}">
           <td><code>${escapeHtml(item.sku || '—')}</code></td>
@@ -1799,6 +2359,7 @@ async function renderStock() {
           <td>${escapeHtml(item.category)}</td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="stockQty" value="${escapeAttr(String(stockVal))}" style="width:5rem" /></td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></td>
+          <td class="muted" style="font-size:0.85rem">${spoolCell}</td>
           <td class="muted" data-status style="font-size:0.8rem">${dirty ? 'Edited' : ''}</td>
         </tr>`;
     })
@@ -1814,8 +2375,8 @@ async function renderStock() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No inventory items</div></td></tr>'}</tbody>
+        <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th>Remaining (filament)</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No inventory items</div></td></tr>'}</tbody>
       </table>
     </div>`;
 

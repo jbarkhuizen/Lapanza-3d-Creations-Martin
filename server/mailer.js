@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { getSettings } from './settings.js';
 
 const FROM_ADDRESS = process.env.GMAIL_USER || 'lapanzaoline@gmail.com';
 
@@ -22,21 +23,24 @@ function formatRand(value) {
   return `R${Number(value || 0).toFixed(0)}`;
 }
 
-// TODO: placeholder banking details -- real account info was not provided
-// for this build. Replace before any Manual EFT order actually goes out,
-// or customers will be told to pay into a fake account.
-const BANKING_DETAILS = `Bank: [REPLACE ME]
-Account name: Lapanza 3D Creative Lab
-Account number: [REPLACE ME]
-Branch code: [REPLACE ME]
+// Phase 3: real account details, pulled from Settings (bankName etc in
+// settings-defaults.js) rather than hardcoded, so they can be changed from
+// the admin Settings view without a code deploy.
+function bankingDetails() {
+  const s = getSettings();
+  return `Bank: ${s.bankName}
+Account name: ${s.bankAccountName}
+Account number: ${s.bankAccountNumber}
+Branch code: ${s.bankBranchCode}
 Reference: use your order number above`;
+}
 
 function buildOrderEmailBody(order) {
   const lines = order.items
     .map((i) => `  ${i.quantity} x ${i.productName} — ${formatRand(i.price)} each = ${formatRand(i.price * i.quantity)}`)
     .join('\n');
   const paymentLabels = {
-    manual_eft: `Manual EFT\n\n${BANKING_DETAILS}\n`,
+    manual_eft: `Manual EFT\n\n${bankingDetails()}\n`,
     cash_on_collection: 'Cash on Collection — pay when you collect your order in store.',
     payfast_card: 'Payfast (Card)',
     payfast_eft: 'Payfast (Instant EFT)',
