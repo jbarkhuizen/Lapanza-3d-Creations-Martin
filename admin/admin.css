@@ -63,6 +63,21 @@ a { color: var(--brand); }
 .muted { color: var(--muted); }
 .hint { font-size: 0.82rem; color: var(--muted); }
 .error { color: var(--danger); font-size: 0.9rem; }
+.error-text { color: var(--danger); font-size: 0.8rem; }
+tr.row-dirty { background: color-mix(in srgb, var(--brand) 6%, transparent); }
+.btn-expand {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--muted);
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.btn-expand:hover { color: var(--brand); }
+tr.nested-row td { padding: 0 0 0.75rem 2.25rem; border-bottom: none; }
+table.nested-orders { width: 100%; background: var(--bg-soft); border-radius: 8px; }
+table.nested-orders th, table.nested-orders td { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
 code {
   background: var(--bg-soft);
   padding: 0.1rem 0.35rem;

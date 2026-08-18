@@ -62,6 +62,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
           // Falls back to weight when unset, same as filament colours --
           // drives shipping-bracket matching, weight is just the spec.
           shippingWeight: item.shippingWeight != null && item.shippingWeight !== '' ? Number(item.shippingWeight) : Number(item.weight) || 0,
+          stockQty: Number(item.stockQty) || 0,
           available: item.available !== false,
         })),
       };

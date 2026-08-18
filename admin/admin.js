@@ -81,6 +81,8 @@ function setRoute(route, { id } = {}) {
   show($('#view-order-detail'), route === 'order-detail');
   show($('#view-clients'), route === 'clients');
   show($('#view-shipping'), route === 'shipping');
+  show($('#view-stock'), route === 'stock');
+  show($('#view-resources'), route === 'resources');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -91,6 +93,8 @@ function setRoute(route, { id } = {}) {
     'order-detail': ['Sales', 'Order detail'],
     clients: ['Sales', 'Clients'],
     shipping: ['Sales', 'Shipping options'],
+    stock: ['Inventory', 'Stock management'],
+    resources: ['Content', '3D Resources'],
     settings: ['Configuration', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
@@ -305,6 +309,12 @@ function bindChrome() {
       } else if (btn.dataset.route === 'shipping') {
         setRoute('shipping');
         await renderShipping();
+      } else if (btn.dataset.route === 'stock') {
+        setRoute('stock');
+        await renderStock();
+      } else if (btn.dataset.route === 'resources') {
+        setRoute('resources');
+        await renderResources();
       }
     });
   });
@@ -709,7 +719,8 @@ function renderCategorySections(p) {
               <label class="field"><span>Weight (g)</span><input data-item="weight" type="number" min="0" step="1" value="${item.weight ?? 0}" /></label>
               <label class="field"><span>Shipping weight (g)</span><input data-item="shippingWeight" type="number" min="0" step="1" value="${item.shippingWeight ?? item.weight ?? 0}" /></label>
             </div>
-            <div class="grid-2">
+            <div class="grid-3">
+              <label class="field"><span>Stock quantity</span><input data-item="stockQty" type="number" min="0" step="1" value="${item.stockQty ?? 0}" /></label>
               <label class="field"><span>Image URL</span><input data-item="imageUrl" value="${escapeAttr(item.imageUrl || '')}" /></label>
               <label class="field checkbox" style="margin-top:1.5rem">
                 <input data-item="available" type="checkbox" ${item.available !== false ? 'checked' : ''} />
@@ -793,6 +804,7 @@ function bindEditorEvents() {
       imageUrl: '',
       weight: 0,
       shippingWeight: 0,
+      stockQty: 0,
       available: true,
       sortOrder: p.items.length,
     });
@@ -1025,6 +1037,7 @@ function syncNestedFromDom() {
     imageUrl: $('[data-item="imageUrl"]', row)?.value || '',
     weight: Number($('[data-item="weight"]', row)?.value) || 0,
     shippingWeight: Number($('[data-item="shippingWeight"]', row)?.value) || 0,
+    stockQty: Math.max(0, Number($('[data-item="stockQty"]', row)?.value) || 0),
     available: $('[data-item="available"]', row)?.checked !== false,
     sortOrder: i,
   }));
@@ -1434,22 +1447,63 @@ function blankClient() {
   };
 }
 
+const ORDER_STATUS_BADGE_CLASS = {
+  paid: 'published',
+  completed: 'published',
+  cancelled: 'draft',
+};
+
+function ordersNestedRowHtml(clientId, colspan) {
+  const orders = state.clientOrders[clientId];
+  if (!orders) {
+    return `<tr class="nested-row" data-nested-for="${escapeAttr(clientId)}"><td colspan="${colspan}">Loading orders…</td></tr>`;
+  }
+  if (!orders.length) {
+    return `<tr class="nested-row" data-nested-for="${escapeAttr(clientId)}"><td colspan="${colspan}"><span class="muted">No orders yet</span></td></tr>`;
+  }
+  const orderRows = orders
+    .map((o) => {
+      const badgeClass = ORDER_STATUS_BADGE_CLASS[o.status] || '';
+      return `<tr>
+        <td><code>${escapeHtml(o.id.slice(0, 8))}</code></td>
+        <td>${escapeHtml(formatDate(o.created_at))}</td>
+        <td><span class="badge ${badgeClass}">${escapeHtml(o.status)}</span></td>
+        <td>R${escapeHtml(String(o.total))}</td>
+      </tr>`;
+    })
+    .join('');
+  return `
+    <tr class="nested-row" data-nested-for="${escapeAttr(clientId)}">
+      <td colspan="${colspan}">
+        <table class="catalog nested-orders">
+          <thead><tr><th>Order</th><th>Date</th><th>Status</th><th>Total</th></tr></thead>
+          <tbody>${orderRows}</tbody>
+        </table>
+      </td>
+    </tr>`;
+}
+
 async function renderClients() {
   state.clientQ = state.clientQ || '';
   state.editingClient = state.editingClient || null;
+  state.expandedClients = state.expandedClients || new Set();
+  state.clientOrders = state.clientOrders || {};
   const { clients } = await api(`/api/clients?${new URLSearchParams({ q: state.clientQ })}`);
 
   const rows = clients
-    .map(
-      (c) => `
+    .map((c) => {
+      const expanded = state.expandedClients.has(c.id);
+      const row = `
         <tr data-id="${escapeAttr(c.id)}">
+          <td><button class="btn-expand" data-action="toggle-orders" type="button" aria-expanded="${expanded}" aria-label="Toggle orders">${expanded ? '▾' : '▸'}</button></td>
           <td><code>${escapeHtml(c.clientCode)}</code></td>
           <td>${escapeHtml(c.name || '—')}</td>
           <td>${escapeHtml(c.email)}</td>
           <td>${escapeHtml(c.phone || '—')}</td>
           <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
-        </tr>`,
-    )
+        </tr>`;
+      return expanded ? row + ordersNestedRowHtml(c.id, 6) : row;
+    })
     .join('');
 
   const form = state.editingClient;
@@ -1488,8 +1542,8 @@ async function renderClients() {
       </div>` : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Code</th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No clients yet</div></td></tr>'}</tbody>
+        <thead><tr><th></th><th>Code</th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No clients yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -1503,6 +1557,24 @@ async function renderClients() {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { client } = await api(`/api/clients/${tr.dataset.id}`);
       state.editingClient = client;
+      await renderClients();
+    });
+    tr.querySelector('[data-action="toggle-orders"]').addEventListener('click', async () => {
+      const id = tr.dataset.id;
+      if (state.expandedClients.has(id)) {
+        state.expandedClients.delete(id);
+        await renderClients();
+        return;
+      }
+      state.expandedClients.add(id);
+      if (!state.clientOrders[id]) {
+        // Render immediately with a "Loading…" nested row, then fetch and
+        // re-render once orders arrive, rather than blocking the toggle on
+        // the network round-trip.
+        await renderClients();
+        const { orders } = await api(`/api/clients/${id}`);
+        state.clientOrders[id] = orders;
+      }
       await renderClients();
     });
   });
@@ -1633,6 +1705,241 @@ async function renderShipping() {
       }
     });
   }
+}
+
+// ---- Stock management (unified bulk-edit grid) ----
+
+async function renderStock() {
+  state.stockQ = state.stockQ || '';
+  state.stockEdits = state.stockEdits || {}; // id -> { stockQty?, price? }
+  const { items } = await api('/api/inventory');
+  state.stockItems = items;
+
+  const needle = state.stockQ.trim().toLowerCase();
+  const filtered = needle
+    ? items.filter((i) => [i.sku, i.name, i.category].filter(Boolean).some((v) => v.toLowerCase().includes(needle)))
+    : items;
+
+  const rows = filtered
+    .map((item) => {
+      const edit = state.stockEdits[item.id] || {};
+      const stockVal = edit.stockQty ?? item.stockQty;
+      const priceVal = edit.price ?? item.price;
+      const dirty = edit.stockQty !== undefined || edit.price !== undefined;
+      return `
+        <tr data-id="${escapeAttr(item.id)}" class="${dirty ? 'row-dirty' : ''}">
+          <td><code>${escapeHtml(item.sku || '—')}</code></td>
+          <td>${escapeHtml(item.name)}</td>
+          <td>${escapeHtml(item.category)}</td>
+          <td><input type="number" min="0" step="1" class="stock-input" data-field="stockQty" value="${escapeAttr(String(stockVal))}" style="width:5rem" /></td>
+          <td><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></td>
+          <td class="muted" data-status style="font-size:0.8rem">${dirty ? 'Edited' : ''}</td>
+        </tr>`;
+    })
+    .join('');
+
+  const dirtyCount = Object.keys(state.stockEdits).length;
+
+  $('#view-stock').innerHTML = `
+    <div class="toolbar">
+      <input id="stock-q" type="search" placeholder="Search SKU, name, category…" value="${escapeAttr(state.stockQ)}" />
+      <span class="muted">${escapeHtml(String(filtered.length))} items</span>
+      <button class="btn btn-primary" id="save-stock" type="button" ${dirtyCount ? '' : 'disabled'}>Save Changes${dirtyCount ? ` (${escapeHtml(String(dirtyCount))})` : ''}</button>
+    </div>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No inventory items</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#stock-q').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    state.stockQ = $('#stock-q').value.trim();
+    await renderStock();
+  });
+
+  $$('#view-stock .stock-input').forEach((input) => {
+    input.addEventListener('input', () => {
+      const tr = input.closest('tr');
+      const id = tr.dataset.id;
+      const field = input.dataset.field;
+      const num = Number(input.value);
+      const statusEl = tr.querySelector('[data-status]');
+      if (input.value === '' || Number.isNaN(num) || num < 0) {
+        statusEl.textContent = 'Invalid — must be 0 or more';
+        statusEl.className = 'error-text';
+        $('#save-stock').disabled = true;
+        return;
+      }
+      state.stockEdits[id] = state.stockEdits[id] || {};
+      state.stockEdits[id][field] = num;
+      tr.classList.add('row-dirty');
+      statusEl.textContent = 'Edited';
+      statusEl.className = 'muted';
+      statusEl.style.fontSize = '0.8rem';
+      const saveBtn = $('#save-stock');
+      saveBtn.disabled = false;
+      saveBtn.textContent = `Save Changes (${Object.keys(state.stockEdits).length})`;
+    });
+  });
+
+  $('#save-stock').addEventListener('click', async () => {
+    const ids = Object.keys(state.stockEdits);
+    if (!ids.length) return;
+    const updates = ids.map((id) => {
+      const item = state.stockItems.find((i) => i.id === id);
+      return { kind: item.kind, id: item.id, parentId: item.parentId, ...state.stockEdits[id] };
+    });
+    const saveBtn = $('#save-stock');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving…';
+    try {
+      const { results } = await api('/api/inventory', { method: 'PUT', body: JSON.stringify({ updates }) });
+      const failed = results.filter((r) => !r.ok);
+      toast(failed.length ? `${failed.length} item(s) failed to save` : 'Stock updated');
+      for (const r of results) {
+        if (r.ok) delete state.stockEdits[r.id];
+      }
+      await renderStock();
+    } catch (ex) {
+      toast(ex.message);
+      saveBtn.disabled = false;
+    }
+  });
+}
+
+// ---- 3D Resources ----
+
+function blankResource() {
+  return { id: null, title: '', description: '', printSettings: '', filamentType: '', dimensions: '', active: true, imagePath: null, filePath: null };
+}
+
+async function renderResources() {
+  state.editingResource = state.editingResource || null;
+  const { resources } = await api('/api/resources');
+
+  const rows = resources
+    .map(
+      (r) => `
+        <tr data-id="${escapeAttr(r.id)}">
+          <td>${escapeHtml(r.title)}</td>
+          <td>${escapeHtml(r.filamentType || '—')}</td>
+          <td>${escapeHtml(r.dimensions || '—')}</td>
+          <td>${r.active ? '<span class="badge published">active</span>' : '<span class="badge draft">hidden</span>'}</td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  const form = state.editingResource;
+  $('#view-resources').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-resource" type="button">+ Resource</button>
+      <span class="muted">${escapeHtml(String(resources.length))} resources</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:700px">
+        <div class="section-head"><h3>${form.id ? 'Edit resource' : 'New resource'}</h3></div>
+        <label class="field"><span>Title</span><input id="rf-title" value="${escapeAttr(form.title)}" /></label>
+        <label class="field"><span>Description</span><textarea id="rf-description">${escapeHtml(form.description || '')}</textarea></label>
+        <div class="grid-3">
+          <label class="field"><span>Print settings</span><input id="rf-print-settings" value="${escapeAttr(form.printSettings || '')}" placeholder="0.2mm layer, 20% infill" /></label>
+          <label class="field"><span>Filament type</span><input id="rf-filament-type" value="${escapeAttr(form.filamentType || '')}" placeholder="PLA" /></label>
+          <label class="field"><span>Dimensions</span><input id="rf-dimensions" value="${escapeAttr(form.dimensions || '')}" placeholder="120 x 80 x 40mm" /></label>
+        </div>
+        <label class="field checkbox"><input id="rf-active" type="checkbox" ${form.active ? 'checked' : ''} /><span>Visible in public gallery</span></label>
+        ${form.id ? `
+          <div class="grid-2">
+            <label class="field">
+              <span>Cover image ${form.imagePath ? '(replace)' : ''}</span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" id="rf-image-upload" />
+              ${form.imagePath ? `<img src="${escapeAttr(form.imagePath)}" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:4px;margin-top:0.5rem" />` : ''}
+            </label>
+            <label class="field">
+              <span>Downloadable file ${form.filePath ? '(replace)' : ''}</span>
+              <input type="file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" id="rf-file-upload" />
+              ${form.filePath ? `<p class="muted" style="font-size:0.8rem;margin-top:0.5rem">Current: ${escapeHtml(form.filePath.split('/').pop())}</p>` : ''}
+            </label>
+          </div>` : '<p class="muted" style="font-size:0.85rem">Save the resource first to enable image/file upload.</p>'}
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-resource" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-resource" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Title</th><th>Filament</th><th>Dimensions</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No resources yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#new-resource').addEventListener('click', async () => { state.editingResource = blankResource(); await renderResources(); });
+  $$('#view-resources tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const { resource } = await api(`/api/resources/${tr.dataset.id}`);
+      state.editingResource = resource;
+      await renderResources();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this resource?')) return;
+      try {
+        await api(`/api/resources/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Deleted');
+        await renderResources();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (!form) return;
+
+  $('#cancel-resource').addEventListener('click', async () => { state.editingResource = null; await renderResources(); });
+  $('#save-resource').addEventListener('click', async () => {
+    const payload = {
+      title: $('#rf-title').value,
+      description: $('#rf-description').value,
+      printSettings: $('#rf-print-settings').value,
+      filamentType: $('#rf-filament-type').value,
+      dimensions: $('#rf-dimensions').value,
+      active: $('#rf-active').checked,
+    };
+    try {
+      if (form.id) await api(`/api/resources/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      else await api('/api/resources', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Resource saved');
+      state.editingResource = null;
+      await renderResources();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  async function uploadResourceAsset(inputId, field, endpoint) {
+    const input = $(`#${inputId}`);
+    input?.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append(field, file);
+      try {
+        const res = await fetch(`/api/resources/${form.id}/${endpoint}`, { method: 'POST', credentials: 'include', body: formData });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        state.editingResource = data.resource;
+        toast('Uploaded');
+        await renderResources();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
+  await uploadResourceAsset('rf-image-upload', 'image', 'image');
+  await uploadResourceAsset('rf-file-upload', 'file', 'file');
 }
 
 function slugify(value) {

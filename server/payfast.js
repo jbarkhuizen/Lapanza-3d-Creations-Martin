@@ -81,7 +81,16 @@ function buildSignature(orderedPairs, passphrase) {
 // straight to that method on their hosted page instead of showing the
 // full method picker (which would also show options like Zapper that are
 // explicitly out of scope for this build).
-export function buildPayfastRedirect({ order, siteUrl, paymentMethod }) {
+// siteUrl and apiUrl are deliberately separate: siteUrl is where the
+// customer's browser gets sent back to (the static site -- checkout.html/
+// checkout-complete.html), apiUrl is where Payfast's server-to-server ITN
+// webhook must reach (this backend). They're the same host today, but once
+// the static site and this backend live on different domains (the static
+// site has no way to proxy /api/payfast/itn through to wherever this
+// backend actually runs), building notify_url from siteUrl would silently
+// break payment confirmation entirely -- Payfast would be POSTing to a URL
+// with no backend behind it.
+export function buildPayfastRedirect({ order, siteUrl, apiUrl, paymentMethod }) {
   const config = getConfig();
   const urls = PAYFAST_URLS[config.mode];
   const pfMethod = paymentMethod === 'payfast_eft' ? 'eft' : 'cc';
@@ -92,7 +101,7 @@ export function buildPayfastRedirect({ order, siteUrl, paymentMethod }) {
     ['merchant_key', config.merchantKey],
     ['return_url', `${siteUrl}/checkout-complete.html?order=${order.id}`],
     ['cancel_url', `${siteUrl}/checkout.html?cancelled=${order.id}`],
-    ['notify_url', `${siteUrl}/api/payfast/itn`],
+    ['notify_url', `${apiUrl}/api/payfast/itn`],
     ['name_first', order.client?.firstName || order.client?.name || 'Customer'],
     ['name_last', order.client?.lastName || ''],
     ['email_address', order.client?.email || ''],

@@ -19,6 +19,7 @@ test('ensureSchema creates every expected table', () => {
     'order_items',
     'orders',
     'payment_transactions',
+    'resources',
     'settings',
     'shipping_options',
   ]);

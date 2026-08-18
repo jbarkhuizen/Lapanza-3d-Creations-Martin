@@ -3,6 +3,7 @@ import { getDb } from './db.js';
 import { findOrCreateClientForCheckout, getClient } from './clients.js';
 import { matchShippingForWeight, getShippingOption } from './shipping.js';
 import { readCategoryProducts } from './export.js';
+import { getProduct, upsertProduct } from './store.js';
 
 // 'cancelled' is reachable two ways: automatically (see cancelStalePendingOrders
 // below) and now also as an explicit admin action (updateOrderStatus) --
@@ -226,11 +227,77 @@ export function createOrder(
 
 // F.2: forward-only lifecycle, deliberately excludes 'cancelled' -- that
 // transition is automatic-only (see jobs.js), never admin-triggered.
+// #3: decrements stock for every line item when an order is confirmed paid.
+// Filament colours live in SQLite and are decremented inside the SAME
+// db.transaction() as the status flip -- genuinely atomic, matches this
+// project's better-sqlite3-is-synchronous-and-single-threaded concurrency
+// model (see db.js). Category items live in catalog.json, a flat file that
+// isn't part of the SQLite transaction -- that update happens immediately
+// after and is logged on failure, but doesn't roll back the payment
+// confirmation, since the payment is real regardless of whether the stock
+// file write succeeds. True cross-system atomicity isn't achievable with a
+// SQLite DB and a separate JSON file as two independent storage backends;
+// this mirrors the same split already accepted in resolveProductSnapshot.
+//
+// Returns the inventory rows now at <=1 stock, for the caller to alert on.
+function decrementStockForOrder(order, db) {
+  const lowStock = [];
+  const categoryUpdates = [];
+
+  for (const item of order.items) {
+    const productId = String(item.productId || '');
+    if (productId.startsWith('filament:')) {
+      const sku = productId.split(':').slice(2).join(':');
+      const row = db.prepare('SELECT id, sku, stock_qty FROM filament_colours WHERE sku = ?').get(sku);
+      if (!row) continue;
+      const newQty = Math.max(0, row.stock_qty - item.quantity);
+      db.prepare('UPDATE filament_colours SET stock_qty = ? WHERE id = ?').run(newQty, row.id);
+      if (newQty <= 1) lowStock.push({ id: row.id, name: item.productName, sku: row.sku, stockQty: newQty });
+    } else if (productId.startsWith('category:')) {
+      const rest = productId.split(':').slice(1);
+      categoryUpdates.push({ slug: rest[0], skuOrIndex: rest.slice(1).join(':'), quantity: item.quantity, productName: item.productName });
+    }
+  }
+
+  for (const update of categoryUpdates) {
+    try {
+      const category = readCategoryProducts().find((c) => c.slug === update.slug);
+      const product = category && getProduct(category.id);
+      if (!product) continue;
+      const items = product.items || [];
+      const item = update.skuOrIndex && items.some((i) => i.sku === update.skuOrIndex)
+        ? items.find((i) => i.sku === update.skuOrIndex)
+        : items[Number(update.skuOrIndex)];
+      if (!item) continue;
+      const newQty = Math.max(0, (Number(item.stockQty) || 0) - update.quantity);
+      item.stockQty = newQty;
+      upsertProduct(product);
+      if (newQty <= 1) lowStock.push({ id: item.id, name: update.productName, sku: item.sku, stockQty: newQty });
+    } catch (err) {
+      console.error(`Stock decrement failed for category item (order ${order.id}):`, err.message);
+    }
+  }
+
+  return lowStock;
+}
+
 export function updateOrderStatus(id, status, db = getDb()) {
   if (!ALLOWED_STATUSES.includes(status)) throw new Error('Invalid status');
-  const result = db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, new Date().toISOString(), id);
-  if (result.changes === 0) return null;
-  return getOrder(id, db);
+  let lowStock = [];
+  const order = db.transaction(() => {
+    const existing = db.prepare('SELECT status FROM orders WHERE id = ?').get(id);
+    if (!existing) return null;
+    db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, new Date().toISOString(), id);
+    // Only decrement on the transition INTO paid, not every time an already-
+    // paid order is re-saved as paid -- otherwise toggling the admin status
+    // dropdown could decrement stock repeatedly for the same order.
+    if (status === 'paid' && existing.status === 'pending_payment') {
+      lowStock = decrementStockForOrder(getOrder(id, db), db);
+    }
+    return getOrder(id, db);
+  })();
+  if (order) order._lowStock = lowStock;
+  return order;
 }
 
 export function updateOrderTracking(id, trackingNumber, db = getDb()) {
@@ -242,10 +309,14 @@ export function updateOrderTracking(id, trackingNumber, db = getDb()) {
 }
 
 export function markOrderPaid(id, db = getDb()) {
-  const result = db
-    .prepare("UPDATE orders SET status = 'paid', payment_status = 'paid', updated_at = ? WHERE id = ? AND status = 'pending_payment'")
-    .run(new Date().toISOString(), id);
-  return result.changes > 0;
+  return db.transaction(() => {
+    const result = db
+      .prepare("UPDATE orders SET status = 'paid', payment_status = 'paid', updated_at = ? WHERE id = ? AND status = 'pending_payment'")
+      .run(new Date().toISOString(), id);
+    if (result.changes === 0) return { changed: false, lowStock: [] };
+    const lowStock = decrementStockForOrder(getOrder(id, db), db);
+    return { changed: true, lowStock };
+  })();
 }
 
 export function markConfirmationEmailSent(id, db = getDb()) {

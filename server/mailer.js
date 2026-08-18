@@ -78,4 +78,22 @@ export async function sendOrderConfirmationEmail(order) {
   });
 }
 
+// Low-stock alerts go to the shop owner, not a customer -- separate,
+// overridable via env in case that address ever changes.
+const LOW_STOCK_ALERT_TO = process.env.LOW_STOCK_ALERT_EMAIL || 'jbarkhuizen@gmail.com';
+
+export async function sendLowStockAlert(item, replenishUrl) {
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: LOW_STOCK_ALERT_TO,
+    subject: `Low stock: ${item.name} (${item.stockQty} left)`,
+    text: `${item.name} is running low.
+
+SKU: ${item.sku || '(none)'}
+Remaining stock: ${item.stockQty}
+
+Replenish: ${replenishUrl}`,
+  });
+}
+
 export { FROM_ADDRESS };

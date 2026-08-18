@@ -59,3 +59,62 @@ export const uploadFilamentImage = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),
 });
+
+// ---- 3D Resources uploads ----
+
+export const RESOURCE_UPLOAD_DIR = path.join(root, 'public', 'uploads', 'resources');
+
+function ensureResourceUploadDir() {
+  if (!fs.existsSync(RESOURCE_UPLOAD_DIR)) fs.mkdirSync(RESOURCE_UPLOAD_DIR, { recursive: true });
+}
+
+function randomResourceFilename(ext) {
+  return `${crypto.randomBytes(8).toString('hex')}${ext}`;
+}
+
+export const uploadResourceImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureResourceUploadDir();
+      cb(null, RESOURCE_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => cb(null, randomResourceFilename(MIME_EXTENSIONS[file.mimetype] || '.jpg')),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),
+});
+
+// Downloadable model/print files (STL, 3MF, gcode, zip, PDF). Browsers report
+// wildly inconsistent (or no) mimetype for these formats, unlike the
+// standard image types above, so this validates by extension instead --
+// safe here specifically because these files are always served for
+// *download* (Content-Disposition: attachment, generic Content-Type; see
+// the /api/resources/:id/download route), never rendered inline in a
+// browser tab, so a mismatched extension can't be used to get script
+// content interpreted as HTML/SVG the way it could for an inline <img>.
+const RESOURCE_FILE_EXTENSIONS = new Set(['.stl', '.3mf', '.obj', '.gcode', '.zip', '.pdf']);
+
+export const uploadResourceFile = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureResourceUploadDir();
+      cb(null, RESOURCE_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      cb(null, randomResourceFilename(RESOURCE_FILE_EXTENSIONS.has(ext) ? ext : '.bin'));
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    cb(null, RESOURCE_FILE_EXTENSIONS.has(ext));
+  },
+});
+
+export function deleteResourceFile(filePath) {
+  if (!filePath) return;
+  const filename = path.basename(filePath);
+  const abs = path.join(RESOURCE_UPLOAD_DIR, filename);
+  if (fs.existsSync(abs)) fs.unlinkSync(abs);
+}

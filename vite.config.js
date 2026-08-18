@@ -15,6 +15,7 @@ function htmlEntries() {
     phones: resolve(__dirname, 'phones.html'),
     checkout: resolve(__dirname, 'checkout.html'),
     checkoutComplete: resolve(__dirname, 'checkout-complete.html'),
+    resources: resolve(__dirname, 'resources.html'),
   };
 
   for (const dir of ['filament', 'car-parts']) {

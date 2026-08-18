@@ -16,6 +16,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -29,6 +30,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -42,6 +44,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       }
     ]
@@ -63,6 +66,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -76,6 +80,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -89,6 +94,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       }
     ]
@@ -110,6 +116,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -123,6 +130,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -136,6 +144,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       }
     ]
@@ -158,6 +167,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -171,6 +181,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -184,6 +195,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       }
     ]
@@ -206,6 +218,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -219,6 +232,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       },
       {
@@ -232,6 +246,7 @@
         "imageUrl": "",
         "weight": 0,
         "shippingWeight": 0,
+        "stockQty": 0,
         "available": true
       }
     ]

@@ -22,7 +22,7 @@ import {
   setColourImage,
 } from './filaments.js';
 import multer from 'multer';
-import { uploadFilamentImage } from './uploads.js';
+import { uploadFilamentImage, uploadResourceImage, uploadResourceFile, deleteResourceFile } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
 import { listClients, getClient, createClient, updateClient, listOrdersForClient } from './clients.js';
@@ -45,8 +45,10 @@ import {
   recordPaymentTransaction,
 } from './orders.js';
 import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
-import { sendOrderConfirmationEmail } from './mailer.js';
+import { sendOrderConfirmationEmail, sendLowStockAlert } from './mailer.js';
 import { startAutoCancelJob } from './jobs.js';
+import { listInventory, bulkUpdateInventory } from './inventory.js';
+import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -488,6 +490,126 @@ app.get('/api/shipping-match', (req, res) => {
   res.json({ shippingOption: { id: match.id, name: match.name, price: match.price } });
 });
 
+// ---- Inventory / Stock Management ----
+
+app.get('/api/inventory', requireAuth, (_req, res) => {
+  res.json({ items: listInventory() });
+});
+
+app.put('/api/inventory', requireAuth, async (req, res) => {
+  const updates = Array.isArray(req.body?.updates) ? req.body.updates : [];
+  const results = bulkUpdateInventory(updates);
+  await alertOnLowStock(updates.filter((u, i) => results[i]?.ok && u.stockQty !== undefined).map((u) => u.id));
+  res.json({ results });
+});
+
+// #3: fires whenever ANY of these ids' stock is now <=1, regardless of why
+// (manual bulk edit here, or an order-driven decrement elsewhere) -- one
+// shared check so the alert can't be triggered by one path and missed by
+// the other. Re-reads fresh from listInventory() rather than trusting the
+// caller's own numbers, since a bulk request only carries {id, stockQty},
+// not the name/sku the email needs.
+async function alertOnLowStock(changedIds) {
+  if (!changedIds.length) return;
+  const current = listInventory();
+  const rows = changedIds.map((id) => current.find((i) => i.id === id)).filter((item) => item && item.stockQty <= 1);
+  await sendLowStockAlerts(rows);
+}
+
+// Order-driven decrements (decrementStockForOrder in orders.js) already
+// know the name/sku/resulting quantity, so this skips the listInventory()
+// re-fetch alertOnLowStock needs when it's only handed bare ids.
+async function sendLowStockAlerts(rows) {
+  for (const item of rows) {
+    try {
+      await sendLowStockAlert(item, '/admin/');
+    } catch (err) {
+      console.error(`Low-stock alert failed for ${item.name}:`, err.message);
+    }
+  }
+}
+
+// ---- 3D Resources ----
+
+app.get('/api/resources', requireAuth, (_req, res) => {
+  res.json({ resources: listResources() });
+});
+
+app.get('/api/resources/:id', requireAuth, (req, res) => {
+  const resource = getResource(req.params.id);
+  if (!resource) return res.status(404).json({ error: 'Resource not found' });
+  res.json({ resource });
+});
+
+app.post('/api/resources', requireAuth, (req, res) => {
+  res.status(201).json({ resource: createResource(req.body || {}) });
+});
+
+app.put('/api/resources/:id', requireAuth, (req, res) => {
+  const resource = updateResource(req.params.id, req.body || {});
+  if (!resource) return res.status(404).json({ error: 'Resource not found' });
+  res.json({ resource });
+});
+
+app.delete('/api/resources/:id', requireAuth, (req, res) => {
+  const existing = getResource(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Resource not found' });
+  deleteResourceFile(existing.imagePath);
+  deleteResourceFile(existing.filePath);
+  deleteResource(req.params.id);
+  res.json({ ok: true });
+});
+
+app.post(
+  '/api/resources/:id/image',
+  requireAuth,
+  uploadResourceImage.single('image'),
+  (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const resource = updateResource(req.params.id, { imagePath: `/uploads/resources/${req.file.filename}` });
+    if (!resource) return res.status(404).json({ error: 'Resource not found' });
+    res.json({ resource });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
+    next(err);
+  },
+);
+
+app.post(
+  '/api/resources/:id/file',
+  requireAuth,
+  uploadResourceFile.single('file'),
+  (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded, or file type not allowed (stl/3mf/obj/gcode/zip/pdf only)' });
+    const resource = updateResource(req.params.id, { filePath: `/uploads/resources/${req.file.filename}` });
+    if (!resource) return res.status(404).json({ error: 'Resource not found' });
+    res.json({ resource });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'File must be under 50MB' });
+    next(err);
+  },
+);
+
+// Public (no auth) -- the gallery customers browse.
+app.get('/api/resources/public/list', (_req, res) => {
+  res.json({ resources: listResources({ activeOnly: true }) });
+});
+
+// Forces a real download (Content-Disposition: attachment + a generic
+// Content-Type) regardless of the file's extension -- see uploads.js's
+// RESOURCE_FILE_EXTENSIONS comment for why that matters: express.static
+// would otherwise serve these inline based on extension/mimetype guessing.
+app.get('/api/resources/:id/download', (req, res) => {
+  const resource = getResource(req.params.id);
+  if (!resource?.filePath) return res.status(404).send('File not found');
+  const abs = path.join(root, 'public', resource.filePath.replace(/^\//, ''));
+  if (!fs.existsSync(abs)) return res.status(404).send('File not found');
+  const downloadName = `${slugify(resource.title)}${path.extname(abs)}`;
+  res.download(abs, downloadName);
+});
+
 // ---- Orders (D/E/F) ----
 
 app.get('/api/orders', requireAuth, (req, res) => {
@@ -500,11 +622,14 @@ app.get('/api/orders/:id', requireAuth, (req, res) => {
   res.json({ order });
 });
 
-app.put('/api/orders/:id/status', requireAuth, (req, res) => {
+app.put('/api/orders/:id/status', requireAuth, async (req, res) => {
   try {
     const order = updateOrderStatus(req.params.id, (req.body || {}).status);
     if (!order) return res.status(404).json({ error: 'Order not found' });
+    const lowStock = order._lowStock;
+    delete order._lowStock;
     res.json({ order });
+    if (lowStock?.length) await sendLowStockAlerts(lowStock);
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -571,8 +696,15 @@ app.post('/api/checkout', async (req, res) => {
       return res.status(201).json({ order, emailSent, redirect: null });
     }
 
-    const siteUrl = process.env.SITE_URL || `${req.protocol}://${req.get('host')}`;
-    const payfast = buildPayfastRedirect({ order, siteUrl, paymentMethod: body.paymentMethod });
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+    const siteUrl = process.env.SITE_URL || requestOrigin;
+    // apiUrl defaults to this request's own origin (correct for local dev,
+    // and for any single-host deploy) -- API_URL only needs to be set if
+    // this backend sits behind another proxy hop that also mangles
+    // req.get('host'), the same class of problem SITE_URL solves for the
+    // static site.
+    const apiUrl = process.env.API_URL || requestOrigin;
+    const payfast = buildPayfastRedirect({ order, siteUrl, apiUrl, paymentMethod: body.paymentMethod });
     res.status(201).json({ order, emailSent, redirect: payfast });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -618,7 +750,8 @@ app.post(
     });
 
     if (result.paymentStatus === 'COMPLETE') {
-      markOrderPaid(order.id);
+      const { lowStock } = markOrderPaid(order.id);
+      if (lowStock.length) await sendLowStockAlerts(lowStock);
     }
   },
 );
@@ -776,6 +909,10 @@ function normalizeItems(list) {
     // Separate from weight -- what actually drives shipping-bracket
     // matching, so packaging etc can differ from the item's own weight.
     shippingWeight: item.shippingWeight != null && item.shippingWeight !== '' ? Number(item.shippingWeight) : undefined,
+    // Unified with filament_colours.stock_qty for the Stock Management grid
+    // and inventory decrement -- category items had no numeric stock count
+    // before, only the `available` boolean.
+    stockQty: Math.max(0, Number(item.stockQty) || 0),
     available: item.available !== false,
     sortOrder: item.sortOrder ?? i,
   }));

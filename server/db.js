@@ -145,6 +145,21 @@ export function ensureSchema(db) {
     -- no-op instead of a second row.
     CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_transactions_idempotent
       ON payment_transactions (gateway, gateway_reference, status);
+
+    CREATE TABLE IF NOT EXISTS resources (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      image_path TEXT,
+      file_path TEXT,
+      print_settings TEXT NOT NULL DEFAULT '',
+      filament_type TEXT NOT NULL DEFAULT '',
+      dimensions TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
   ensureCheckoutColumns(db);
 }
