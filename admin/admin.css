@@ -171,16 +171,18 @@ code {
 }
 [data-theme="light"] .theme-toggle .moon { display: none; }
 [data-theme="dark"] .theme-toggle .sun { display: none; }
-.sidebar-nav { display: flex; flex-direction: column; gap: 0.35rem; flex: 1; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 0.1rem; flex: 1; overflow-y: auto; }
 .nav-btn {
   text-align: left;
   border: 0;
   background: transparent;
-  padding: 0.75rem 0.9rem;
-  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
   cursor: pointer;
   color: var(--muted);
   font-weight: 600;
+  font-size: 0.88rem;
+  line-height: 1.3;
 }
 .nav-btn:hover, .nav-btn.active {
   background: var(--brand-soft);

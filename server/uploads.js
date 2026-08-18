@@ -166,3 +166,56 @@ export function deleteDesignRequestFile(filePath) {
   const abs = path.join(DESIGN_REQUEST_UPLOAD_DIR, filename);
   if (fs.existsSync(abs)) fs.unlinkSync(abs);
 }
+
+// ---- Print Job Costing uploads ----
+// Same two allowlist strategies as resources/design-requests above, as two
+// separate single-file endpoints (mirrors resources.js's uploadResourceImage/
+// uploadResourceFile -- admin uploads happen after the job already exists,
+// unlike the public design-request form's combined single-POST).
+
+export const PRINT_JOB_UPLOAD_DIR = path.join(root, 'public', 'uploads', 'print-jobs');
+
+function ensurePrintJobUploadDir() {
+  if (!fs.existsSync(PRINT_JOB_UPLOAD_DIR)) fs.mkdirSync(PRINT_JOB_UPLOAD_DIR, { recursive: true });
+}
+
+function randomPrintJobFilename(ext) {
+  return `${crypto.randomBytes(8).toString('hex')}${ext}`;
+}
+
+export const uploadPrintJobImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensurePrintJobUploadDir();
+      cb(null, PRINT_JOB_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => cb(null, randomPrintJobFilename(MIME_EXTENSIONS[file.mimetype] || '.jpg')),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),
+});
+
+export const uploadPrintJobFile = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensurePrintJobUploadDir();
+      cb(null, PRINT_JOB_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      cb(null, randomPrintJobFilename(RESOURCE_FILE_EXTENSIONS.has(ext) ? ext : '.bin'));
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    cb(null, RESOURCE_FILE_EXTENSIONS.has(ext));
+  },
+});
+
+export function deletePrintJobFile(filePath) {
+  if (!filePath) return;
+  const filename = path.basename(filePath);
+  const abs = path.join(PRINT_JOB_UPLOAD_DIR, filename);
+  if (fs.existsSync(abs)) fs.unlinkSync(abs);
+}

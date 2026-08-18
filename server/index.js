@@ -30,6 +30,8 @@ import {
   deleteResourceFile,
   uploadDesignRequestAssets,
   deleteDesignRequestFile,
+  uploadPrintJobImage,
+  uploadPrintJobFile,
 } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
@@ -75,7 +77,14 @@ import { startAutoCancelJob } from './jobs.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
-import { listPrintJobs, getPrintJob, createPrintJob, updatePrintJob, deletePrintJob } from './print-jobs.js';
+import { listPrintJobs, getPrintJob, createPrintJob, updatePrintJob, deletePrintJob, previewPrintJobCost, setPrintJobImage, setPrintJobFile } from './print-jobs.js';
+import {
+  listInHouseFilament,
+  getInHouseFilament,
+  createInHouseFilament,
+  updateInHouseFilament,
+  deleteInHouseFilament,
+} from './in-house-filament.js';
 import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
@@ -865,6 +874,17 @@ app.get('/api/print-jobs/:id', requireAuth, (req, res) => {
   res.json({ printJob: job });
 });
 
+// Computes the cost breakdown without saving anything -- the admin form's
+// "Validate" button, so usage/costs can be checked before Log Job commits
+// (creates the row and decrements in-house filament stock).
+app.post('/api/print-jobs/validate', requireAuth, (req, res) => {
+  try {
+    res.json({ preview: previewPrintJobCost(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/print-jobs', requireAuth, (req, res) => {
   try {
     res.status(201).json({ printJob: createPrintJob(req.body || {}) });
@@ -883,6 +903,78 @@ app.delete('/api/print-jobs/:id', requireAuth, (req, res) => {
   const ok = deletePrintJob(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Print job not found' });
   res.json({ ok: true });
+});
+
+app.post(
+  '/api/print-jobs/:id/image',
+  requireAuth,
+  uploadPrintJobImage.single('image'),
+  (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const job = setPrintJobImage(req.params.id, `/uploads/print-jobs/${req.file.filename}`);
+    if (!job) return res.status(404).json({ error: 'Print job not found' });
+    res.json({ printJob: job });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
+    next(err);
+  },
+);
+
+app.post(
+  '/api/print-jobs/:id/file',
+  requireAuth,
+  uploadPrintJobFile.single('file'),
+  (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded, or file type not allowed (stl/3mf/obj/gcode/zip/pdf only)' });
+    const job = setPrintJobFile(req.params.id, `/uploads/print-jobs/${req.file.filename}`);
+    if (!job) return res.status(404).json({ error: 'Print job not found' });
+    res.json({ printJob: job });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'File must be under 50MB' });
+    next(err);
+  },
+);
+
+// ---- In-House Filament (Phase 3+, local-printing stock) ----
+
+app.get('/api/in-house-filament', requireAuth, (_req, res) => {
+  res.json({ filaments: listInHouseFilament() });
+});
+
+app.get('/api/in-house-filament/:id', requireAuth, (req, res) => {
+  const filament = getInHouseFilament(req.params.id);
+  if (!filament) return res.status(404).json({ error: 'Filament not found' });
+  res.json({ filament });
+});
+
+app.post('/api/in-house-filament', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ filament: createInHouseFilament(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/in-house-filament/:id', requireAuth, (req, res) => {
+  try {
+    const filament = updateInHouseFilament(req.params.id, req.body || {});
+    if (!filament) return res.status(404).json({ error: 'Filament not found' });
+    res.json({ filament });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/in-house-filament/:id', requireAuth, (req, res) => {
+  try {
+    const ok = deleteInHouseFilament(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Filament not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ---- Purchase History (Phase 3, supplier expenses) ----

@@ -89,6 +89,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-new-order'), route === 'new-order');
   show($('#view-purchases'), route === 'purchases');
   show($('#view-print-jobs'), route === 'print-jobs');
+  show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -107,6 +108,7 @@ function setRoute(route, { id } = {}) {
     'new-order': ['Management', 'New order'],
     purchases: ['Management', 'Purchase History'],
     'print-jobs': ['Management', 'Print Job Costing'],
+    'in-house-filament': ['Management', 'In-House Filament'],
     settings: ['Configuration', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
@@ -345,6 +347,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'print-jobs') {
         setRoute('print-jobs');
         await renderPrintJobs();
+      } else if (btn.dataset.route === 'in-house-filament') {
+        setRoute('in-house-filament');
+        await renderInHouseFilament();
       }
     });
   });
@@ -2015,28 +2020,75 @@ async function renderNewOrder() {
 // Never touches storefront pricing -- purely a production-cost log mirroring
 // the spreadsheet's Cost Calculator, computed server-side in print-jobs.js.
 
+const MAX_PRINT_JOB_FILAMENT_SLOTS = 4;
+
 function blankPrintJob() {
   return {
-    itemName: '', filamentColourId: '', modelG: 0, supportG: 0, purgeG: 0, towerG: 0,
+    itemName: '',
+    slots: Array.from({ length: MAX_PRINT_JOB_FILAMENT_SLOTS }, () => ({ inHouseFilamentId: '', grams: '', meters: '' })),
     printTimeMinutes: 0, designHours: 0, setupHours: 0, postProcessingHours: 0, markupPct: '',
+    modelFile: null, modelImage: null,
+    preview: null,
+  };
+}
+
+function printJobFilamentOptions(filaments, selectedId) {
+  return filaments
+    .map((f) => `<option value="${escapeAttr(f.id)}" ${selectedId === f.id ? 'selected' : ''}>${escapeHtml(f.filamentType)} — ${escapeHtml(f.colorName)} (${escapeHtml(f.remainingG.toFixed(0))}g left)</option>`)
+    .join('');
+}
+
+function readPrintJobPayload(draft) {
+  const filaments = draft.slots
+    .filter((s) => s.inHouseFilamentId)
+    .map((s) => ({ inHouseFilamentId: s.inHouseFilamentId, grams: Number(s.grams) || 0, meters: Number(s.meters) || 0 }));
+  return {
+    itemName: draft.itemName.trim(),
+    filaments,
+    printTimeMinutes: Number(draft.printTimeMinutes) || 0,
+    designHours: Number(draft.designHours) || 0,
+    setupHours: Number(draft.setupHours) || 0,
+    postProcessingHours: Number(draft.postProcessingHours) || 0,
+    markupPct: draft.markupPct === '' ? undefined : Number(draft.markupPct),
   };
 }
 
 async function renderPrintJobs() {
   state.newPrintJob = state.newPrintJob || blankPrintJob();
   const draft = state.newPrintJob;
-  const [{ printJobs }, { filaments }] = await Promise.all([api('/api/print-jobs'), api('/api/filaments')]);
+  const [{ printJobs }, { filaments }] = await Promise.all([api('/api/print-jobs'), api('/api/in-house-filament')]);
 
-  const colourOptions = filaments
-    .flatMap((f) => f.colours.map((c) => ({ id: c.id, label: `${f.name} — ${c.name} (${c.sku})` })))
-    .map((c) => `<option value="${escapeAttr(c.id)}" ${draft.filamentColourId === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`)
+  const slotRows = draft.slots
+    .map((slot, idx) => `
+        <div class="grid-4" data-slot-idx="${idx}" style="align-items:end">
+          <label class="field" style="grid-column:span 2"><span>Filament ${idx + 1}${idx === 0 ? '' : ' (optional)'}</span>
+            <select class="pjs-filament">
+              <option value="">${idx === 0 ? '— Choose —' : '— None —'}</option>
+              ${printJobFilamentOptions(filaments, slot.inHouseFilamentId)}
+            </select>
+          </label>
+          <label class="field"><span>Grams</span><input class="pjs-grams" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.grams))}" /></label>
+          <label class="field"><span>Meters</span><input class="pjs-meters" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.meters))}" /></label>
+        </div>`)
     .join('');
+
+  const totalGrams = draft.slots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0);
+  const totalMeters = draft.slots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0);
+
+  const preview = draft.preview;
+  const previewHtml = preview ? `
+      <div class="panel stack gap-2" style="background:var(--panel-2, transparent)">
+        <div class="section-head"><h3>Validation result</h3></div>
+        <p>Filament cost: R${escapeHtml(String(preview.filamentCost))} · Power: R${escapeHtml(String(preview.powerCost))} · Labour: R${escapeHtml(String(preview.labourCost))} · Running: R${escapeHtml(String(preview.runningCost))}</p>
+        <p><strong>Total cost: R${escapeHtml(String(preview.totalCost))} — Markup: R${escapeHtml(String(preview.markupAmount))} — Selling price: R${escapeHtml(String(preview.sellingPrice))}</strong></p>
+      </div>` : '';
 
   const rows = printJobs
     .map(
       (j) => `
         <tr>
-          <td>${escapeHtml(j.itemName)}</td>
+          <td>${j.referenceImagePath ? `<img src="${escapeAttr(j.referenceImagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:0.5rem" />` : ''}${escapeHtml(j.itemName)}</td>
+          <td>${escapeHtml(j.totalGrams.toFixed(1))}g / ${escapeHtml(j.totalMeters.toFixed(2))}m</td>
           <td>R${escapeHtml(String(j.totalCost))}</td>
           <td>R${escapeHtml(String(j.sellingPrice))}</td>
           <td>${escapeHtml(j.status)}</td>
@@ -2050,18 +2102,11 @@ async function renderPrintJobs() {
     <div class="stack gap-4" style="max-width:900px">
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Log a print job</h3></div>
-        <div class="grid-2">
-          <label class="field"><span>Item / file name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
-          <label class="field"><span>Filament (optional)</span>
-            <select id="pj-filament"><option value="">— None —</option>${colourOptions}</select>
-          </label>
-        </div>
-        <div class="grid-4">
-          <label class="field"><span>Model (g)</span><input id="pj-model-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.modelG))}" /></label>
-          <label class="field"><span>Support (g)</span><input id="pj-support-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.supportG))}" /></label>
-          <label class="field"><span>Purge (g)</span><input id="pj-purge-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.purgeG))}" /></label>
-          <label class="field"><span>Tower (g)</span><input id="pj-tower-g" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.towerG))}" /></label>
-        </div>
+        <label class="field"><span>Item / file name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
+
+        <div class="stack gap-2">${slotRows}</div>
+        <p class="muted" style="font-size:0.85rem">Totals: <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
+
         <div class="grid-4">
           <label class="field"><span>Print time (min)</span><input id="pj-time" type="number" min="0" step="1" value="${escapeAttr(String(draft.printTimeMinutes))}" /></label>
           <label class="field"><span>Design (hrs)</span><input id="pj-design-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.designHours))}" /></label>
@@ -2069,37 +2114,86 @@ async function renderPrintJobs() {
           <label class="field"><span>Post-processing (hrs)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
         </div>
         <label class="field" style="max-width:220px"><span>Markup override (fraction, blank = Settings default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
+
+        <div class="grid-2">
+          <label class="field"><span>Model file (optional) — STL/3MF/OBJ/gcode/zip/PDF</span><input type="file" id="pj-model-file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" /></label>
+          <label class="field"><span>Reference photo (optional)</span><input type="file" id="pj-model-image" accept="image/jpeg,image/png,image/webp" /></label>
+        </div>
+
+        ${previewHtml}
+
         <div class="row-card-actions">
+          <button class="btn" id="validate-job" type="button">Validate</button>
           <button class="btn btn-primary" id="log-job" type="button">Log job &amp; compute cost</button>
         </div>
       </div>
       <div class="panel table-wrap">
         <table class="catalog">
-          <thead><tr><th>Item</th><th>Cost</th><th>Selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="6"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
+          <thead><tr><th>Item</th><th>Filament used</th><th>Cost</th><th>Selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="7"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
 
-  $('#log-job').addEventListener('click', async () => {
-    const name = $('#pj-name').value.trim();
-    if (!name) return toast('Item name is required');
-    const payload = {
-      itemName: name,
-      filamentColourId: $('#pj-filament').value || null,
-      modelG: Number($('#pj-model-g').value) || 0,
-      supportG: Number($('#pj-support-g').value) || 0,
-      purgeG: Number($('#pj-purge-g').value) || 0,
-      towerG: Number($('#pj-tower-g').value) || 0,
-      printTimeMinutes: Number($('#pj-time').value) || 0,
-      designHours: Number($('#pj-design-hrs').value) || 0,
-      setupHours: Number($('#pj-setup-hrs').value) || 0,
-      postProcessingHours: Number($('#pj-post-hrs').value) || 0,
-      markupPct: $('#pj-markup').value === '' ? undefined : Number($('#pj-markup').value),
-    };
+  $$('[data-slot-idx]').forEach((row) => {
+    const idx = Number(row.dataset.slotIdx);
+    row.querySelector('.pjs-filament').addEventListener('change', (e) => {
+      // Picking a filament re-renders the whole view (to refresh the other
+      // slots' "grams left" labels), so every other field's current value
+      // must be pulled back into draft first -- otherwise this re-render
+      // would wipe out whatever the admin already typed elsewhere.
+      syncFormIntoDraft();
+      draft.slots[idx].inHouseFilamentId = e.target.value;
+      draft.preview = null;
+      renderPrintJobs();
+    });
+    row.querySelector('.pjs-grams').addEventListener('input', (e) => { draft.slots[idx].grams = e.target.value; renderTotalsOnly(); });
+    row.querySelector('.pjs-meters').addEventListener('input', (e) => { draft.slots[idx].meters = e.target.value; renderTotalsOnly(); });
+  });
+
+  function renderTotalsOnly() {
+    // Cheap live-total update without a full re-render on every keystroke;
+    // a full renderPrintJobs() still happens on blur-triggering actions
+    // (filament pick, validate, log) so the totals never drift stale.
+    const g = draft.slots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0);
+    const m = draft.slots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0);
+    const el = document.querySelector('#view-print-jobs .muted');
+    if (el) el.innerHTML = `Totals: <strong>${escapeHtml(g.toFixed(1))}g</strong> · <strong>${escapeHtml(m.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
+  }
+
+  function syncFormIntoDraft() {
+    draft.itemName = $('#pj-name').value;
+    draft.printTimeMinutes = $('#pj-time').value;
+    draft.designHours = $('#pj-design-hrs').value;
+    draft.setupHours = $('#pj-setup-hrs').value;
+    draft.postProcessingHours = $('#pj-post-hrs').value;
+    draft.markupPct = $('#pj-markup').value;
+  }
+
+  $('#validate-job').addEventListener('click', async () => {
+    syncFormIntoDraft();
+    if (!draft.itemName.trim()) return toast('Item name is required');
     try {
-      const { printJob } = await api('/api/print-jobs', { method: 'POST', body: JSON.stringify(payload) });
+      const { preview } = await api('/api/print-jobs/validate', { method: 'POST', body: JSON.stringify(readPrintJobPayload(draft)) });
+      draft.preview = preview;
+      await renderPrintJobs();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $('#log-job').addEventListener('click', async () => {
+    syncFormIntoDraft();
+    if (!draft.itemName.trim()) return toast('Item name is required');
+    try {
+      const { printJob } = await api('/api/print-jobs', { method: 'POST', body: JSON.stringify(readPrintJobPayload(draft)) });
       toast(`Cost: R${printJob.totalCost} — Selling price: R${printJob.sellingPrice}`);
+
+      const fileInput = $('#pj-model-file');
+      const imageInput = $('#pj-model-image');
+      if (fileInput.files[0]) await uploadPrintJobAsset(printJob.id, 'file', fileInput.files[0]);
+      if (imageInput.files[0]) await uploadPrintJobAsset(printJob.id, 'image', imageInput.files[0]);
+
       state.newPrintJob = blankPrintJob();
       await renderPrintJobs();
     } catch (ex) {
@@ -2114,6 +2208,121 @@ async function renderPrintJobs() {
       await renderPrintJobs();
     });
   });
+}
+
+async function uploadPrintJobAsset(jobId, field, file) {
+  const formData = new FormData();
+  formData.append(field, file);
+  const endpoint = field === 'image' ? 'image' : 'file';
+  try {
+    const res = await fetch(`/api/print-jobs/${jobId}/${endpoint}`, { method: 'POST', credentials: 'include', body: formData });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+  } catch (ex) {
+    toast(ex.message);
+  }
+}
+
+// ---- In-House Filament ----
+
+function blankInHouseFilament() {
+  return { id: null, filamentType: '', colorName: '', rollsAvailable: 0, weightG: 1000, rollLengthM: 335, costPerRollRand: 0 };
+}
+
+async function renderInHouseFilament() {
+  state.editingInHouseFilament = state.editingInHouseFilament || null;
+  const { filaments } = await api('/api/in-house-filament');
+
+  const rows = filaments
+    .map(
+      (f) => `
+        <tr data-id="${escapeAttr(f.id)}">
+          <td>${escapeHtml(f.filamentType)}</td>
+          <td>${escapeHtml(f.colorName)}</td>
+          <td>${escapeHtml(String(f.rollsAvailable))}</td>
+          <td>${escapeHtml(String(f.weightG))}g / ${escapeHtml(String(f.rollLengthM))}m</td>
+          <td>R${escapeHtml(String(f.costPerRollRand))}</td>
+          <td>${escapeHtml(f.remainingG.toFixed(0))}g / ${escapeHtml(f.percentLeft != null ? Math.round(f.percentLeft * 100) : '—')}%</td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  const form = state.editingInHouseFilament;
+  $('#view-in-house-filament').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-in-house-filament" type="button">+ Filament</button>
+      <span class="muted">${escapeHtml(String(filaments.length))} filaments</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:600px">
+        <div class="section-head"><h3>${form.id ? 'Edit filament' : 'New filament'}</h3></div>
+        <div class="grid-2">
+          <label class="field"><span>Filament type</span><input id="ihf-type" value="${escapeAttr(form.filamentType)}" placeholder="PLA" /></label>
+          <label class="field"><span>Color name</span><input id="ihf-color" value="${escapeAttr(form.colorName)}" placeholder="Black" /></label>
+        </div>
+        <div class="grid-4">
+          <label class="field"><span>Rolls available</span><input id="ihf-rolls" type="number" min="0" step="1" value="${escapeAttr(String(form.rollsAvailable))}" /></label>
+          <label class="field"><span>Weight per roll (g)</span><input id="ihf-weight" type="number" min="0" step="1" value="${escapeAttr(String(form.weightG))}" /></label>
+          <label class="field"><span>Length per roll (m)</span><input id="ihf-length" type="number" min="0" step="1" value="${escapeAttr(String(form.rollLengthM))}" /></label>
+          <label class="field"><span>Cost per roll (R)</span><input id="ihf-cost" type="number" min="0" step="1" value="${escapeAttr(String(form.costPerRollRand))}" /></label>
+        </div>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-in-house-filament" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-in-house-filament" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Type</th><th>Color</th><th>Rolls</th><th>Per-roll spec</th><th>Cost/roll</th><th>Remaining</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No in-house filament logged yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#new-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = blankInHouseFilament(); await renderInHouseFilament(); });
+  $$('#view-in-house-filament tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const { filament } = await api(`/api/in-house-filament/${tr.dataset.id}`);
+      state.editingInHouseFilament = filament;
+      await renderInHouseFilament();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this in-house filament?')) return;
+      try {
+        await api(`/api/in-house-filament/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Deleted');
+        await renderInHouseFilament();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (form) {
+    $('#cancel-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = null; await renderInHouseFilament(); });
+    $('#save-in-house-filament').addEventListener('click', async () => {
+      const payload = {
+        filamentType: $('#ihf-type').value,
+        colorName: $('#ihf-color').value,
+        rollsAvailable: Number($('#ihf-rolls').value) || 0,
+        weightG: Number($('#ihf-weight').value) || 0,
+        rollLengthM: Number($('#ihf-length').value) || 0,
+        costPerRollRand: Number($('#ihf-cost').value) || 0,
+      };
+      try {
+        if (form.id) await api(`/api/in-house-filament/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/api/in-house-filament', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Filament saved');
+        state.editingInHouseFilament = null;
+        await renderInHouseFilament();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
 }
 
 // ---- Purchase History (Phase 3, supplier expenses) ----

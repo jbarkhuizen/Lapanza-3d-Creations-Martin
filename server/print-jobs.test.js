@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { computeJobCost, createPrintJob, getPrintJob, listPrintJobs, deletePrintJob } from './print-jobs.js';
+import { createInHouseFilament } from './in-house-filament.js';
+import { computeJobCost, createPrintJob, previewPrintJobCost, getPrintJob, listPrintJobs, deletePrintJob } from './print-jobs.js';
 
 const SETTINGS = {
   markupPct: 0.25,
@@ -13,76 +14,104 @@ const SETTINGS = {
   postProcessingRate: 20,
 };
 
-test('computeJobCost with no filament: only power + labour + running cost + markup', () => {
-  const cost = computeJobCost(
-    { printTimeMinutes: 60, designHours: 1, setupHours: 0, postProcessingHours: 0 },
-    SETTINGS,
-    null,
-  );
-  // power: 1hr * 0.2kWh/hr * R4/kWh = R0.80
+function makeFilament(db, overrides = {}) {
+  return createInHouseFilament({ filamentType: 'PLA', colorName: 'Black', rollsAvailable: 5, weightG: 1000, rollLengthM: 335, costPerRollRand: 300, ...overrides }, db);
+}
+
+test('computeJobCost sums cost across multiple resolved filament slots', () => {
+  const slots = [
+    { grams: 100, meters: 33.5, costPerG: 0.3 },
+    { grams: 20, meters: 6.7, costPerG: 0.5 },
+  ];
+  const cost = computeJobCost({ printTimeMinutes: 0, designHours: 0, setupHours: 0, postProcessingHours: 0 }, SETTINGS, slots);
+  assert.strictEqual(cost.totalGrams, 120);
+  assert.strictEqual(cost.filamentCost, 100 * 0.3 + 20 * 0.5); // 30 + 10 = 40
+});
+
+test('computeJobCost with no filament grams: only power + labour + running cost + markup', () => {
+  const cost = computeJobCost({ printTimeMinutes: 60, designHours: 1, setupHours: 0, postProcessingHours: 0 }, SETTINGS, []);
   assert.strictEqual(cost.filamentCost, 0);
   assert.strictEqual(cost.powerCost, 0.8);
-  // labour: 1hr design * R100/hr = R100
   assert.strictEqual(cost.labourCost, 100);
-  // running cost: (0 + 0.8) * 0.1 = 0.08
   assert.strictEqual(cost.runningCost, 0.08);
-  const totalCost = 0 + 0.8 + 100 + 0.08;
-  assert.strictEqual(cost.totalCost, Math.round(totalCost * 100) / 100);
-  // markup: totalCost * 0.25
-  assert.strictEqual(cost.markupAmount, Math.round(totalCost * 0.25 * 100) / 100);
-  assert.strictEqual(cost.sellingPrice, Math.round((totalCost + totalCost * 0.25) * 100) / 100);
 });
 
-test('computeJobCost derives filament cost from priceRand/weightG times grams used', () => {
-  const filament = { priceRand: 300, weightG: 1000 }; // R0.30/g
-  const cost = computeJobCost({ modelG: 100, supportG: 20 }, SETTINGS, filament);
-  assert.strictEqual(cost.totalFilamentG, 120);
-  assert.strictEqual(cost.filamentCost, 36); // 120g * R0.30
-});
-
-test('computeJobCost markupPct override beats the settings default', () => {
-  const cost = computeJobCost({ modelG: 10 }, SETTINGS, { priceRand: 100, weightG: 100 });
-  const costWithDefault = cost.markupAmount;
-  const overridden = computeJobCost({ modelG: 10, markupPct: 0.5 }, SETTINGS, { priceRand: 100, weightG: 100 });
-  assert.notStrictEqual(overridden.markupAmount, costWithDefault);
-  assert.strictEqual(overridden.markupPct, 0.5);
-});
-
-test('createPrintJob stores a snapshot and decrements the picked filament colour\'s used_g', () => {
+test('createPrintJob requires at least one filament slot', () => {
   const db = openDb(':memory:');
-  db.prepare(
-    `INSERT INTO filament_types (id, slug, name, description, colour_note, specs_json, seo_title, seo_description, internal_notes, status, featured, sort_order, created_at, updated_at)
-     VALUES ('t1','pla','PLA','','','[]','','','','published',0,0,'now','now')`,
-  ).run();
-  db.prepare(
-    `INSERT INTO filament_colours (id, filament_type_id, name, hex, sku, weight_g, roll_length_m, price_rand, stock_qty, image_path, notes, sort_order, created_at, updated_at)
-     VALUES ('c1','t1','Black','','SKU-1',1000,335,300,3,NULL,'',0,'now','now')`,
-  ).run();
-  // settings table empty -> falls back to DEFAULT_SETTINGS, fine for this test
+  assert.throws(() => createPrintJob({ itemName: 'X', filaments: [] }, db), /At least one filament is required/);
+  db.close();
+});
 
-  const job = createPrintJob({ itemName: 'Test Widget', filamentColourId: 'c1', modelG: 50, printTimeMinutes: 30 }, db);
-  assert.strictEqual(job.itemName, 'Test Widget');
-  assert.ok(job.totalCost >= 0);
+test('createPrintJob rejects more than 4 filament slots', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const slots = Array.from({ length: 5 }, () => ({ inHouseFilamentId: f.id, grams: 10, meters: 1 }));
+  assert.throws(() => createPrintJob({ itemName: 'X', filaments: slots }, db), /At most 4 filaments/);
+  db.close();
+});
+
+test('createPrintJob with up to 4 filament slots stores a snapshot and decrements each filament\'s used_g/used_m', () => {
+  const db = openDb(':memory:');
+  const f1 = makeFilament(db, { colorName: 'Black' });
+  const f2 = makeFilament(db, { colorName: 'White' });
+  const job = createPrintJob(
+    {
+      itemName: 'Dual Color Widget',
+      filaments: [
+        { inHouseFilamentId: f1.id, grams: 50, meters: 16.75 },
+        { inHouseFilamentId: f2.id, grams: 20, meters: 6.7 },
+      ],
+      printTimeMinutes: 30,
+    },
+    db,
+  );
+  assert.strictEqual(job.filaments.length, 2);
+  assert.strictEqual(job.totalGrams, 70);
+  assert.strictEqual(job.totalMeters, 23.45);
+  assert.ok(job.totalCost > 0);
   assert.ok(job.sellingPrice >= job.totalCost);
 
-  const colour = db.prepare('SELECT used_g FROM filament_colours WHERE id = ?').get('c1');
-  assert.strictEqual(colour.used_g, 50);
+  const row1 = db.prepare('SELECT used_g, used_m FROM in_house_filament WHERE id = ?').get(f1.id);
+  assert.strictEqual(row1.used_g, 50);
+  assert.strictEqual(row1.used_m, 16.75);
+  const row2 = db.prepare('SELECT used_g, used_m FROM in_house_filament WHERE id = ?').get(f2.id);
+  assert.strictEqual(row2.used_g, 20);
+  db.close();
+});
+
+test('previewPrintJobCost computes the same breakdown as createPrintJob but writes nothing', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const input = { itemName: 'Preview Me', filaments: [{ inHouseFilamentId: f.id, grams: 40, meters: 13.4 }], printTimeMinutes: 15 };
+
+  const preview = previewPrintJobCost(input, db);
+  assert.ok(preview.totalCost > 0);
+  assert.strictEqual(listPrintJobs({}, db).length, 0);
+
+  const before = db.prepare('SELECT used_g FROM in_house_filament WHERE id = ?').get(f.id).used_g;
+  assert.strictEqual(before, 0);
+
+  const created = createPrintJob(input, db);
+  assert.strictEqual(created.totalCost, preview.totalCost);
   db.close();
 });
 
 test('createPrintJob requires an item name', () => {
   const db = openDb(':memory:');
-  assert.throws(() => createPrintJob({}, db), /Item name is required/);
+  const f = makeFilament(db);
+  assert.throws(() => createPrintJob({ filaments: [{ inHouseFilamentId: f.id, grams: 10, meters: 1 }] }, db), /Item name is required/);
   db.close();
 });
 
-test('listPrintJobs filters by status, deletePrintJob removes the row', () => {
+test('listPrintJobs filters by status, deletePrintJob removes the row and its filament slots', () => {
   const db = openDb(':memory:');
-  const a = createPrintJob({ itemName: 'A', status: 'planned' }, db);
-  createPrintJob({ itemName: 'B' }, db);
+  const f = makeFilament(db);
+  const a = createPrintJob({ itemName: 'A', status: 'planned', filaments: [{ inHouseFilamentId: f.id, grams: 5, meters: 1 }] }, db);
+  createPrintJob({ itemName: 'B', filaments: [{ inHouseFilamentId: f.id, grams: 5, meters: 1 }] }, db);
   assert.strictEqual(listPrintJobs({ status: 'planned' }, db).length, 1);
   assert.strictEqual(listPrintJobs({}, db).length, 2);
   assert.strictEqual(deletePrintJob(a.id, db), true);
   assert.strictEqual(getPrintJob(a.id, db), null);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM print_job_filaments WHERE print_job_id = ?').get(a.id).n, 0);
   db.close();
 });

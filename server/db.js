@@ -10,6 +10,15 @@ function ensureDataDir(dir) {
 
 export function ensureSchema(db) {
   db.pragma('foreign_keys = ON');
+  // One-time redesign of print_jobs from single-filament/role-based
+  // (model_g/support_g/...) to multi-filament slots (print_job_filaments).
+  // A DROP+recreate here is only safe because this table shipped in this
+  // same project phase with no real rows in production yet -- this is NOT
+  // the normal pattern (see hasColumn/guarded-ALTER below for that).
+  const stillOldShape = db
+    .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='print_jobs'")
+    .get().n > 0 && db.prepare('PRAGMA table_info(print_jobs)').all().some((c) => c.name === 'model_g');
+  if (stillOldShape) db.exec('DROP TABLE print_jobs');
   db.exec(`
     CREATE TABLE IF NOT EXISTS admins (
       id TEXT PRIMARY KEY,
@@ -198,11 +207,8 @@ export function ensureSchema(db) {
     CREATE TABLE IF NOT EXISTS print_jobs (
       id TEXT PRIMARY KEY,
       item_name TEXT NOT NULL,
-      filament_colour_id TEXT REFERENCES filament_colours(id),
-      model_g REAL NOT NULL DEFAULT 0,
-      support_g REAL NOT NULL DEFAULT 0,
-      purge_g REAL NOT NULL DEFAULT 0,
-      tower_g REAL NOT NULL DEFAULT 0,
+      total_grams REAL NOT NULL DEFAULT 0,
+      total_meters REAL NOT NULL DEFAULT 0,
       print_time_minutes INTEGER NOT NULL DEFAULT 0,
       design_hours REAL NOT NULL DEFAULT 0,
       setup_hours REAL NOT NULL DEFAULT 0,
@@ -215,11 +221,51 @@ export function ensureSchema(db) {
       total_cost REAL NOT NULL DEFAULT 0,
       markup_amount REAL NOT NULL DEFAULT 0,
       selling_price REAL NOT NULL DEFAULT 0,
+      reference_file_path TEXT,
+      reference_image_path TEXT,
       status TEXT NOT NULL DEFAULT 'printed',
       date_printed TEXT,
       created_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_print_jobs_filament ON print_jobs (filament_colour_id);
+
+    -- In-house filament: physically-open rolls kept for local/internal
+    -- printing, separate from the storefront Filament Library (which is the
+    -- sellable catalog with its own SKU/price/spool tracking). Weight and
+    -- roll_length_m are the per-roll spec (same convention as
+    -- filament_colours.weight_g/roll_length_m); rolls_available x that spec
+    -- gives total stock, used_g/used_m track cumulative consumption from
+    -- logged print jobs -- same "computed at read time, never stored
+    -- remaining/percent" pattern as filament_colours.
+    CREATE TABLE IF NOT EXISTS in_house_filament (
+      id TEXT PRIMARY KEY,
+      filament_type TEXT NOT NULL,
+      color_name TEXT NOT NULL,
+      rolls_available INTEGER NOT NULL DEFAULT 0,
+      weight_g INTEGER NOT NULL DEFAULT 0,
+      roll_length_m REAL NOT NULL DEFAULT 0,
+      cost_per_roll_rand INTEGER NOT NULL DEFAULT 0,
+      used_g REAL NOT NULL DEFAULT 0,
+      used_m REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Up to 4 filaments per job (multi-material/multi-colour prints), each
+    -- with its own grams + metres used. Replaces the single-filament,
+    -- role-based (model/support/purge/tower) shape print_jobs originally
+    -- shipped with -- see the one-time migration below for why that's a
+    -- DROP+recreate instead of the usual guarded ALTER TABLE.
+    CREATE TABLE IF NOT EXISTS print_job_filaments (
+      id TEXT PRIMARY KEY,
+      print_job_id TEXT NOT NULL REFERENCES print_jobs(id) ON DELETE CASCADE,
+      in_house_filament_id TEXT NOT NULL REFERENCES in_house_filament(id),
+      grams REAL NOT NULL DEFAULT 0,
+      meters REAL NOT NULL DEFAULT 0,
+      cost REAL NOT NULL DEFAULT 0,
+      slot_order INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_print_job_filaments_job ON print_job_filaments (print_job_id);
+    CREATE INDEX IF NOT EXISTS idx_print_job_filaments_filament ON print_job_filaments (in_house_filament_id);
 
     CREATE TABLE IF NOT EXISTS purchases (
       id TEXT PRIMARY KEY,
