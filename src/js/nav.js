@@ -51,7 +51,8 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
 <a href="${p}toys.html" class="side-link ${isActive('toys.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Toys</a>
 <a href="${p}homeware.html" class="side-link ${isActive('homeware.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Homeware</a>
 <a href="${p}phones.html" class="side-link ${isActive('phones.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Phones</a>
-<a href="${p}resources.html" class="side-link ${isActive('resources.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10 border-b border-charcoal/10">3D Resources</a>
+<a href="${p}resources.html" class="side-link ${isActive('resources.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">3D Resources</a>
+<a href="${p}design-request.html" class="side-link ${isActive('design-request.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10 border-b border-charcoal/10">Custom Design</a>
 `.trim();
 }
 

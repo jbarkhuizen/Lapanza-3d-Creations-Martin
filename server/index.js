@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import rateLimit from 'express-rate-limit';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -22,10 +23,26 @@ import {
   setColourImage,
 } from './filaments.js';
 import multer from 'multer';
-import { uploadFilamentImage, uploadResourceImage, uploadResourceFile, deleteResourceFile } from './uploads.js';
+import {
+  uploadFilamentImage,
+  uploadResourceImage,
+  uploadResourceFile,
+  deleteResourceFile,
+  uploadDesignRequestAssets,
+  deleteDesignRequestFile,
+} from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
-import { listClients, getClient, createClient, updateClient, listOrdersForClient } from './clients.js';
+import {
+  listClients,
+  getClient,
+  createClient,
+  updateClient,
+  listOrdersForClient,
+  registerClient,
+  verifyClientEmail,
+  loginClient,
+} from './clients.js';
 import {
   listShippingOptions,
   getShippingOption,
@@ -45,10 +62,18 @@ import {
   recordPaymentTransaction,
 } from './orders.js';
 import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
-import { sendOrderConfirmationEmail, sendLowStockAlert } from './mailer.js';
+import {
+  sendOrderConfirmationEmail,
+  sendLowStockAlert,
+  sendClientVerificationEmail,
+  sendNewsletterConfirmationEmail,
+  sendDesignRequestStatusEmail,
+} from './mailer.js';
+import { subscribe as subscribeNewsletter, confirm as confirmNewsletter, unsubscribe as unsubscribeNewsletter } from './newsletter.js';
 import { startAutoCancelJob } from './jobs.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
+import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -78,6 +103,26 @@ app.use(cookieParser());
 app.use('/uploads', express.static(path.join(root, 'public', 'uploads')));
 
 const sessions = new Map();
+
+// In-memory, per-process limiters -- consistent with the rest of the app's
+// single-process assumption (sessions Maps above have the same limitation).
+// authLimiter guards brute-force login/registration attempts; publicFormLimiter
+// guards unauthenticated public-write endpoints (newsletter signup, design
+// request submission) against spam.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts — please wait a few minutes and try again.' },
+});
+const publicFormLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many submissions — please try again later.' },
+});
 
 // better-sqlite3 throws a raw SqliteError (not something route handlers can
 // turn into clean JSON on their own) when a duplicate slug or SKU hits a
@@ -122,6 +167,124 @@ function revokeSessionsForAdmin(adminId) {
   }
 }
 
+// ---- Client accounts (Phase 2) ----
+// Parallel to, but entirely separate from, the admin session system above:
+// own cookie, own in-memory session store, own TTL constant kept in sync by
+// value only. Deliberately not unified into one sessions Map/role column --
+// keeps the admin portal's security model (and its requireAuth checks)
+// unchanged while giving customers their own login.
+const CLIENT_SESSION_COOKIE = 'lapanza_client_session';
+const clientSessions = new Map();
+
+function requireClientAuth(req, res, next) {
+  const token = req.cookies[CLIENT_SESSION_COOKIE];
+  const session = token && clientSessions.get(token);
+  if (!session) return res.status(401).json({ error: 'Unauthorized' });
+  if (Date.now() - session.createdAt >= SESSION_TTL_MS) {
+    clientSessions.delete(token);
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  req.clientId = session.clientId;
+  next();
+}
+
+function startClientSession(res, clientId) {
+  const token = randomUUID();
+  clientSessions.set(token, { createdAt: Date.now(), clientId });
+  res.cookie(CLIENT_SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
+}
+
+function siteUrlFor(req) {
+  const requestOrigin = `${req.protocol}://${req.get('host')}`;
+  return process.env.SITE_URL || requestOrigin;
+}
+
+app.post('/api/client/register', authLimiter, async (req, res) => {
+  try {
+    const { client, token } = registerClient(req.body || {});
+    const verifyUrl = `${req.protocol}://${req.get('host')}/api/client/verify?token=${token}`;
+    try {
+      await sendClientVerificationEmail(client, verifyUrl);
+    } catch (err) {
+      console.error('Verification email failed to send:', err.message);
+    }
+    res.status(201).json({ ok: true, message: 'Account created — check your email to verify it before logging in.' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/client/verify', (req, res) => {
+  const client = verifyClientEmail(req.query.token);
+  const siteUrl = siteUrlFor(req);
+  if (!client) return res.redirect(`${siteUrl}/index.html?verified=0`);
+  res.redirect(`${siteUrl}/index.html?verified=1`);
+});
+
+app.post('/api/client/login', authLimiter, (req, res) => {
+  const { email, password } = req.body || {};
+  if (typeof email !== 'string' || !email || typeof password !== 'string' || !password) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+  const result = loginClient(email, password);
+  if (!result.ok && result.reason === 'unverified') {
+    return res.status(403).json({ error: 'Please verify your email before logging in — check your inbox for the verification link.' });
+  }
+  if (!result.ok) return res.status(401).json({ error: 'Invalid email or password' });
+  startClientSession(res, result.client.id);
+  res.json({ ok: true, client: result.client });
+});
+
+app.post('/api/client/logout', (req, res) => {
+  const token = req.cookies[CLIENT_SESSION_COOKIE];
+  if (token) clientSessions.delete(token);
+  res.clearCookie(CLIENT_SESSION_COOKIE);
+  res.json({ ok: true });
+});
+
+app.get('/api/client/me', (req, res) => {
+  const token = req.cookies[CLIENT_SESSION_COOKIE];
+  const session = token && clientSessions.get(token);
+  if (!session) return res.json({ authenticated: false });
+  const client = getClient(session.clientId);
+  res.json({ authenticated: true, client });
+});
+
+app.get('/api/client/orders', requireClientAuth, (req, res) => {
+  res.json({ orders: listOrdersForClient(req.clientId) });
+});
+
+// ---- Newsletter double opt-in (Phase 2) ----
+
+app.post('/api/newsletter/subscribe', publicFormLimiter, async (req, res) => {
+  try {
+    const { token, alreadyConfirmed } = subscribeNewsletter((req.body || {}).email);
+    if (!alreadyConfirmed) {
+      const base = `${req.protocol}://${req.get('host')}/api/newsletter`;
+      try {
+        await sendNewsletterConfirmationEmail((req.body || {}).email, `${base}/confirm?token=${token}`, `${base}/unsubscribe?token=${token}`);
+      } catch (err) {
+        console.error('Newsletter confirmation email failed to send:', err.message);
+      }
+    }
+    res.status(201).json({ ok: true, message: alreadyConfirmed ? "You're already subscribed." : 'Check your email to confirm your subscription.' });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/newsletter/confirm', (req, res) => {
+  const subscriber = confirmNewsletter(req.query.token);
+  const siteUrl = siteUrlFor(req);
+  res.redirect(`${siteUrl}/index.html?newsletter=${subscriber ? 'confirmed' : 'invalid'}`);
+});
+
+app.get('/api/newsletter/unsubscribe', (req, res) => {
+  const subscriber = unsubscribeNewsletter(req.query.token);
+  const siteUrl = siteUrlFor(req);
+  res.redirect(`${siteUrl}/index.html?newsletter=${subscriber ? 'unsubscribed' : 'invalid'}`);
+});
+
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'lapanza-admin', time: new Date().toISOString() });
 });
@@ -145,7 +308,7 @@ app.post('/api/setup', (req, res) => {
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', authLimiter, (req, res) => {
   const { username, password } = req.body || {};
   // bcryptjs throws (not rejects) when compareSync gets a non-string, so a
   // missing/malformed password must be rejected before it ever reaches
@@ -422,7 +585,7 @@ app.delete('/api/products/:id', requireAuth, (req, res) => {
 // ---- Clients (B) ----
 
 app.get('/api/clients', requireAuth, (req, res) => {
-  res.json({ clients: listClients({ q: req.query.q }) });
+  res.json({ clients: listClients({ q: req.query.q, registeredOnly: req.query.registeredOnly === 'true' }) });
 });
 
 app.get('/api/clients/:id', requireAuth, (req, res) => {
@@ -608,6 +771,75 @@ app.get('/api/resources/:id/download', (req, res) => {
   if (!fs.existsSync(abs)) return res.status(404).send('File not found');
   const downloadName = `${slugify(resource.title)}${path.extname(abs)}`;
   res.download(abs, downloadName);
+});
+
+// ---- Custom 3D design requests (Phase 2) ----
+
+// Public intake -- accepts an optional reference image and/or reference
+// file (STL etc) in the same submission, reusing the resources upload
+// allowlists (see uploads.js's uploadDesignRequestAssets).
+app.post(
+  '/api/design-requests',
+  publicFormLimiter,
+  uploadDesignRequestAssets.fields([
+    { name: 'referenceImage', maxCount: 1 },
+    { name: 'referenceFile', maxCount: 1 },
+  ]),
+  (req, res, next) => {
+    try {
+      const imageFile = req.files?.referenceImage?.[0];
+      const fileFile = req.files?.referenceFile?.[0];
+      const request = createDesignRequest({
+        ...(req.body || {}),
+        referenceImagePath: imageFile ? `/uploads/design-requests/${imageFile.filename}` : undefined,
+        referenceFilePath: fileFile ? `/uploads/design-requests/${fileFile.filename}` : undefined,
+      });
+      res.status(201).json({ ok: true, designRequest: request });
+    } catch (err) {
+      res.status(400).json({ error: err.message });
+    }
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Upload failed — image must be under 5MB, file under 50MB' });
+    next(err);
+  },
+);
+
+app.get('/api/design-requests', requireAuth, (req, res) => {
+  res.json({ designRequests: listDesignRequests({ status: req.query.status }) });
+});
+
+app.get('/api/design-requests/:id', requireAuth, (req, res) => {
+  const request = getDesignRequest(req.params.id);
+  if (!request) return res.status(404).json({ error: 'Design request not found' });
+  res.json({ designRequest: request });
+});
+
+app.patch('/api/design-requests/:id', requireAuth, async (req, res) => {
+  try {
+    const before = getDesignRequest(req.params.id);
+    if (!before) return res.status(404).json({ error: 'Design request not found' });
+    const updated = updateDesignRequest(req.params.id, req.body || {});
+    if (req.body?.status && req.body.status !== before.status) {
+      try {
+        await sendDesignRequestStatusEmail(updated, updated.status);
+      } catch (err) {
+        console.error('Design request status email failed to send:', err.message);
+      }
+    }
+    res.json({ designRequest: updated });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/design-requests/:id', requireAuth, (req, res) => {
+  const existing = getDesignRequest(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Design request not found' });
+  deleteDesignRequestFile(existing.referenceImagePath);
+  deleteDesignRequestFile(existing.referenceFilePath);
+  deleteDesignRequest(req.params.id);
+  res.json({ ok: true });
 });
 
 // ---- Orders (D/E/F) ----

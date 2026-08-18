@@ -96,4 +96,72 @@ Replenish: ${replenishUrl}`,
   });
 }
 
+// Phase 2: confirms the registrant owns the email address before their
+// account can log in -- see clients.js's loginClient, which rejects
+// unverified accounts outright.
+export async function sendClientVerificationEmail(client, verifyUrl) {
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: client.email,
+    subject: 'Lapanza 3D — verify your email',
+    text: `Hi ${client.name || 'there'},
+
+Thanks for creating an account with Lapanza 3D Creative Lab. Confirm your email address to finish setting it up:
+
+${verifyUrl}
+
+If you didn't request this, you can ignore this email.
+
+— Lapanza 3D Creative Lab`,
+  });
+}
+
+// Double opt-in: the same link opens/closes nothing else, it just flips
+// status pending -> confirmed. The unsubscribe link uses the same token
+// (see newsletter.js's newToken() comment) so it keeps working for the
+// subscriber's whole lifetime, not just before they've confirmed.
+export async function sendNewsletterConfirmationEmail(email, confirmUrl, unsubscribeUrl) {
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: 'Lapanza 3D — confirm your newsletter signup',
+    text: `Thanks for signing up to hear from Lapanza 3D Creative Lab.
+
+Confirm your subscription:
+
+${confirmUrl}
+
+If you didn't request this, you can ignore this email — or unsubscribe here: ${unsubscribeUrl}
+
+— Lapanza 3D Creative Lab`,
+  });
+}
+
+const DESIGN_REQUEST_STATUS_LABELS = {
+  new: 'received',
+  in_review: 'under review',
+  quoted: 'quoted',
+  accepted: 'accepted',
+  rejected: 'declined',
+  completed: 'completed',
+};
+
+export async function sendDesignRequestStatusEmail(request, newStatus) {
+  const label = DESIGN_REQUEST_STATUS_LABELS[newStatus] || newStatus;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: request.email,
+    subject: `Lapanza 3D — your design request is now ${label}`,
+    text: `Hi ${request.name || 'there'},
+
+Your custom design request is now: ${label}.
+
+${request.description}
+${request.adminNotes ? `\nNote from us: ${request.adminNotes}\n` : ''}
+We'll be in touch with any next steps.
+
+— Lapanza 3D Creative Lab`,
+  });
+}
+
 export { FROM_ADDRESS };

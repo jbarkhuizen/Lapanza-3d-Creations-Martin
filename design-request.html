@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custom Design Requests — Lapanza 3D Creative Lab</title>
+<meta name="description" content="Request a custom 3D print design from Lapanza 3D Creative Lab — tell us what you need and attach references.">
+<meta name="theme-color" content="#f7f3eb">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>
+(function(){try{var t=localStorage.getItem('lapanza-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
+</script>
+<script>window.__PAGE_DEPTH__=0;window.__PAGE_PATH__="design-request.html";</script>
+<script type="module" src="/src/js/design-request-entry.js"></script>
+</head>
+<body class="font-sans antialiased">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="site-grain" aria-hidden="true"></div>
+
+  <div class="md:hidden sticky top-0 z-30 nav-blur border-b border-charcoal/10 flex items-center justify-between px-4 py-3 gap-2">
+    <a href="index.html" class="brand-mark font-serif text-lg tracking-tight font-semibold">Lapanza <span class="mark-3d">3D</span></a>
+    <div class="flex items-center gap-2">
+      <button type="button" class="theme-toggle-btn" data-theme-toggle aria-label="Toggle dark mode">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"/></svg>
+      </button>
+      <button type="button" onclick="toggleDrawer()" class="border-2 border-charcoal/20 rounded-full px-3 py-1.5 text-xs uppercase tracking-wide font-semibold">Menu</button>
+    </div>
+  </div>
+  <div id="sidebar-drawer" class="hidden md:hidden bg-cream border-b border-charcoal/10 px-6 py-4">
+    <nav data-site-nav class="site-sidebar text-sm" aria-label="Catalogue"></nav>
+  </div>
+
+  <div class="md:flex">
+    <aside class="aside-panel hidden md:block w-72 shrink-0 min-h-screen sticky top-0 px-6 py-10 overflow-y-auto" aria-label="Catalogue">
+      <nav data-site-nav class="site-sidebar text-sm"></nav>
+    </aside>
+
+    <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-2xl">
+        <p class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-10">
+          <a href="index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">Custom Design</span>
+        </p>
+        <p class="eyebrow mb-3">Custom Design</p>
+        <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Request a custom print</h1>
+        <p class="text-espresso/75 leading-relaxed max-w-xl mb-12 text-lg">Tell us what you need — a repair part, a one-off design, a reference photo of something you'd like recreated. We'll get back to you with a quote.</p>
+
+        <form id="design-request-form" class="space-y-5" novalidate>
+          <div class="grid sm:grid-cols-2 gap-5">
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">Name</span>
+              <input name="name" type="text" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">Email *</span>
+              <input name="email" type="email" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+          </div>
+          <label class="block text-sm">
+            <span class="block mb-1.5 text-espresso/70">Phone</span>
+            <input name="phone" type="tel" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+          </label>
+          <label class="block text-sm">
+            <span class="block mb-1.5 text-espresso/70">Describe what you need *</span>
+            <textarea name="description" required rows="5" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent"></textarea>
+          </label>
+          <label class="block text-sm">
+            <span class="block mb-1.5 text-espresso/70">Budget (optional)</span>
+            <input name="budgetNote" type="text" placeholder="e.g. under R500" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+          </label>
+          <div class="grid sm:grid-cols-2 gap-5">
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">Reference image (optional)</span>
+              <input name="referenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="w-full text-sm" />
+            </label>
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">Reference file (optional)</span>
+              <input name="referenceFile" type="file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" class="w-full text-sm" />
+            </label>
+          </div>
+          <button type="submit" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-6 py-3 hover:bg-terracotta transition-colors">Send request</button>
+          <p id="design-request-note" class="text-sm text-espresso/70" role="status"></p>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <footer class="border-t border-charcoal/10 py-10 md:pl-72">
+    <div class="mx-auto max-w-5xl px-6 sm:px-10 lg:px-16 xl:px-24 text-xs text-espresso/60 flex flex-wrap gap-4 justify-between">
+      <span>&copy; <span data-year>2026</span> Lapanza 3D Creative Lab</span>
+      <span>lapanzaonline@gmail.com &middot; 082 663 9608</span>
+    </div>
+  </footer>
+</body>
+</html>

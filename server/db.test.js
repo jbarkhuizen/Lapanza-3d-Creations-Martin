@@ -14,8 +14,10 @@ test('ensureSchema creates every expected table', () => {
   assert.deepStrictEqual(tables, [
     'admins',
     'clients',
+    'design_requests',
     'filament_colours',
     'filament_types',
+    'newsletter_subscribers',
     'order_items',
     'orders',
     'payment_transactions',

@@ -16,6 +16,7 @@ function htmlEntries() {
     checkout: resolve(__dirname, 'checkout.html'),
     checkoutComplete: resolve(__dirname, 'checkout-complete.html'),
     resources: resolve(__dirname, 'resources.html'),
+    designRequest: resolve(__dirname, 'design-request.html'),
   };
 
   for (const dir of ['filament', 'car-parts']) {

@@ -160,8 +160,39 @@ export function ensureSchema(db) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    -- Phase 2: client accounts, newsletter, custom design requests.
+
+    CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      token TEXT NOT NULL,
+      subscribed_at TEXT NOT NULL,
+      confirmed_at TEXT,
+      unsubscribed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_newsletter_subscribers_token ON newsletter_subscribers (token);
+
+    CREATE TABLE IF NOT EXISTS design_requests (
+      id TEXT PRIMARY KEY,
+      client_id TEXT REFERENCES clients(id),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL DEFAULT '',
+      description TEXT NOT NULL DEFAULT '',
+      budget_note TEXT NOT NULL DEFAULT '',
+      reference_image_path TEXT,
+      reference_file_path TEXT,
+      status TEXT NOT NULL DEFAULT 'new',
+      admin_notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_design_requests_status ON design_requests (status);
   `);
   ensureCheckoutColumns(db);
+  ensureClientAuthColumns(db);
 }
 
 function hasColumn(db, tableInfoStatement, column) {
@@ -204,6 +235,24 @@ function ensureCheckoutColumns(db) {
   // than leaving historical rows with an empty/null method.
   if (!hasColumn(db, 'PRAGMA table_info(orders)', 'shipping_method')) {
     db.exec("ALTER TABLE orders ADD COLUMN shipping_method TEXT NOT NULL DEFAULT 'courier'");
+  }
+}
+
+// Phase 2: a `clients` row becomes a real account once password_hash is set
+// (NULL means it's still just a guest-checkout record) -- no separate
+// accounts table, this table already carries everything an account needs.
+function ensureClientAuthColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'password_hash')) {
+    db.exec('ALTER TABLE clients ADD COLUMN password_hash TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'email_verified')) {
+    db.exec('ALTER TABLE clients ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'verification_token')) {
+    db.exec('ALTER TABLE clients ADD COLUMN verification_token TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'verification_token_expires')) {
+    db.exec('ALTER TABLE clients ADD COLUMN verification_token_expires TEXT');
   }
 }
 

@@ -91,16 +91,23 @@ export function initHomeMotion() {
 
   const form = document.getElementById('newsletter-form');
   if (form) {
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const email = new FormData(form).get('email');
       const note = document.getElementById('newsletter-note');
-      if (note) {
-        note.textContent = email
-          ? `Thanks — we'll be in touch at ${email}. Prefer WhatsApp for faster replies.`
-          : "Thanks — we'll be in touch.";
+      try {
+        const res = await fetch('/api/newsletter/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Something went wrong');
+        if (note) note.textContent = data.message || "Thanks — we'll be in touch.";
+        form.reset();
+      } catch (err) {
+        if (note) note.textContent = err.message || 'Something went wrong — please try again.';
       }
-      form.reset();
     });
   }
 

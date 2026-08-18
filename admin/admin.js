@@ -80,9 +80,11 @@ function setRoute(route, { id } = {}) {
   show($('#view-orders'), route === 'orders');
   show($('#view-order-detail'), route === 'order-detail');
   show($('#view-clients'), route === 'clients');
+  show($('#view-registered-users'), route === 'registered-users');
   show($('#view-shipping'), route === 'shipping');
   show($('#view-stock'), route === 'stock');
   show($('#view-resources'), route === 'resources');
+  show($('#view-design-requests'), route === 'design-requests');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -92,9 +94,11 @@ function setRoute(route, { id } = {}) {
     orders: ['Sales', 'Orders'],
     'order-detail': ['Sales', 'Order detail'],
     clients: ['Sales', 'Clients'],
+    'registered-users': ['Sales', 'Registered users'],
     shipping: ['Sales', 'Shipping options'],
     stock: ['Inventory', 'Stock management'],
     resources: ['Content', '3D Resources'],
+    'design-requests': ['Content', 'Design requests'],
     settings: ['Configuration', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
@@ -306,6 +310,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'clients') {
         setRoute('clients');
         await renderClients();
+      } else if (btn.dataset.route === 'registered-users') {
+        setRoute('registered-users');
+        await renderRegisteredUsers();
       } else if (btn.dataset.route === 'shipping') {
         setRoute('shipping');
         await renderShipping();
@@ -315,6 +322,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'resources') {
         setRoute('resources');
         await renderResources();
+      } else if (btn.dataset.route === 'design-requests') {
+        setRoute('design-requests');
+        await renderDesignRequests();
       }
     });
   });
@@ -1611,6 +1621,62 @@ async function renderClients() {
   }
 }
 
+// ---- Registered Users (Phase 2) ----
+// Read-only: these are clients.js rows that have set a password (an
+// "account"), filtered server-side via listClients({ registeredOnly }).
+// Nested order-history expansion reuses ordersNestedRowHtml/state.clientOrders
+// from the Clients view above, since the underlying id space is the same.
+
+async function renderRegisteredUsers() {
+  state.expandedRegisteredUsers = state.expandedRegisteredUsers || new Set();
+  state.clientOrders = state.clientOrders || {};
+  const { clients } = await api('/api/clients?registeredOnly=true');
+
+  const rows = clients
+    .map((c) => {
+      const expanded = state.expandedRegisteredUsers.has(c.id);
+      const row = `
+        <tr data-id="${escapeAttr(c.id)}">
+          <td><button class="btn-expand" data-action="toggle-orders" type="button" aria-expanded="${expanded}" aria-label="Toggle orders">${expanded ? '▾' : '▸'}</button></td>
+          <td>${escapeHtml(c.name || '—')}</td>
+          <td>${escapeHtml(c.email)}</td>
+          <td>${c.emailVerified ? '<span class="badge published">verified</span>' : '<span class="badge draft">unverified</span>'}</td>
+          <td>${escapeHtml(formatDate(c.createdAt))}</td>
+        </tr>`;
+      return expanded ? row + ordersNestedRowHtml(c.id, 5) : row;
+    })
+    .join('');
+
+  $('#view-registered-users').innerHTML = `
+    <div class="toolbar">
+      <span class="muted">${escapeHtml(String(clients.length))} registered accounts</span>
+    </div>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th></th><th>Name</th><th>Email</th><th>Status</th><th>Registered</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No registered accounts yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $$('#view-registered-users tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="toggle-orders"]').addEventListener('click', async () => {
+      const id = tr.dataset.id;
+      if (state.expandedRegisteredUsers.has(id)) {
+        state.expandedRegisteredUsers.delete(id);
+        await renderRegisteredUsers();
+        return;
+      }
+      state.expandedRegisteredUsers.add(id);
+      if (!state.clientOrders[id]) {
+        await renderRegisteredUsers();
+        const { orders } = await api(`/api/clients/${id}`);
+        state.clientOrders[id] = orders;
+      }
+      await renderRegisteredUsers();
+    });
+  });
+}
+
 // ---- Shipping options (C) ----
 
 function blankShippingOption() {
@@ -1940,6 +2006,105 @@ async function renderResources() {
   }
   await uploadResourceAsset('rf-image-upload', 'image', 'image');
   await uploadResourceAsset('rf-file-upload', 'file', 'file');
+}
+
+// ---- Custom 3D design requests (Phase 2) ----
+
+const DESIGN_REQUEST_STATUSES = ['new', 'in_review', 'quoted', 'accepted', 'rejected', 'completed'];
+const DESIGN_REQUEST_STATUS_LABEL = {
+  new: 'New',
+  in_review: 'In review',
+  quoted: 'Quoted',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
+  completed: 'Completed',
+};
+
+async function renderDesignRequests() {
+  state.editingDesignRequest = state.editingDesignRequest || null;
+  const { designRequests } = await api('/api/design-requests');
+
+  const rows = designRequests
+    .map(
+      (r) => `
+        <tr data-id="${escapeAttr(r.id)}">
+          <td>${escapeHtml(r.name || '—')}</td>
+          <td>${escapeHtml(r.email)}</td>
+          <td><span class="badge">${escapeHtml(DESIGN_REQUEST_STATUS_LABEL[r.status] || r.status)}</span></td>
+          <td>${escapeHtml(formatDate(r.createdAt))}</td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">View</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  const form = state.editingDesignRequest;
+  const statusOptions = form
+    ? DESIGN_REQUEST_STATUSES.map((s) => `<option value="${s}" ${form.status === s ? 'selected' : ''}>${DESIGN_REQUEST_STATUS_LABEL[s]}</option>`).join('')
+    : '';
+
+  $('#view-design-requests').innerHTML = `
+    <div class="toolbar">
+      <span class="muted">${escapeHtml(String(designRequests.length))} requests</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:700px">
+        <div class="section-head"><h3>Request from ${escapeHtml(form.name || form.email)}</h3></div>
+        <p class="muted" style="font-size:0.85rem">${escapeHtml(form.email)} ${form.phone ? `· ${escapeHtml(form.phone)}` : ''}</p>
+        <label class="field"><span>Description</span><textarea readonly>${escapeHtml(form.description)}</textarea></label>
+        ${form.budgetNote ? `<p class="muted" style="font-size:0.85rem">Budget: ${escapeHtml(form.budgetNote)}</p>` : ''}
+        <div class="grid-2">
+          ${form.referenceImagePath ? `<img src="${escapeAttr(form.referenceImagePath)}" alt="Reference image" style="width:120px;height:120px;object-fit:cover;border-radius:4px" />` : ''}
+          ${form.referenceFilePath ? `<a class="btn small" href="${escapeAttr(form.referenceFilePath)}" target="_blank" rel="noopener">Reference file</a>` : ''}
+        </div>
+        <label class="field"><span>Status</span><select id="dr-status">${statusOptions}</select></label>
+        <label class="field"><span>Admin notes</span><textarea id="dr-notes">${escapeHtml(form.adminNotes || '')}</textarea></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-design-request" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-design-request" type="button">Close</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Received</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No design requests yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $$('#view-design-requests tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const { designRequest } = await api(`/api/design-requests/${tr.dataset.id}`);
+      state.editingDesignRequest = designRequest;
+      await renderDesignRequests();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this design request?')) return;
+      try {
+        await api(`/api/design-requests/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Deleted');
+        await renderDesignRequests();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (!form) return;
+
+  $('#cancel-design-request').addEventListener('click', async () => { state.editingDesignRequest = null; await renderDesignRequests(); });
+  $('#save-design-request').addEventListener('click', async () => {
+    const payload = { status: $('#dr-status').value, adminNotes: $('#dr-notes').value };
+    try {
+      const { designRequest } = await api(`/api/design-requests/${form.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
+      toast('Saved — client notified if status changed');
+      state.editingDesignRequest = designRequest;
+      await renderDesignRequests();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
 }
 
 function slugify(value) {

@@ -118,3 +118,51 @@ export function deleteResourceFile(filePath) {
   const abs = path.join(RESOURCE_UPLOAD_DIR, filename);
   if (fs.existsSync(abs)) fs.unlinkSync(abs);
 }
+
+// ---- Custom design request uploads ----
+// Same two allowlist strategies as the resource uploads above (mimetype for
+// images, extension for model/print files), combined into one multer
+// instance with two named fields since the public intake form submits both
+// optional attachments in a single request.
+
+export const DESIGN_REQUEST_UPLOAD_DIR = path.join(root, 'public', 'uploads', 'design-requests');
+
+function ensureDesignRequestUploadDir() {
+  if (!fs.existsSync(DESIGN_REQUEST_UPLOAD_DIR)) fs.mkdirSync(DESIGN_REQUEST_UPLOAD_DIR, { recursive: true });
+}
+
+function randomDesignRequestFilename(ext) {
+  return `${crypto.randomBytes(8).toString('hex')}${ext}`;
+}
+
+export const uploadDesignRequestAssets = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureDesignRequestUploadDir();
+      cb(null, DESIGN_REQUEST_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => {
+      if (file.fieldname === 'referenceImage') {
+        return cb(null, randomDesignRequestFilename(MIME_EXTENSIONS[file.mimetype] || '.jpg'));
+      }
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      cb(null, randomDesignRequestFilename(RESOURCE_FILE_EXTENSIONS.has(ext) ? ext : '.bin'));
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.fieldname === 'referenceImage') return cb(null, ALLOWED_TYPES.has(file.mimetype));
+    if (file.fieldname === 'referenceFile') {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      return cb(null, RESOURCE_FILE_EXTENSIONS.has(ext));
+    }
+    cb(null, false);
+  },
+});
+
+export function deleteDesignRequestFile(filePath) {
+  if (!filePath) return;
+  const filename = path.basename(filePath);
+  const abs = path.join(DESIGN_REQUEST_UPLOAD_DIR, filename);
+  if (fs.existsSync(abs)) fs.unlinkSync(abs);
+}

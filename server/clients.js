@@ -1,5 +1,8 @@
-import { randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
+import { randomUUID, randomBytes } from 'crypto';
 import { getDb } from './db.js';
+
+const VERIFICATION_TOKEN_TTL_MS = 1000 * 60 * 60 * 24; // 24h
 
 function rowToClient(row) {
   if (!row) return null;
@@ -19,6 +22,10 @@ function rowToClient(row) {
     postalCode: row.postal_code,
     country: row.country,
     createdAt: row.created_at,
+    // Registered-account fields (Phase 2) -- password_hash itself is never
+    // exposed on the mapped object, only whether one exists.
+    hasAccount: Boolean(row.password_hash),
+    emailVerified: Boolean(row.email_verified),
   };
 }
 
@@ -28,8 +35,10 @@ function nextClientCode(db) {
   return `CLI-${String(next).padStart(6, '0')}`;
 }
 
-export function listClients({ q } = {}, db = getDb()) {
-  let rows = db.prepare('SELECT * FROM clients ORDER BY created_at DESC').all();
+export function listClients({ q, registeredOnly } = {}, db = getDb()) {
+  let rows = registeredOnly
+    ? db.prepare('SELECT * FROM clients WHERE password_hash IS NOT NULL ORDER BY created_at DESC').all()
+    : db.prepare('SELECT * FROM clients ORDER BY created_at DESC').all();
   if (q) {
     const needle = String(q).toLowerCase();
     rows = rows.filter((r) =>
@@ -127,4 +136,79 @@ export function findOrCreateClientForCheckout(data, db = getDb()) {
 
 export function listOrdersForClient(clientId, db = getDb()) {
   return db.prepare('SELECT id, status, total, created_at FROM orders WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
+}
+
+// ---- Phase 2: client accounts ----
+// A `clients` row becomes a real account once password_hash is set; a row
+// with password_hash IS NULL is still just a guest-checkout record. This
+// lets someone who already checked out as a guest later "claim" that same
+// record by registering with the same email, rather than ending up with two
+// disconnected identities.
+
+function newVerificationToken() {
+  return randomBytes(32).toString('hex');
+}
+
+// Registers a new account, or attaches auth to an existing guest-only
+// client row that matches the email. Returns the (unverified) client and
+// the raw verification token the caller needs to email out -- the token is
+// never returned from any other function, so it can't leak via a later
+// /api/client/me-style read.
+export function registerClient(data, db = getDb()) {
+  const email = String(data.email || '').trim();
+  if (!email) throw new Error('Email is required');
+  if (!data.password || String(data.password).length < 8) {
+    throw new Error('Password must be at least 8 characters');
+  }
+  const passwordHash = bcrypt.hashSync(data.password, 10);
+  const token = newVerificationToken();
+  const tokenExpires = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS).toISOString();
+
+  const tx = db.transaction(() => {
+    const existingRow = db.prepare('SELECT * FROM clients WHERE LOWER(email) = LOWER(?)').get(email);
+    if (existingRow && existingRow.password_hash) {
+      throw new Error('An account with this email already exists — log in instead');
+    }
+    if (existingRow) {
+      db.prepare(
+        'UPDATE clients SET password_hash = ?, email_verified = 0, verification_token = ?, verification_token_expires = ? WHERE id = ?',
+      ).run(passwordHash, token, tokenExpires, existingRow.id);
+      return existingRow.id;
+    }
+    const created = insertClient(db, data);
+    db.prepare(
+      'UPDATE clients SET password_hash = ?, email_verified = 0, verification_token = ?, verification_token_expires = ? WHERE id = ?',
+    ).run(passwordHash, token, tokenExpires, created.id);
+    return created.id;
+  });
+  const clientId = tx();
+  return { client: getClient(clientId, db), token };
+}
+
+// Returns the verified client, or null if the token is missing/expired.
+export function verifyClientEmail(token, db = getDb()) {
+  if (!token) return null;
+  const row = db.prepare('SELECT * FROM clients WHERE verification_token = ?').get(token);
+  if (!row) return null;
+  if (!row.verification_token_expires || new Date(row.verification_token_expires).getTime() < Date.now()) {
+    return null;
+  }
+  db.prepare(
+    'UPDATE clients SET email_verified = 1, verification_token = NULL, verification_token_expires = NULL WHERE id = ?',
+  ).run(row.id);
+  return getClient(row.id, db);
+}
+
+// Returns { ok: true, client } on success, or { ok: false, reason } so the
+// route can tell "wrong credentials" apart from "not verified yet" without a
+// second query -- 'invalid' covers unknown email/no account/wrong password
+// alike, deliberately not distinguishing those from each other to avoid
+// leaking which emails have accounts.
+export function loginClient(email, password, db = getDb()) {
+  const row = db.prepare('SELECT * FROM clients WHERE LOWER(email) = LOWER(?)').get(String(email || '').trim());
+  if (!row || !row.password_hash || !bcrypt.compareSync(password, row.password_hash)) {
+    return { ok: false, reason: 'invalid' };
+  }
+  if (!row.email_verified) return { ok: false, reason: 'unverified' };
+  return { ok: true, client: rowToClient(row) };
 }
