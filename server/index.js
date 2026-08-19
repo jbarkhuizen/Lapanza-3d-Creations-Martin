@@ -125,6 +125,10 @@ const SESSION_COOKIE = 'lapanza_admin_session';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12h -- shared between the cookie maxAge and the server-side expiry check
 
 const app = express();
+// Behind nginx in production (single hop) -- without this, express-rate-limit
+// throws on the X-Forwarded-For header nginx sets, since Express doesn't yet
+// know it's safe to trust it for req.ip. Harmless locally (no proxy in front).
+app.set('trust proxy', 1);
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
