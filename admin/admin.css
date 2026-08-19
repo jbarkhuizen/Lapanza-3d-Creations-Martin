@@ -188,6 +188,17 @@ code {
   background: var(--brand-soft);
   color: var(--brand);
 }
+.nav-group-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.6;
+  padding: 0.6rem 0.75rem 0.2rem;
+}
+.nav-group-label:first-child { padding-top: 0.1rem; }
+.nav-divider { border: 0; border-top: 1px solid var(--line); margin: 0.5rem 0.4rem; }
 .sidebar-foot { display: grid; gap: 0.45rem; }
 
 .main { padding: 1.5rem 1.75rem 3rem; }

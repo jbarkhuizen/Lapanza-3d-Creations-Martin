@@ -277,10 +277,42 @@ export function ensureSchema(db) {
       purchase_date TEXT,
       created_at TEXT NOT NULL
     );
+
+    -- Phase 4: marketing campaigns. Separate from newsletter_subscribers
+    -- (the audience list) -- these are the actual messages sent, with a
+    -- compose -> approve -> send lifecycle.
+    CREATE TABLE IF NOT EXISTS newsletter_campaigns (
+      id TEXT PRIMARY KEY,
+      subject TEXT NOT NULL,
+      body_text TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at TEXT NOT NULL,
+      approved_at TEXT,
+      sent_at TEXT,
+      sent_count INTEGER NOT NULL DEFAULT 0,
+      failed_count INTEGER NOT NULL DEFAULT 0
+    );
+
+    -- template_params_json holds the {{1}}/{{2}}... substitution values for
+    -- the Meta-approved template named by template_name -- WhatsApp Business
+    -- API requires a pre-approved template for any business-initiated
+    -- broadcast, free text isn't accepted (see server/whatsapp.js).
+    CREATE TABLE IF NOT EXISTS whatsapp_campaigns (
+      id TEXT PRIMARY KEY,
+      template_name TEXT NOT NULL,
+      template_params_json TEXT NOT NULL DEFAULT '[]',
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at TEXT NOT NULL,
+      approved_at TEXT,
+      sent_at TEXT,
+      sent_count INTEGER NOT NULL DEFAULT 0,
+      failed_count INTEGER NOT NULL DEFAULT 0
+    );
   `);
   ensureCheckoutColumns(db);
   ensureClientAuthColumns(db);
   ensureManagementColumns(db);
+  ensureEngagementColumns(db);
 }
 
 function hasColumn(db, tableInfoStatement, column) {
@@ -388,6 +420,17 @@ function ensureManagementColumns(db) {
   // doesn't depend on cart weight, so bracket matching doesn't apply.
   if (!hasColumn(db, 'PRAGMA table_info(shipping_options)', 'option_type')) {
     db.exec("ALTER TABLE shipping_options ADD COLUMN option_type TEXT NOT NULL DEFAULT 'auto_weight'");
+  }
+}
+
+// Phase 4: login-activity tracking + WhatsApp marketing consent (separate
+// from newsletter_subscribers -- email and WhatsApp are separate consents).
+function ensureEngagementColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'last_login_at')) {
+    db.exec('ALTER TABLE clients ADD COLUMN last_login_at TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'whatsapp_opt_in')) {
+    db.exec('ALTER TABLE clients ADD COLUMN whatsapp_opt_in INTEGER NOT NULL DEFAULT 0');
   }
 }
 

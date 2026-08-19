@@ -44,6 +44,7 @@ import {
   registerClient,
   verifyClientEmail,
   loginClient,
+  setWhatsAppOptIn,
 } from './clients.js';
 import {
   listShippingOptions,
@@ -71,8 +72,23 @@ import {
   sendClientVerificationEmail,
   sendNewsletterConfirmationEmail,
   sendDesignRequestStatusEmail,
+  sendNewOrderNotificationEmail,
+  sendNewDesignRequestNotificationEmail,
 } from './mailer.js';
 import { subscribe as subscribeNewsletter, confirm as confirmNewsletter, unsubscribe as unsubscribeNewsletter } from './newsletter.js';
+import {
+  listCampaigns as listNewsletterCampaigns,
+  createCampaign as createNewsletterCampaign,
+  approveCampaign as approveNewsletterCampaign,
+  sendCampaign as sendNewsletterCampaign,
+} from './newsletter-campaigns.js';
+import {
+  listCampaigns as listWhatsAppCampaigns,
+  createCampaign as createWhatsAppCampaign,
+  approveCampaign as approveWhatsAppCampaign,
+  sendCampaign as sendWhatsAppCampaign,
+} from './whatsapp-campaigns.js';
+import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob } from './jobs.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
@@ -266,6 +282,17 @@ app.get('/api/client/orders', requireClientAuth, (req, res) => {
   res.json({ orders: listOrdersForClient(req.clientId) });
 });
 
+// Phase 4: the post-checkout opt-in prompt toggles this without requiring a
+// login -- email-matched as a lightweight guard (it only flips a consent
+// flag, not real auth) rather than gated behind requireClientAuth.
+app.patch('/api/client/:id/marketing-preferences', publicFormLimiter, (req, res) => {
+  const { email, whatsappOptIn } = req.body || {};
+  if (typeof email !== 'string' || !email) return res.status(400).json({ error: 'Email is required' });
+  const updated = setWhatsAppOptIn(req.params.id, email, Boolean(whatsappOptIn));
+  if (!updated) return res.status(404).json({ error: 'Client not found' });
+  res.json({ ok: true });
+});
+
 // ---- Newsletter double opt-in (Phase 2) ----
 
 app.post('/api/newsletter/subscribe', publicFormLimiter, async (req, res) => {
@@ -295,6 +322,74 @@ app.get('/api/newsletter/unsubscribe', (req, res) => {
   const subscriber = unsubscribeNewsletter(req.query.token);
   const siteUrl = siteUrlFor(req);
   res.redirect(`${siteUrl}/index.html?newsletter=${subscriber ? 'unsubscribed' : 'invalid'}`);
+});
+
+// ---- Newsletter campaigns: compose -> approve -> send (Phase 4) ----
+
+app.get('/api/newsletter-campaigns', requireAuth, (_req, res) => {
+  res.json({ campaigns: listNewsletterCampaigns() });
+});
+
+app.post('/api/newsletter-campaigns', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ campaign: createNewsletterCampaign(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch('/api/newsletter-campaigns/:id/approve', requireAuth, (req, res) => {
+  try {
+    const campaign = approveNewsletterCampaign(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    res.json({ campaign });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/newsletter-campaigns/:id/send', requireAuth, async (req, res) => {
+  try {
+    const campaign = await sendNewsletterCampaign(req.params.id, { siteUrl: siteUrlFor(req) });
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    res.json({ campaign });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ---- WhatsApp campaigns: compose -> approve -> send (Phase 4) ----
+
+app.get('/api/whatsapp-campaigns', requireAuth, (_req, res) => {
+  res.json({ campaigns: listWhatsAppCampaigns(), configured: isWhatsAppConfigured() });
+});
+
+app.post('/api/whatsapp-campaigns', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ campaign: createWhatsAppCampaign(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch('/api/whatsapp-campaigns/:id/approve', requireAuth, (req, res) => {
+  try {
+    const campaign = approveWhatsAppCampaign(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    res.json({ campaign });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/whatsapp-campaigns/:id/send', requireAuth, async (req, res) => {
+  try {
+    const campaign = await sendWhatsAppCampaign(req.params.id);
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    res.json({ campaign });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.get('/api/health', (_req, res) => {
@@ -805,7 +900,7 @@ app.post(
     { name: 'referenceImage', maxCount: 1 },
     { name: 'referenceFile', maxCount: 1 },
   ]),
-  (req, res, next) => {
+  async (req, res, next) => {
     try {
       const imageFile = req.files?.referenceImage?.[0];
       const fileFile = req.files?.referenceFile?.[0];
@@ -815,6 +910,11 @@ app.post(
         referenceFilePath: fileFile ? `/uploads/design-requests/${fileFile.filename}` : undefined,
       });
       res.status(201).json({ ok: true, designRequest: request });
+      try {
+        await sendNewDesignRequestNotificationEmail(request);
+      } catch (err) {
+        console.error('New design request owner-notification email failed:', err.message);
+      }
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -1025,6 +1125,11 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     delete order._lowStock;
     res.status(201).json({ order });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
+    try {
+      await sendNewOrderNotificationEmail(order);
+    } catch (err) {
+      console.error('New order owner-notification email failed:', err.message);
+    }
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -1114,6 +1219,12 @@ app.post('/api/checkout', async (req, res) => {
       console.error(`Order ${order.id} confirmation email failed to send:`, err.message);
     }
 
+    try {
+      await sendNewOrderNotificationEmail(order);
+    } catch (err) {
+      console.error('New order owner-notification email failed:', err.message);
+    }
+
     if (body.paymentMethod === 'manual_eft' || body.paymentMethod === 'cash_on_collection') {
       return res.status(201).json({ order, emailSent, redirect: null });
     }
@@ -1192,6 +1303,8 @@ app.put('/api/settings', requireAuth, (req, res) => {
     'bankName', 'bankAccountName', 'bankAccountNumber', 'bankBranchCode', 'invoiceNumberSeed',
     'markupPct', 'electricityRate', 'printerPowerDraw', 'runningCostsPct',
     'designRate', 'setupRate', 'postProcessingRate',
+    // Phase 4
+    'orderNotificationEmail',
   ];
   const patch = {};
   for (const key of allowed) {

@@ -344,6 +344,15 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
     })
     .join(' / ');
 
+  // Car Parts pages get an extra link into the actual design-request form
+  // (same form as the site-wide "Custom Design and Print Request" page) --
+  // WhatsApp alone doesn't capture a reference photo/file, which matters
+  // most for a part that needs to be designed and printed from scratch.
+  const isCarParts = pagePath.startsWith('car-parts/');
+  const requestPartCta = isCarParts
+    ? `<a href="${'../'.repeat(depth)}design-request.html" class="inline-flex text-sm font-semibold border-2 border-charcoal text-charcoal rounded-full px-5 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">Request a part to be designed &amp; printed</a>`
+    : '';
+
   const body =
     kind === 'story'
       ? null
@@ -352,7 +361,10 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
         <p class="eyebrow mb-3">Custom request</p>
         <p class="font-serif text-2xl mb-3 tracking-tight">Need something specific?</p>
         <p class="text-espresso/65 text-sm mb-5 max-w-md leading-relaxed">Send a photo, sketch or part number — we'll advise material, finish and turnaround.</p>
-        <a href="${SITE.whatsapp}" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors" target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a>
+        <div class="flex flex-wrap gap-3">
+          <a href="${SITE.whatsapp}" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors" target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a>
+          ${requestPartCta}
+        </div>
       </div>`;
 
   if (kind === 'story') {

@@ -41,20 +41,29 @@
           </button>
         </div>
         <nav class="sidebar-nav">
+          <p class="nav-group-label">Client Side</p>
           <button class="nav-btn active" data-route="dashboard">Dashboard</button>
           <button class="nav-btn" data-route="catalog">Product catalog</button>
           <button class="nav-btn" data-route="orders">Orders</button>
+          <button class="nav-btn" data-route="new-order">+ New order</button>
           <button class="nav-btn" data-route="clients">Clients</button>
           <button class="nav-btn" data-route="registered-users">Registered users</button>
-          <button class="nav-btn" data-route="shipping">Shipping options</button>
-          <button class="nav-btn" data-route="stock">Stock management</button>
-          <button class="nav-btn" data-route="resources">3D Resources</button>
           <button class="nav-btn" data-route="design-requests">Design requests</button>
-          <button class="nav-btn" data-route="new-order">+ New order</button>
           <button class="nav-btn" data-route="invoice-history">Invoice History</button>
-          <button class="nav-btn" data-route="purchases">Purchase History</button>
-          <button class="nav-btn" data-route="print-jobs">Print Job Costing</button>
+          <button class="nav-btn" data-route="resources">3D Resources</button>
+          <button class="nav-btn" data-route="shipping">Shipping options</button>
+          <button class="nav-btn" data-route="newsletter">Newsletter</button>
+          <button class="nav-btn" data-route="whatsapp-updates">WhatsApp Updates</button>
+
+          <hr class="nav-divider" />
+          <p class="nav-group-label">Local Management</p>
+          <button class="nav-btn" data-route="stock">Stock management</button>
           <button class="nav-btn" data-route="in-house-filament">In-House Filament</button>
+          <button class="nav-btn" data-route="print-jobs">Print Job Costing</button>
+          <button class="nav-btn" data-route="purchases">Purchase History</button>
+
+          <hr class="nav-divider" />
+          <p class="nav-group-label">Settings</p>
           <button class="nav-btn" data-route="settings">Site settings</button>
         </nav>
         <div class="sidebar-foot">
@@ -86,6 +95,8 @@
         <div id="view-stock" class="view hidden"></div>
         <div id="view-resources" class="view hidden"></div>
         <div id="view-design-requests" class="view hidden"></div>
+        <div id="view-newsletter" class="view hidden"></div>
+        <div id="view-whatsapp-updates" class="view hidden"></div>
         <div id="view-new-order" class="view hidden"></div>
         <div id="view-invoice-history" class="view hidden"></div>
         <div id="view-purchases" class="view hidden"></div>

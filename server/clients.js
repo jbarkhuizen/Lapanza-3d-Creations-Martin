@@ -31,6 +31,9 @@ function rowToClient(row) {
     discountPct: row.discount_pct,
     discountNote: row.discount_note,
     source: row.source,
+    // Phase 4
+    lastLoginAt: row.last_login_at,
+    whatsappOptIn: Boolean(row.whatsapp_opt_in),
   };
 }
 
@@ -147,7 +150,7 @@ export function findOrCreateClientForCheckout(data, db = getDb()) {
 }
 
 export function listOrdersForClient(clientId, db = getDb()) {
-  return db.prepare('SELECT id, status, total, created_at FROM orders WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
+  return db.prepare('SELECT id, invoice_number, status, total, created_at FROM orders WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
 }
 
 // ---- Phase 2: client accounts ----
@@ -222,5 +225,20 @@ export function loginClient(email, password, db = getDb()) {
     return { ok: false, reason: 'invalid' };
   }
   if (!row.email_verified) return { ok: false, reason: 'unverified' };
-  return { ok: true, client: rowToClient(row) };
+  db.prepare('UPDATE clients SET last_login_at = ? WHERE id = ?').run(new Date().toISOString(), row.id);
+  return { ok: true, client: rowToClient(getClientRow(row.id, db)) };
+}
+
+function getClientRow(id, db) {
+  return db.prepare('SELECT * FROM clients WHERE id = ?').get(id);
+}
+
+// Phase 4: public checkout opt-in prompt sets this after order success --
+// email-matched as a lightweight guard since it only toggles a consent
+// flag, not real auth (see server/index.js's PATCH /api/client/:id/marketing-preferences).
+export function setWhatsAppOptIn(id, email, optIn, db = getDb()) {
+  const result = db
+    .prepare('UPDATE clients SET whatsapp_opt_in = ? WHERE id = ? AND LOWER(email) = LOWER(?)')
+    .run(optIn ? 1 : 0, id, String(email || '').trim());
+  return result.changes > 0;
 }

@@ -150,6 +150,21 @@
     color: var(--color-terracotta);
   }
 
+  /* Homepage hero only -- deliberately bigger/bolder than the shared
+     .eyebrow used on every other page's section labels. */
+  .hero-eyebrow {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--color-terracotta);
+  }
+  @media (min-width: 768px) {
+    .hero-eyebrow {
+      font-size: 1.3rem;
+    }
+  }
+
   .fade-up {
     opacity: 1;
     transform: none;

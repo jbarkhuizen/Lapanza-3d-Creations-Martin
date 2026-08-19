@@ -85,6 +85,8 @@ function setRoute(route, { id } = {}) {
   show($('#view-stock'), route === 'stock');
   show($('#view-resources'), route === 'resources');
   show($('#view-design-requests'), route === 'design-requests');
+  show($('#view-newsletter'), route === 'newsletter');
+  show($('#view-whatsapp-updates'), route === 'whatsapp-updates');
   show($('#view-invoice-history'), route === 'invoice-history');
   show($('#view-new-order'), route === 'new-order');
   show($('#view-purchases'), route === 'purchases');
@@ -93,23 +95,25 @@ function setRoute(route, { id } = {}) {
   show($('#view-settings'), route === 'settings');
 
   const titles = {
-    dashboard: ['Overview', 'Dashboard'],
-    catalog: ['Inventory', 'Product catalog'],
-    editor: ['Editor', 'Edit product'],
-    orders: ['Sales', 'Orders'],
-    'order-detail': ['Sales', 'Order detail'],
-    clients: ['Sales', 'Clients'],
-    'registered-users': ['Sales', 'Registered users'],
-    shipping: ['Sales', 'Shipping options'],
-    stock: ['Inventory', 'Stock management'],
-    resources: ['Content', '3D Resources'],
-    'design-requests': ['Content', 'Design requests'],
-    'invoice-history': ['Management', 'Invoice History'],
-    'new-order': ['Management', 'New order'],
-    purchases: ['Management', 'Purchase History'],
-    'print-jobs': ['Management', 'Print Job Costing'],
-    'in-house-filament': ['Management', 'In-House Filament'],
-    settings: ['Configuration', 'Site settings'],
+    dashboard: ['Client Side', 'Dashboard'],
+    catalog: ['Client Side', 'Product catalog'],
+    editor: ['Client Side', 'Edit product'],
+    orders: ['Client Side', 'Orders'],
+    'order-detail': ['Client Side', 'Order detail'],
+    clients: ['Client Side', 'Clients'],
+    'registered-users': ['Client Side', 'Registered users'],
+    shipping: ['Client Side', 'Shipping options'],
+    resources: ['Client Side', '3D Resources'],
+    'design-requests': ['Client Side', 'Design requests'],
+    newsletter: ['Client Side', 'Newsletter'],
+    'whatsapp-updates': ['Client Side', 'WhatsApp Updates'],
+    'invoice-history': ['Client Side', 'Invoice History'],
+    'new-order': ['Client Side', 'New order'],
+    stock: ['Local Management', 'Stock management'],
+    purchases: ['Local Management', 'Purchase History'],
+    'print-jobs': ['Local Management', 'Print Job Costing'],
+    'in-house-filament': ['Local Management', 'In-House Filament'],
+    settings: ['Settings', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
@@ -338,6 +342,12 @@ function bindChrome() {
       } else if (btn.dataset.route === 'invoice-history') {
         setRoute('invoice-history');
         await renderInvoiceHistory();
+      } else if (btn.dataset.route === 'newsletter') {
+        setRoute('newsletter');
+        await renderNewsletterCampaigns();
+      } else if (btn.dataset.route === 'whatsapp-updates') {
+        setRoute('whatsapp-updates');
+        await renderWhatsAppCampaigns();
       } else if (btn.dataset.route === 'new-order') {
         setRoute('new-order');
         await renderNewOrder();
@@ -1217,6 +1227,7 @@ async function renderSettings() {
           <label class="field"><span>Branch code</span><input data-setting="bankBranchCode" value="${escapeAttr(s.bankBranchCode || '')}" /></label>
         </div>
         <label class="field" style="max-width:220px"><span>Next invoice number seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
+        <label class="field" style="max-width:320px"><span>Order &amp; design-request notification email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
       </div>
 
       <div class="panel stack gap-3">
@@ -1709,8 +1720,9 @@ async function renderRegisteredUsers() {
           <td>${escapeHtml(c.email)}</td>
           <td>${c.emailVerified ? '<span class="badge published">verified</span>' : '<span class="badge draft">unverified</span>'}</td>
           <td>${escapeHtml(formatDate(c.createdAt))}</td>
+          <td>${c.lastLoginAt ? escapeHtml(formatDate(c.lastLoginAt)) : '<span class="muted">Never</span>'}</td>
         </tr>`;
-      return expanded ? row + ordersNestedRowHtml(c.id, 5) : row;
+      return expanded ? row + ordersNestedRowHtml(c.id, 6) : row;
     })
     .join('');
 
@@ -1720,8 +1732,8 @@ async function renderRegisteredUsers() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th></th><th>Name</th><th>Email</th><th>Status</th><th>Registered</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No registered accounts yet</div></td></tr>'}</tbody>
+        <thead><tr><th></th><th>Name</th><th>Email</th><th>Status</th><th>Joined</th><th>Last logged on</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No registered accounts yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -2425,6 +2437,166 @@ async function renderPurchases() {
       }
     });
   }
+}
+
+// ---- Newsletter campaigns: compose -> approve -> send (Phase 4) ----
+
+function campaignStatusBadge(status) {
+  const cls = status === 'sent' ? 'published' : status === 'draft' ? 'draft' : '';
+  return `<span class="badge ${cls}">${escapeHtml(status)}</span>`;
+}
+
+async function renderNewsletterCampaigns() {
+  const { campaigns } = await api('/api/newsletter-campaigns');
+
+  const rows = campaigns
+    .map(
+      (c) => `
+        <tr data-id="${escapeAttr(c.id)}">
+          <td>${escapeHtml(c.subject)}</td>
+          <td>${campaignStatusBadge(c.status)}</td>
+          <td>${formatDate(c.createdAt)}</td>
+          <td>${c.status === 'sent' ? `${escapeHtml(String(c.sentCount))} sent${c.failedCount ? `, ${escapeHtml(String(c.failedCount))} failed` : ''}` : '—'}</td>
+          <td>
+            ${c.status === 'draft' ? '<button class="btn small" data-action="approve" type="button">Approve</button>' : ''}
+            ${c.status === 'approved' ? '<button class="btn small btn-primary" data-action="send" type="button">Send</button>' : ''}
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-newsletter').innerHTML = `
+    <div class="panel stack gap-3" style="max-width:600px">
+      <div class="section-head"><h3>Compose newsletter</h3></div>
+      <label class="field"><span>Subject</span><input id="nc-subject" /></label>
+      <label class="field"><span>Body</span><textarea id="nc-body" rows="6"></textarea></label>
+      <div class="row-card-actions">
+        <button class="btn btn-primary" id="save-campaign" type="button">Save as draft</button>
+      </div>
+    </div>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Subject</th><th>Status</th><th>Created</th><th>Sent</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No campaigns yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#save-campaign').addEventListener('click', async () => {
+    const subject = $('#nc-subject').value;
+    const bodyText = $('#nc-body').value;
+    try {
+      await api('/api/newsletter-campaigns', { method: 'POST', body: JSON.stringify({ subject, bodyText }) });
+      toast('Campaign saved as draft');
+      await renderNewsletterCampaigns();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $$('#view-newsletter tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="approve"]')?.addEventListener('click', async () => {
+      try {
+        await api(`/api/newsletter-campaigns/${tr.dataset.id}/approve`, { method: 'PATCH' });
+        toast('Campaign approved');
+        await renderNewsletterCampaigns();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="send"]')?.addEventListener('click', async () => {
+      if (!confirm('Send this campaign to every confirmed newsletter subscriber now?')) return;
+      try {
+        const { campaign } = await api(`/api/newsletter-campaigns/${tr.dataset.id}/send`, { method: 'POST' });
+        toast(`Sent to ${campaign.sentCount} subscriber(s)${campaign.failedCount ? `, ${campaign.failedCount} failed` : ''}`);
+        await renderNewsletterCampaigns();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+}
+
+// ---- WhatsApp campaigns: compose -> approve -> send (Phase 4) ----
+// Sends a Meta-approved template (name + up to 4 {{1}}..{{4}} parameters),
+// never free text -- see server/whatsapp.js for why.
+
+async function renderWhatsAppCampaigns() {
+  const { campaigns, configured } = await api('/api/whatsapp-campaigns');
+
+  const rows = campaigns
+    .map(
+      (c) => `
+        <tr data-id="${escapeAttr(c.id)}">
+          <td>${escapeHtml(c.templateName)}</td>
+          <td>${campaignStatusBadge(c.status)}</td>
+          <td>${formatDate(c.createdAt)}</td>
+          <td>${c.status === 'sent' ? `${escapeHtml(String(c.sentCount))} sent${c.failedCount ? `, ${escapeHtml(String(c.failedCount))} failed` : ''}` : '—'}</td>
+          <td>
+            ${c.status === 'draft' ? '<button class="btn small" data-action="approve" type="button">Approve</button>' : ''}
+            ${c.status === 'approved' ? '<button class="btn small btn-primary" data-action="send" type="button">Send</button>' : ''}
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-whatsapp-updates').innerHTML = `
+    <div class="panel stack gap-3" style="max-width:600px">
+      <div class="section-head">
+        <h3>Compose WhatsApp update</h3>
+        ${configured ? '' : '<span class="badge draft">Not configured</span>'}
+      </div>
+      ${configured ? '' : '<p class="muted">Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID in .env to enable sending -- see .env.example.</p>'}
+      <label class="field"><span>Template name (Meta-approved)</span><input id="wc-template" /></label>
+      <div class="grid-4">
+        <label class="field"><span>{{1}}</span><input id="wc-param-1" /></label>
+        <label class="field"><span>{{2}}</span><input id="wc-param-2" /></label>
+        <label class="field"><span>{{3}}</span><input id="wc-param-3" /></label>
+        <label class="field"><span>{{4}}</span><input id="wc-param-4" /></label>
+      </div>
+      <div class="row-card-actions">
+        <button class="btn btn-primary" id="save-wa-campaign" type="button">Save as draft</button>
+      </div>
+    </div>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Template</th><th>Status</th><th>Created</th><th>Sent</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No campaigns yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#save-wa-campaign').addEventListener('click', async () => {
+    const templateName = $('#wc-template').value;
+    const templateParams = ['1', '2', '3', '4'].map((n) => $(`#wc-param-${n}`).value).filter((v) => v !== '');
+    try {
+      await api('/api/whatsapp-campaigns', { method: 'POST', body: JSON.stringify({ templateName, templateParams }) });
+      toast('Campaign saved as draft');
+      await renderWhatsAppCampaigns();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $$('#view-whatsapp-updates tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="approve"]')?.addEventListener('click', async () => {
+      try {
+        await api(`/api/whatsapp-campaigns/${tr.dataset.id}/approve`, { method: 'PATCH' });
+        toast('Campaign approved');
+        await renderWhatsAppCampaigns();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="send"]')?.addEventListener('click', async () => {
+      if (!confirm('Send this WhatsApp update to every opted-in client now?')) return;
+      try {
+        const { campaign } = await api(`/api/whatsapp-campaigns/${tr.dataset.id}/send`, { method: 'POST' });
+        toast(`Sent to ${campaign.sentCount} recipient(s)${campaign.failedCount ? `, ${campaign.failedCount} failed` : ''}`);
+        await renderWhatsAppCampaigns();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
 }
 
 // ---- Shipping options (C) ----

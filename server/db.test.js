@@ -18,6 +18,7 @@ test('ensureSchema creates every expected table', () => {
     'filament_colours',
     'filament_types',
     'in_house_filament',
+    'newsletter_campaigns',
     'newsletter_subscribers',
     'order_items',
     'orders',
@@ -28,6 +29,7 @@ test('ensureSchema creates every expected table', () => {
     'resources',
     'settings',
     'shipping_options',
+    'whatsapp_campaigns',
   ]);
   db.close();
 });

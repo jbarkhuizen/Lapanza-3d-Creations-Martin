@@ -65,7 +65,12 @@ export function mountCartUI() {
         <a id="cart-checkout" href="#" class="block text-center text-xs font-semibold bg-charcoal text-cream rounded-full px-4 py-2.5 hover:bg-terracotta transition-colors mb-3">Checkout</a>
         <button type="button" id="cart-clear" class="w-full text-center text-xs text-espresso/50 hover:text-terracotta transition-colors uppercase tracking-wide">Clear cart</button>
       </div>
-    </aside>`;
+    </aside>
+
+    <div id="cart-toast" class="fixed left-1/2 bottom-24 z-[65] -translate-x-1/2 opacity-0 pointer-events-none flex items-center gap-3 bg-charcoal text-cream rounded-full pl-5 pr-2 py-2 shadow-[0_10px_28px_rgb(26_22_18_/_0.35)] text-sm whitespace-nowrap" role="status" aria-live="polite">
+      <span>Item added to your cart</span>
+      <button type="button" id="cart-toast-view" class="text-xs font-semibold bg-terracotta text-cream rounded-full px-4 py-2 hover:bg-cream hover:text-charcoal transition-colors">View cart</button>
+    </div>`;
   document.body.append(...root.childNodes);
 
   const fab = document.getElementById('cart-fab');
@@ -75,6 +80,7 @@ export function mountCartUI() {
   const linesEl = document.getElementById('cart-lines');
   const emptyEl = document.getElementById('cart-empty');
   const totalEl = document.getElementById('cart-total');
+  const toast = document.getElementById('cart-toast');
 
   const depth = (window.__PAGE_DEPTH__ ?? 0) | 0;
   document.getElementById('cart-checkout').href = `${'../'.repeat(depth)}checkout.html`;
@@ -114,8 +120,34 @@ export function mountCartUI() {
     fab.setAttribute('aria-expanded', 'false');
   }
 
+  let toastTimer = null;
+  function showAddedToCartToast() {
+    clearTimeout(toastTimer);
+    toast.classList.remove('pointer-events-none');
+    gsap.killTweensOf(toast);
+    gsap.fromTo(
+      toast,
+      { opacity: 0, y: 10 },
+      { opacity: 1, y: 0, duration: 0.3, ease: 'power3.out' },
+    );
+    toastTimer = setTimeout(hideToast, 3200);
+  }
+  function hideToast() {
+    gsap.to(toast, {
+      opacity: 0,
+      y: 10,
+      duration: 0.25,
+      onComplete: () => toast.classList.add('pointer-events-none'),
+    });
+  }
+
   fab.addEventListener('click', openDrawer);
   document.getElementById('cart-close').addEventListener('click', closeDrawer);
+  document.getElementById('cart-toast-view').addEventListener('click', () => {
+    clearTimeout(toastTimer);
+    hideToast();
+    openDrawer();
+  });
   overlay.addEventListener('click', closeDrawer);
   document.getElementById('cart-clear').addEventListener('click', clearCart);
 
@@ -145,6 +177,7 @@ export function mountCartUI() {
       weight: btn.dataset.weight,
     });
     gsap.fromTo(badge, { scale: 1.5 }, { scale: 1, duration: 0.3, ease: 'back.out(3)' });
+    showAddedToCartToast();
   });
 
   window.addEventListener('cart:updated', render);

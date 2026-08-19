@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { createClient, findClientByEmail, registerClient, verifyClientEmail, loginClient } from './clients.js';
+import { createClient, findClientByEmail, registerClient, verifyClientEmail, loginClient, setWhatsAppOptIn } from './clients.js';
 
 test('registerClient creates an unverified account and returns a verification token', () => {
   const db = openDb(':memory:');
@@ -71,6 +71,38 @@ test('loginClient succeeds once verified, fails with the wrong password', () => 
   const right = loginClient('loginflow@example.com', 'correcthorse', db);
   assert.strictEqual(right.ok, true);
   assert.strictEqual(right.client.email, 'loginflow@example.com');
+  db.close();
+});
+
+test('loginClient stamps last_login_at on success, leaves it unset on failure (Phase 4)', () => {
+  const db = openDb(':memory:');
+  const { token } = registerClient({ email: 'lastlogin@example.com', password: 'correcthorse' }, db);
+  verifyClientEmail(token, db);
+
+  const failed = loginClient('lastlogin@example.com', 'wrongpassword', db);
+  assert.strictEqual(failed.ok, false);
+  assert.strictEqual(findClientByEmail('lastlogin@example.com', db).lastLoginAt, null);
+
+  const succeeded = loginClient('lastlogin@example.com', 'correcthorse', db);
+  assert.strictEqual(succeeded.ok, true);
+  assert.ok(succeeded.client.lastLoginAt);
+  assert.strictEqual(findClientByEmail('lastlogin@example.com', db).lastLoginAt, succeeded.client.lastLoginAt);
+  db.close();
+});
+
+test('setWhatsAppOptIn requires the id and email to match, toggles the flag idempotently', () => {
+  const db = openDb(':memory:');
+  const client = createClient({ email: 'wa-consent@example.com' }, db);
+  assert.strictEqual(findClientByEmail('wa-consent@example.com', db).whatsappOptIn, false);
+
+  assert.strictEqual(setWhatsAppOptIn(client.id, 'wrong@example.com', true, db), false);
+  assert.strictEqual(findClientByEmail('wa-consent@example.com', db).whatsappOptIn, false);
+
+  assert.strictEqual(setWhatsAppOptIn(client.id, 'wa-consent@example.com', true, db), true);
+  assert.strictEqual(findClientByEmail('wa-consent@example.com', db).whatsappOptIn, true);
+
+  assert.strictEqual(setWhatsAppOptIn(client.id, 'wa-consent@example.com', false, db), true);
+  assert.strictEqual(findClientByEmail('wa-consent@example.com', db).whatsappOptIn, false);
   db.close();
 });
 

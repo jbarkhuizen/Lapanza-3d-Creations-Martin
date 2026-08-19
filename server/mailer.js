@@ -141,6 +141,19 @@ If you didn't request this, you can ignore this email — or unsubscribe here: $
   });
 }
 
+// Section E: the actual campaign send, one call per confirmed subscriber.
+// unsubscribeUrl carries that subscriber's own token (see newsletter.js's
+// newToken() comment) so the link in every campaign email works regardless
+// of which campaign it came from.
+export async function sendNewsletterCampaignEmail(subject, bodyText, toEmail, unsubscribeUrl) {
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: toEmail,
+    subject,
+    text: `${bodyText}\n\n— Lapanza 3D Creative Lab\n\nUnsubscribe: ${unsubscribeUrl}`,
+  });
+}
+
 const DESIGN_REQUEST_STATUS_LABELS = {
   new: 'received',
   in_review: 'under review',
@@ -165,6 +178,45 @@ ${request.adminNotes ? `\nNote from us: ${request.adminNotes}\n` : ''}
 We'll be in touch with any next steps.
 
 — Lapanza 3D Creative Lab`,
+  });
+}
+
+// Phase 4: owner-facing notifications, mirroring sendLowStockAlert's shape
+// (goes to the shop owner, not a customer) but the recipient is
+// admin-editable (settings.orderNotificationEmail) rather than env-only.
+export async function sendNewOrderNotificationEmail(order) {
+  const s = getSettings();
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: s.orderNotificationEmail,
+    subject: `New order ${order.invoiceNumber || order.id.slice(0, 8)} — ${formatRand(order.total)}`,
+    text: `New order placed.
+
+Reference: ${order.invoiceNumber || order.id}
+Client: ${order.client?.name || 'Unknown'} (${order.client?.email || 'no email'})
+Total: ${formatRand(order.total)}
+Payment method: ${order.paymentMethod}
+Items: ${order.items?.length || 0}
+
+View it in the admin portal.`,
+  });
+}
+
+export async function sendNewDesignRequestNotificationEmail(request) {
+  const s = getSettings();
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: s.orderNotificationEmail,
+    subject: `New design request from ${request.name || request.email}`,
+    text: `New custom design request submitted.
+
+From: ${request.name || 'Unknown'} (${request.email})
+Phone: ${request.phone || '—'}
+
+Description:
+${request.description}
+${request.budgetNote ? `\nBudget note: ${request.budgetNote}\n` : ''}
+View it in the admin portal.`,
   });
 }
 

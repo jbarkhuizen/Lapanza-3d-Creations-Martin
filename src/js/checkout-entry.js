@@ -52,6 +52,85 @@ function submitToPayfast({ actionUrl, fields }) {
   form.submit();
 }
 
+// Phase 4: offered only after the order has actually succeeded, never
+// before -- so it can't add friction to completing a purchase. "Create an
+// account" is skipped for a client who already has one (order.client.hasAccount).
+function optInPanelHtml(client) {
+  const accountBlock = client.hasAccount
+    ? ''
+    : `<div class="border-t border-charcoal/10 pt-4 mt-4">
+        <p class="text-sm font-semibold mb-2">Create an account to track this order</p>
+        <form id="optin-account-form" class="flex flex-wrap gap-2 items-start">
+          <input name="password" type="password" minlength="8" placeholder="Password (8+ characters)" class="border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent text-sm flex-1 min-w-[200px]" />
+          <button type="submit" class="text-sm font-semibold bg-charcoal text-cream rounded-full px-4 py-2 hover:bg-terracotta transition-colors">Create account</button>
+        </form>
+        <p id="optin-account-note" class="text-sm text-espresso/70 mt-1"></p>
+      </div>`;
+  return `
+    <div class="border-t border-charcoal/10 pt-4 mt-4">
+      <p class="text-sm font-semibold mb-2">Stay in the loop</p>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="optin-email" class="text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Email me updates</button>
+        <button type="button" id="optin-whatsapp" class="text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">WhatsApp me updates</button>
+      </div>
+      <p id="optin-marketing-note" class="text-sm text-espresso/70 mt-2"></p>
+    </div>
+    ${accountBlock}`;
+}
+
+function wireOptInPanel(client) {
+  document.getElementById('optin-email')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const note = document.getElementById('optin-marketing-note');
+    btn.disabled = true;
+    try {
+      await api('/api/newsletter/subscribe', { method: 'POST', body: JSON.stringify({ email: client.email }) });
+      note.textContent = 'Check your email to confirm your subscription.';
+    } catch (err) {
+      note.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('optin-whatsapp')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const note = document.getElementById('optin-marketing-note');
+    btn.disabled = true;
+    try {
+      await api(`/api/client/${client.id}/marketing-preferences`, {
+        method: 'PATCH',
+        body: JSON.stringify({ email: client.email, whatsappOptIn: true }),
+      });
+      note.textContent = "You're opted in for WhatsApp updates.";
+    } catch (err) {
+      note.textContent = err.message;
+      btn.disabled = false;
+    }
+  });
+
+  const accountForm = document.getElementById('optin-account-form');
+  accountForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const note = document.getElementById('optin-account-note');
+    const password = new FormData(accountForm).get('password');
+    try {
+      const { message } = await api('/api/client/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          firstName: client.firstName,
+          lastName: client.lastName,
+          email: client.email,
+          password,
+        }),
+      });
+      note.textContent = message || 'Account created — check your email to verify it.';
+      accountForm.classList.add('hidden');
+    } catch (err) {
+      note.textContent = err.message;
+    }
+  });
+}
+
 function showOrderPlacedSuccess(order, paymentMethod) {
   document.getElementById('checkout-form').classList.add('hidden');
   const box = document.getElementById('checkout-success');
@@ -71,7 +150,9 @@ function showOrderPlacedSuccess(order, paymentMethod) {
   box.innerHTML = `
     <h2 class="font-serif text-2xl mb-3">Order placed — ${escapeHtml(order.id.slice(0, 8))}</h2>
     ${paymentNote}
-    <a href="index.html" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors">Back to shop</a>`;
+    <a href="index.html" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors">Back to shop</a>
+    ${order.client ? optInPanelHtml(order.client) : ''}`;
+  if (order.client) wireOptInPanel(order.client);
 }
 
 async function init() {

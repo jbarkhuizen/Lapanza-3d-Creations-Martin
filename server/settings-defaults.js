@@ -61,6 +61,11 @@ export const DEFAULT_SETTINGS = {
   designRate: 300,
   setupRate: 300,
   postProcessingRate: 300,
+
+  // Phase 4: where owner-facing notifications (new order, new design
+  // request) get sent -- separate from LOW_STOCK_ALERT_EMAIL's env-var
+  // override since this one's admin-editable, not deploy-time config.
+  orderNotificationEmail: 'lapanzaonline@gmail.com',
 };
 
 export function findFont(id) {
