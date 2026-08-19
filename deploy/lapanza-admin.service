@@ -1,0 +1,16 @@
+[Unit]
+Description=Lapanza 3D admin backend (Express + better-sqlite3)
+After=network.target
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/opt/lapanza/app
+ExecStart=/usr/bin/node server/index.js
+Restart=on-failure
+RestartSec=3
+# Binds to 127.0.0.1:8787 by default (see server/index.js) -- nginx is the
+# only thing that talks to it directly, never exposed to the internet.
+
+[Install]
+WantedBy=multi-user.target
