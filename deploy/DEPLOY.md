@@ -1,8 +1,8 @@
 # Deploying to the domain.co.za VPS
 
-Single VPS, Ubuntu/Debian assumed. nginx serves the built static site and
-reverse-proxies `/api`, `/admin`, `/uploads` to the Node backend (systemd
-service, port 8787, localhost-only).
+Single VPS running AlmaLinux 10 (dnf, firewalld, SELinux disabled). nginx
+serves the built static site and reverse-proxies `/api`, `/admin`,
+`/uploads` to the Node backend (systemd service, port 8787, localhost-only).
 
 ## 0. What you need before starting
 - VPS IP address

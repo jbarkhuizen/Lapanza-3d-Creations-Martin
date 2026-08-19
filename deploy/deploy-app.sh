@@ -41,11 +41,11 @@ sudo systemctl enable lapanza-admin
 sudo systemctl restart lapanza-admin
 
 echo "==> Installing/refreshing nginx site"
-sudo cp deploy/nginx-lapanza.conf /etc/nginx/sites-available/lapanza
-sudo ln -sf /etc/nginx/sites-available/lapanza /etc/nginx/sites-enabled/lapanza
-sudo rm -f /etc/nginx/sites-enabled/default
+# RHEL/AlmaLinux nginx auto-includes /etc/nginx/conf.d/*.conf -- no
+# sites-available/sites-enabled convention here (that's Debian's).
+sudo cp deploy/nginx-lapanza.conf /etc/nginx/conf.d/lapanza.conf
 sudo nginx -t
-sudo systemctl reload nginx
+sudo systemctl restart nginx
 
 echo ""
 echo "==================================================================="
