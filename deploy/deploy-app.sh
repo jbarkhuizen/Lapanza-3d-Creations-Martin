@@ -40,12 +40,22 @@ sudo systemctl daemon-reload
 sudo systemctl enable lapanza-admin
 sudo systemctl restart lapanza-admin
 
-echo "==> Installing/refreshing nginx site"
-# RHEL/AlmaLinux nginx auto-includes /etc/nginx/conf.d/*.conf -- no
-# sites-available/sites-enabled convention here (that's Debian's).
-sudo cp deploy/nginx-lapanza.conf /etc/nginx/conf.d/lapanza.conf
-sudo nginx -t
-sudo systemctl restart nginx
+if [ ! -f /etc/nginx/conf.d/lapanza.conf ]; then
+  echo "==> Installing nginx site (first run)"
+  # RHEL/AlmaLinux nginx auto-includes /etc/nginx/conf.d/*.conf -- no
+  # sites-available/sites-enabled convention here (that's Debian's).
+  sudo cp deploy/nginx-lapanza.conf /etc/nginx/conf.d/lapanza.conf
+  sudo nginx -t
+  sudo systemctl restart nginx
+else
+  # Once certbot has run, this file has "managed by Certbot" SSL blocks
+  # appended -- blindly re-copying the plain-HTTP template here would
+  # silently drop HTTPS (port 443) on every future deploy. Edit the live
+  # file directly (or re-run certbot) for nginx config changes instead.
+  echo "==> nginx site already configured -- leaving /etc/nginx/conf.d/lapanza.conf as-is (certbot manages it)"
+  sudo nginx -t
+  sudo systemctl reload nginx
+fi
 
 echo ""
 echo "==================================================================="

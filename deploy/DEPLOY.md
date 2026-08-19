@@ -130,3 +130,9 @@ Pulls latest `main`, rebuilds, restarts the service. `.env` is untouched
 - better-sqlite3 in this repo requires Node **>=22** -- installing Node 20
   will let `npm install` "succeed" with only a warning, then segfault the
   service on every boot. Always Node 22.
+- `deploy-app.sh` only installs `nginx-lapanza.conf` the *first* time
+  (checks whether `/etc/nginx/conf.d/lapanza.conf` already exists). Once
+  certbot has run, that file has HTTPS/redirect blocks appended -- it's
+  left alone on every later deploy so those survive. To change the nginx
+  config after SSL is live, edit `/etc/nginx/conf.d/lapanza.conf` on the
+  server directly (or re-run `certbot --nginx ...`), not the repo template.
