@@ -242,3 +242,54 @@ export function setWhatsAppOptIn(id, email, optIn, db = getDb()) {
     .run(optIn ? 1 : 0, id, String(email || '').trim());
   return result.changes > 0;
 }
+
+// Admin override for a customer who never got/clicked the verification
+// email -- skips the token entirely rather than faking one, since there's
+// no real link being confirmed here.
+export function manuallyVerifyClient(id, db = getDb()) {
+  const row = getClientRow(id, db);
+  if (!row) return null;
+  if (!row.password_hash) throw new Error('This client has no account to verify');
+  db.prepare(
+    'UPDATE clients SET email_verified = 1, verification_token = NULL, verification_token_expires = NULL WHERE id = ?',
+  ).run(id);
+  return getClient(id, db);
+}
+
+// Issues a fresh token (old one, if any, is overwritten) for the admin
+// "resend verification email" action -- separate from registerClient's
+// inline token generation since this fires for an already-existing account,
+// not a new signup.
+export function regenerateVerificationToken(id, db = getDb()) {
+  const row = getClientRow(id, db);
+  if (!row) return null;
+  if (!row.password_hash) throw new Error('This client has no account to verify');
+  if (row.email_verified) throw new Error('This client is already verified');
+  const token = newVerificationToken();
+  const tokenExpires = new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS).toISOString();
+  db.prepare('UPDATE clients SET verification_token = ?, verification_token_expires = ? WHERE id = ?').run(
+    token,
+    tokenExpires,
+    id,
+  );
+  return { client: getClient(id, db), token };
+}
+
+// A client with real order history can't be hard-deleted (orders.client_id
+// is a foreign key) -- and shouldn't be, since that history is the actual
+// business record. Instead this revokes just their account/login, dropping
+// them back to a guest-checkout row (same shape registerClient() upgrades
+// from) while a client with zero orders is removed outright.
+export function deleteOrRevokeClient(id, db = getDb()) {
+  const row = getClientRow(id, db);
+  if (!row) return null;
+  const orderCount = db.prepare('SELECT COUNT(*) c FROM orders WHERE client_id = ?').get(id).c;
+  if (orderCount > 0) {
+    db.prepare(
+      'UPDATE clients SET password_hash = NULL, email_verified = 0, verification_token = NULL, verification_token_expires = NULL WHERE id = ?',
+    ).run(id);
+    return { deleted: false, revoked: true };
+  }
+  db.prepare('DELETE FROM clients WHERE id = ?').run(id);
+  return { deleted: true, revoked: false };
+}

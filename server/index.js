@@ -45,6 +45,9 @@ import {
   verifyClientEmail,
   loginClient,
   setWhatsAppOptIn,
+  manuallyVerifyClient,
+  regenerateVerificationToken,
+  deleteOrRevokeClient,
 } from './clients.js';
 import {
   listShippingOptions,
@@ -721,6 +724,34 @@ app.put('/api/clients/:id', requireAuth, (req, res) => {
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+app.patch('/api/clients/:id/verify', requireAuth, (req, res) => {
+  try {
+    const client = manuallyVerifyClient(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    res.json({ client });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/clients/:id/resend-verification', requireAuth, async (req, res) => {
+  try {
+    const result = regenerateVerificationToken(req.params.id);
+    if (!result) return res.status(404).json({ error: 'Client not found' });
+    const verifyUrl = `${req.protocol}://${req.get('host')}/api/client/verify?token=${result.token}`;
+    await sendClientVerificationEmail(result.client, verifyUrl);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/clients/:id', requireAuth, (req, res) => {
+  const result = deleteOrRevokeClient(req.params.id);
+  if (!result) return res.status(404).json({ error: 'Client not found' });
+  res.json(result);
 });
 
 // ---- Shipping options (C) ----

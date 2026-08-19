@@ -1721,8 +1721,13 @@ async function renderRegisteredUsers() {
           <td>${c.emailVerified ? '<span class="badge published">verified</span>' : '<span class="badge draft">unverified</span>'}</td>
           <td>${escapeHtml(formatDate(c.createdAt))}</td>
           <td>${c.lastLoginAt ? escapeHtml(formatDate(c.lastLoginAt)) : '<span class="muted">Never</span>'}</td>
+          <td>
+            ${c.emailVerified ? '' : '<button class="btn small" data-action="verify" type="button">Verify</button>'}
+            ${c.emailVerified ? '' : '<button class="btn small" data-action="resend" type="button">Resend email</button>'}
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
         </tr>`;
-      return expanded ? row + ordersNestedRowHtml(c.id, 6) : row;
+      return expanded ? row + ordersNestedRowHtml(c.id, 7) : row;
     })
     .join('');
 
@@ -1732,14 +1737,14 @@ async function renderRegisteredUsers() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th></th><th>Name</th><th>Email</th><th>Status</th><th>Joined</th><th>Last logged on</th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No registered accounts yet</div></td></tr>'}</tbody>
+        <thead><tr><th></th><th>Name</th><th>Email</th><th>Status</th><th>Joined</th><th>Last logged on</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No registered accounts yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
   $$('#view-registered-users tbody tr[data-id]').forEach((tr) => {
+    const id = tr.dataset.id;
     tr.querySelector('[data-action="toggle-orders"]').addEventListener('click', async () => {
-      const id = tr.dataset.id;
       if (state.expandedRegisteredUsers.has(id)) {
         state.expandedRegisteredUsers.delete(id);
         await renderRegisteredUsers();
@@ -1752,6 +1757,33 @@ async function renderRegisteredUsers() {
         state.clientOrders[id] = orders;
       }
       await renderRegisteredUsers();
+    });
+    tr.querySelector('[data-action="verify"]')?.addEventListener('click', async () => {
+      try {
+        await api(`/api/clients/${id}/verify`, { method: 'PATCH' });
+        toast('Marked as verified');
+        await renderRegisteredUsers();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="resend"]')?.addEventListener('click', async () => {
+      try {
+        await api(`/api/clients/${id}/resend-verification`, { method: 'POST' });
+        toast('Verification email sent');
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this registered user? If they have order history, only their login/account is removed (orders are kept) — otherwise the record is deleted entirely.')) return;
+      try {
+        const result = await api(`/api/clients/${id}`, { method: 'DELETE' });
+        toast(result.deleted ? 'Client deleted' : 'Account removed (order history kept)');
+        await renderRegisteredUsers();
+      } catch (ex) {
+        toast(ex.message);
+      }
     });
   });
 }

@@ -1,7 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { createClient, findClientByEmail, registerClient, verifyClientEmail, loginClient, setWhatsAppOptIn } from './clients.js';
+import {
+  createClient,
+  findClientByEmail,
+  registerClient,
+  verifyClientEmail,
+  loginClient,
+  setWhatsAppOptIn,
+  manuallyVerifyClient,
+  regenerateVerificationToken,
+  deleteOrRevokeClient,
+} from './clients.js';
 
 test('registerClient creates an unverified account and returns a verification token', () => {
   const db = openDb(':memory:');
@@ -121,5 +131,54 @@ test('findClientByEmail keeps working unchanged for guest-checkout lookups', () 
   const found = findClientByEmail('stillguest@example.com', db);
   assert.ok(found);
   assert.strictEqual(found.hasAccount, false);
+  db.close();
+});
+
+test('manuallyVerifyClient verifies without a token, rejects a guest with no account', () => {
+  const db = openDb(':memory:');
+  const { client } = registerClient({ email: 'needsverify@example.com', password: 'correcthorse' }, db);
+  const verified = manuallyVerifyClient(client.id, db);
+  assert.strictEqual(verified.emailVerified, true);
+
+  const guest = createClient({ email: 'noaccount@example.com' }, db);
+  assert.throws(() => manuallyVerifyClient(guest.id, db), /no account/);
+  assert.strictEqual(manuallyVerifyClient('bogus-id', db), null);
+  db.close();
+});
+
+test('regenerateVerificationToken issues a fresh usable token, rejects already-verified or guest', () => {
+  const db = openDb(':memory:');
+  const { client, token: firstToken } = registerClient({ email: 'resend@example.com', password: 'correcthorse' }, db);
+  const { token: secondToken } = regenerateVerificationToken(client.id, db);
+  assert.notStrictEqual(secondToken, firstToken);
+  // the old token must no longer work -- only the freshly issued one does
+  assert.strictEqual(verifyClientEmail(firstToken, db), null);
+  assert.strictEqual(verifyClientEmail(secondToken, db).emailVerified, true);
+
+  assert.throws(() => regenerateVerificationToken(client.id, db), /already verified/);
+  const guest = createClient({ email: 'noaccount2@example.com' }, db);
+  assert.throws(() => regenerateVerificationToken(guest.id, db), /no account/);
+  assert.strictEqual(regenerateVerificationToken('bogus-id', db), null);
+  db.close();
+});
+
+test('deleteOrRevokeClient deletes a client with no orders, revokes login for one with orders', () => {
+  const db = openDb(':memory:');
+  const { client: noOrders } = registerClient({ email: 'noorders@example.com', password: 'correcthorse' }, db);
+  const result1 = deleteOrRevokeClient(noOrders.id, db);
+  assert.deepStrictEqual(result1, { deleted: true, revoked: false });
+  assert.strictEqual(findClientByEmail('noorders@example.com', db), null);
+
+  const { client: withOrders } = registerClient({ email: 'hasorders@example.com', password: 'correcthorse' }, db);
+  db.prepare(
+    `INSERT INTO orders (id, client_id, status, subtotal, total, payment_method, payment_status, shipping_method, created_at, updated_at)
+     VALUES ('order-1', ?, 'paid', 100, 100, 'manual_eft', 'paid', 'fixed', datetime('now'), datetime('now'))`,
+  ).run(withOrders.id);
+  const result2 = deleteOrRevokeClient(withOrders.id, db);
+  assert.deepStrictEqual(result2, { deleted: false, revoked: true });
+  const revoked = findClientByEmail('hasorders@example.com', db);
+  assert.strictEqual(revoked.hasAccount, false);
+
+  assert.strictEqual(deleteOrRevokeClient('bogus-id', db), null);
   db.close();
 });
