@@ -4,11 +4,14 @@ Single VPS running AlmaLinux 10 (dnf, firewalld, SELinux disabled). nginx
 serves the built static site and reverse-proxies `/api`, `/admin`,
 `/uploads` to the Node backend (systemd service, port 8787, localhost-only).
 
+Live domain: **lapanza3d.co.za** / **www.lapanza3d.co.za** (this is a new
+site — unrelated to lapanzaonline.co.za, which is email-only, and unrelated
+to the existing separate "www.lapanza" site).
+
 ## 0. What you need before starting
 - VPS IP address
 - Root SSH access (password or key domain.co.za gave you)
-- Access to lapanzaonline.co.za's DNS (domain.co.za control panel, or
-  wherever the domain is registered/managed)
+- Access to lapanza3d.co.za's DNS (wherever that domain is registered)
 
 ## 1. Add the deploy key to the VPS
 A dedicated key was generated for this (`~/.ssh/lapanza_vps_deploy` on this
@@ -31,7 +34,7 @@ scp deploy/bootstrap-vps.sh root@<VPS_IP>:/root/
 ssh root@<VPS_IP> 'bash /root/bootstrap-vps.sh'
 ```
 You'll be prompted for the root password once (or it'll just work if the
-key's already on the box). This installs Node 20, nginx, certbot, git,
+key's already on the box). This installs Node 22, nginx, certbot, git,
 build tools, opens the firewall for SSH/HTTP/HTTPS only, and creates a
 `deploy` user with the key from step 1.
 
@@ -41,7 +44,7 @@ ssh -i ~/.ssh/lapanza_vps_deploy deploy@<VPS_IP>
 ```
 
 ## 3. Point DNS at the VPS
-In lapanzaonline.co.za's DNS settings, set:
+In lapanza3d.co.za's DNS settings, set:
 - `A` record: `@` -> `<VPS_IP>`
 - `A` record: `www` -> `<VPS_IP>`
 
@@ -61,6 +64,20 @@ bash deploy/deploy-app.sh
 This clones the repo, `npm ci`, `npm run build`, copies `.env` from the
 template, installs the systemd service, and wires up nginx.
 
+`data/catalog.json` (category products) is gitignored -- copy it up
+separately:
+```bash
+scp -i ~/.ssh/lapanza_vps_deploy data/catalog.json deploy@<VPS_IP>:/opt/lapanza/app/data/catalog.json
+```
+Do this *before* the service first starts (or delete `data/lapanza.db*` and
+restart it after) so the first-boot migration picks up real category data
+instead of an empty catalog.
+
+Filament types/colours, shipping options, and settings live only in the
+dev SQLite DB (never exported to a file) -- export/import them once via a
+short Node script reading/writing those specific tables, rather than
+copying the whole dev DB (which also carries test accounts/orders).
+
 ## 5. Fill in real secrets on the server
 ```bash
 nano /opt/lapanza/app/.env
@@ -68,10 +85,10 @@ sudo systemctl restart lapanza-admin
 ```
 Fill in Gmail app password and Payfast credentials directly here — never
 paste these into chat with me or any AI tool. `SITE_URL`/`API_URL` are
-already set to `https://lapanzaonline.co.za` in the template.
+already set to `https://www.lapanza3d.co.za` in the template.
 
 ## 6. First-run admin account
-Visit `https://lapanzaonline.co.za/admin/` (or `http://<VPS_IP>/admin/`
+Visit `https://www.lapanza3d.co.za/admin/` (or `http://<VPS_IP>/admin/`
 before DNS/SSL are live) — first boot shows a "create your admin account"
 screen since the shipped DB has no admin users yet. Set a real
 username/password there.
@@ -79,15 +96,15 @@ username/password there.
 ## 7. Enable HTTPS
 Once DNS resolves to the VPS:
 ```bash
-sudo certbot --nginx -d lapanzaonline.co.za -d www.lapanzaonline.co.za
+sudo certbot --nginx -d lapanza3d.co.za -d www.lapanza3d.co.za
 ```
 Follow the prompts (email for renewal notices, agree to terms, choose
 redirect HTTP->HTTPS: yes). Certbot auto-renews via a systemd timer it
 installs — nothing further needed.
 
 ## 8. Smoke test
-- `https://lapanzaonline.co.za/` — homepage loads, cart empty
-- `https://lapanzaonline.co.za/admin/` — login works, dashboard loads
+- `https://www.lapanza3d.co.za/` — homepage loads, cart empty
+- `https://www.lapanza3d.co.za/admin/` — login works, dashboard loads
 - Place a sandbox Payfast order end to end
 - Submit a design request, confirm the owner-notification email arrives
   (needs `GMAIL_APP_PASSWORD` filled in)
@@ -110,3 +127,6 @@ Pulls latest `main`, rebuilds, restarts the service. `.env` is untouched
   `sqlite3 data/lapanza.db ".backup /opt/lapanza/backups/$(date +%F).db"`.
 - To go from Payfast sandbox to live: fill in `PAYFAST_MERCHANT_*` in
   `.env`, set `PAYFAST_MODE=live`, restart the service.
+- better-sqlite3 in this repo requires Node **>=22** -- installing Node 20
+  will let `npm install` "succeed" with only a warning, then segfault the
+  service on every boot. Always Node 22.
