@@ -200,6 +200,7 @@ function colourCards(colours, filament) {
                   <p class="font-medium mb-1 tracking-tight">${c.name}</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">${c.sku}</p>
                   <p class="text-terracotta font-semibold">${c.price}</p>
+                  <p class="text-[0.72rem] mt-0.5 ${c.stockQty > 0 ? 'text-espresso/50' : 'text-terracotta font-semibold'}">${c.stockQty > 0 ? `${c.stockQty} in stock` : 'Out of stock'}</p>
                   ${addToCartButton({
                     productId: `filament:${filament.slug}:${c.sku}`,
                     name: `${filament.name} — ${c.name}`,

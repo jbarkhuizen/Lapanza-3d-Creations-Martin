@@ -46,7 +46,7 @@ These are real incidents from this project's build/deploy history — documented
 | Automated backups | Live — daily + on-boot, 30-backup retention, admin "Backups" view. Still on the *same disk* as the live DB, not yet off-server |
 | Uptime monitoring | `/api/health` verifies real DB connectivity (503 on failure). Setup guide at `docs/UPTIME_MONITORING.md` — whether an actual monitor is configured depends on that manual, third-party account-signup step having been completed by the owner |
 | Visitor analytics | Live — first-party, anonymous pageview/heartbeat tracking, admin "Analytics" page. No cookie/tracking disclosure shown to visitors yet (ties into the still-missing Privacy Policy page) |
-| Test suite | 160/160 passing (`node --test`), run before every commit |
+| Test suite | 161/161 passing (`node --test`), run before every commit |
 | CI/CD | None — manual test-then-push-then-SSH-deploy |
 | Staging environment | None — the VPS is production from first deploy |
 

@@ -43,6 +43,41 @@ test('generate-pages renders an <img> for a colour with imageUrl, placeholder te
   }
 });
 
+test('generate-pages renders an in-stock count for stocked colours, "Out of stock" for zero/missing stock', () => {
+  const filamentsPath = path.join(root, 'src', 'data', 'filaments.json');
+  const backup = fs.readFileSync(filamentsPath, 'utf8');
+
+  try {
+    fs.writeFileSync(
+      filamentsPath,
+      JSON.stringify([
+        {
+          slug: 'test-pla',
+          name: 'Test PLA',
+          description: 'A test filament',
+          specs: [],
+          colours: [
+            { name: 'Plenty', sku: 'SKU-1', price: 'R299', stockQty: 12 },
+            { name: 'Zero', sku: 'SKU-2', price: 'R299', stockQty: 0 },
+            { name: 'Unset', sku: 'SKU-3', price: 'R299' },
+          ],
+        },
+      ]),
+    );
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    const html = fs.readFileSync(path.join(root, 'filament', 'test-pla.html'), 'utf8');
+    assert.match(html, /12 in stock/);
+    // A colour with 0 stock and one with no stockQty field at all must both
+    // read "Out of stock" -- undefined is not a truthy stock count.
+    assert.strictEqual((html.match(/Out of stock/g) || []).length, 2);
+  } finally {
+    fs.writeFileSync(filamentsPath, backup);
+    fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+  }
+});
+
 test('generate-pages skips category pages missing from categories.json instead of crashing', () => {
   const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
   const warningsPath = path.join(root, 'data', 'publish-warnings.json');

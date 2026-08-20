@@ -64,6 +64,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Backups** | Automated daily database backups (in-process scheduler, 30-backup retention) + an admin "Backups" view (Settings group) to run one on demand, and list/download/delete existing ones | 149/149 |
 | **Uptime monitoring** | `/api/health` strengthened to verify real database connectivity (returns `503` on DB failure, not just a bare liveness `200`) so an external monitor actually catches a stuck/corrupted DB, not just a dead process; documented setup guide for a free-tier UptimeRobot monitor | 151/151 |
 | **Visitor analytics** | First-party, privacy-minimal visitor tracking (`page_views` table + in-memory "active now"), new admin Analytics page with live active-visitor count, active-registered-clients list, and historical visit/unique-visitor/top-pages stats | 160/160 |
+| **Storefront stock display** | Each filament colour card on the public site now shows its stock level below the price — `"{N} in stock"` or `"Out of stock"` — sourced from the same `stockQty` already flowing through `filaments.json`, no new data pipeline needed | 161/161 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -244,7 +245,7 @@ This lookup happens **server-side on every checkout**, never trusting a client-s
 |---|---|
 | Vite (multi-page) | Bundles every top-level `*.html` + `car-parts/*.html` + `filament/*.html` as separate entries (see `vite.config.js`'s `htmlEntries()`) into `dist/` |
 | `scripts/generate-pages.mjs` | **Not** part of the Vite build — a separate Node script, run via `npm run generate` or the admin "Publish to site" button, that reads the DB/catalog.json and regenerates the committed static HTML source files (which Vite then bundles) |
-| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 160 tests across 22 `*.test.js` files |
+| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 161 tests across 22 `*.test.js` files |
 
 ---
 
@@ -1193,6 +1194,7 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
 - **Key fields (filament):** slug, name, description, colourNote, specs (array), seoTitle/Description, status, featured, sortOrder; per colour: name, hex, sku, weightG, shippingWeightG, rollLengthM, priceRand, stockQty, image, notes.
 - **Key fields (category items):** varies by category — stored in `catalog.json`, not SQLite.
 - **Business rules:** SKU is globally unique across all filament colours (enforced at DB level). Changes here are **not** live on the storefront until "Publish to site" is run (§8.8).
+- **Storefront display:** each filament colour's static page card shows the price and, directly below it, the live stock count at last publish — `"{N} in stock"`, or `"Out of stock"` (styled to match the price colour, drawing the eye) when `stockQty` is `0` or unset. This is **display-only** — a 0-stock colour's "Add to Cart" button is still rendered and functional; nothing currently blocks checkout on stock level (see §15 — the same absence of enforcement already noted for in-house filament applies here too, on the sellable catalog).
 - **Endpoints:** §7.6. **Tables:** `filament_types`, `filament_colours` (+ `catalog.json` for category items, file-based).
 
 ### 9.10 Registered Users (Admin) — see also §9.4
@@ -1303,6 +1305,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 | FR-23 | Admin sidebar shall be organised into Client Side / Local Management / Settings groups | Phase 4 |
 | FR-24 | System shall automatically back up the database on a schedule with retention, and admin shall be able to trigger, view, download, and delete backups on demand | Post-launch |
 | FR-25 | System shall track site visits (total and per-page, historically) and show admin a live count of currently-active visitors, distinguishing anonymous traffic from currently-active registered customers | Post-launch |
+| FR-26 | Each filament colour's storefront page shall display its current stock level directly below its price | Post-launch |
 
 ### 10.2 Non-Functional Requirements
 
@@ -1313,7 +1316,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 | NFR-03 | **Availability** — process auto-restarts on failure (systemd `Restart=on-failure`) | Implemented |
 | NFR-04 | **Transport security** — HTTPS enforced site-wide, HTTP force-redirects | Implemented (certbot) |
 | NFR-05 | **Auditability** — every schema change is additive/idempotent, safe to re-run on every boot | Implemented |
-| NFR-06 | **Testability** — automated test coverage for all backend business logic | 160 tests, `node --test`, no test framework dependency |
+| NFR-06 | **Testability** — automated test coverage for all backend business logic | 161 tests, `node --test`, no test framework dependency |
 | NFR-07 | **Deployability** — one-command deploy from git to running production service | `deploy/deploy-app.sh` |
 | NFR-08 | **Email deliverability** — outbound mail failures never block the primary user action (checkout, registration) | Best-effort, try/catch around every send |
 | NFR-09 | **Backup** — database is a single portable file, trivially backupable | Implemented — automated daily backup + on-demand admin backups, 30-backup retention (§9.18). Backups currently live on the same disk as the live DB, not yet off-server — see §15. |
@@ -1415,7 +1418,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 ### 12.1 Development Workflow (as practised)
 
 1. Change implemented locally against a local SQLite DB (`data/lapanza.db`, gitignored).
-2. `node --test` run — **full suite must pass (160/160)** before any commit.
+2. `node --test` run — **full suite must pass (161/161)** before any commit.
 3. `git add` (never blanket `-A` for sensitive paths) → commit with a descriptive message → `git push origin main`.
 4. No CI/CD pipeline (no GitHub Actions observed) — testing and deployment are both manual/assistant-driven.
 5. No pull-request/branch-review workflow observed — all work committed directly to `main`.
@@ -1478,7 +1481,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 160 tests across 22 test files, 100% passing at last recorded run.
+- **Current count:** 161 tests across 22 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases
@@ -1622,6 +1625,14 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | T-81 | `POST /api/analytics/beacon` with a missing `visitorId` (malformed beacon) | Negative (graceful) | Still `204` — a fire-and-forget client-side call is never going to check the response, so this must never surface as an error |
 | T-82 | `GET /api/analytics/active` / `/summary` without an admin session | Negative | `401 Unauthorized` |
 
+#### Storefront Stock Display
+
+| # | Case | Type | Expected result |
+|---|---|---|---|
+| T-83 | Generate a filament page with a colour whose `stockQty` is a positive number | Positive | `"{N} in stock"` rendered, muted styling |
+| T-84 | Generate a filament page with a colour whose `stockQty` is `0` | Negative (the actual point of this label) | `"Out of stock"` rendered, styled to draw the eye (same colour treatment as the price) |
+| T-85 | Generate a filament page with a colour that has no `stockQty` field at all | Positive (edge — defensive default) | `"Out of stock"` — `undefined` must never be treated as "in stock" |
+
 ### 13.3 Non-Functional / Infra Test Cases (manually verified during deployment)
 
 | # | Case | Type | Result |
@@ -1670,6 +1681,7 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | **Dual product storage remains unmerged** | By design (see §2.1), but it is genuine ongoing complexity — any future developer must remember category items live in a gitignored JSON file, not the database, and are content the deploy process must copy separately. |
 | **`uuid` package present but mostly unused** | Most IDs use Node's built-in `crypto.randomUUID()` instead — `uuid` is a listed dependency with limited actual call sites; worth auditing for removal. |
 | **No in-house filament stock-sufficiency check** | `server/print-jobs.js` logs filament consumption (`used_g`/`used_m`) unconditionally when a print job is saved — there is no check against `rolls_available × weight_g` before allowing the save, so logged usage can exceed physically available stock with no warning. Confirmed by direct code inspection (§13.2, T-55), not merely inferred. |
+| **Checkout does not check sellable-catalog stock before allowing a sale** | `server/orders.js`'s stock decrement is `Math.max(0, stock_qty - quantity)` — it only ever floors the *stored* value at zero, it never rejects a checkout for a colour that's already at 0 (or would go negative). Combined with the new storefront "Out of stock" label (§9.9) being purely informational, a customer can still add and pay for an item shown as out of stock. Two customers can also both buy the last unit of a low-stock colour simultaneously. |
 | **No cookie/tracking consent notice shown to visitors** | Visitor analytics (§9.20) collects anonymous behavioural data without any on-page disclosure or opt-out — no cookie banner, no "we track your visits" notice. The tracking itself is deliberately privacy-minimal (no IP/fingerprint), but the *absence of disclosure* is still a gap, and ties directly into the missing-Privacy-Policy item above. |
 | **"Active now" resets on every backend restart** | The active-visitor map is deliberately in-memory (§9.20) — correct for its purpose (no historical value in heartbeat data), but means the live count reads 0 for up to 5 minutes after every deploy/restart until visitors' next beacon repopulates it, not an actual outage. |
 
