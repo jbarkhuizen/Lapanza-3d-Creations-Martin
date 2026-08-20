@@ -63,6 +63,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Post-launch data load** | Bulk-imported 20 real customer records and 8 historical invoices (INV-0001–INV-0008) into production; added admin controls for registered users (manual verify, resend verification, delete/revoke) | 143/143 |
 | **Backups** | Automated daily database backups (in-process scheduler, 30-backup retention) + an admin "Backups" view (Settings group) to run one on demand, and list/download/delete existing ones | 149/149 |
 | **Uptime monitoring** | `/api/health` strengthened to verify real database connectivity (returns `503` on DB failure, not just a bare liveness `200`) so an external monitor actually catches a stuck/corrupted DB, not just a dead process; documented setup guide for a free-tier UptimeRobot monitor | 151/151 |
+| **Visitor analytics** | First-party, privacy-minimal visitor tracking (`page_views` table + in-memory "active now"), new admin Analytics page with live active-visitor count, active-registered-clients list, and historical visit/unique-visitor/top-pages stats | 160/160 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -243,7 +244,7 @@ This lookup happens **server-side on every checkout**, never trusting a client-s
 |---|---|
 | Vite (multi-page) | Bundles every top-level `*.html` + `car-parts/*.html` + `filament/*.html` as separate entries (see `vite.config.js`'s `htmlEntries()`) into `dist/` |
 | `scripts/generate-pages.mjs` | **Not** part of the Vite build — a separate Node script, run via `npm run generate` or the admin "Publish to site" button, that reads the DB/catalog.json and regenerates the committed static HTML source files (which Vite then bundles) |
-| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 151 tests across 21 `*.test.js` files |
+| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 160 tests across 22 `*.test.js` files |
 
 ---
 
@@ -322,6 +323,7 @@ lapanza-3d-fullsite/
 | `uploads.js` | Multer storage configs + allowed-extension lists per upload type (filament images, resource images/files, design-request attachments, print-job images/files) |
 | `jobs.js` | Background/periodic tasks: cancelling stale pending-payment orders, and the daily automated database backup (`startAutoBackupJob`) |
 | `backups.js` | Database backup lifecycle — `createBackup()` (better-sqlite3's online backup API, safe against a live WAL-mode DB), `listBackups()`, `deleteBackup()`, `getBackupPath()`, `pruneOldBackups()` |
+| `analytics.js` | Visitor tracking — `recordPageView()` (writes to `page_views`), `touchActiveVisitor()`/`getActiveVisitors()`/`pruneActiveVisitors()` (in-memory only, never persisted), `getVisitSummary()` (historical totals/daily breakdown/top pages) |
 
 ### 5.3 Frontend Structure (`src/js/`)
 
@@ -335,7 +337,8 @@ Each public-facing page has its own Vite entry point (registered in `vite.config
 | `account-entry.js` | `account.html` | Register/login/logout, order history |
 | `design-request-entry.js` | `design-request.html` | Custom design request form submission (with file uploads) |
 | `resources-entry.js` | `resources.html` | 3D Resources gallery listing + download links |
-| `site.js` | *(imported by every page)* | Mounts `nav.js` (sidebar) + `cart-ui.js` (cart drawer, add-to-cart toast), theme toggle |
+| `site.js` | *(imported by every page)* | Mounts `nav.js` (sidebar) + `cart-ui.js` (cart drawer, add-to-cart toast) + `analytics.js` (visitor beacon), theme toggle |
+| `analytics.js` | *(shared)* | Sends a pageview beacon on load + a ~45s heartbeat while the tab stays visible, via `navigator.sendBeacon` — anonymous, client-generated visitor id only, no IP/fingerprinting |
 | `cart.js` | *(shared)* | localStorage-backed cart state (`getCart`, `addItem`, `updateQuantity`, `removeItem`, `clearCart`), dispatches a `cart:updated` DOM event on every mutation |
 | `cart-ui.js` | *(shared)* | Cart drawer UI, floating cart button + badge, add-to-cart toast notification |
 | `nav.js` | *(shared)* | Sidebar navigation rendering (shared markup across every page) |
@@ -352,7 +355,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-18 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+19 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -366,6 +369,7 @@ erDiagram
     FILAMENT_TYPES ||--o{ FILAMENT_COLOURS : has
     PRINT_JOBS ||--o{ PRINT_JOB_FILAMENTS : uses
     PRINT_JOB_FILAMENTS }o--|| IN_HOUSE_FILAMENT : consumes
+    CLIENTS |o--o{ PAGE_VIEWS : "browses (when logged in)"
     ADMINS {
         text id PK
         text username UK
@@ -500,6 +504,13 @@ erDiagram
     SETTINGS {
         text key PK
         text value
+    }
+    PAGE_VIEWS {
+        text id PK
+        text visitor_id "anonymous, client-generated"
+        text client_id FK "only set if logged in"
+        text path
+        text created_at
     }
 ```
 
@@ -718,6 +729,18 @@ Supplier expense tracking.
 | created_at, approved_at, sent_at | TEXT NULL | |
 | sent_count, failed_count | INTEGER | |
 
+#### `page_views`
+One row per real page load (never per heartbeat — see §9.20). Post-launch addition.
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | |
+| visitor_id | TEXT NOT NULL | Random, client-generated (localStorage), carries no personal information on its own |
+| client_id | TEXT FK → clients(id) NULL | Only set when the visitor holds a valid logged-in client session at that moment — this is the one column on this table that ties a row to a real, identified person |
+| path | TEXT NOT NULL | Truncated to 300 chars server-side |
+| referrer | TEXT NOT NULL DEFAULT '' | Truncated to 300 chars server-side |
+| created_at | TEXT NOT NULL | |
+| *(indexes)* | `created_at`, `visitor_id` | |
+
 ---
 
 ## 7. API Reference
@@ -886,7 +909,15 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | GET | `/api/backups/:filename/download` | Admin | Download a specific backup file |
 | DELETE | `/api/backups/:filename` | Admin | Delete a specific backup file |
 
-### 7.18 Static Serving
+### 7.19 Visitor Analytics
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| POST | `/api/analytics/beacon` | Public (rate-limited, 30/min — much more permissive than other public routes since legitimate traffic hits this on every page load plus a periodic heartbeat) | Records a pageview or updates the in-memory active-visitor map (heartbeat) |
+| GET | `/api/analytics/active` | Admin | Live "who's on the site right now" — total/anonymous/registered counts + a list of active registered clients |
+| GET | `/api/analytics/summary` | Admin | Historical totals — all-time visits, unique visitors, today's visits, last-30-days daily breakdown, top 10 pages |
+
+### 7.20 Static Serving
 
 | Route | Behaviour |
 |---|---|
@@ -1217,10 +1248,25 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
   - Every filename accepted from a request (download, delete) is validated against path traversal before touching the filesystem.
 - **Endpoints:** §7.17. **Tables:** none directly (operates on the SQLite file itself, not through it).
 
-### 9.19 Admin Sidebar Structure
+### 9.20 Visitor Analytics (Admin)
+
+- **Purpose:** Traffic visibility — how many people visit, how much traffic historically, and who's on the site right now (specifically, which known/registered customers).
+- **Actors:** Anonymous/logged-in customer (generates the data passively, via `src/js/analytics.js`); Admin (views it).
+- **Key fields displayed:** active-now count, registered-clients-active count, visits today, total visits, unique visitors all-time, a live table of which registered clients are active and on what page, last-30-days daily visit/unique-visitor counts, top 10 pages all-time.
+- **Business rules:**
+  - Every public page sends a beacon on load (`type: 'pageview'`) and roughly every 45s while the tab stays open **and visible** (`type: 'heartbeat'`) — a backgrounded tab does not count as active. `navigator.sendBeacon` is used so the beacon survives page unload/navigation without blocking it.
+  - Only pageview beacons are written to the durable `page_views` table. Heartbeats update the in-memory "active now" map only — never persisted, since heartbeat noise has no historical value once a visitor leaves.
+  - "Active now" = any visitor whose most recent beacon (pageview or heartbeat) was within the last 5 minutes. Pruned lazily on every read of `/api/analytics/active`, not on a timer.
+  - A visitor's `client_id` is attached to their beacon (and therefore their page views + active-now entry) **only** if they hold a valid, non-expired client session cookie at that exact moment — an anonymous browser gets no `client_id`, ever.
+  - The visitor identifier (`visitorId`) is a random UUID generated client-side and stored in `localStorage` — it is not an IP address, not a fingerprint, and carries no personal information by itself. It exists purely to distinguish "one visitor across several page loads" from "several different visitors."
+  - All date-grouping queries (today's visits, last-30-days breakdown) use SQLite's `'localtime'` modifier explicitly — the server runs in SAST (UTC+2) and SQLite's `date()`/`datetime()` default to UTC, which silently shifts day boundaries by a calendar day near midnight otherwise. (This exact class of bug already hit invoice-date import once in this project — see §12.5 — the fix was applied proactively here rather than waiting to hit it again.)
+- **Privacy note:** while the anonymous visitor ID alone is not personal information, the `client_id` linkage means a **logged-in customer's browsing on this site is being logged against their real identity** while they're logged in. This is a genuine POPIA-relevant data-processing activity that the site's still-missing Privacy Policy (§15) should disclose — this feature increases the urgency of that pre-existing gap rather than being a new one on its own.
+- **Endpoints:** §7.19. **Tables:** `page_views`, `clients` (read-only, to resolve active client names/emails).
+
+### 9.21 Admin Sidebar Structure
 
 Three groups (Phase 4 reorganisation, per explicit user request):
-- **Client Side:** Dashboard, Product catalog, Orders, +New order, Clients, Registered users, Design requests, Invoice History, 3D Resources, Shipping options, Newsletter, WhatsApp Updates
+- **Client Side:** Dashboard, Analytics, Product catalog, Orders, +New order, Clients, Registered users, Design requests, Invoice History, 3D Resources, Shipping options, Newsletter, WhatsApp Updates
 - **Local Management:** Stock management, In-House Filament, Print Job Costing, Purchase History
 - **Settings:** Backups, Site settings
 
@@ -1256,6 +1302,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 | FR-22 | System shall reset the shopping cart when the customer returns to the homepage | Phase 4 |
 | FR-23 | Admin sidebar shall be organised into Client Side / Local Management / Settings groups | Phase 4 |
 | FR-24 | System shall automatically back up the database on a schedule with retention, and admin shall be able to trigger, view, download, and delete backups on demand | Post-launch |
+| FR-25 | System shall track site visits (total and per-page, historically) and show admin a live count of currently-active visitors, distinguishing anonymous traffic from currently-active registered customers | Post-launch |
 
 ### 10.2 Non-Functional Requirements
 
@@ -1266,12 +1313,13 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 | NFR-03 | **Availability** — process auto-restarts on failure (systemd `Restart=on-failure`) | Implemented |
 | NFR-04 | **Transport security** — HTTPS enforced site-wide, HTTP force-redirects | Implemented (certbot) |
 | NFR-05 | **Auditability** — every schema change is additive/idempotent, safe to re-run on every boot | Implemented |
-| NFR-06 | **Testability** — automated test coverage for all backend business logic | 151 tests, `node --test`, no test framework dependency |
+| NFR-06 | **Testability** — automated test coverage for all backend business logic | 160 tests, `node --test`, no test framework dependency |
 | NFR-07 | **Deployability** — one-command deploy from git to running production service | `deploy/deploy-app.sh` |
 | NFR-08 | **Email deliverability** — outbound mail failures never block the primary user action (checkout, registration) | Best-effort, try/catch around every send |
 | NFR-09 | **Backup** — database is a single portable file, trivially backupable | Implemented — automated daily backup + on-demand admin backups, 30-backup retention (§9.18). Backups currently live on the same disk as the live DB, not yet off-server — see §15. |
 | NFR-10 | **Compliance (WhatsApp)** — business-initiated broadcasts use only Meta-pre-approved templates | Implemented — free text is not permitted by Meta policy and the code enforces this shape |
 | NFR-11 | **Observability** — an external monitor detects an outage before a customer reports one | `/api/health` verifies real DB connectivity (not just process liveness) and is designed to be polled by a third-party uptime service; see `docs/UPTIME_MONITORING.md`. **The actual monitor account/configuration is a manual, user-owned step** (third-party account signup) — the code-side support for it is implemented, but whether a monitor is actually configured and alerting depends on that manual step having been completed. |
+| NFR-12 | **Privacy-by-design (visitor analytics)** — traffic data is collected without capturing IP addresses, fingerprints, or third-party tracking cookies | Implemented — anonymous tracking uses a random client-generated ID only. Real personal data (customer identity) is only ever linked when the visitor is already a logged-in, authenticated client — see the privacy note in §9.20. Not a substitute for an actual Privacy Policy page (§15). |
 
 ---
 
@@ -1367,7 +1415,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 ### 12.1 Development Workflow (as practised)
 
 1. Change implemented locally against a local SQLite DB (`data/lapanza.db`, gitignored).
-2. `node --test` run — **full suite must pass (151/151)** before any commit.
+2. `node --test` run — **full suite must pass (160/160)** before any commit.
 3. `git add` (never blanket `-A` for sensitive paths) → commit with a descriptive message → `git push origin main`.
 4. No CI/CD pipeline (no GitHub Actions observed) — testing and deployment are both manual/assistant-driven.
 5. No pull-request/branch-review workflow observed — all work committed directly to `main`.
@@ -1430,7 +1478,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 151 tests across 21 test files, 100% passing at last recorded run.
+- **Current count:** 160 tests across 22 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases
@@ -1557,6 +1605,23 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | T-69 | `GET /api/health` with a reachable database | Positive | `200 {"ok": true, ...}` |
 | T-70 | `GET /api/health` with the database connection closed/unreachable | Negative (the actual point of this endpoint) | `503 {"ok": false, ...}` — proves this is a real health check, not a bare liveness ping that would falsely report `200` here |
 
+#### Visitor Analytics
+
+| # | Case | Type | Expected result |
+|---|---|---|---|
+| T-71 | `recordPageView` with a valid visitorId + path | Positive | Row written to `page_views`; visitor also marked active |
+| T-72 | `recordPageView` with an empty visitorId, or an empty path | Negative | Rejected — "visitorId is required" / "path is required" |
+| T-73 | `recordPageView` with a `clientId` provided | Positive | `client_id` column populated on the written row |
+| T-74 | `touchActiveVisitor` (heartbeat) with no corresponding DB write | Positive | Visitor appears in "active now" without a `page_views` row existing |
+| T-75 | `getActiveVisitors` with a mix of anonymous and registered-client visitors | Positive | Correctly splits `anonymousActive`/`registeredActive`, resolves real name/email for registered ones |
+| T-76 | `pruneActiveVisitors` with an entry older than the active window | Positive | Stale entry removed, recent entry kept |
+| T-77 | `getVisitSummary` against a database with seeded visits across two visitor IDs and two paths | Positive | Correct `totalVisits`, `uniqueVisitorsAllTime`, `todayVisits`, daily breakdown, and top-pages ranking |
+| T-78 | `getVisitSummary` against an empty database | Positive (edge) | Zeroes and empty arrays, not an error |
+| T-79 | `POST /api/analytics/beacon` with `type: 'pageview'` | Positive | `204`, row persisted |
+| T-80 | `POST /api/analytics/beacon` with `type: 'heartbeat'` | Positive | `204`, no row persisted, visitor still counted active |
+| T-81 | `POST /api/analytics/beacon` with a missing `visitorId` (malformed beacon) | Negative (graceful) | Still `204` — a fire-and-forget client-side call is never going to check the response, so this must never surface as an error |
+| T-82 | `GET /api/analytics/active` / `/summary` without an admin session | Negative | `401 Unauthorized` |
+
 ### 13.3 Non-Functional / Infra Test Cases (manually verified during deployment)
 
 | # | Case | Type | Result |
@@ -1592,7 +1657,7 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 
 | Item | Detail |
 |---|---|
-| **README.md is stale** | Still documents pre-Phase-2 local-dev-only setup and a hardcoded admin password that no longer exists/applies. Should be rewritten to reflect Phases 2–4 and production deployment, or explicitly superseded by this document. |
+| **No Privacy Policy / Terms & Conditions / Returns Policy pages** | The site collects real personal information (names, addresses, phone numbers at checkout; browsing behaviour linked to identity for logged-in customers via visitor analytics, §9.20) with no page disclosing what's collected or why — a genuine POPIA-relevant gap, and Payfast's own merchant approval process typically expects a refund-policy URL too. Not addressed by this or any prior phase. |
 | **Backups are on-server, not off-server** | Automated daily backups now run (see §9.18), but they're written to `data/backups/` on the *same* VPS disk as the live database. This protects against bad data/deploys/human error, but not against that disk or the whole VPS failing — a genuine disaster-recovery posture needs backups copied somewhere physically separate (a different host, or object storage). `paths.js`'s `BACKUPS_DIR` env override already supports pointing at a different mount if/when one exists; nothing currently does that. |
 | **No CI/CD pipeline** | No GitHub Actions or equivalent — tests are run manually before each commit, deploys are manually triggered over SSH. |
 | **No staging environment** | The VPS is production from first deploy; there is no intermediate environment to test against before changes reach real customers. |
@@ -1605,6 +1670,8 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | **Dual product storage remains unmerged** | By design (see §2.1), but it is genuine ongoing complexity — any future developer must remember category items live in a gitignored JSON file, not the database, and are content the deploy process must copy separately. |
 | **`uuid` package present but mostly unused** | Most IDs use Node's built-in `crypto.randomUUID()` instead — `uuid` is a listed dependency with limited actual call sites; worth auditing for removal. |
 | **No in-house filament stock-sufficiency check** | `server/print-jobs.js` logs filament consumption (`used_g`/`used_m`) unconditionally when a print job is saved — there is no check against `rolls_available × weight_g` before allowing the save, so logged usage can exceed physically available stock with no warning. Confirmed by direct code inspection (§13.2, T-55), not merely inferred. |
+| **No cookie/tracking consent notice shown to visitors** | Visitor analytics (§9.20) collects anonymous behavioural data without any on-page disclosure or opt-out — no cookie banner, no "we track your visits" notice. The tracking itself is deliberately privacy-minimal (no IP/fingerprint), but the *absence of disclosure* is still a gap, and ties directly into the missing-Privacy-Policy item above. |
+| **"Active now" resets on every backend restart** | The active-visitor map is deliberately in-memory (§9.20) — correct for its purpose (no historical value in heartbeat data), but means the live count reads 0 for up to 5 minutes after every deploy/restart until visitors' next beacon repopulates it, not an actual outage. |
 
 ---
 

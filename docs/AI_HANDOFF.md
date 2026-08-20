@@ -16,7 +16,7 @@ A live e-commerce + operations platform for a South African 3D-printing/filament
 ## Start here, in order
 
 1. `README.md` — quick local-dev setup
-2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (18 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
+2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (19 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
 3. `deploy/DEPLOY.md` — production deployment/SSH runbook specifically
 4. `docs/UPTIME_MONITORING.md` — external monitoring setup (manual, third-party account signup — not something to attempt on the user's behalf)
 5. `.env.example` and `deploy/.env.production.template` — every config variable, documented
@@ -32,6 +32,7 @@ These are real incidents from this project's build/deploy history — documented
 - **Product data lives in two places, not one:** the sellable filament catalog is in SQLite (`filament_types`/`filament_colours`); category items (toys/homeware/phones/car-parts) are in `data/catalog.json`, which is **gitignored** — it's real business data, not code, and must be copied to a new server separately from `git clone`.
 - **Storefront static pages are not live-rendered.** They're pre-generated HTML (`scripts/generate-pages.mjs`, triggered by the admin "Publish to site" button). Catalog edits in the admin do not appear on the public site until that runs.
 - **Checkout prices are always server-resolved, never trust a client-submitted price** — this is a deliberate security property, not an oversight to "simplify."
+- **SQLite `date()`/`datetime()` default to UTC; the server runs in SAST (UTC+2).** Any query grouping by calendar day (invoice dates, analytics daily breakdowns) needs the `'localtime'` modifier explicitly, or day boundaries silently shift near midnight. Already bit this project once (imported invoice dates landed a day early) before being applied proactively elsewhere.
 - **`.env` secrets are never pasted into chat/AI tooling** — the working rule established for this project is that whoever has server access types secrets directly on the server (`nano /opt/lapanza/app/.env`). Don't ask for or accept Payfast keys, the Gmail app password, or WhatsApp tokens in conversation.
 
 ## Current production state (as of this handoff)
@@ -44,7 +45,8 @@ These are real incidents from this project's build/deploy history — documented
 | SSL | Live, Let's Encrypt via certbot, auto-renewing |
 | Automated backups | Live — daily + on-boot, 30-backup retention, admin "Backups" view. Still on the *same disk* as the live DB, not yet off-server |
 | Uptime monitoring | `/api/health` verifies real DB connectivity (503 on failure). Setup guide at `docs/UPTIME_MONITORING.md` — whether an actual monitor is configured depends on that manual, third-party account-signup step having been completed by the owner |
-| Test suite | 151/151 passing (`node --test`), run before every commit |
+| Visitor analytics | Live — first-party, anonymous pageview/heartbeat tracking, admin "Analytics" page. No cookie/tracking disclosure shown to visitors yet (ties into the still-missing Privacy Policy page) |
+| Test suite | 160/160 passing (`node --test`), run before every commit |
 | CI/CD | None — manual test-then-push-then-SSH-deploy |
 | Staging environment | None — the VPS is production from first deploy |
 
