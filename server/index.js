@@ -92,7 +92,8 @@ import {
   sendCampaign as sendWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
-import { startAutoCancelJob } from './jobs.js';
+import { startAutoCancelJob, startAutoBackupJob } from './jobs.js';
+import { createBackup, listBackups, deleteBackup, getBackupPath } from './backups.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
@@ -1383,6 +1384,45 @@ app.post('/api/publish', requireAuth, async (_req, res) => {
   }
 });
 
+// ---- Database backups ----
+// A daily backup already runs automatically (server/jobs.js's
+// startAutoBackupJob) -- these routes are for the admin "Backups" view:
+// see what's been taken, trigger one on demand, download or delete one.
+
+app.get('/api/backups', requireAuth, (_req, res) => {
+  res.json({ backups: listBackups() });
+});
+
+app.post('/api/backups', requireAuth, async (_req, res) => {
+  try {
+    const backup = await createBackup();
+    res.status(201).json({ backup });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Backup failed' });
+  }
+});
+
+app.get('/api/backups/:filename/download', requireAuth, (req, res) => {
+  let filePath;
+  try {
+    filePath = getBackupPath(req.params.filename);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  if (!filePath) return res.status(404).json({ error: 'Backup not found' });
+  res.download(filePath, req.params.filename);
+});
+
+app.delete('/api/backups/:filename', requireAuth, (req, res) => {
+  try {
+    const deleted = deleteBackup(req.params.filename);
+    if (!deleted) return res.status(404).json({ error: 'Backup not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // generate-pages.mjs runs as a spawned child (stdio: 'inherit'), so its
 // console.warn output reaches this process's own stdout, not the client —
 // it writes this sidecar file so we can report skipped categories back to
@@ -1590,6 +1630,7 @@ if (isMainModule) {
     console.log(`\n> Lapanza Admin API  http://localhost:${PORT}/admin/\n`);
   });
   startAutoCancelJob();
+  startAutoBackupJob();
 }
 
 export default app;

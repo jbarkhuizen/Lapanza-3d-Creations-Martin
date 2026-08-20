@@ -8,4 +8,5 @@ data/catalog.json
 data/lapanza.db
 data/lapanza.db-*
 data/publish-warnings.json
+data/backups/
 .env

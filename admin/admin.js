@@ -46,6 +46,13 @@ function formatDate(value) {
   }
 }
 
+function formatBytes(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** exp).toFixed(exp === 0 ? 0 : 1)} ${units[exp]}`;
+}
+
 function setTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('lapanza-admin-theme', theme);
@@ -92,6 +99,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-purchases'), route === 'purchases');
   show($('#view-print-jobs'), route === 'print-jobs');
   show($('#view-in-house-filament'), route === 'in-house-filament');
+  show($('#view-backups'), route === 'backups');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -113,12 +121,13 @@ function setRoute(route, { id } = {}) {
     purchases: ['Local Management', 'Purchase History'],
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
+    backups: ['Settings', 'Backups'],
     settings: ['Settings', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups');
 }
 
 async function boot() {
@@ -315,6 +324,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'catalog') {
         setRoute('catalog');
         await renderCatalog();
+      } else if (btn.dataset.route === 'backups') {
+        setRoute('backups');
+        await renderBackups();
       } else if (btn.dataset.route === 'settings') {
         setRoute('settings');
         await renderSettings();
@@ -1086,6 +1098,75 @@ function syncNestedFromDom() {
     available: $('[data-item="available"]', row)?.checked !== false,
     sortOrder: i,
   }));
+}
+
+// ---- Database backups ----
+// A daily backup already runs automatically (server/jobs.js) and keeps the
+// most recent 30 -- this view is for visibility into what's actually been
+// taken, plus an on-demand backup before something risky (a bulk import, a
+// schema-affecting deploy).
+
+async function renderBackups() {
+  const { backups } = await api('/api/backups');
+  const totalBytes = backups.reduce((sum, b) => sum + b.sizeBytes, 0);
+
+  const rows = backups
+    .map(
+      (b) => `
+        <tr data-filename="${escapeAttr(b.filename)}">
+          <td><code>${escapeHtml(b.filename)}</code></td>
+          <td>${escapeHtml(formatDate(b.createdAt))}</td>
+          <td>${escapeHtml(formatBytes(b.sizeBytes))}</td>
+          <td>
+            <a class="btn small" href="/api/backups/${encodeURIComponent(b.filename)}/download">Download</a>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-backups').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="run-backup" type="button">Run backup now</button>
+      <span class="muted">${escapeHtml(String(backups.length))} backup(s) &middot; ${escapeHtml(formatBytes(totalBytes))} total</span>
+    </div>
+    <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
+      A backup of the full database runs automatically once a day; the most recent 30 are kept and older ones are pruned automatically. Manual backups count toward that same limit.
+    </p>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4"><div class="empty">No backups yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#run-backup').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Backing up…';
+    try {
+      await api('/api/backups', { method: 'POST' });
+      toast('Backup created');
+      await renderBackups();
+    } catch (ex) {
+      toast(ex.message);
+      btn.disabled = false;
+      btn.textContent = 'Run backup now';
+    }
+  });
+
+  $$('#view-backups tbody tr[data-filename]').forEach((tr) => {
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm(`Delete backup ${tr.dataset.filename}? This cannot be undone.`)) return;
+      try {
+        await api(`/api/backups/${encodeURIComponent(tr.dataset.filename)}`, { method: 'DELETE' });
+        toast('Backup deleted');
+        await renderBackups();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
 }
 
 async function renderSettings() {

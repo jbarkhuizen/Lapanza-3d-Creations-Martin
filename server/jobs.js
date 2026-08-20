@@ -1,7 +1,10 @@
 import { cancelStalePendingOrders } from './orders.js';
+import { createBackup, pruneOldBackups } from './backups.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const CANCEL_AFTER_MS = 5 * 24 * HOUR_MS; // 5 days, per spec G.1
+const BACKUP_INTERVAL_MS = 24 * HOUR_MS; // daily
+const BACKUP_RETENTION_COUNT = 30; // ~1 month of daily backups
 
 // G.2: this project has no external process manager, cron, or container
 // orchestrator -- it runs as a single persistent `node server/index.js`
@@ -22,5 +25,25 @@ export function startAutoCancelJob(intervalMs = HOUR_MS) {
   run(); // also run once immediately on boot, don't wait a full interval for the first pass
   const timer = setInterval(run, intervalMs);
   timer.unref?.(); // don't keep the process alive on its own if everything else has shut down
+  return timer;
+}
+
+// Same in-process setInterval shape as startAutoCancelJob above -- no
+// external cron/scheduler in this project. Runs once on boot too, so a
+// freshly-deployed server has at least one backup within seconds rather
+// than waiting a full day for the first one.
+export function startAutoBackupJob(intervalMs = BACKUP_INTERVAL_MS, keep = BACKUP_RETENTION_COUNT) {
+  async function run() {
+    try {
+      const backup = await createBackup();
+      const pruned = pruneOldBackups(keep);
+      console.log(`Auto-backup: created ${backup.filename}${pruned ? `, pruned ${pruned} old backup(s)` : ''}`);
+    } catch (err) {
+      console.error('Auto-backup job failed:', err);
+    }
+  }
+  run();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
   return timer;
 }

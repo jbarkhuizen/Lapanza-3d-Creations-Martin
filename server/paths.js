@@ -19,6 +19,13 @@ export function uploadsDir() {
   return process.env.UPLOADS_DIR || path.join(process.cwd(), 'public', 'uploads');
 }
 
+// Deliberately its own override (not nested under DATA_DIR) so a host can
+// point backups at a separate disk/volume from the live DB -- defeats the
+// purpose of a backup if both live on the same disk that just failed.
+export function backupsDir() {
+  return process.env.BACKUPS_DIR || path.join(process.cwd(), 'data', 'backups');
+}
+
 export function publicDir() {
   return path.join(process.cwd(), 'public');
 }
