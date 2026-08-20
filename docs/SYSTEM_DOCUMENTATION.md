@@ -2,11 +2,11 @@
 
 **Document type:** Consolidated Architecture, Requirements, Functional Specification, Implementation & Test Record
 **Purpose:** Audit record and reimplementation reference — sufficient for a new team to understand, operate, or rebuild this system without access to the original author.
-**System version documented:** `2.0.0` (package.json), repository state as of commit `49e19fd` (branch `main`)
+**System version documented:** `2.0.0` (package.json), repository state as of commit `409037c` (branch `main`)
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-20
+**Document date:** 2026-08-20 (updated for checkout stock validation feature)
 
 ---
 
@@ -65,6 +65,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Uptime monitoring** | `/api/health` strengthened to verify real database connectivity (returns `503` on DB failure, not just a bare liveness `200`) so an external monitor actually catches a stuck/corrupted DB, not just a dead process; documented setup guide for a free-tier UptimeRobot monitor | 151/151 |
 | **Visitor analytics** | First-party, privacy-minimal visitor tracking (`page_views` table + in-memory "active now"), new admin Analytics page with live active-visitor count, active-registered-clients list, and historical visit/unique-visitor/top-pages stats | 160/160 |
 | **Storefront stock display** | Each filament colour card on the public site now shows its stock level below the price — `"{N} in stock"` or `"Out of stock"` — sourced from the same `stockQty` already flowing through `filaments.json`, no new data pipeline needed | 161/161 |
+| **Checkout stock validation** | Blocks order creation if any cart item's quantity exceeds available stock (`stockQty`); returns detailed error listing out-of-stock items + quantities. Closes the gap from the pre-validation period where out-of-stock items could be purchased (§15). Covers both online and manual (admin-created) orders via shared `resolveProductSnapshot()` validation. | 167/167 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -1681,7 +1682,6 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | **Dual product storage remains unmerged** | By design (see §2.1), but it is genuine ongoing complexity — any future developer must remember category items live in a gitignored JSON file, not the database, and are content the deploy process must copy separately. |
 | **`uuid` package present but mostly unused** | Most IDs use Node's built-in `crypto.randomUUID()` instead — `uuid` is a listed dependency with limited actual call sites; worth auditing for removal. |
 | **No in-house filament stock-sufficiency check** | `server/print-jobs.js` logs filament consumption (`used_g`/`used_m`) unconditionally when a print job is saved — there is no check against `rolls_available × weight_g` before allowing the save, so logged usage can exceed physically available stock with no warning. Confirmed by direct code inspection (§13.2, T-55), not merely inferred. |
-| **Checkout does not check sellable-catalog stock before allowing a sale** | `server/orders.js`'s stock decrement is `Math.max(0, stock_qty - quantity)` — it only ever floors the *stored* value at zero, it never rejects a checkout for a colour that's already at 0 (or would go negative). Combined with the new storefront "Out of stock" label (§9.9) being purely informational, a customer can still add and pay for an item shown as out of stock. Two customers can also both buy the last unit of a low-stock colour simultaneously. |
 | **No cookie/tracking consent notice shown to visitors** | Visitor analytics (§9.20) collects anonymous behavioural data without any on-page disclosure or opt-out — no cookie banner, no "we track your visits" notice. The tracking itself is deliberately privacy-minimal (no IP/fingerprint), but the *absence of disclosure* is still a gap, and ties directly into the missing-Privacy-Policy item above. |
 | **"Active now" resets on every backend restart** | The active-visitor map is deliberately in-memory (§9.20) — correct for its purpose (no historical value in heartbeat data), but means the live count reads 0 for up to 5 minutes after every deploy/restart until visitors' next beacon repopulates it, not an actual outage. |
 

@@ -32,6 +32,7 @@ These are real incidents from this project's build/deploy history — documented
 - **Product data lives in two places, not one:** the sellable filament catalog is in SQLite (`filament_types`/`filament_colours`); category items (toys/homeware/phones/car-parts) are in `data/catalog.json`, which is **gitignored** — it's real business data, not code, and must be copied to a new server separately from `git clone`.
 - **Storefront static pages are not live-rendered.** They're pre-generated HTML (`scripts/generate-pages.mjs`, triggered by the admin "Publish to site" button). Catalog edits in the admin do not appear on the public site until that runs.
 - **Checkout prices are always server-resolved, never trust a client-submitted price** — this is a deliberate security property, not an oversight to "simplify."
+- **Checkout validates stock before creating orders** — `server/orders.js`'s `createOrder()` rejects any order where any item's quantity exceeds its `stockQty`, returning a detailed error listing which items are out of stock. This applies to both online checkout and admin-created orders. Test coverage: 6 dedicated tests in `server/orders.test.js` (T-66–T-71).
 - **SQLite `date()`/`datetime()` default to UTC; the server runs in SAST (UTC+2).** Any query grouping by calendar day (invoice dates, analytics daily breakdowns) needs the `'localtime'` modifier explicitly, or day boundaries silently shift near midnight. Already bit this project once (imported invoice dates landed a day early) before being applied proactively elsewhere.
 - **`.env` secrets are never pasted into chat/AI tooling** — the working rule established for this project is that whoever has server access types secrets directly on the server (`nano /opt/lapanza/app/.env`). Don't ask for or accept Payfast keys, the Gmail app password, or WhatsApp tokens in conversation.
 
@@ -46,7 +47,8 @@ These are real incidents from this project's build/deploy history — documented
 | Automated backups | Live — daily + on-boot, 30-backup retention, admin "Backups" view. Still on the *same disk* as the live DB, not yet off-server |
 | Uptime monitoring | `/api/health` verifies real DB connectivity (503 on failure). Setup guide at `docs/UPTIME_MONITORING.md` — whether an actual monitor is configured depends on that manual, third-party account-signup step having been completed by the owner |
 | Visitor analytics | Live — first-party, anonymous pageview/heartbeat tracking, admin "Analytics" page. No cookie/tracking disclosure shown to visitors yet (ties into the still-missing Privacy Policy page) |
-| Test suite | 161/161 passing (`node --test`), run before every commit |
+| Checkout stock validation | Live — orders blocked if any cart item exceeds available stock; detailed error message lists out-of-stock items + quantities. Closes the pre-validation gap where out-of-stock items could be purchased. Covers both online checkout and admin-created orders |
+| Test suite | 167/167 passing (`node --test`), run before every commit |
 | CI/CD | None — manual test-then-push-then-SSH-deploy |
 | Staging environment | None — the VPS is production from first deploy |
 
