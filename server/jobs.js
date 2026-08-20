@@ -1,5 +1,5 @@
 import { cancelStalePendingOrders } from './orders.js';
-import { createBackup, pruneOldBackups } from './backups.js';
+import { createBackup, pruneOldBackups, syncOffsite } from './backups.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const CANCEL_AFTER_MS = 5 * 24 * HOUR_MS; // 5 days, per spec G.1
@@ -40,6 +40,16 @@ export function startAutoBackupJob(intervalMs = BACKUP_INTERVAL_MS, keep = BACKU
       console.log(`Auto-backup: created ${backup.filename}${pruned ? `, pruned ${pruned} old backup(s)` : ''}`);
     } catch (err) {
       console.error('Auto-backup job failed:', err);
+      return; // don't sync a possibly-broken local backup set offsite
+    }
+    // Separate try/catch: an offsite hiccup (network, rclone not yet
+    // configured on a fresh box, remote quota) must never be reported as
+    // "the backup failed" -- the local backup above already succeeded.
+    try {
+      syncOffsite();
+      console.log('Auto-backup: synced to offsite remote');
+    } catch (err) {
+      console.error('Offsite backup sync failed (local backup still succeeded):', err.message);
     }
   }
   run();

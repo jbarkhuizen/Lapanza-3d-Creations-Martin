@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { openDb } from './db.js';
-import { createBackup, listBackups, deleteBackup, getBackupPath, pruneOldBackups } from './backups.js';
+import { createBackup, listBackups, deleteBackup, getBackupPath, pruneOldBackups, syncOffsite } from './backups.js';
 
 // Isolates BACKUPS_DIR to a fresh temp directory per test (same override
 // mechanism paths.js documents for production disk-mount overrides) so
@@ -101,5 +101,36 @@ test('pruneOldBackups is a no-op when there are fewer backups than the keep coun
 
     assert.strictEqual(pruneOldBackups(30), 0);
     assert.strictEqual(listBackups().length, 1);
+  });
+});
+
+test('syncOffsite throws a clear error when no remote is configured', () => {
+  assert.throws(() => syncOffsite({ remote: undefined }), /BACKUP_RCLONE_REMOTE is not set/);
+});
+
+test('syncOffsite shells out to rclone sync with the backups dir and configured remote', async () => {
+  await withTempBackupsDir(async (dir) => {
+    const calls = [];
+    const result = syncOffsite({ remote: 'gdrive:', dir, run: (cmd, args) => calls.push({ cmd, args }) });
+    assert.strictEqual(result, true);
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].cmd, 'rclone');
+    assert.deepStrictEqual(calls[0].args, ['sync', dir, 'gdrive:']);
+  });
+});
+
+test('syncOffsite propagates a failure from the underlying rclone call', async () => {
+  await withTempBackupsDir(async (dir) => {
+    assert.throws(
+      () =>
+        syncOffsite({
+          remote: 'gdrive:',
+          dir,
+          run: () => {
+            throw new Error('rclone: didn\'t find section in config file');
+          },
+        }),
+      /didn't find section/,
+    );
   });
 });

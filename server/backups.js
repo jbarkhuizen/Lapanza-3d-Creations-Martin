@@ -1,7 +1,14 @@
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 import { getDb } from './db.js';
 import { backupsDir } from './paths.js';
+
+// Off-server copy (see docs/DEPLOY.md's "Off-server backups" section for
+// the one-time Google Drive service-account setup this depends on).
+// Un-set until that setup is done, so a fresh box just skips this step
+// with a clear reason rather than a cryptic rclone failure.
+const RCLONE_REMOTE = process.env.BACKUP_RCLONE_REMOTE;
 
 function ensureBackupsDir() {
   const dir = backupsDir();
@@ -73,4 +80,26 @@ export function pruneOldBackups(keep = 30) {
   const stale = listBackups().slice(keep);
   for (const b of stale) deleteBackup(b.filename);
   return stale.length;
+}
+
+// On-disk backups above protect against bad data, a bad deploy, or human
+// error -- but they live on the SAME disk as the live DB, so they're no
+// help at all against that disk, or the whole VPS, failing outright. This
+// mirrors the whole `backupsDir()` to a remote via rclone (not just the
+// latest file), so the remote self-corrects to match local retention --
+// whatever pruneOldBackups() removed locally also disappears remotely,
+// rather than growing an ever-larger, never-pruned remote copy.
+//
+// Shells out to the `rclone` binary (via execFileSync -- array args, no
+// shell string interpolation) rather than a Google API client library, so
+// this app's own dependency tree doesn't grow just for one nightly
+// directory copy; rclone already handles auth refresh, retries, and
+// resumable uploads. `run` is injectable so tests can stub it out without
+// a real rclone binary or network access.
+export function syncOffsite({ remote = RCLONE_REMOTE, dir = backupsDir(), run = execFileSync } = {}) {
+  if (!remote) {
+    throw new Error('BACKUP_RCLONE_REMOTE is not set — off-server backup sync is disabled. See docs/DEPLOY.md.');
+  }
+  run('rclone', ['sync', dir, remote]);
+  return true;
 }

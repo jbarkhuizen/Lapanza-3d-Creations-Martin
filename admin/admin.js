@@ -1231,10 +1231,11 @@ async function renderBackups() {
   $('#view-backups').innerHTML = `
     <div class="toolbar">
       <button class="btn btn-primary" id="run-backup" type="button">Run backup now</button>
+      <button class="btn" id="sync-offsite" type="button">Sync offsite now</button>
       <span class="muted">${escapeHtml(String(backups.length))} backup(s) &middot; ${escapeHtml(formatBytes(totalBytes))} total</span>
     </div>
     <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
-      A backup of the full database runs automatically once a day; the most recent 30 are kept and older ones are pruned automatically. Manual backups count toward that same limit.
+      A backup of the full database runs automatically once a day; the most recent 30 are kept and older ones are pruned automatically. Manual backups count toward that same limit. Every daily run also mirrors this folder to an offsite remote (Google Drive via rclone) so backups survive a disk/VPS failure, not just bad data or a bad deploy -- see docs/DEPLOY.md if "Sync offsite now" errors with "not set".
     </p>
     <div class="panel table-wrap">
       <table class="catalog">
@@ -1255,6 +1256,21 @@ async function renderBackups() {
       toast(ex.message);
       btn.disabled = false;
       btn.textContent = 'Run backup now';
+    }
+  });
+
+  $('#sync-offsite').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    try {
+      await api('/api/backups/sync-offsite', { method: 'POST' });
+      toast('Synced to offsite remote');
+    } catch (ex) {
+      toast(ex.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sync offsite now';
     }
   });
 

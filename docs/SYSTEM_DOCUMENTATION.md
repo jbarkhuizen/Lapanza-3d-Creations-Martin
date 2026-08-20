@@ -6,7 +6,7 @@
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-20 (updated for automated version-history recording — V1.01)
+**Document date:** 2026-08-20 (updated for offsite backup sync)
 
 ---
 
@@ -69,6 +69,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Version history tracking** | Admin "Version History" page in Settings group; manual button to record deployment version with description; auto-incrementing version numbers (v1, v2, ...); table displays all versions in reverse chronological order showing version, description, deployed date. | 167/167 |
 | **Customer password recovery (V1.01)** | Closes the previous "no forgot-password" gap — register/verify/login was the only path in and there was no way back in for a forgotten password. Adds `POST /api/client/forgot-password` (emails a single-use, 1h-expiry reset link; always returns the same generic response so the endpoint can't be used to discover which emails have accounts) and `POST /api/client/reset-password` (consumes the token, sets the new password, marks the account verified, revokes any other live sessions for that client, and logs the requester straight in). New `account.html` "Forgot password?" link and a `?reset_token=` landing view. | 172/172 |
 | **Automated version-history recording (V1.01 versioning scheme)** | Replaces the manual "+ Record Version" admin button with `scripts/record-deploy-version.mjs`, run automatically by `deploy/deploy-app.sh` after every deploy (non-fatal on failure). Version labels switch from a plain incrementing integer to `"<major>.<minor>"` (e.g. `1.01`, `1.02`, ... rolling to `2.01` after `.99`), computed in `server/version-history.js`. `POST /api/version-history` is removed — the admin page is now read-only. | 177/177 |
+| **Offsite backup sync** | Closes the single-point-of-failure gap flagged in §15 — on-server daily backups alone don't survive a disk/VPS failure. `server/backups.js`'s `syncOffsite()` mirrors `data/backups/` to a Google Drive folder via `rclone` (service-account auth, no interactive OAuth needed on a headless server) right after every automated daily backup, self-correcting to match local 30-backup retention. Manual "Sync offsite now" button added to the admin Backups view; new `POST /api/backups/sync-offsite` route. Requires one-time setup (DEPLOY.md §9) before `BACKUP_RCLONE_REMOTE` is set — until then, on-server backups still run unaffected. | 180/180 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -930,6 +931,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | POST | `/api/backups` | Admin | Create a backup now |
 | GET | `/api/backups/:filename/download` | Admin | Download a specific backup file |
 | DELETE | `/api/backups/:filename` | Admin | Delete a specific backup file |
+| POST | `/api/backups/sync-offsite` | Admin | Manually mirror `data/backups/` to the configured `rclone` remote now, rather than waiting for the next daily run; `400` with a clear message if `BACKUP_RCLONE_REMOTE` isn't set yet |
 
 ### 7.19 Visitor Analytics
 
@@ -1285,6 +1287,7 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
   - The most recent 30 backups are kept; older ones are pruned automatically after every automated run. Manually-triggered backups count toward the same 30-backup limit — there's no separate "protected" manual backup that survives pruning indefinitely.
   - Uses `better-sqlite3`'s built-in online backup API (SQLite's own backup mechanism) — safe to run against the live database in WAL mode without stopping the app or locking out writers.
   - Every filename accepted from a request (download, delete) is validated against path traversal before touching the filesystem.
+  - After every automated run, `data/backups/` is mirrored to a configured `rclone` remote (`syncOffsite()`) so backups survive a disk/VPS failure, not just bad data or a bad deploy — a self-correcting `rclone sync`, not `copy`, so remote pruning matches local pruning automatically. Runs in its own try/catch: an offsite failure is logged but never reported as "the backup failed," since the local backup already succeeded by that point. Requires one-time setup (DEPLOY.md §9); skips itself with a clear error if `BACKUP_RCLONE_REMOTE` isn't set.
 - **Endpoints:** §7.17. **Tables:** none directly (operates on the SQLite file itself, not through it).
 
 ### 9.20 Visitor Analytics (Admin)
@@ -1706,7 +1709,7 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | Item | Detail |
 |---|---|
 | **No Privacy Policy / Terms & Conditions / Returns Policy pages** | The site collects real personal information (names, addresses, phone numbers at checkout; browsing behaviour linked to identity for logged-in customers via visitor analytics, §9.20) with no page disclosing what's collected or why — a genuine POPIA-relevant gap, and Payfast's own merchant approval process typically expects a refund-policy URL too. Not addressed by this or any prior phase. |
-| **Backups are on-server, not off-server** | Automated daily backups now run (see §9.18), but they're written to `data/backups/` on the *same* VPS disk as the live database. This protects against bad data/deploys/human error, but not against that disk or the whole VPS failing — a genuine disaster-recovery posture needs backups copied somewhere physically separate (a different host, or object storage). `paths.js`'s `BACKUPS_DIR` env override already supports pointing at a different mount if/when one exists; nothing currently does that. |
+| **Offsite backup sync exists but requires one-time manual setup** | `server/backups.js`'s `syncOffsite()` mirrors `data/backups/` to Google Drive via `rclone` after every automated daily backup (see §9.18, DEPLOY.md §9) — but it needs a Google Cloud service account + shared Drive folder set up once by a human (account creation isn't something this assistant can do on the owner's behalf), and `BACKUP_RCLONE_REMOTE` set in `.env`. Until that's done, backups still run but remain on-server only, same disk as the live DB. |
 | **No CI/CD pipeline** | No GitHub Actions or equivalent — tests are run manually before each commit, deploys are manually triggered over SSH. |
 | **No staging environment** | The VPS is production from first deploy; there is no intermediate environment to test against before changes reach real customers. |
 | **In-memory session store** | Admin/client sessions do not survive a process restart (see §14). |
@@ -1741,6 +1744,7 @@ All variables documented in `.env.example` / `deploy/.env.production.template`. 
 | `DATA_DIR` | Overrides where `data/` resolves (for hosts with a separate persistent-disk mount) | Defaults to `{cwd}/data` |
 | `UPLOADS_DIR` | Overrides where uploaded files are stored | Defaults to `{cwd}/public/uploads` |
 | `BACKUPS_DIR` | Overrides where database backups are written — deliberately independent of `DATA_DIR` so backups can target a separate disk/volume from the live DB | Defaults to `{cwd}/data/backups` |
+| `BACKUP_RCLONE_REMOTE` | `rclone` remote name (with trailing colon, e.g. `gdrive:`) that `data/backups/` mirrors to nightly — see DEPLOY.md §9 for the one-time Google Drive service-account setup | Blank — offsite sync skips itself with a clear error until set |
 | `PORT` / `ADMIN_PORT` | Backend listen port | `8787` |
 | `LOW_STOCK_ALERT_EMAIL` | Override recipient for low-stock alerts | Defaults to a hardcoded fallback address in `mailer.js` |
 
@@ -1803,6 +1807,11 @@ curl -s -o /dev/null -w "%{http_code}\n" https://lapanza3d.co.za/admin/
 # the shell instead of the UI:
 ls -la /opt/lapanza/app/data/backups/
 curl -s -X POST -H "Cookie: <admin session cookie>" https://lapanza3d.co.za/api/backups   # or use the admin UI button
+
+# Offsite backup sync (Google Drive via rclone -- see DEPLOY.md §9 for setup)
+rclone lsd gdrive:                                          # confirm the remote works at all
+rclone sync /opt/lapanza/app/data/backups gdrive:            # manual sync from the shell
+curl -s -X POST -H "Cookie: <admin session cookie>" https://lapanza3d.co.za/api/backups/sync-offsite   # or use the admin UI button
 
 # SSL renewal (automatic via certbot's timer; manual re-run if ever needed)
 sudo certbot --nginx -d lapanza3d.co.za -d www.lapanza3d.co.za

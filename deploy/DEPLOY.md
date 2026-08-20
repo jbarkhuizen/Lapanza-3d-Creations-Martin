@@ -110,6 +110,73 @@ installs — nothing further needed.
   (needs `GMAIL_APP_PASSWORD` filled in)
 - Check `sudo systemctl status lapanza-admin` is `active (running)`
 
+## 9. Off-server backups (Google Drive)
+
+Automated daily backups (§Notes below) already write to `data/backups/` on
+the VPS itself -- good against bad data, a bad deploy, or human error, but
+useless against that disk or the whole VPS failing outright. This step
+mirrors that folder to Google Drive nightly via `rclone`, using a Google
+**service account** (not your personal OAuth login) so it works
+unattended, headless, with no browser-based consent step on the server.
+
+**One-time setup:**
+
+1. **Google Cloud Console** (console.cloud.google.com) -- create a project
+   (or reuse one), then **APIs & Services -> Library**, enable the
+   **Google Drive API**.
+2. **APIs & Services -> Credentials -> Create Credentials -> Service
+   Account.** Name it something like `lapanza-backup-uploader`. No roles
+   needed at the project level -- Drive access below is granted by sharing
+   a folder, not IAM.
+3. Open the new service account -> **Keys -> Add Key -> Create new key ->
+   JSON.** Downloads a `.json` key file -- treat it like a password, never
+   commit it.
+4. In your own Google Drive, create a folder for backups (e.g.
+   "Lapanza Backups"). Right-click it -> **Share**, and share it with the
+   service account's email address (looks like
+   `lapanza-backup-uploader@your-project.iam.gserviceaccount.com`,
+   visible on the service account's page) as **Editor**. Service accounts
+   have no personal Drive storage of their own -- this is what lets it
+   write into *your* folder instead.
+5. Get that folder's ID from its URL:
+   `https://drive.google.com/drive/folders/`**`THIS_PART`**.
+6. Copy the key onto the VPS and lock down its permissions:
+   ```bash
+   scp -i ~/.ssh/lapanza_vps_deploy gdrive-service-account.json deploy@<VPS_IP>:/opt/lapanza/
+   ssh -i ~/.ssh/lapanza_vps_deploy deploy@<VPS_IP>
+   chmod 600 /opt/lapanza/gdrive-service-account.json
+   ```
+7. Write the rclone config (as the `deploy` user, no interactive `rclone
+   config` browser flow needed with a service account):
+   ```bash
+   mkdir -p ~/.config/rclone
+   cat > ~/.config/rclone/rclone.conf <<'EOF'
+   [gdrive]
+   type = drive
+   scope = drive
+   service_account_file = /opt/lapanza/gdrive-service-account.json
+   root_folder_id = PASTE_THE_FOLDER_ID_FROM_STEP_5
+   EOF
+   ```
+8. Test it directly before wiring it into the app:
+   ```bash
+   rclone lsd gdrive:          # should print nothing (empty folder) but not error
+   rclone sync /opt/lapanza/app/data/backups gdrive:
+   rclone lsd gdrive:          # now shows what got synced, if anything exists yet
+   ```
+9. Set the env var and restart:
+   ```bash
+   nano /opt/lapanza/app/.env      # BACKUP_RCLONE_REMOTE=gdrive:
+   sudo systemctl restart lapanza-admin
+   ```
+10. Confirm from the admin UI: **Settings -> Backups -> Sync offsite now**
+    should succeed immediately, rather than waiting for the next daily run.
+
+From here, every automated daily backup mirrors to that Drive folder right
+after it's created and pruned locally -- no further action needed. If the
+VPS is ever lost, the backups are sitting in that Drive folder, not on the
+dead disk.
+
 ## Future deploys
 ```bash
 ssh -i ~/.ssh/lapanza_vps_deploy deploy@<VPS_IP>
@@ -123,8 +190,9 @@ Pulls latest `main`, rebuilds, restarts the service. `.env` is untouched
 - The VPS `.env` holds live payment/email credentials. It is never in git
   (`.gitignore`'d) and never passes through this chat.
 - Backups: automated daily, on-boot, 30-backup retention -- see the admin
-  "Backups" view (Settings group) or `data/backups/` on the server. Still
-  worth an occasional off-server `scp` copy -- automated backups currently
+  "Backups" view (Settings group) or `data/backups/` on the server. Also
+  auto-synced offsite to Google Drive nightly once §9 above is set up
+  (`BACKUP_RCLONE_REMOTE` set) -- without that, backups still run but only
   live on the same disk as the live DB, which protects against bad data or
   a bad deploy but not against that disk/VPS failing entirely.
 - To go from Payfast sandbox to live: fill in `PAYFAST_MERCHANT_*` in

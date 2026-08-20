@@ -30,6 +30,14 @@ fi
 node -v
 npm -v
 
+echo "==> Installing rclone (offsite backup sync)"
+# Not in AlmaLinux's default repos even with EPEL -- rclone's own installer
+# handles arch detection and is the officially documented install path.
+if ! command -v rclone >/dev/null 2>&1; then
+  curl -fsSL https://rclone.org/install.sh | bash
+fi
+rclone --version | head -1
+
 echo "==> Creating deploy user (if missing)"
 if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
   useradd -m -G wheel "$DEPLOY_USER"

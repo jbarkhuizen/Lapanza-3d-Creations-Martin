@@ -96,7 +96,7 @@ import {
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob, startAutoBackupJob } from './jobs.js';
-import { createBackup, listBackups, deleteBackup, getBackupPath } from './backups.js';
+import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
@@ -1529,6 +1529,19 @@ app.get('/api/backups/:filename/download', requireAuth, (req, res) => {
   }
   if (!filePath) return res.status(404).json({ error: 'Backup not found' });
   res.download(filePath, req.params.filename);
+});
+
+// Manual trigger for the same offsite sync startAutoBackupJob runs daily --
+// lets an admin confirm the rclone remote is actually configured/working
+// right after setting it up, without waiting up to 24h for the next
+// automatic run.
+app.post('/api/backups/sync-offsite', requireAuth, (_req, res) => {
+  try {
+    syncOffsite();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.delete('/api/backups/:filename', requireAuth, (req, res) => {
