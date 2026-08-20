@@ -57,6 +57,9 @@ else
   sudo systemctl reload nginx
 fi
 
+echo "==> Recording deployed version"
+node scripts/record-deploy-version.mjs || echo "    WARNING: failed to record version history (non-fatal, deploy continues)"
+
 echo ""
 echo "==================================================================="
 echo "Deployed. Check status:"

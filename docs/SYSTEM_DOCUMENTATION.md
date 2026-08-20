@@ -6,7 +6,7 @@
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-20 (updated for customer password recovery — V1.01)
+**Document date:** 2026-08-20 (updated for automated version-history recording — V1.01)
 
 ---
 
@@ -68,6 +68,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Checkout stock validation** | Blocks order creation if any cart item's quantity exceeds available stock (`stockQty`); returns detailed error listing out-of-stock items + quantities. Closes the gap from the pre-validation period where out-of-stock items could be purchased (§15). Covers both online and manual (admin-created) orders via shared `resolveProductSnapshot()` validation. | 167/167 |
 | **Version history tracking** | Admin "Version History" page in Settings group; manual button to record deployment version with description; auto-incrementing version numbers (v1, v2, ...); table displays all versions in reverse chronological order showing version, description, deployed date. | 167/167 |
 | **Customer password recovery (V1.01)** | Closes the previous "no forgot-password" gap — register/verify/login was the only path in and there was no way back in for a forgotten password. Adds `POST /api/client/forgot-password` (emails a single-use, 1h-expiry reset link; always returns the same generic response so the endpoint can't be used to discover which emails have accounts) and `POST /api/client/reset-password` (consumes the token, sets the new password, marks the account verified, revokes any other live sessions for that client, and logs the requester straight in). New `account.html` "Forgot password?" link and a `?reset_token=` landing view. | 172/172 |
+| **Automated version-history recording (V1.01 versioning scheme)** | Replaces the manual "+ Record Version" admin button with `scripts/record-deploy-version.mjs`, run automatically by `deploy/deploy-app.sh` after every deploy (non-fatal on failure). Version labels switch from a plain incrementing integer to `"<major>.<minor>"` (e.g. `1.01`, `1.02`, ... rolling to `2.01` after `.99`), computed in `server/version-history.js`. `POST /api/version-history` is removed — the admin page is now read-only. | 177/177 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -748,16 +749,17 @@ One row per real page load (never per heartbeat — see §9.20). Post-launch add
 | *(indexes)* | `created_at`, `visitor_id` | |
 
 #### `version_history`
-Track deployments and system updates. Each row records a version bump with description and deployment timestamp.
+Track deployments and system updates. Every row is created automatically by `scripts/record-deploy-version.mjs` after a deploy (V1.01) — nothing writes here manually.
 | Column | Type | Notes |
 |---|---|---|
 | id | TEXT PK | |
-| version_number | INTEGER NOT NULL UNIQUE | Auto-incrementing version identifier (v1, v2, v3, ...) |
-| description | TEXT NOT NULL | Admin-provided description of changes in this version |
-| deployed_date | TEXT NOT NULL | ISO timestamp when this version was deployed to production |
-| deployed_by | TEXT NOT NULL DEFAULT 'admin' | User/role that recorded this version (currently always 'admin') |
+| version_number | INTEGER NOT NULL UNIQUE | Legacy plain-incrementing integer, kept only to satisfy this constraint — not the displayed version |
+| version_label | TEXT | V1.01 — the displayed version, `"<major>.<minor>"` two-digit-padded (e.g. `"1.01"`), computed by `nextLabel()` in `server/version-history.js` |
+| description | TEXT NOT NULL | Latest git commit subject + short hash at deploy time, unless passed explicitly |
+| deployed_date | TEXT NOT NULL | ISO timestamp when this version was recorded |
+| deployed_by | TEXT NOT NULL DEFAULT 'admin' | Always `'deploy'` for automated rows |
 | created_at | TEXT NOT NULL | Row creation timestamp |
-| *(indexes)* | `version_number DESC` | For fast reverse-chronological retrieval in admin UI |
+| *(indexes)* | `version_number DESC` | Legacy — `listVersions()` actually orders by `created_at DESC, version_number DESC` |
 
 ---
 
@@ -945,23 +947,21 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | `/uploads/*` | `express.static(public/uploads/)` |
 | `/` | Redirects to `/admin/` (the Node server itself does **not** serve the public storefront — that's nginx's job in production, or a separate Vite dev server locally) |
 
-### 7.21 Version History (Admin)
+### 7.21 Version History (Admin) — V1.01: now automated, no manual entry
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/version-history` | Admin | List all recorded versions in reverse chronological order (newest first) |
-| POST | `/api/version-history` | Admin | Record a new version entry; request body: `{ description: "string" }` |
+| GET | `/api/version-history` | Admin | List all recorded versions in reverse chronological order (newest first) — read-only |
 
 **Responses:**
 
-- **GET** `200` → `{ versions: [ { id, version_number, description, deployed_date, deployed_by, created_at }, ... ] }`
-- **POST** `200` → `{ ok: true, version: { id, version_number, description, deployed_date } }`
-- **POST** `400` → `{ error: "description required" }`
+- **GET** `200` → `{ versions: [ { id, version_number, version_label, description, deployed_date, deployed_by, created_at }, ... ] }`
 
 **Behaviour:**
-- Version numbers auto-increment: first call creates v1, second creates v2, etc.
-- `deployed_date` is always the request timestamp (ISO 8601).
-- `deployed_by` is currently hardcoded to `'admin'`; future extension could track which admin user recorded the version.
+- There is no POST route and no "Record Version" button in the admin UI as of V1.01 — a row is created only by `scripts/record-deploy-version.mjs`, which `deploy/deploy-app.sh` runs automatically after every deploy (non-fatal if it fails — a version-history hiccup never blocks a deploy). It reads the latest git commit subject/hash as the description unless one is passed explicitly as `argv[2]`.
+- `version_label` is the customer/admin-facing string, `"<major>.<minor>"` two-digit-padded (e.g. `"1.01"`), computed by `server/version-history.js`'s `nextLabel()` — starts at `1.01`, increments the minor part each deploy, rolls the major over after `.99`.
+- `version_number` is a legacy plain-incrementing integer, kept only to satisfy the original schema's `NOT NULL UNIQUE` constraint — not shown in the UI.
+- `deployed_date` is always the record-time timestamp (ISO 8601). `deployed_by` is `'deploy'` for every automated row.
 
 ---
 

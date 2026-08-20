@@ -1279,7 +1279,7 @@ async function renderVersionHistory() {
     .map(
       (v) => `
         <tr>
-          <td style="width: 80px; text-align: center;"><strong>v${v.version_number}</strong></td>
+          <td style="width: 80px; text-align: center;"><strong>V${v.version_label || v.version_number}</strong></td>
           <td>${escapeHtml(v.description)}</td>
           <td style="width: 180px;">${escapeHtml(formatDate(v.deployed_date))}</td>
         </tr>`,
@@ -1288,11 +1288,10 @@ async function renderVersionHistory() {
 
   $('#view-version-history').innerHTML = `
     <div class="toolbar">
-      <button class="btn btn-primary" id="btn-new-version" type="button">+ Record Version</button>
       <span class="muted">${escapeHtml(String(versions.length))} version(s)</span>
     </div>
     <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
-      Track changes and updates made to the system. Record a new version after each deployment.
+      Recorded automatically on every deployment (see deploy/deploy-app.sh) -- nothing to do here.
     </p>
     <div class="panel table-wrap">
       <table class="catalog">
@@ -1300,22 +1299,6 @@ async function renderVersionHistory() {
         <tbody>${rows || '<tr><td colspan="3"><div class="empty">No versions recorded yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
-
-  $('#btn-new-version').addEventListener('click', async () => {
-    const description = prompt('Enter version description:');
-    if (!description) return;
-    try {
-      await api('/api/version-history', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description }),
-      });
-      toast('Version recorded');
-      await renderVersionHistory();
-    } catch (ex) {
-      toast(ex.message);
-    }
-  });
 }
 
 async function renderSettings() {

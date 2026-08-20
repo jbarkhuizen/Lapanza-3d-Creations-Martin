@@ -110,6 +110,7 @@ import {
   deleteInHouseFilament,
 } from './in-house-filament.js';
 import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
+import { listVersions } from './version-history.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -1555,31 +1556,11 @@ function readPublishWarnings() {
   }
 }
 
+// V1.01: recorded only by scripts/record-deploy-version.mjs (run
+// automatically from deploy/deploy-app.sh after every deploy) -- no manual
+// "add version" route. This is a read-only view onto that history.
 app.get('/api/version-history', requireAuth, (req, res) => {
-  const db = getDb();
-  const versions = db.prepare('SELECT * FROM version_history ORDER BY version_number DESC').all();
-  res.json({ versions });
-});
-
-app.post('/api/version-history', requireAuth, (req, res) => {
-  try {
-    const { description } = req.body;
-    if (!description || typeof description !== 'string') {
-      return res.status(400).json({ error: 'description required' });
-    }
-    const db = getDb();
-    const latestVersion = db.prepare('SELECT MAX(version_number) as max FROM version_history').get();
-    const nextVersion = (latestVersion.max || 0) + 1;
-    const id = randomUUID();
-    const now = new Date().toISOString();
-    db.prepare(`
-      INSERT INTO version_history (id, version_number, description, deployed_date, deployed_by, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, nextVersion, description, now, 'admin', now);
-    res.json({ ok: true, version: { id, version_number: nextVersion, description, deployed_date: now } });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
+  res.json({ versions: listVersions() });
 });
 
 app.use('/admin', express.static(path.join(root, 'admin')));

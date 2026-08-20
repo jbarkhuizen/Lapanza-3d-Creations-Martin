@@ -342,6 +342,7 @@ export function ensureSchema(db) {
   ensureManagementColumns(db);
   ensureEngagementColumns(db);
   ensurePasswordResetColumns(db);
+  ensureVersionHistoryColumns(db);
 }
 
 function hasColumn(db, tableInfoStatement, column) {
@@ -472,6 +473,17 @@ function ensurePasswordResetColumns(db) {
   }
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'reset_token_expires')) {
     db.exec('ALTER TABLE clients ADD COLUMN reset_token_expires TEXT');
+  }
+}
+
+// V1.01: version_number (a plain incrementing integer) is kept as the
+// internal uniqueness/ordering column the original schema requires NOT
+// NULL, but the customer/admin-facing label is now this separate
+// "<major>.<minor>" string (e.g. "1.01") -- see server/version-history.js's
+// nextLabel() for how it's computed.
+function ensureVersionHistoryColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(version_history)', 'version_label')) {
+    db.exec('ALTER TABLE version_history ADD COLUMN version_label TEXT');
   }
 }
 

@@ -34,6 +34,7 @@ These are real incidents from this project's build/deploy history — documented
 - **Checkout prices are always server-resolved, never trust a client-submitted price** — this is a deliberate security property, not an oversight to "simplify."
 - **Checkout validates stock before creating orders** — `server/orders.js`'s `createOrder()` rejects any order where any item's quantity exceeds its `stockQty`, returning a detailed error listing which items are out of stock. This applies to both online checkout and admin-created orders. Test coverage: 6 dedicated tests in `server/orders.test.js` (T-66–T-71).
 - **Password reset tokens (V1.01) are a separate column pair from email-verification tokens** (`reset_token`/`reset_token_expires` vs `verification_token`/`verification_token_expires` on `clients`) — both can be outstanding at once without clobbering each other. Reset TTL is 1h, shorter than verification's 24h, since it's freely re-requestable.
+- **`deploy/deploy-app.sh` now writes to the live DB directly** (via `scripts/record-deploy-version.mjs`, no HTTP/auth involved) as its last step, to log the deploy in Version History. It's `|| echo ...`-guarded so a failure there can't abort an otherwise-successful deploy — if you ever touch that script, keep it non-fatal.
 - **SQLite `date()`/`datetime()` default to UTC; the server runs in SAST (UTC+2).** Any query grouping by calendar day (invoice dates, analytics daily breakdowns) needs the `'localtime'` modifier explicitly, or day boundaries silently shift near midnight. Already bit this project once (imported invoice dates landed a day early) before being applied proactively elsewhere.
 - **`.env` secrets are never pasted into chat/AI tooling** — the working rule established for this project is that whoever has server access types secrets directly on the server (`nano /opt/lapanza/app/.env`). Don't ask for or accept Payfast keys, the Gmail app password, or WhatsApp tokens in conversation.
 
@@ -50,7 +51,8 @@ These are real incidents from this project's build/deploy history — documented
 | Visitor analytics | Live — first-party, anonymous pageview/heartbeat tracking, admin "Analytics" page. No cookie/tracking disclosure shown to visitors yet (ties into the still-missing Privacy Policy page) |
 | Checkout stock validation | Live — orders blocked if any cart item exceeds available stock; detailed error message lists out-of-stock items + quantities. Closes the pre-validation gap where out-of-stock items could be purchased. Covers both online checkout and admin-created orders |
 | Customer password recovery (V1.01) | Live — `account.html` "Forgot password?" → `POST /api/client/forgot-password` emails a single-use, 1h-expiry reset link (generic response either way, no email enumeration) → `POST /api/client/reset-password` sets the new password, verifies the account, revokes other live sessions for that client, logs the requester in. Closes the previous register→verify→login-only dead end |
-| Test suite | 172/172 passing (`node --test`), run before every commit |
+| Version history recording | Automated as of V1.01 — `deploy/deploy-app.sh` runs `scripts/record-deploy-version.mjs` after every deploy; no more manual "+ Record Version" button. Labels are `"<major>.<minor>"` (this feature shipped as `1.01`), incrementing the minor each deploy |
+| Test suite | 177/177 passing (`node --test`), run before every commit |
 | CI/CD | None — manual test-then-push-then-SSH-deploy |
 | Staging environment | None — the VPS is production from first deploy |
 
