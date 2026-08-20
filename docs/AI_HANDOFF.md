@@ -41,8 +41,8 @@ These are real incidents from this project's build/deploy history — documented
 | WhatsApp campaigns | Not configured (`WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` unset) — requires the business owner to complete Meta Business Account + template approval first; sends fail cleanly with "not configured" until then |
 | Gmail SMTP | Configured and working (order confirmations, verification emails, notifications) |
 | SSL | Live, Let's Encrypt via certbot, auto-renewing |
-| Automated backups | **Not yet scheduled** — `data/lapanza.db` (all customer/order data) has no backup job configured |
-| Test suite | 143/143 passing (`node --test`), run before every commit |
+| Automated backups | Live — daily + on-boot, 30-backup retention, admin "Backups" view. Still on the *same disk* as the live DB, not yet off-server |
+| Test suite | 149/149 passing (`node --test`), run before every commit |
 | CI/CD | None — manual test-then-push-then-SSH-deploy |
 | Staging environment | None — the VPS is production from first deploy |
 

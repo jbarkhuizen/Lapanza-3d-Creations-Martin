@@ -61,6 +61,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Phase 4** | Public account page, newsletter campaigns (compose→approve→send), WhatsApp campaigns (Meta Business Cloud API), owner notification emails, checkout post-purchase opt-in, homepage cart reset, admin sidebar reorganisation (Client Side / Local Management / Settings) | 138/138 |
 | **Production migration** | Moved from shared cPanel hosting to a dedicated VPS (AlmaLinux 10): Node 22, nginx, systemd, Let's Encrypt SSL, DNS cutover to `lapanza3d.co.za` | 141/141 |
 | **Post-launch data load** | Bulk-imported 20 real customer records and 8 historical invoices (INV-0001–INV-0008) into production; added admin controls for registered users (manual verify, resend verification, delete/revoke) | 143/143 |
+| **Backups** | Automated daily database backups (in-process scheduler, 30-backup retention) + an admin "Backups" view (Settings group) to run one on demand, and list/download/delete existing ones | 149/149 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -241,7 +242,7 @@ This lookup happens **server-side on every checkout**, never trusting a client-s
 |---|---|
 | Vite (multi-page) | Bundles every top-level `*.html` + `car-parts/*.html` + `filament/*.html` as separate entries (see `vite.config.js`'s `htmlEntries()`) into `dist/` |
 | `scripts/generate-pages.mjs` | **Not** part of the Vite build — a separate Node script, run via `npm run generate` or the admin "Publish to site" button, that reads the DB/catalog.json and regenerates the committed static HTML source files (which Vite then bundles) |
-| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 143 tests across 24 `*.test.js` files |
+| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 149 tests across 21 `*.test.js` files |
 
 ---
 
@@ -294,7 +295,7 @@ lapanza-3d-fullsite/
 |---|---|
 | `index.js` | Express app setup, session middleware (admin + client, two independent systems), **every** route registration, static file serving for `/admin` and `/uploads` |
 | `db.js` | `ensureSchema()` — all `CREATE TABLE IF NOT EXISTS` + guarded `ALTER TABLE`; `getDb()` (cached singleton) / `openDb()` (explicit path, used by tests with `:memory:`) |
-| `paths.js` | Resolves `dataDir()` / `uploadsDir()` / `publicDir()` relative to `process.cwd()` (overridable via `DATA_DIR`/`UPLOADS_DIR` env vars) |
+| `paths.js` | Resolves `dataDir()` / `uploadsDir()` / `backupsDir()` / `publicDir()` relative to `process.cwd()` (overridable via `DATA_DIR`/`UPLOADS_DIR`/`BACKUPS_DIR` env vars) |
 | `migrate-json.js` | One-time bootstrap: on a brand-new DB, seeds nothing directly but is available to migrate from an older catalog.json shape if needed |
 | `store.js` | Low-level product CRUD used by the admin catalog editor (filament + category items combined view) |
 | `filaments.js` | Filament type + colour CRUD, stock, image upload wiring |
@@ -318,7 +319,8 @@ lapanza-3d-fullsite/
 | `settings.js` | Settings key-value store read/write wrapper |
 | `settings-defaults.js` | Default values for every setting + the Google Fonts curated list |
 | `uploads.js` | Multer storage configs + allowed-extension lists per upload type (filament images, resource images/files, design-request attachments, print-job images/files) |
-| `jobs.js` | Background/periodic tasks (e.g. cancelling stale pending-payment orders) |
+| `jobs.js` | Background/periodic tasks: cancelling stale pending-payment orders, and the daily automated database backup (`startAutoBackupJob`) |
+| `backups.js` | Database backup lifecycle — `createBackup()` (better-sqlite3's online backup API, safe against a live WAL-mode DB), `listBackups()`, `deleteBackup()`, `getBackupPath()`, `pruneOldBackups()` |
 
 ### 5.3 Frontend Structure (`src/js/`)
 
@@ -874,7 +876,16 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | PUT | `/api/settings` | Admin | Update settings (allow-listed keys only) |
 | POST | `/api/publish` | Admin | Runs `generate-pages.mjs` logic to regenerate static HTML from current catalog data |
 
-### 7.17 Static Serving
+### 7.17 Database Backups (Admin)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/backups` | Admin | List all backups (filename, size, created date) |
+| POST | `/api/backups` | Admin | Create a backup now |
+| GET | `/api/backups/:filename/download` | Admin | Download a specific backup file |
+| DELETE | `/api/backups/:filename` | Admin | Delete a specific backup file |
+
+### 7.18 Static Serving
 
 | Route | Behaviour |
 |---|---|
@@ -1193,12 +1204,24 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
 - **Purpose:** A downloadable-file gallery (print settings, STL/3MF/OBJ/gcode files) for customers.
 - **Business rules:** Downloads are forced via `Content-Disposition: attachment` (not served inline by extension guessing) — see `uploads.js`'s allowlist comment.
 
-### 9.18 Admin Sidebar Structure
+### 9.18 Database Backups (Admin)
+
+- **Purpose:** Protect against data loss (single SQLite file = the entire business record).
+- **Actors:** Admin (manual trigger + view/download/delete); system (automated daily run).
+- **Key fields displayed:** filename, created date/time, file size.
+- **Business rules:**
+  - An automated backup runs once immediately on every process boot (so a fresh deploy is never more than the deploy interval away from a backup) and then once every 24 hours thereafter, via an in-process `setInterval` — same pattern as the stale-order auto-cancel job, no external cron.
+  - The most recent 30 backups are kept; older ones are pruned automatically after every automated run. Manually-triggered backups count toward the same 30-backup limit — there's no separate "protected" manual backup that survives pruning indefinitely.
+  - Uses `better-sqlite3`'s built-in online backup API (SQLite's own backup mechanism) — safe to run against the live database in WAL mode without stopping the app or locking out writers.
+  - Every filename accepted from a request (download, delete) is validated against path traversal before touching the filesystem.
+- **Endpoints:** §7.17. **Tables:** none directly (operates on the SQLite file itself, not through it).
+
+### 9.19 Admin Sidebar Structure
 
 Three groups (Phase 4 reorganisation, per explicit user request):
 - **Client Side:** Dashboard, Product catalog, Orders, +New order, Clients, Registered users, Design requests, Invoice History, 3D Resources, Shipping options, Newsletter, WhatsApp Updates
 - **Local Management:** Stock management, In-House Filament, Print Job Costing, Purchase History
-- **Settings:** Site settings
+- **Settings:** Backups, Site settings
 
 ---
 
@@ -1231,6 +1254,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 | FR-21 | Admin shall be able to manually verify, resend verification email to, or delete/revoke a registered customer account | Post-launch |
 | FR-22 | System shall reset the shopping cart when the customer returns to the homepage | Phase 4 |
 | FR-23 | Admin sidebar shall be organised into Client Side / Local Management / Settings groups | Phase 4 |
+| FR-24 | System shall automatically back up the database on a schedule with retention, and admin shall be able to trigger, view, download, and delete backups on demand | Post-launch |
 
 ### 10.2 Non-Functional Requirements
 
@@ -1241,10 +1265,10 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 | NFR-03 | **Availability** — process auto-restarts on failure (systemd `Restart=on-failure`) | Implemented |
 | NFR-04 | **Transport security** — HTTPS enforced site-wide, HTTP force-redirects | Implemented (certbot) |
 | NFR-05 | **Auditability** — every schema change is additive/idempotent, safe to re-run on every boot | Implemented |
-| NFR-06 | **Testability** — automated test coverage for all backend business logic | 143 tests, `node --test`, no test framework dependency |
+| NFR-06 | **Testability** — automated test coverage for all backend business logic | 149 tests, `node --test`, no test framework dependency |
 | NFR-07 | **Deployability** — one-command deploy from git to running production service | `deploy/deploy-app.sh` |
 | NFR-08 | **Email deliverability** — outbound mail failures never block the primary user action (checkout, registration) | Best-effort, try/catch around every send |
-| NFR-09 | **Backup** — database is a single portable file, trivially backupable | No automated backup job currently configured — see §15 |
+| NFR-09 | **Backup** — database is a single portable file, trivially backupable | Implemented — automated daily backup + on-demand admin backups, 30-backup retention (§9.18). Backups currently live on the same disk as the live DB, not yet off-server — see §15. |
 | NFR-10 | **Compliance (WhatsApp)** — business-initiated broadcasts use only Meta-pre-approved templates | Implemented — free text is not permitted by Meta policy and the code enforces this shape |
 
 ---
@@ -1341,7 +1365,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 ### 12.1 Development Workflow (as practised)
 
 1. Change implemented locally against a local SQLite DB (`data/lapanza.db`, gitignored).
-2. `node --test` run — **full suite must pass (143/143)** before any commit.
+2. `node --test` run — **full suite must pass (149/149)** before any commit.
 3. `git add` (never blanket `-A` for sensitive paths) → commit with a descriptive message → `git push origin main`.
 4. No CI/CD pipeline (no GitHub Actions observed) — testing and deployment are both manual/assistant-driven.
 5. No pull-request/branch-review workflow observed — all work committed directly to `main`.
@@ -1403,7 +1427,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 143 tests across 24 test files, 100% passing at last recorded run.
+- **Current count:** 149 tests across 21 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases
@@ -1510,6 +1534,19 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | T-59 | Access any `requireAuth` route without a session | Negative | `401 Unauthorized` |
 | T-60 | Rate-limited route (login) hit >10 times in the window | Negative | `429 Too Many Requests` |
 
+#### Database Backups
+
+| # | Case | Type | Expected result |
+|---|---|---|---|
+| T-61 | Create a backup against a live database | Positive | Real, non-empty `.db` file written; metadata (filename/size/createdAt) returned |
+| T-62 | List backups with a mix of `.db` files and unrelated files present | Positive | Only `.db` files listed, newest first |
+| T-63 | Delete an existing backup | Positive | File removed, no longer listed |
+| T-64 | Delete a backup filename that doesn't exist | Negative (graceful) | No-op, returns `false`/`404`, does not throw |
+| T-65 | Delete/download/get-path with a path-traversal filename (`../../etc/passwd`, `sub/dir.db`) | Negative (security) | Rejected — "Invalid backup filename" — before any filesystem access |
+| T-66 | `pruneOldBackups(keep)` with more backups than the keep count | Positive | Oldest are removed until exactly `keep` remain |
+| T-67 | `pruneOldBackups(keep)` with fewer backups than the keep count | Positive (edge) | No-op, nothing deleted |
+| T-68 | Automated backup job fires once immediately on process boot | Positive | Confirmed live on the VPS — a backup file with a boot-time timestamp appears within seconds of `systemctl start` |
+
 ### 13.3 Non-Functional / Infra Test Cases (manually verified during deployment)
 
 | # | Case | Type | Result |
@@ -1546,7 +1583,7 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | Item | Detail |
 |---|---|
 | **README.md is stale** | Still documents pre-Phase-2 local-dev-only setup and a hardcoded admin password that no longer exists/applies. Should be rewritten to reflect Phases 2–4 and production deployment, or explicitly superseded by this document. |
-| **No automated backups** | `data/lapanza.db` (the entire business record — clients, orders, campaigns, admin accounts) has no scheduled backup job configured. `DEPLOY.md` documents a manual/cron'd `sqlite3 .backup` approach but it is not yet scheduled. |
+| **Backups are on-server, not off-server** | Automated daily backups now run (see §9.18), but they're written to `data/backups/` on the *same* VPS disk as the live database. This protects against bad data/deploys/human error, but not against that disk or the whole VPS failing — a genuine disaster-recovery posture needs backups copied somewhere physically separate (a different host, or object storage). `paths.js`'s `BACKUPS_DIR` env override already supports pointing at a different mount if/when one exists; nothing currently does that. |
 | **No CI/CD pipeline** | No GitHub Actions or equivalent — tests are run manually before each commit, deploys are manually triggered over SSH. |
 | **No staging environment** | The VPS is production from first deploy; there is no intermediate environment to test against before changes reach real customers. |
 | **In-memory session store** | Admin/client sessions do not survive a process restart (see §14). |
@@ -1578,6 +1615,7 @@ All variables documented in `.env.example` / `deploy/.env.production.template`. 
 | `WHATSAPP_PHONE_NUMBER_ID` | Meta WhatsApp Business phone-number ID | — |
 | `DATA_DIR` | Overrides where `data/` resolves (for hosts with a separate persistent-disk mount) | Defaults to `{cwd}/data` |
 | `UPLOADS_DIR` | Overrides where uploaded files are stored | Defaults to `{cwd}/public/uploads` |
+| `BACKUPS_DIR` | Overrides where database backups are written — deliberately independent of `DATA_DIR` so backups can target a separate disk/volume from the live DB | Defaults to `{cwd}/data/backups` |
 | `PORT` / `ADMIN_PORT` | Backend listen port | `8787` |
 | `LOW_STOCK_ALERT_EMAIL` | Override recipient for low-stock alerts | Defaults to a hardcoded fallback address in `mailer.js` |
 
@@ -1635,8 +1673,11 @@ cat /etc/nginx/conf.d/lapanza.conf
 curl -s https://lapanza3d.co.za/api/health
 curl -s -o /dev/null -w "%{http_code}\n" https://lapanza3d.co.za/admin/
 
-# Database backup (manual — see §15, not yet scheduled)
-sqlite3 /opt/lapanza/app/data/lapanza.db ".backup /opt/lapanza/backups/$(date +%F).db"
+# Database backups -- automated daily (30-backup retention) + on demand
+# from the admin "Backups" view (Settings group). To trigger/inspect from
+# the shell instead of the UI:
+ls -la /opt/lapanza/app/data/backups/
+curl -s -X POST -H "Cookie: <admin session cookie>" https://lapanza3d.co.za/api/backups   # or use the admin UI button
 
 # SSL renewal (automatic via certbot's timer; manual re-run if ever needed)
 sudo certbot --nginx -d lapanza3d.co.za -d www.lapanza3d.co.za

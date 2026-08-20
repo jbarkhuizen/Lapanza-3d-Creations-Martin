@@ -122,9 +122,11 @@ Pulls latest `main`, rebuilds, restarts the service. `.env` is untouched
 ## Notes
 - The VPS `.env` holds live payment/email credentials. It is never in git
   (`.gitignore`'d) and never passes through this chat.
-- Backups: `data/lapanza.db` is the entire database (clients, orders,
-  campaigns, admin accounts). Worth a periodic `scp` copy or a cron'd
-  `sqlite3 data/lapanza.db ".backup /opt/lapanza/backups/$(date +%F).db"`.
+- Backups: automated daily, on-boot, 30-backup retention -- see the admin
+  "Backups" view (Settings group) or `data/backups/` on the server. Still
+  worth an occasional off-server `scp` copy -- automated backups currently
+  live on the same disk as the live DB, which protects against bad data or
+  a bad deploy but not against that disk/VPS failing entirely.
 - To go from Payfast sandbox to live: fill in `PAYFAST_MERCHANT_*` in
   `.env`, set `PAYFAST_MODE=live`, restart the service.
 - better-sqlite3 in this repo requires Node **>=22** -- installing Node 20
