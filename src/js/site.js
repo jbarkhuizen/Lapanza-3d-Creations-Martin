@@ -3,6 +3,7 @@ import { mountNav, mountWhatsAppFab, toggleDrawer } from './nav.js';
 import { enhanceColourCards } from './swatches.js';
 import { initAppearance, toggleTheme, applyTheme } from './appearance.js';
 import { mountCartUI } from './cart-ui.js';
+import { trackVisit } from './analytics.js';
 
 window.toggleDrawer = toggleDrawer;
 
@@ -72,4 +73,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   enhanceColourCards();
   syncYear();
   hydrateHomeTiles();
+  trackVisit();
 });

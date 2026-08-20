@@ -1,0 +1,122 @@
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { openDb } from './db.js';
+import { createClient } from './clients.js';
+import {
+  recordPageView,
+  touchActiveVisitor,
+  pruneActiveVisitors,
+  getActiveVisitors,
+  getVisitSummary,
+  _activeVisitorsMap,
+} from './analytics.js';
+
+// The active-visitor map is module-level (deliberately, see analytics.js) --
+// clear it before every test that touches it so tests can't see each
+// other's state.
+function resetActive() {
+  _activeVisitorsMap().clear();
+}
+
+test('recordPageView writes a row and requires visitorId + path', () => {
+  const db = openDb(':memory:');
+  const { id } = recordPageView({ visitorId: 'v1', path: '/toys.html', referrer: 'https://google.com' }, db);
+  assert.ok(id);
+  const row = db.prepare('SELECT * FROM page_views WHERE id = ?').get(id);
+  assert.strictEqual(row.visitor_id, 'v1');
+  assert.strictEqual(row.path, '/toys.html');
+  assert.strictEqual(row.referrer, 'https://google.com');
+  assert.strictEqual(row.client_id, null);
+
+  assert.throws(() => recordPageView({ visitorId: '', path: '/x' }, db), /visitorId is required/);
+  assert.throws(() => recordPageView({ visitorId: 'v2', path: '' }, db), /path is required/);
+  db.close();
+});
+
+test('recordPageView attaches clientId when provided', () => {
+  const db = openDb(':memory:');
+  const client = createClient({ email: 'shopper@example.com', name: 'Shopper' }, db);
+  recordPageView({ visitorId: 'v1', clientId: client.id, path: '/account.html' }, db);
+  const row = db.prepare('SELECT client_id FROM page_views WHERE visitor_id = ?').get('v1');
+  assert.strictEqual(row.client_id, client.id);
+  db.close();
+});
+
+test('recordPageView also marks the visitor active', () => {
+  resetActive();
+  const db = openDb(':memory:');
+  recordPageView({ visitorId: 'v1', path: '/index.html' }, db);
+  const active = getActiveVisitors(db);
+  assert.strictEqual(active.totalActive, 1);
+  db.close();
+});
+
+test('touchActiveVisitor without a DB write still counts as active', () => {
+  resetActive();
+  const db = openDb(':memory:');
+  touchActiveVisitor({ visitorId: 'v1', path: '/toys.html' });
+  const active = getActiveVisitors(db);
+  assert.strictEqual(active.totalActive, 1);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM page_views').get().c, 0);
+  db.close();
+});
+
+test('getActiveVisitors splits anonymous vs registered and resolves client names', () => {
+  resetActive();
+  const db = openDb(':memory:');
+  const client = createClient({ email: 'known@example.com', name: 'Known Customer' }, db);
+  touchActiveVisitor({ visitorId: 'anon-1', path: '/toys.html' });
+  touchActiveVisitor({ visitorId: 'anon-2', path: '/homeware.html' });
+  touchActiveVisitor({ visitorId: 'known-1', clientId: client.id, path: '/account.html' });
+
+  const active = getActiveVisitors(db);
+  assert.strictEqual(active.totalActive, 3);
+  assert.strictEqual(active.anonymousActive, 2);
+  assert.strictEqual(active.registeredActive, 1);
+  assert.strictEqual(active.activeClients.length, 1);
+  assert.strictEqual(active.activeClients[0].name, 'Known Customer');
+  assert.strictEqual(active.activeClients[0].email, 'known@example.com');
+  assert.strictEqual(active.activeClients[0].path, '/account.html');
+  db.close();
+});
+
+test('pruneActiveVisitors removes entries older than the window, keeps recent ones', () => {
+  resetActive();
+  touchActiveVisitor({ visitorId: 'stale', path: '/x' });
+  // Backdate it directly rather than waiting -- same map, same shape.
+  _activeVisitorsMap().get('stale').lastSeenAt = Date.now() - 10 * 60 * 1000;
+  touchActiveVisitor({ visitorId: 'fresh', path: '/y' });
+
+  pruneActiveVisitors(5 * 60 * 1000);
+  const remaining = [..._activeVisitorsMap().keys()];
+  assert.deepStrictEqual(remaining, ['fresh']);
+});
+
+test('getVisitSummary computes totals, today, unique visitors, daily breakdown, and top pages', () => {
+  const db = openDb(':memory:');
+  recordPageView({ visitorId: 'v1', path: '/toys.html' }, db);
+  recordPageView({ visitorId: 'v1', path: '/toys.html' }, db);
+  recordPageView({ visitorId: 'v2', path: '/homeware.html' }, db);
+
+  const summary = getVisitSummary(db);
+  assert.strictEqual(summary.totalVisits, 3);
+  assert.strictEqual(summary.uniqueVisitorsAllTime, 2);
+  assert.strictEqual(summary.todayVisits, 3);
+  assert.strictEqual(summary.dailyVisits.length, 1);
+  assert.strictEqual(summary.dailyVisits[0].visits, 3);
+  assert.strictEqual(summary.dailyVisits[0].uniqueVisitors, 2);
+  assert.strictEqual(summary.topPages[0].path, '/toys.html');
+  assert.strictEqual(summary.topPages[0].visits, 2);
+  db.close();
+});
+
+test('getVisitSummary returns zeroes/empty arrays on a database with no visits', () => {
+  const db = openDb(':memory:');
+  const summary = getVisitSummary(db);
+  assert.strictEqual(summary.totalVisits, 0);
+  assert.strictEqual(summary.uniqueVisitorsAllTime, 0);
+  assert.strictEqual(summary.todayVisits, 0);
+  assert.deepStrictEqual(summary.dailyVisits, []);
+  assert.deepStrictEqual(summary.topPages, []);
+  db.close();
+});

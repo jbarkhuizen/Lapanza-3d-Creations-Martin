@@ -70,9 +70,18 @@ function show(el, on = true) {
   el.classList.toggle('hidden', !on);
 }
 
+let analyticsPollTimer = null;
+
 function setRoute(route, { id } = {}) {
   state.route = route;
   state.editingId = id || null;
+  // The Analytics view polls for live "active now" data while it's open --
+  // stop that the moment the admin navigates elsewhere, same idea as
+  // clearing any other page-scoped side effect on route change.
+  if (route !== 'analytics' && analyticsPollTimer) {
+    clearInterval(analyticsPollTimer);
+    analyticsPollTimer = null;
+  }
   $$('.nav-btn').forEach((btn) =>
     btn.classList.toggle(
       'active',
@@ -82,6 +91,7 @@ function setRoute(route, { id } = {}) {
     ),
   );
   show($('#view-dashboard'), route === 'dashboard');
+  show($('#view-analytics'), route === 'analytics');
   show($('#view-catalog'), route === 'catalog');
   show($('#view-editor'), route === 'editor');
   show($('#view-orders'), route === 'orders');
@@ -104,6 +114,7 @@ function setRoute(route, { id } = {}) {
 
   const titles = {
     dashboard: ['Client Side', 'Dashboard'],
+    analytics: ['Client Side', 'Analytics'],
     catalog: ['Client Side', 'Product catalog'],
     editor: ['Client Side', 'Edit product'],
     orders: ['Client Side', 'Orders'],
@@ -127,7 +138,7 @@ function setRoute(route, { id } = {}) {
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics');
 }
 
 async function boot() {
@@ -321,6 +332,9 @@ function bindChrome() {
       if (btn.dataset.route === 'dashboard') {
         setRoute('dashboard');
         await renderDashboard();
+      } else if (btn.dataset.route === 'analytics') {
+        setRoute('analytics');
+        await renderAnalytics();
       } else if (btn.dataset.route === 'catalog') {
         setRoute('catalog');
         await renderCatalog();
@@ -429,6 +443,90 @@ async function refreshProducts() {
   list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
   state.products = list;
   return { products: list, count: list.length };
+}
+
+// ---- Analytics (post-launch) ----
+// First-party visitor tracking -- see src/js/analytics.js for the beacon
+// this data comes from. "Active now" polls while this view stays open;
+// historical totals (visits/unique visitors/top pages) don't need polling,
+// they're refreshed each time the view is (re-)rendered.
+
+function formatRelativeSeconds(isoString) {
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(isoString).getTime()) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  return `${Math.round(seconds / 60)}m ago`;
+}
+
+function renderActiveSection(active) {
+  const activeClientRows = active.activeClients
+    .map(
+      (c) => `
+        <tr>
+          <td>${escapeHtml(c.name)}</td>
+          <td>${escapeHtml(c.email)}</td>
+          <td><code>${escapeHtml(c.path)}</code></td>
+          <td>${escapeHtml(formatRelativeSeconds(c.lastSeenAt))}</td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#analytics-active-now').textContent = String(active.totalActive);
+  $('#analytics-active-registered').textContent = String(active.registeredActive);
+  $('#analytics-active-clients-body').innerHTML =
+    activeClientRows || '<tr><td colspan="4"><div class="empty">No registered clients active right now</div></td></tr>';
+}
+
+async function renderAnalytics() {
+  const [active, summary] = await Promise.all([api('/api/analytics/active'), api('/api/analytics/summary')]);
+
+  const dailyRows = summary.dailyVisits
+    .map((d) => `<tr><td>${escapeHtml(d.day)}</td><td>${escapeHtml(String(d.visits))}</td><td>${escapeHtml(String(d.uniqueVisitors))}</td></tr>`)
+    .join('');
+
+  const topPageRows = summary.topPages
+    .map((p) => `<tr><td><code>${escapeHtml(p.path)}</code></td><td>${escapeHtml(String(p.visits))}</td></tr>`)
+    .join('');
+
+  $('#view-analytics').innerHTML = `
+    <div class="stats">
+      <div class="stat-card"><div class="label">Active now</div><div class="value" id="analytics-active-now">${escapeHtml(String(active.totalActive))}</div></div>
+      <div class="stat-card"><div class="label">Registered clients active</div><div class="value" id="analytics-active-registered">${escapeHtml(String(active.registeredActive))}</div></div>
+      <div class="stat-card"><div class="label">Visits today</div><div class="value">${escapeHtml(String(summary.todayVisits))}</div></div>
+      <div class="stat-card"><div class="label">Total visits</div><div class="value">${escapeHtml(String(summary.totalVisits))}</div></div>
+      <div class="stat-card"><div class="label">Unique visitors (all time)</div><div class="value">${escapeHtml(String(summary.uniqueVisitorsAllTime))}</div></div>
+    </div>
+
+    <div class="panel table-wrap">
+      <div class="section-head"><h3>Active registered clients</h3></div>
+      <table class="catalog">
+        <thead><tr><th>Name</th><th>Email</th><th>Page</th><th>Last seen</th></tr></thead>
+        <tbody id="analytics-active-clients-body"></tbody>
+      </table>
+    </div>
+
+    <div class="grid-2" style="align-items:start; margin-top:1.5rem;">
+      <div class="panel table-wrap">
+        <div class="section-head"><h3>Last 30 days</h3></div>
+        <table class="catalog">
+          <thead><tr><th>Day</th><th>Visits</th><th>Unique visitors</th></tr></thead>
+          <tbody>${dailyRows || '<tr><td colspan="3"><div class="empty">No visits recorded yet</div></td></tr>'}</tbody>
+        </table>
+      </div>
+      <div class="panel table-wrap">
+        <div class="section-head"><h3>Top pages (all time)</h3></div>
+        <table class="catalog">
+          <thead><tr><th>Page</th><th>Visits</th></tr></thead>
+          <tbody>${topPageRows || '<tr><td colspan="2"><div class="empty">No visits recorded yet</div></td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  renderActiveSection(active);
+
+  clearInterval(analyticsPollTimer);
+  analyticsPollTimer = setInterval(async () => {
+    renderActiveSection(await api('/api/analytics/active'));
+  }, 20000);
 }
 
 async function renderDashboard() {

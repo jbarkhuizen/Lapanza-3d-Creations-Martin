@@ -308,6 +308,24 @@ export function ensureSchema(db) {
       sent_count INTEGER NOT NULL DEFAULT 0,
       failed_count INTEGER NOT NULL DEFAULT 0
     );
+
+    -- Post-launch: visitor analytics. One row per real page load (never per
+    -- heartbeat -- see server/analytics.js for why "currently active" is
+    -- tracked in memory instead of here). visitor_id is a random client-
+    -- generated identifier (localStorage), never an IP address or anything
+    -- else identifying on its own -- client_id is only attached when the
+    -- visitor happens to have a valid logged-in client session at that
+    -- moment, which is the one case this table does hold real personal data.
+    CREATE TABLE IF NOT EXISTS page_views (
+      id TEXT PRIMARY KEY,
+      visitor_id TEXT NOT NULL,
+      client_id TEXT REFERENCES clients(id),
+      path TEXT NOT NULL,
+      referrer TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views (created_at);
+    CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON page_views (visitor_id);
   `);
   ensureCheckoutColumns(db);
   ensureClientAuthColumns(db);

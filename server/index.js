@@ -94,6 +94,7 @@ import {
 import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob, startAutoBackupJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath } from './backups.js';
+import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
@@ -158,6 +159,17 @@ const publicFormLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many submissions — please try again later.' },
+});
+// Much more permissive than the two above -- legitimate traffic hits this
+// on every page load plus a ~45s heartbeat while a tab stays open (see
+// src/js/analytics.js), so a form-submission-style 5-per-hour limit would
+// break real visitor tracking, not just abuse.
+const analyticsLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests.' },
 });
 
 // better-sqlite3 throws a raw SqliteError (not something route handlers can
@@ -288,6 +300,43 @@ app.get('/api/client/me', (req, res) => {
 
 app.get('/api/client/orders', requireClientAuth, (req, res) => {
   res.json({ orders: listOrdersForClient(req.clientId) });
+});
+
+// ---- Visitor analytics (post-launch) ----
+// Public beacon fired by src/js/analytics.js on every public page load
+// (type: 'pageview') and roughly every 45s while a tab stays open and
+// visible (type: 'heartbeat'). Never blocks or errors visibly to the
+// visitor -- the client-side beacon call is fire-and-forget.
+
+app.post('/api/analytics/beacon', analyticsLimiter, (req, res) => {
+  const { visitorId, path: pagePath, referrer, type } = req.body || {};
+  // Opportunistic, non-blocking: attach the client if a valid session
+  // cookie is present, same lookup requireClientAuth uses, but this route
+  // works fine for anonymous visitors too -- it just never gets a clientId.
+  const token = req.cookies[CLIENT_SESSION_COOKIE];
+  const session = token && clientSessions.get(token);
+  const clientId = session && Date.now() - session.createdAt < SESSION_TTL_MS ? session.clientId : null;
+
+  try {
+    if (type === 'heartbeat') {
+      touchActiveVisitor({ visitorId, clientId, path: pagePath });
+    } else {
+      recordPageView({ visitorId, clientId, path: pagePath, referrer });
+    }
+    res.status(204).end();
+  } catch {
+    // Malformed beacon (missing visitorId/path) -- not worth a 400 that the
+    // fire-and-forget client-side call will never look at anyway.
+    res.status(204).end();
+  }
+});
+
+app.get('/api/analytics/active', requireAuth, (_req, res) => {
+  res.json(getActiveVisitors());
+});
+
+app.get('/api/analytics/summary', requireAuth, (_req, res) => {
+  res.json(getVisitSummary());
 });
 
 // Phase 4: the post-checkout opt-in prompt toggles this without requiring a

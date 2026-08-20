@@ -22,6 +22,7 @@ test('ensureSchema creates every expected table', () => {
     'newsletter_subscribers',
     'order_items',
     'orders',
+    'page_views',
     'payment_transactions',
     'print_job_filaments',
     'print_jobs',

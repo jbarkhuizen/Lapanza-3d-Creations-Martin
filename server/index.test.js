@@ -483,3 +483,35 @@ test('login with a missing or non-string password returns 401, not 500', async (
   const nonString = await request(app).post('/api/auth/login').send({ username: 'johan', password: 12345678 });
   assert.strictEqual(nonString.status, 401);
 });
+
+test('analytics: pageview beacon is recorded, heartbeat is not, both return 204, admin routes require auth', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = login.headers['set-cookie'];
+
+  const unauthedActive = await request(app).get('/api/analytics/active');
+  assert.strictEqual(unauthedActive.status, 401);
+  const unauthedSummary = await request(app).get('/api/analytics/summary');
+  assert.strictEqual(unauthedSummary.status, 401);
+
+  const pageview = await request(app).post('/api/analytics/beacon').send({ visitorId: 'v1', path: '/toys.html', type: 'pageview' });
+  assert.strictEqual(pageview.status, 204);
+  const heartbeat = await request(app).post('/api/analytics/beacon').send({ visitorId: 'v1', path: '/toys.html', type: 'heartbeat' });
+  assert.strictEqual(heartbeat.status, 204);
+  // Malformed beacon (no visitorId) must never surface as a 400/500 to a
+  // fire-and-forget client-side call that will never read the response.
+  const malformed = await request(app).post('/api/analytics/beacon').send({ path: '/x', type: 'pageview' });
+  assert.strictEqual(malformed.status, 204);
+
+  const summary = await request(app).get('/api/analytics/summary').set('Cookie', adminCookie);
+  assert.strictEqual(summary.status, 200);
+  // Only the pageview should have persisted -- the heartbeat and the
+  // malformed beacon must not appear in the historical count.
+  assert.strictEqual(summary.body.totalVisits, 1);
+
+  const active = await request(app).get('/api/analytics/active').set('Cookie', adminCookie);
+  assert.strictEqual(active.status, 200);
+  assert.strictEqual(active.body.totalActive, 1);
+});
