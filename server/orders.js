@@ -66,6 +66,7 @@ export function resolveProductSnapshot(productId, db = getDb()) {
       // Shipping weight, not the item's own weight_g -- see db.js's
       // ensureCheckoutColumns comment for why these are separate.
       weight: row.shipping_weight_g ?? row.weight_g,
+      stockQty: row.stock_qty || 0,
     };
   }
   if (raw.startsWith('category:')) {
@@ -84,6 +85,7 @@ export function resolveProductSnapshot(productId, db = getDb()) {
       name: item.name || category.name,
       price: parseRand(item.price),
       weight: Number(item.shippingWeight ?? item.weight) || 0,
+      stockQty: Number(item.stockQty) || 0,
     };
   }
   return null;
@@ -178,6 +180,13 @@ export function createOrder(
     const quantity = Math.max(1, Number(line.quantity) || 1);
     return { ...snap, quantity };
   });
+
+  // Stock validation: block checkout if any item is out of stock
+  const outOfStock = resolved.filter((item) => item.quantity > item.stockQty);
+  if (outOfStock.length > 0) {
+    const itemList = outOfStock.map((item) => `${item.name} (requested ${item.quantity}, ${item.stockQty} available)`).join('; ');
+    throw new Error(`Out of stock: ${itemList}`);
+  }
 
   const totalWeight = resolved.reduce((sum, i) => sum + i.weight * i.quantity, 0);
   const subtotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
