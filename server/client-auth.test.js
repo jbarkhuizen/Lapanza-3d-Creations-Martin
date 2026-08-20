@@ -7,6 +7,8 @@ import {
   registerClient,
   verifyClientEmail,
   loginClient,
+  requestPasswordReset,
+  resetClientPassword,
   setWhatsAppOptIn,
   manuallyVerifyClient,
   regenerateVerificationToken,
@@ -159,6 +161,63 @@ test('regenerateVerificationToken issues a fresh usable token, rejects already-v
   const guest = createClient({ email: 'noaccount2@example.com' }, db);
   assert.throws(() => regenerateVerificationToken(guest.id, db), /no account/);
   assert.strictEqual(regenerateVerificationToken('bogus-id', db), null);
+  db.close();
+});
+
+test('requestPasswordReset returns null for an unknown email and for a guest-only row', () => {
+  const db = openDb(':memory:');
+  assert.strictEqual(requestPasswordReset('nobody@example.com', db), null);
+  createClient({ email: 'guestonly2@example.com' }, db);
+  assert.strictEqual(requestPasswordReset('guestonly2@example.com', db), null);
+  db.close();
+});
+
+test('requestPasswordReset issues a token for a registered account regardless of verification state', () => {
+  const db = openDb(':memory:');
+  registerClient({ email: 'forgot@example.com', password: 'correcthorse' }, db);
+  const result = requestPasswordReset('forgot@example.com', db);
+  assert.ok(result.token);
+  assert.strictEqual(result.client.email, 'forgot@example.com');
+  db.close();
+});
+
+test('resetClientPassword sets the new password, verifies the account, and consumes the token', () => {
+  const db = openDb(':memory:');
+  registerClient({ email: 'reset@example.com', password: 'oldpassword' }, db);
+  const { token } = requestPasswordReset('reset@example.com', db);
+
+  const updated = resetClientPassword(token, 'newpassword', db);
+  assert.strictEqual(updated.emailVerified, true);
+
+  const loginWithOld = loginClient('reset@example.com', 'oldpassword', db);
+  assert.strictEqual(loginWithOld.ok, false);
+  const loginWithNew = loginClient('reset@example.com', 'newpassword', db);
+  assert.strictEqual(loginWithNew.ok, true);
+
+  // token is single-use -- a second attempt with the same token must fail
+  assert.strictEqual(resetClientPassword(token, 'anotherpassword', db), null);
+  db.close();
+});
+
+test('resetClientPassword returns null for an unknown or expired token', () => {
+  const db = openDb(':memory:');
+  assert.strictEqual(resetClientPassword('not-a-real-token', 'newpassword', db), null);
+
+  registerClient({ email: 'expired@example.com', password: 'correcthorse' }, db);
+  const { token } = requestPasswordReset('expired@example.com', db);
+  db.prepare('UPDATE clients SET reset_token_expires = ? WHERE reset_token = ?').run(
+    new Date(Date.now() - 1000).toISOString(),
+    token,
+  );
+  assert.strictEqual(resetClientPassword(token, 'newpassword', db), null);
+  db.close();
+});
+
+test('resetClientPassword rejects a password shorter than 8 characters', () => {
+  const db = openDb(':memory:');
+  registerClient({ email: 'shortreset@example.com', password: 'correcthorse' }, db);
+  const { token } = requestPasswordReset('shortreset@example.com', db);
+  assert.throws(() => resetClientPassword(token, 'short', db), /at least 8/);
   db.close();
 });
 

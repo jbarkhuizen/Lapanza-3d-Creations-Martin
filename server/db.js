@@ -341,6 +341,7 @@ export function ensureSchema(db) {
   ensureClientAuthColumns(db);
   ensureManagementColumns(db);
   ensureEngagementColumns(db);
+  ensurePasswordResetColumns(db);
 }
 
 function hasColumn(db, tableInfoStatement, column) {
@@ -459,6 +460,18 @@ function ensureEngagementColumns(db) {
   }
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'whatsapp_opt_in')) {
     db.exec('ALTER TABLE clients ADD COLUMN whatsapp_opt_in INTEGER NOT NULL DEFAULT 0');
+  }
+}
+
+// Password recovery: separate token pair from verification_token above so a
+// pending email-verification link and a pending reset link can't clobber
+// each other if both are outstanding at once.
+function ensurePasswordResetColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'reset_token')) {
+    db.exec('ALTER TABLE clients ADD COLUMN reset_token TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'reset_token_expires')) {
+    db.exec('ALTER TABLE clients ADD COLUMN reset_token_expires TEXT');
   }
 }
 

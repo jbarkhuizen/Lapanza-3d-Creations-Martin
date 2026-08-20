@@ -120,6 +120,25 @@ If you didn't request this, you can ignore this email.
   });
 }
 
+// Password recovery: link is single-use (server/clients.js clears
+// reset_token on success) and expires in 1h -- see requestPasswordReset.
+export async function sendClientPasswordResetEmail(client, resetUrl) {
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: client.email,
+    subject: 'Lapanza 3D — reset your password',
+    text: `Hi ${client.name || 'there'},
+
+We received a request to reset your Lapanza 3D Creative Lab account password. Click below to set a new one:
+
+${resetUrl}
+
+This link expires in 1 hour. If you didn't request this, you can ignore this email — your password won't change.
+
+— Lapanza 3D Creative Lab`,
+  });
+}
+
 // Double opt-in: the same link opens/closes nothing else, it just flips
 // status pending -> confirmed. The unsubscribe link uses the same token
 // (see newsletter.js's newToken() comment) so it keeps working for the

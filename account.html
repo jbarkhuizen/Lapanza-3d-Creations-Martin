@@ -67,6 +67,7 @@
                 </label>
                 <button type="submit" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-6 py-3 hover:bg-terracotta transition-colors">Log in</button>
                 <p id="login-note" class="text-sm text-espresso/70" role="status"></p>
+                <p class="text-sm"><button type="button" id="forgot-password-link" class="text-espresso/70 underline hover:text-terracotta">Forgot password?</button></p>
               </form>
             </div>
 
@@ -96,6 +97,40 @@
               </form>
             </div>
           </div>
+        </div>
+
+        <!-- Logged out: forgot-password request -->
+        <div id="account-forgot" class="hidden">
+          <p class="eyebrow mb-3">My Account</p>
+          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Reset your password</h1>
+          <p class="text-espresso/75 leading-relaxed max-w-xl mb-10 text-lg">Enter your email and we'll send you a link to set a new password.</p>
+          <form id="forgot-form" class="space-y-4 max-w-sm" novalidate>
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">Email</span>
+              <input name="email" type="email" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <button type="submit" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-6 py-3 hover:bg-terracotta transition-colors">Send reset link</button>
+            <p id="forgot-note" class="text-sm text-espresso/70" role="status"></p>
+            <p class="text-sm"><button type="button" id="back-to-login-link" class="text-espresso/70 underline hover:text-terracotta">Back to log in</button></p>
+          </form>
+        </div>
+
+        <!-- Reached via emailed reset link (?reset_token=...): set new password -->
+        <div id="account-reset" class="hidden">
+          <p class="eyebrow mb-3">My Account</p>
+          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Set a new password</h1>
+          <form id="reset-form" class="space-y-4 max-w-sm" novalidate>
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">New password (8+ characters)</span>
+              <input name="password" type="password" required minlength="8" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">Confirm password</span>
+              <input name="confirmPassword" type="password" required minlength="8" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+            <button type="submit" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-6 py-3 hover:bg-terracotta transition-colors">Set new password</button>
+            <p id="reset-note" class="text-sm text-espresso/70" role="status"></p>
+          </form>
         </div>
 
         <!-- Logged in: order history -->

@@ -38,6 +38,8 @@ function orderRowHtml(order) {
 async function showLoggedIn(client) {
   document.getElementById('account-loading').classList.add('hidden');
   document.getElementById('account-guest').classList.add('hidden');
+  document.getElementById('account-forgot').classList.add('hidden');
+  document.getElementById('account-reset').classList.add('hidden');
   const panel = document.getElementById('account-loggedin');
   panel.classList.remove('hidden');
   const welcomeName = client.name ? `, ${client.name}` : '';
@@ -61,16 +63,39 @@ async function showLoggedIn(client) {
 function showGuest() {
   document.getElementById('account-loading').classList.add('hidden');
   document.getElementById('account-loggedin').classList.add('hidden');
+  document.getElementById('account-forgot').classList.add('hidden');
+  document.getElementById('account-reset').classList.add('hidden');
   document.getElementById('account-guest').classList.remove('hidden');
 }
 
+function showForgot() {
+  document.getElementById('account-guest').classList.add('hidden');
+  document.getElementById('account-forgot').classList.remove('hidden');
+}
+
+function showReset() {
+  document.getElementById('account-loading').classList.add('hidden');
+  document.getElementById('account-guest').classList.add('hidden');
+  document.getElementById('account-loggedin').classList.add('hidden');
+  document.getElementById('account-forgot').classList.add('hidden');
+  document.getElementById('account-reset').classList.remove('hidden');
+}
+
 async function init() {
-  try {
-    const { authenticated, client } = await api('/api/client/me');
-    if (authenticated && client) await showLoggedIn(client);
-    else showGuest();
-  } catch {
-    showGuest();
+  // A reset link (?reset_token=...) takes priority over the normal
+  // logged-in/guest check below -- the token itself is the proof of
+  // identity here, not any existing session.
+  const resetToken = new URLSearchParams(window.location.search).get('reset_token');
+  if (resetToken) {
+    showReset();
+  } else {
+    try {
+      const { authenticated, client } = await api('/api/client/me');
+      if (authenticated && client) await showLoggedIn(client);
+      else showGuest();
+    } catch {
+      showGuest();
+    }
   }
 
   const loginForm = document.getElementById('login-form');
@@ -110,6 +135,50 @@ async function init() {
       registerForm.reset();
     } catch (err) {
       registerNote.textContent = err.message || 'Something went wrong.';
+    }
+  });
+
+  document.getElementById('forgot-password-link')?.addEventListener('click', showForgot);
+  document.getElementById('back-to-login-link')?.addEventListener('click', showGuest);
+
+  const forgotForm = document.getElementById('forgot-form');
+  const forgotNote = document.getElementById('forgot-note');
+  forgotForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    forgotNote.textContent = '';
+    const data = new FormData(forgotForm);
+    try {
+      const { message } = await api('/api/client/forgot-password', {
+        method: 'POST',
+        body: JSON.stringify({ email: data.get('email') }),
+      });
+      forgotNote.textContent = message || "If an account exists for that email, we've sent a reset link.";
+      forgotForm.reset();
+    } catch (err) {
+      forgotNote.textContent = err.message || 'Something went wrong.';
+    }
+  });
+
+  const resetForm = document.getElementById('reset-form');
+  const resetNote = document.getElementById('reset-note');
+  resetForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    resetNote.textContent = '';
+    const data = new FormData(resetForm);
+    const password = data.get('password');
+    if (password !== data.get('confirmPassword')) {
+      resetNote.textContent = 'Passwords do not match.';
+      return;
+    }
+    try {
+      const { client } = await api('/api/client/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ token: resetToken, password }),
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+      await showLoggedIn(client);
+    } catch (err) {
+      resetNote.textContent = err.message || 'Something went wrong.';
     }
   });
 

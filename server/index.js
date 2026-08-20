@@ -44,6 +44,8 @@ import {
   registerClient,
   verifyClientEmail,
   loginClient,
+  requestPasswordReset,
+  resetClientPassword,
   setWhatsAppOptIn,
   manuallyVerifyClient,
   regenerateVerificationToken,
@@ -73,6 +75,7 @@ import {
   sendOrderConfirmationEmail,
   sendLowStockAlert,
   sendClientVerificationEmail,
+  sendClientPasswordResetEmail,
   sendNewsletterConfirmationEmail,
   sendDesignRequestStatusEmail,
   sendNewOrderNotificationEmail,
@@ -242,6 +245,16 @@ function startClientSession(res, clientId) {
   res.cookie(CLIENT_SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
 }
 
+// Password reset proves the requester currently controls the mailbox, but
+// says nothing about any session opened before that -- e.g. on a device
+// that had the account logged in without permission. Mirrors
+// revokeSessionsForAdmin above.
+function revokeSessionsForClient(clientId) {
+  for (const [token, session] of clientSessions) {
+    if (session.clientId === clientId) clientSessions.delete(token);
+  }
+}
+
 function siteUrlFor(req) {
   const requestOrigin = `${req.protocol}://${req.get('host')}`;
   return process.env.SITE_URL || requestOrigin;
@@ -281,6 +294,50 @@ app.post('/api/client/login', authLimiter, (req, res) => {
   if (!result.ok) return res.status(401).json({ error: 'Invalid email or password' });
   startClientSession(res, result.client.id);
   res.json({ ok: true, client: result.client });
+});
+
+// Always returns the same generic message regardless of whether the email
+// has an account -- same email-enumeration guard as loginClient's 'invalid'
+// reason. The actual reset link only ever goes out over email, never in
+// this response.
+app.post('/api/client/forgot-password', authLimiter, async (req, res) => {
+  const { email } = req.body || {};
+  const GENERIC_MESSAGE = "If an account exists for that email, we've sent a link to reset the password.";
+  if (typeof email !== 'string' || !email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+  try {
+    const result = requestPasswordReset(email);
+    if (result) {
+      const resetUrl = `${siteUrlFor(req)}/account.html?reset_token=${result.token}`;
+      try {
+        await sendClientPasswordResetEmail(result.client, resetUrl);
+      } catch (err) {
+        console.error('Password reset email failed to send:', err.message);
+      }
+    }
+  } catch (err) {
+    console.error('Password reset request failed:', err.message);
+  }
+  res.json({ ok: true, message: GENERIC_MESSAGE });
+});
+
+app.post('/api/client/reset-password', authLimiter, (req, res) => {
+  const { token, password } = req.body || {};
+  if (typeof token !== 'string' || !token) {
+    return res.status(400).json({ error: 'Reset link is missing its token' });
+  }
+  try {
+    const client = resetClientPassword(token, password);
+    if (!client) {
+      return res.status(400).json({ error: 'This reset link is invalid or has expired — request a new one.' });
+    }
+    revokeSessionsForClient(client.id);
+    startClientSession(res, client.id);
+    res.json({ ok: true, client });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post('/api/client/logout', (req, res) => {

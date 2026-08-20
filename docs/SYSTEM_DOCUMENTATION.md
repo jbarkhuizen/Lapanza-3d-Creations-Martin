@@ -6,7 +6,7 @@
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-20 (updated for checkout stock validation feature)
+**Document date:** 2026-08-20 (updated for customer password recovery — V1.01)
 
 ---
 
@@ -67,6 +67,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Storefront stock display** | Each filament colour card on the public site now shows its stock level below the price — `"{N} in stock"` or `"Out of stock"` — sourced from the same `stockQty` already flowing through `filaments.json`, no new data pipeline needed | 161/161 |
 | **Checkout stock validation** | Blocks order creation if any cart item's quantity exceeds available stock (`stockQty`); returns detailed error listing out-of-stock items + quantities. Closes the gap from the pre-validation period where out-of-stock items could be purchased (§15). Covers both online and manual (admin-created) orders via shared `resolveProductSnapshot()` validation. | 167/167 |
 | **Version history tracking** | Admin "Version History" page in Settings group; manual button to record deployment version with description; auto-incrementing version numbers (v1, v2, ...); table displays all versions in reverse chronological order showing version, description, deployed date. | 167/167 |
+| **Customer password recovery (V1.01)** | Closes the previous "no forgot-password" gap — register/verify/login was the only path in and there was no way back in for a forgotten password. Adds `POST /api/client/forgot-password` (emails a single-use, 1h-expiry reset link; always returns the same generic response so the endpoint can't be used to discover which emails have accounts) and `POST /api/client/reset-password` (consumes the token, sets the new password, marks the account verified, revokes any other live sessions for that client, and logs the requester straight in). New `account.html` "Forgot password?" link and a `?reset_token=` landing view. | 172/172 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -391,6 +392,7 @@ erDiagram
         text password_hash "NULL = guest"
         int email_verified
         text verification_token
+        text reset_token
         text last_login_at
         int whatsapp_opt_in
         real discount_pct
@@ -582,6 +584,7 @@ Simple key-value store (site config, invoicing config, print-job-costing rates).
 | password_hash | TEXT NULL | **NULL = guest, set = registered account** |
 | email_verified | INTEGER (bool) | |
 | verification_token, verification_token_expires | TEXT | 24h TTL, single-use |
+| reset_token, reset_token_expires | TEXT | V1.01 — password recovery, 1h TTL, single-use; separate from verification_token so both can be outstanding at once |
 | last_login_at | TEXT NULL | Phase 4 |
 | whatsapp_opt_in | INTEGER (bool) DEFAULT 0 | Phase 4, separate consent from newsletter |
 | discount_pct | REAL DEFAULT 0 | Applied only on admin-created manual orders |
@@ -785,6 +788,8 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | POST | `/api/client/register` | Public (rate-limited) | Register (or upgrade an existing guest row) |
 | GET | `/api/client/verify` | Public | Consumes a verification token (redirects to `/index.html?verified=0\|1`) |
 | POST | `/api/client/login` | Public (rate-limited) | Customer login |
+| POST | `/api/client/forgot-password` | Public (rate-limited) | V1.01 — emails a reset link if the address has a registered account; always returns the same generic message either way |
+| POST | `/api/client/reset-password` | Public (rate-limited) | V1.01 — consumes the reset token, sets the new password, revokes other sessions for that client, and logs the requester in |
 | POST | `/api/client/logout` | Public | Customer logout |
 | GET | `/api/client/me` | Public | Current client session status |
 | GET | `/api/client/orders` | Client | Own order history |

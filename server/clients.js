@@ -3,6 +3,7 @@ import { randomUUID, randomBytes } from 'crypto';
 import { getDb } from './db.js';
 
 const VERIFICATION_TOKEN_TTL_MS = 1000 * 60 * 60 * 24; // 24h
+const RESET_TOKEN_TTL_MS = 1000 * 60 * 60; // 1h -- shorter than verification since it's re-requestable any time
 
 function rowToClient(row) {
   if (!row) return null;
@@ -273,6 +274,42 @@ export function regenerateVerificationToken(id, db = getDb()) {
     id,
   );
   return { client: getClient(id, db), token };
+}
+
+// Issues a reset token for an existing registered account. Returns null for
+// an unknown email or a guest-only row (no password_hash) -- caller must not
+// let that distinguish the two cases in the HTTP response/email sent, so an
+// attacker can't use "forgot password" to discover which emails have
+// accounts. Deliberately doesn't check email_verified: receiving this email
+// is itself proof of ownership, same strength as the verification link, so
+// it's also how someone who never finished verifying gets unstuck.
+export function requestPasswordReset(email, db = getDb()) {
+  const row = db.prepare('SELECT * FROM clients WHERE LOWER(email) = LOWER(?)').get(String(email || '').trim());
+  if (!row || !row.password_hash) return null;
+  const token = randomBytes(32).toString('hex');
+  const tokenExpires = new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString();
+  db.prepare('UPDATE clients SET reset_token = ?, reset_token_expires = ? WHERE id = ?').run(token, tokenExpires, row.id);
+  return { client: getClient(row.id, db), token };
+}
+
+// Returns the updated client on success, or null if the token is missing,
+// unknown, or expired. Also marks the account verified -- clicking a link
+// mailed to that address is proof of ownership either way.
+export function resetClientPassword(token, newPassword, db = getDb()) {
+  if (!newPassword || String(newPassword).length < 8) {
+    throw new Error('Password must be at least 8 characters');
+  }
+  if (!token) return null;
+  const row = db.prepare('SELECT * FROM clients WHERE reset_token = ?').get(token);
+  if (!row) return null;
+  if (!row.reset_token_expires || new Date(row.reset_token_expires).getTime() < Date.now()) {
+    return null;
+  }
+  const passwordHash = bcrypt.hashSync(newPassword, 10);
+  db.prepare(
+    'UPDATE clients SET password_hash = ?, email_verified = 1, reset_token = NULL, reset_token_expires = NULL WHERE id = ?',
+  ).run(passwordHash, row.id);
+  return getClient(row.id, db);
 }
 
 // A client with real order history can't be hard-deleted (orders.client_id
