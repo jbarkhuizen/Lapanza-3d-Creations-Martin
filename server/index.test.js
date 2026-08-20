@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import request from 'supertest';
-import { closeAllCachedDbs } from './db.js';
+import { closeAllCachedDbs, getDb } from './db.js';
 
 async function freshApp() {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'index-test-'));
@@ -28,6 +28,32 @@ async function freshApp() {
     },
   };
 }
+
+test('health check reports ok when the database is reachable', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+
+  const res = await request(app).get('/api/health');
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.ok, true);
+  assert.strictEqual(res.body.service, 'lapanza-admin');
+  assert.ok(res.body.time);
+});
+
+test('health check reports 503 when the database is unreachable', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+
+  // Simulates the real failure mode a pure liveness check would miss: the
+  // Node process is still alive and responding, but the DB underneath it
+  // isn't -- closing the connection this app instance holds reproduces
+  // exactly that without needing to actually corrupt a file on disk.
+  getDb().close();
+
+  const res = await request(app).get('/api/health');
+  assert.strictEqual(res.status, 503);
+  assert.strictEqual(res.body.ok, false);
+});
 
 test('setup status is true before any admin exists, false after', async (t) => {
   const { app, cleanup } = await freshApp();

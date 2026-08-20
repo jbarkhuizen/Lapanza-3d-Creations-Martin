@@ -62,6 +62,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Production migration** | Moved from shared cPanel hosting to a dedicated VPS (AlmaLinux 10): Node 22, nginx, systemd, Let's Encrypt SSL, DNS cutover to `lapanza3d.co.za` | 141/141 |
 | **Post-launch data load** | Bulk-imported 20 real customer records and 8 historical invoices (INV-0001–INV-0008) into production; added admin controls for registered users (manual verify, resend verification, delete/revoke) | 143/143 |
 | **Backups** | Automated daily database backups (in-process scheduler, 30-backup retention) + an admin "Backups" view (Settings group) to run one on demand, and list/download/delete existing ones | 149/149 |
+| **Uptime monitoring** | `/api/health` strengthened to verify real database connectivity (returns `503` on DB failure, not just a bare liveness `200`) so an external monitor actually catches a stuck/corrupted DB, not just a dead process; documented setup guide for a free-tier UptimeRobot monitor | 151/151 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -242,7 +243,7 @@ This lookup happens **server-side on every checkout**, never trusting a client-s
 |---|---|
 | Vite (multi-page) | Bundles every top-level `*.html` + `car-parts/*.html` + `filament/*.html` as separate entries (see `vite.config.js`'s `htmlEntries()`) into `dist/` |
 | `scripts/generate-pages.mjs` | **Not** part of the Vite build — a separate Node script, run via `npm run generate` or the admin "Publish to site" button, that reads the DB/catalog.json and regenerates the committed static HTML source files (which Vite then bundles) |
-| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 149 tests across 21 `*.test.js` files |
+| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 151 tests across 21 `*.test.js` files |
 
 ---
 
@@ -727,7 +728,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
-| GET | `/api/health` | Public | Liveness check |
+| GET | `/api/health` | Public | Health check — verifies the database is actually reachable (not just that the process is alive), returns `503` if not. Designed to be polled by an external uptime monitor (see `docs/UPTIME_MONITORING.md`). |
 | GET | `/api/setup/status` | Public | Reports whether first-run admin setup is needed (`{needsSetup}`) |
 | POST | `/api/setup` | Public | First-run only — creates the first admin account |
 | POST | `/api/auth/login` | Public (rate-limited) | Admin login |
@@ -1265,11 +1266,12 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 | NFR-03 | **Availability** — process auto-restarts on failure (systemd `Restart=on-failure`) | Implemented |
 | NFR-04 | **Transport security** — HTTPS enforced site-wide, HTTP force-redirects | Implemented (certbot) |
 | NFR-05 | **Auditability** — every schema change is additive/idempotent, safe to re-run on every boot | Implemented |
-| NFR-06 | **Testability** — automated test coverage for all backend business logic | 149 tests, `node --test`, no test framework dependency |
+| NFR-06 | **Testability** — automated test coverage for all backend business logic | 151 tests, `node --test`, no test framework dependency |
 | NFR-07 | **Deployability** — one-command deploy from git to running production service | `deploy/deploy-app.sh` |
 | NFR-08 | **Email deliverability** — outbound mail failures never block the primary user action (checkout, registration) | Best-effort, try/catch around every send |
 | NFR-09 | **Backup** — database is a single portable file, trivially backupable | Implemented — automated daily backup + on-demand admin backups, 30-backup retention (§9.18). Backups currently live on the same disk as the live DB, not yet off-server — see §15. |
 | NFR-10 | **Compliance (WhatsApp)** — business-initiated broadcasts use only Meta-pre-approved templates | Implemented — free text is not permitted by Meta policy and the code enforces this shape |
+| NFR-11 | **Observability** — an external monitor detects an outage before a customer reports one | `/api/health` verifies real DB connectivity (not just process liveness) and is designed to be polled by a third-party uptime service; see `docs/UPTIME_MONITORING.md`. **The actual monitor account/configuration is a manual, user-owned step** (third-party account signup) — the code-side support for it is implemented, but whether a monitor is actually configured and alerting depends on that manual step having been completed. |
 
 ---
 
@@ -1365,7 +1367,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 ### 12.1 Development Workflow (as practised)
 
 1. Change implemented locally against a local SQLite DB (`data/lapanza.db`, gitignored).
-2. `node --test` run — **full suite must pass (149/149)** before any commit.
+2. `node --test` run — **full suite must pass (151/151)** before any commit.
 3. `git add` (never blanket `-A` for sensitive paths) → commit with a descriptive message → `git push origin main`.
 4. No CI/CD pipeline (no GitHub Actions observed) — testing and deployment are both manual/assistant-driven.
 5. No pull-request/branch-review workflow observed — all work committed directly to `main`.
@@ -1402,6 +1404,7 @@ There is **no separate staging environment** — the VPS is production from firs
 8. Install/start the systemd service and nginx config.
 9. Verify DNS propagation, then run `certbot --nginx -d ... -d www....` for HTTPS.
 10. First-run admin setup screen (`/admin/`) — create the real admin account (no default/test credentials shipped).
+11. External uptime monitoring — see `docs/UPTIME_MONITORING.md`. Manual, third-party account setup; not something an automated deploy step can do.
 
 ### 12.5 Notable Implementation Incidents (retained for audit value)
 
@@ -1427,7 +1430,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 149 tests across 21 test files, 100% passing at last recorded run.
+- **Current count:** 151 tests across 21 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases
@@ -1546,6 +1549,13 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | T-66 | `pruneOldBackups(keep)` with more backups than the keep count | Positive | Oldest are removed until exactly `keep` remain |
 | T-67 | `pruneOldBackups(keep)` with fewer backups than the keep count | Positive (edge) | No-op, nothing deleted |
 | T-68 | Automated backup job fires once immediately on process boot | Positive | Confirmed live on the VPS — a backup file with a boot-time timestamp appears within seconds of `systemctl start` |
+
+#### Health Check / Uptime Monitoring
+
+| # | Case | Type | Expected result |
+|---|---|---|---|
+| T-69 | `GET /api/health` with a reachable database | Positive | `200 {"ok": true, ...}` |
+| T-70 | `GET /api/health` with the database connection closed/unreachable | Negative (the actual point of this endpoint) | `503 {"ok": false, ...}` — proves this is a real health check, not a bare liveness ping that would falsely report `200` here |
 
 ### 13.3 Non-Functional / Infra Test Cases (manually verified during deployment)
 

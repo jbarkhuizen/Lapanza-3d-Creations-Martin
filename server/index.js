@@ -400,8 +400,19 @@ app.post('/api/whatsapp-campaigns/:id/send', requireAuth, async (req, res) => {
   }
 });
 
+// Verifies the database is actually reachable, not just that the Node
+// process is alive -- a stuck/corrupted/locked DB is a far more likely
+// real-world failure than the process itself dying, and a pure liveness
+// check would report "ok" straight through that. Cheap enough (a single
+// literal SELECT, no table access) to poll every few minutes from an
+// external uptime monitor without adding real load.
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, service: 'lapanza-admin', time: new Date().toISOString() });
+  try {
+    getDb().prepare('SELECT 1').get();
+    res.json({ ok: true, service: 'lapanza-admin', time: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({ ok: false, service: 'lapanza-admin', time: new Date().toISOString(), error: 'Database unreachable' });
+  }
 });
 
 app.get('/api/setup/status', (_req, res) => {

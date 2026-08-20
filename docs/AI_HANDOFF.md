@@ -18,7 +18,8 @@ A live e-commerce + operations platform for a South African 3D-printing/filament
 1. `README.md` — quick local-dev setup
 2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (18 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
 3. `deploy/DEPLOY.md` — production deployment/SSH runbook specifically
-4. `.env.example` and `deploy/.env.production.template` — every config variable, documented
+4. `docs/UPTIME_MONITORING.md` — external monitoring setup (manual, third-party account signup — not something to attempt on the user's behalf)
+5. `.env.example` and `deploy/.env.production.template` — every config variable, documented
 
 ## Non-obvious things that will bite you if you don't know them
 
@@ -42,7 +43,8 @@ These are real incidents from this project's build/deploy history — documented
 | Gmail SMTP | Configured and working (order confirmations, verification emails, notifications) |
 | SSL | Live, Let's Encrypt via certbot, auto-renewing |
 | Automated backups | Live — daily + on-boot, 30-backup retention, admin "Backups" view. Still on the *same disk* as the live DB, not yet off-server |
-| Test suite | 149/149 passing (`node --test`), run before every commit |
+| Uptime monitoring | `/api/health` verifies real DB connectivity (503 on failure). Setup guide at `docs/UPTIME_MONITORING.md` — whether an actual monitor is configured depends on that manual, third-party account-signup step having been completed by the owner |
+| Test suite | 151/151 passing (`node --test`), run before every commit |
 | CI/CD | None — manual test-then-push-then-SSH-deploy |
 | Staging environment | None — the VPS is production from first deploy |
 
