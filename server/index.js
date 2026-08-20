@@ -1513,7 +1513,7 @@ app.post('/api/version-history', requireAuth, (req, res) => {
     const db = getDb();
     const latestVersion = db.prepare('SELECT MAX(version_number) as max FROM version_history').get();
     const nextVersion = (latestVersion.max || 0) + 1;
-    const id = generateId();
+    const id = randomUUID();
     const now = new Date().toISOString();
     db.prepare(`
       INSERT INTO version_history (id, version_number, description, deployed_date, deployed_by, created_at)
