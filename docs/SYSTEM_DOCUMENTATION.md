@@ -66,6 +66,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Visitor analytics** | First-party, privacy-minimal visitor tracking (`page_views` table + in-memory "active now"), new admin Analytics page with live active-visitor count, active-registered-clients list, and historical visit/unique-visitor/top-pages stats | 160/160 |
 | **Storefront stock display** | Each filament colour card on the public site now shows its stock level below the price — `"{N} in stock"` or `"Out of stock"` — sourced from the same `stockQty` already flowing through `filaments.json`, no new data pipeline needed | 161/161 |
 | **Checkout stock validation** | Blocks order creation if any cart item's quantity exceeds available stock (`stockQty`); returns detailed error listing out-of-stock items + quantities. Closes the gap from the pre-validation period where out-of-stock items could be purchased (§15). Covers both online and manual (admin-created) orders via shared `resolveProductSnapshot()` validation. | 167/167 |
+| **Version history tracking** | Admin "Version History" page in Settings group; manual button to record deployment version with description; auto-incrementing version numbers (v1, v2, ...); table displays all versions in reverse chronological order showing version, description, deployed date. | 167/167 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -743,6 +744,18 @@ One row per real page load (never per heartbeat — see §9.20). Post-launch add
 | created_at | TEXT NOT NULL | |
 | *(indexes)* | `created_at`, `visitor_id` | |
 
+#### `version_history`
+Track deployments and system updates. Each row records a version bump with description and deployment timestamp.
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | |
+| version_number | INTEGER NOT NULL UNIQUE | Auto-incrementing version identifier (v1, v2, v3, ...) |
+| description | TEXT NOT NULL | Admin-provided description of changes in this version |
+| deployed_date | TEXT NOT NULL | ISO timestamp when this version was deployed to production |
+| deployed_by | TEXT NOT NULL DEFAULT 'admin' | User/role that recorded this version (currently always 'admin') |
+| created_at | TEXT NOT NULL | Row creation timestamp |
+| *(indexes)* | `version_number DESC` | For fast reverse-chronological retrieval in admin UI |
+
 ---
 
 ## 7. API Reference
@@ -926,6 +939,24 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | `/admin`, `/admin/*` | `express.static(admin/)` + SPA fallback to `admin/index.html` |
 | `/uploads/*` | `express.static(public/uploads/)` |
 | `/` | Redirects to `/admin/` (the Node server itself does **not** serve the public storefront — that's nginx's job in production, or a separate Vite dev server locally) |
+
+### 7.21 Version History (Admin)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/version-history` | Admin | List all recorded versions in reverse chronological order (newest first) |
+| POST | `/api/version-history` | Admin | Record a new version entry; request body: `{ description: "string" }` |
+
+**Responses:**
+
+- **GET** `200` → `{ versions: [ { id, version_number, description, deployed_date, deployed_by, created_at }, ... ] }`
+- **POST** `200` → `{ ok: true, version: { id, version_number, description, deployed_date } }`
+- **POST** `400` → `{ error: "description required" }`
+
+**Behaviour:**
+- Version numbers auto-increment: first call creates v1, second creates v2, etc.
+- `deployed_date` is always the request timestamp (ISO 8601).
+- `deployed_by` is currently hardcoded to `'admin'`; future extension could track which admin user recorded the version.
 
 ---
 
