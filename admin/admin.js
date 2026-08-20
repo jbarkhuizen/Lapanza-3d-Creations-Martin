@@ -110,6 +110,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-print-jobs'), route === 'print-jobs');
   show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-backups'), route === 'backups');
+  show($('#view-version-history'), route === 'version-history');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -133,12 +134,13 @@ function setRoute(route, { id } = {}) {
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
     backups: ['Settings', 'Backups'],
+    'version-history': ['Settings', 'Version History'],
     settings: ['Settings', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history');
 }
 
 async function boot() {
@@ -341,6 +343,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'backups') {
         setRoute('backups');
         await renderBackups();
+      } else if (btn.dataset.route === 'version-history') {
+        setRoute('version-history');
+        await renderVersionHistory();
       } else if (btn.dataset.route === 'settings') {
         setRoute('settings');
         await renderSettings();
@@ -1264,6 +1269,52 @@ async function renderBackups() {
         toast(ex.message);
       }
     });
+  });
+}
+
+async function renderVersionHistory() {
+  const { versions } = await api('/api/version-history');
+
+  const rows = versions
+    .map(
+      (v) => `
+        <tr>
+          <td style="width: 80px; text-align: center;"><strong>v${v.version_number}</strong></td>
+          <td>${escapeHtml(v.description)}</td>
+          <td style="width: 180px;">${escapeHtml(formatDate(v.deployed_date))}</td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-version-history').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="btn-new-version" type="button">+ Record Version</button>
+      <span class="muted">${escapeHtml(String(versions.length))} version(s)</span>
+    </div>
+    <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
+      Track changes and updates made to the system. Record a new version after each deployment.
+    </p>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th style="width: 80px;">Version</th><th>Description</th><th style="width: 180px;">Deployed Date</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="3"><div class="empty">No versions recorded yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#btn-new-version').addEventListener('click', async () => {
+    const description = prompt('Enter version description:');
+    if (!description) return;
+    try {
+      await api('/api/version-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description }),
+      });
+      toast('Version recorded');
+      await renderVersionHistory();
+    } catch (ex) {
+      toast(ex.message);
+    }
   });
 }
 

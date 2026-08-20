@@ -326,6 +326,16 @@ export function ensureSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views (created_at);
     CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON page_views (visitor_id);
+
+    CREATE TABLE IF NOT EXISTS version_history (
+      id TEXT PRIMARY KEY,
+      version_number INTEGER NOT NULL UNIQUE,
+      description TEXT NOT NULL,
+      deployed_date TEXT NOT NULL,
+      deployed_by TEXT NOT NULL DEFAULT 'admin',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_version_history_number ON version_history (version_number DESC);
   `);
   ensureCheckoutColumns(db);
   ensureClientAuthColumns(db);

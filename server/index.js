@@ -1498,6 +1498,33 @@ function readPublishWarnings() {
   }
 }
 
+app.get('/api/version-history', requireAuth, (req, res) => {
+  const db = getDb();
+  const versions = db.prepare('SELECT * FROM version_history ORDER BY version_number DESC').all();
+  res.json({ versions });
+});
+
+app.post('/api/version-history', requireAuth, (req, res) => {
+  try {
+    const { description } = req.body;
+    if (!description || typeof description !== 'string') {
+      return res.status(400).json({ error: 'description required' });
+    }
+    const db = getDb();
+    const latestVersion = db.prepare('SELECT MAX(version_number) as max FROM version_history').get();
+    const nextVersion = (latestVersion.max || 0) + 1;
+    const id = generateId();
+    const now = new Date().toISOString();
+    db.prepare(`
+      INSERT INTO version_history (id, version_number, description, deployed_date, deployed_by, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, nextVersion, description, now, 'admin', now);
+    res.json({ ok: true, version: { id, version_number: nextVersion, description, deployed_date: now } });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.use('/admin', express.static(path.join(root, 'admin')));
 app.get(/^\/admin(\/.*)?$/, (_req, res) => {
   res.sendFile(path.join(root, 'admin', 'index.html'));

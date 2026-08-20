@@ -30,6 +30,7 @@ test('ensureSchema creates every expected table', () => {
     'resources',
     'settings',
     'shipping_options',
+    'version_history',
     'whatsapp_campaigns',
   ]);
   db.close();
