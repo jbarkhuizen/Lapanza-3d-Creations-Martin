@@ -21,8 +21,7 @@ it onto the VPS:
 **Easiest** — if domain.co.za's control panel has an "SSH Keys" field for
 the VPS, paste this in:
 ```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEu87hzq0KoCiNW5exKUqmG+mmzv4DiYW7Ff5c845e4d lapanza-deploy
-```
+Enter key```
 
 **Otherwise** — `bootstrap-vps.sh` (step 2 below) installs it for you as
 part of first boot, using the root password once.
