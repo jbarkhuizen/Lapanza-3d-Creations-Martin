@@ -334,6 +334,7 @@ lapanza-3d-fullsite/
 | `jobs.js` | Background/periodic tasks: cancelling stale pending-payment orders, and the daily automated database backup (`startAutoBackupJob`) |
 | `backups.js` | Database backup lifecycle — `createBackup()` (better-sqlite3's online backup API, safe against a live WAL-mode DB), `listBackups()`, `deleteBackup()`, `getBackupPath()`, `pruneOldBackups()` |
 | `analytics.js` | Visitor tracking — `recordPageView()` (writes to `page_views`), `touchActiveVisitor()`/`getActiveVisitors()`/`pruneActiveVisitors()` (in-memory only, never persisted), `getVisitSummary()` (historical totals/daily breakdown/top pages) |
+| `audit-log.js` | Security/session audit trail — `recordAuditEvent()` (called from `index.js` on login/logout/session-expiry/admin-account changes), `listAuditLog()` (filterable by `eventType`/`q`, admin "Audit Logs" page) |
 
 ### 5.3 Frontend Structure (`src/js/`)
 
@@ -365,7 +366,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-20 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+21 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -788,6 +789,20 @@ Backlog/todo tracker (admin "Todo / Backlog" page, §7.22). Append-only — no d
 | *(indexes)* | `date_added DESC` | |
 | *(seed)* | 13 rows | Inserted once, automatically, the first time this table is empty (`seedTodoItems` in `server/db.js`) — mirrors §15 Known Limitations at the time this table shipped |
 
+#### `audit_log`
+Security/session audit trail (admin "Audit Logs" page, Settings group). Append-only — no update/delete function exists. Scope is the admin portal's own auth/session lifecycle and admin-account changes, not every mutating action in the app (that would be a materially larger feature — see the note in §7's audit-log entry if extending this).
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | |
+| event_type | TEXT NOT NULL | `setup` / `login_success` / `login_failure` / `logout` / `session_expired` / `admin_created` / `admin_deleted` / `password_reset` — see `AUDIT_EVENTS` in `server/audit-log.js` |
+| admin_id | TEXT | Nullable — the *acting* admin for admin-management events, the authenticating admin for login/logout/expiry, null for a `login_failure` against an unknown/wrong username |
+| username | TEXT | Stored as a plain string (not just a FK) so the row still reads correctly after the admin account it refers to is deleted — e.g. its own `admin_deleted` event, or a `login_failure` for a username that was never a real account |
+| ip_address | TEXT | `req.ip`, which respects the `trust proxy` setting (see §12.5) |
+| user_agent | TEXT | Raw `User-Agent` header |
+| detail | TEXT NOT NULL DEFAULT '' | Free-text context — e.g. `Deleted admin "martin"` for `admin_deleted`, where the target is a different account than `username` (the actor) |
+| created_at | TEXT NOT NULL | |
+| *(indexes)* | `created_at DESC` | `listAuditLog()` also tiebreaks with `rowid DESC` — two events in the same request can share a millisecond timestamp |
+
 ---
 
 ## 7. API Reference
@@ -808,6 +823,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | POST | `/api/admins` | Admin | Create admin account |
 | DELETE | `/api/admins/:id` | Admin | Remove admin account |
 | POST | `/api/admins/:id/reset-password` | Admin | Reset another admin's password |
+| GET | `/api/audit-log` | Admin | List audit trail entries, newest first, most recent 500. Query params: `eventType`, `q` (matches username/IP/detail), `limit` (clamped 1–1000) |
 | GET | `/api/dashboard` | Admin | Summary stats for the dashboard view |
 
 ### 7.2 Customer Accounts
@@ -1409,7 +1425,7 @@ Three groups (Phase 4 reorganisation, per explicit user request):
 
 | ID | Requirement | Notes |
 |---|---|---|
-| NFR-01 | **Security** — passwords hashed (bcrypt), rate limiting on auth/public-form endpoints, session cookies `httpOnly`/`sameSite=lax`, admin/client sessions fully independent | Implemented |
+| NFR-01 | **Security** — passwords hashed (bcrypt), rate limiting on auth/public-form/checkout endpoints, session cookies `httpOnly`/`sameSite=lax`, admin/client sessions fully independent, admin audit trail (`audit_log`, §7's `/api/audit-log`) | Implemented |
 | NFR-02 | **Data integrity** — checkout prices always server-resolved, never client-trusted | Implemented |
 | NFR-03 | **Availability** — process auto-restarts on failure (systemd `Restart=on-failure`) | Implemented |
 | NFR-04 | **Transport security** — HTTPS enforced site-wide, HTTP force-redirects | Implemented (certbot) |
@@ -1579,7 +1595,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 211 tests across 25 test files, 100% passing at last recorded run.
+- **Current count:** 219 tests across 27 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases

@@ -515,3 +515,84 @@ test('analytics: pageview beacon is recorded, heartbeat is not, both return 204,
   assert.strictEqual(active.status, 200);
   assert.strictEqual(active.body.totalActive, 1);
 });
+
+test('audit log records setup, login success/failure, and logout, newest first', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  await request(app).post('/api/auth/login').send({ username: 'johan', password: 'wrong-password' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+  await request(app).post('/api/auth/logout').set('Cookie', cookie);
+
+  // Route is itself behind requireAuth, so re-login to read the log back.
+  const relog = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const freshCookie = relog.headers['set-cookie'];
+
+  const res = await request(app).get('/api/audit-log').set('Cookie', freshCookie);
+  assert.strictEqual(res.status, 200);
+  const types = res.body.entries.map((e) => e.eventType);
+  // Newest first: the second login (used to read this list) is on top.
+  assert.strictEqual(types[0], 'login_success');
+  assert.ok(types.includes('logout'));
+  assert.ok(types.includes('login_failure'));
+  assert.ok(types.includes('setup'));
+
+  const failure = res.body.entries.find((e) => e.eventType === 'login_failure');
+  assert.strictEqual(failure.username, 'johan');
+});
+
+test('audit log GET requires an admin session', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+
+  const res = await request(app).get('/api/audit-log');
+  assert.strictEqual(res.status, 401);
+});
+
+test('audit log filters by eventType and search text', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  await request(app).post('/api/auth/login').send({ username: 'johan', password: 'wrong-password' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const filtered = await request(app).get('/api/audit-log?eventType=login_failure').set('Cookie', cookie);
+  assert.strictEqual(filtered.body.entries.length, 1);
+  assert.strictEqual(filtered.body.entries[0].eventType, 'login_failure');
+
+  const searched = await request(app).get('/api/audit-log?q=johan').set('Cookie', cookie);
+  assert.ok(searched.body.entries.length >= 2);
+  assert.ok(searched.body.entries.every((e) => e.username === 'johan'));
+});
+
+test('deleting an admin and resetting a password are attributed to the acting admin and recorded', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const second = await request(app).post('/api/admins').set('Cookie', cookie).send({ username: 'martin', password: 'anothersafepassword' });
+  assert.strictEqual(second.status, 201);
+
+  await request(app).post(`/api/admins/${second.body.admin.id}/reset-password`).set('Cookie', cookie).send({ password: 'yetanothersafepass' });
+  await request(app).delete(`/api/admins/${second.body.admin.id}`).set('Cookie', cookie);
+
+  const res = await request(app).get('/api/audit-log').set('Cookie', cookie);
+  const created = res.body.entries.find((e) => e.eventType === 'admin_created');
+  const reset = res.body.entries.find((e) => e.eventType === 'password_reset');
+  const deleted = res.body.entries.find((e) => e.eventType === 'admin_deleted');
+  assert.ok(created && reset && deleted);
+  // adminId/username on these events is the acting admin (johan), not the
+  // admin account being acted on (martin) -- detail carries the target.
+  assert.strictEqual(created.username, 'johan');
+  assert.match(created.detail, /martin/);
+  assert.strictEqual(reset.username, 'johan');
+  assert.match(reset.detail, /martin/);
+  assert.strictEqual(deleted.username, 'johan');
+  assert.match(deleted.detail, /martin/);
+});

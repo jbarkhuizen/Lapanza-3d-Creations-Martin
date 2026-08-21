@@ -356,6 +356,23 @@ export function ensureSchema(db) {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_todo_items_date_added ON todo_items (date_added DESC);
+
+    -- Security/session audit trail (admin "Audit Logs" page, Settings group).
+    -- Append-only, never updated or deleted from the app -- admin_id/username
+    -- are both stored (not just a FK) so a row still reads correctly after
+    -- the admin account it refers to is deleted (e.g. "admin_deleted" itself,
+    -- or a login_failure for a username that was never a real account).
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      admin_id TEXT,
+      username TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      detail TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log (created_at DESC);
   `);
   ensureCheckoutColumns(db);
   ensureClientAuthColumns(db);

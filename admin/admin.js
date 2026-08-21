@@ -112,6 +112,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-backups'), route === 'backups');
   show($('#view-version-history'), route === 'version-history');
   show($('#view-todos'), route === 'todos');
+  show($('#view-audit-log'), route === 'audit-log');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -137,12 +138,13 @@ function setRoute(route, { id } = {}) {
     backups: ['Settings', 'Backups'],
     'version-history': ['Settings', 'Version History'],
     todos: ['Settings', 'Todo / Backlog'],
+    'audit-log': ['Settings', 'Audit Logs'],
     settings: ['Settings', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'todos');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'todos' && route !== 'audit-log');
 }
 
 async function boot() {
@@ -351,6 +353,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'todos') {
         setRoute('todos');
         await renderTodos();
+      } else if (btn.dataset.route === 'audit-log') {
+        setRoute('audit-log');
+        await renderAuditLog();
       } else if (btn.dataset.route === 'settings') {
         setRoute('settings');
         await renderSettings();
@@ -1436,6 +1441,77 @@ async function renderTodos() {
       }
     });
   }
+}
+
+// ---- Audit Logs (Settings) ----
+
+const AUDIT_EVENT_LABEL = {
+  setup: 'Initial setup',
+  login_success: 'Login',
+  login_failure: 'Login failed',
+  logout: 'Logout',
+  session_expired: 'Session expired',
+  admin_created: 'Admin created',
+  admin_deleted: 'Admin deleted',
+  password_reset: 'Password reset',
+};
+
+function auditEventBadge(eventType) {
+  const cls = eventType === 'login_failure' || eventType === 'admin_deleted' || eventType === 'password_reset' || eventType === 'session_expired' ? 'draft' : 'published';
+  return `<span class="badge ${cls}">${escapeHtml(AUDIT_EVENT_LABEL[eventType] || eventType)}</span>`;
+}
+
+async function renderAuditLog() {
+  state.auditEventFilter = state.auditEventFilter || '';
+  state.auditQ = state.auditQ || '';
+
+  const params = new URLSearchParams();
+  if (state.auditEventFilter) params.set('eventType', state.auditEventFilter);
+  if (state.auditQ.trim()) params.set('q', state.auditQ.trim());
+  const { entries } = await api(`/api/audit-log${params.toString() ? `?${params}` : ''}`);
+
+  const rows = entries
+    .map(
+      (e) => `
+        <tr>
+          <td style="white-space:nowrap">${escapeHtml(formatDate(e.createdAt))}</td>
+          <td>${auditEventBadge(e.eventType)}</td>
+          <td>${escapeHtml(e.username || '—')}</td>
+          <td><code>${escapeHtml(e.ipAddress || '—')}</code></td>
+          <td class="muted" style="font-size:0.8rem;max-width:280px" title="${escapeAttr(e.userAgent || '')}">${escapeHtml(e.userAgent || '—')}</td>
+          <td class="muted" style="font-size:0.85rem">${escapeHtml(e.detail || '—')}</td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-audit-log').innerHTML = `
+    <div class="toolbar">
+      <input id="audit-q" type="search" placeholder="Search username, IP, detail…" value="${escapeAttr(state.auditQ)}" />
+      <select id="audit-event-filter">
+        <option value="">All events</option>
+        ${Object.entries(AUDIT_EVENT_LABEL).map(([value, label]) => `<option value="${escapeAttr(value)}" ${state.auditEventFilter === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+      </select>
+      <span class="muted">${escapeHtml(String(entries.length))} entr${entries.length === 1 ? 'y' : 'ies'}</span>
+    </div>
+    <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
+      Every admin login (success/failure), logout, session expiry, and admin-account change (create/delete/password reset) -- append-only, newest first, most recent 500 shown.
+    </p>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Time</th><th>Event</th><th>Admin</th><th>IP</th><th>User agent</th><th>Detail</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No audit events yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#audit-q').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    state.auditQ = $('#audit-q').value.trim();
+    await renderAuditLog();
+  });
+  $('#audit-event-filter').addEventListener('change', async () => {
+    state.auditEventFilter = $('#audit-event-filter').value;
+    await renderAuditLog();
+  });
 }
 
 async function renderSettings() {

@@ -11,6 +11,7 @@ import { getDb } from './db.js';
 import { getSettings, updateSettings, publicSettings } from './settings.js';
 import { FONT_OPTIONS } from './settings-defaults.js';
 import { hasAnyAdmin, listAdmins, createAdmin, deleteAdmin, resetPassword, verifyLogin } from './admins.js';
+import { AUDIT_EVENTS, recordAuditEvent, listAuditLog } from './audit-log.js';
 import {
   listFilaments,
   getFilament,
@@ -216,6 +217,12 @@ function uniqueConstraintMessage(err) {
   return 'That value is already in use';
 }
 
+// req.ip reflects the real client address, not nginx's -- see the `trust
+// proxy` setting above.
+function requestMeta(req) {
+  return { ip: req.ip, userAgent: req.get('user-agent') || null };
+}
+
 function requireAuth(req, res, next) {
   const token = req.cookies[SESSION_COOKIE];
   const session = token && sessions.get(token);
@@ -224,14 +231,20 @@ function requireAuth(req, res, next) {
   }
   if (Date.now() - session.createdAt >= SESSION_TTL_MS) {
     sessions.delete(token); // stale -- treat exactly like a missing session
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SESSION_EXPIRED, adminId: session.adminId, username: session.username, ...requestMeta(req) });
     return res.status(401).json({ error: 'Unauthorized' });
   }
+  // Downstream handlers (admin management routes) use this to attribute the
+  // action to the admin who performed it, separate from the admin id the
+  // action itself targets.
+  req.adminId = session.adminId;
+  req.adminUsername = session.username;
   next();
 }
 
-function startSession(res, adminId) {
+function startSession(res, adminId, username) {
   const token = randomUUID();
-  sessions.set(token, { createdAt: Date.now(), adminId });
+  sessions.set(token, { createdAt: Date.now(), adminId, username });
   res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
 }
 
@@ -559,7 +572,8 @@ app.post('/api/setup', (req, res) => {
   }
   try {
     const admin = createAdmin({ username, password });
-    startSession(res, admin.id);
+    startSession(res, admin.id, admin.username);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETUP, adminId: admin.id, username: admin.username, ...requestMeta(req), detail: 'Initial admin account created' });
     res.status(201).json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -572,17 +586,26 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
   // missing/malformed password must be rejected before it ever reaches
   // verifyLogin -- otherwise the thrown error becomes an unhandled 500.
   if (typeof username !== 'string' || !username || typeof password !== 'string' || !password) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_FAILURE, username: typeof username === 'string' ? username : null, ...requestMeta(req), detail: 'Missing or malformed credentials' });
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   const admin = verifyLogin(username, password);
-  if (!admin) return res.status(401).json({ error: 'Invalid username or password' });
-  startSession(res, admin.id);
+  if (!admin) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_FAILURE, username, ...requestMeta(req), detail: 'Invalid username or password' });
+    return res.status(401).json({ error: 'Invalid username or password' });
+  }
+  startSession(res, admin.id, admin.username);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_SUCCESS, adminId: admin.id, username: admin.username, ...requestMeta(req) });
   res.json({ ok: true });
 });
 
 app.post('/api/auth/logout', (req, res) => {
   const token = req.cookies[SESSION_COOKIE];
+  const session = token && sessions.get(token);
   if (token) sessions.delete(token);
+  if (session) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.LOGOUT, adminId: session.adminId, username: session.username, ...requestMeta(req) });
+  }
   res.clearCookie(SESSION_COOKIE);
   res.json({ ok: true });
 });
@@ -598,7 +621,9 @@ app.get('/api/admins', requireAuth, (_req, res) => {
 
 app.post('/api/admins', requireAuth, (req, res) => {
   try {
-    res.status(201).json({ admin: createAdmin(req.body || {}) });
+    const admin = createAdmin(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ADMIN_CREATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created admin "${admin.username}"` });
+    res.status(201).json({ admin });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -606,9 +631,14 @@ app.post('/api/admins', requireAuth, (req, res) => {
 
 app.delete('/api/admins/:id', requireAuth, (req, res) => {
   try {
+    // Looked up before deleteAdmin() removes the row -- audit_log stores the
+    // target's username as a plain string precisely so this event still
+    // reads correctly after the account it refers to no longer exists.
+    const target = listAdmins().find((a) => a.id === req.params.id);
     const ok = deleteAdmin(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Admin not found' });
     revokeSessionsForAdmin(req.params.id);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ADMIN_DELETED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted admin "${target?.username || req.params.id}"` });
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -617,13 +647,20 @@ app.delete('/api/admins/:id', requireAuth, (req, res) => {
 
 app.post('/api/admins/:id/reset-password', requireAuth, (req, res) => {
   try {
+    const target = listAdmins().find((a) => a.id === req.params.id);
     const ok = resetPassword(req.params.id, (req.body || {}).password);
     if (!ok) return res.status(404).json({ error: 'Admin not found' });
     revokeSessionsForAdmin(req.params.id);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.PASSWORD_RESET, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Reset password for admin "${target?.username || req.params.id}"` });
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+app.get('/api/audit-log', requireAuth, (req, res) => {
+  const { eventType, q, limit } = req.query;
+  res.json({ entries: listAuditLog({ eventType, q, limit }) });
 });
 
 app.get('/api/dashboard', requireAuth, (_req, res) => {

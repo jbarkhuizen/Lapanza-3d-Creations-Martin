@@ -16,7 +16,7 @@ A live e-commerce + operations platform for a South African 3D-printing/filament
 ## Start here, in order
 
 1. `README.md` — quick local-dev setup
-2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (20 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
+2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (21 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
 3. `deploy/DEPLOY.md` — production deployment/SSH runbook specifically
 4. `docs/UPTIME_MONITORING.md` — external monitoring setup (manual, third-party account signup — not something to attempt on the user's behalf)
 5. `.env.example` and `deploy/.env.production.template` — every config variable, documented
@@ -60,7 +60,8 @@ These are real incidents from this project's build/deploy history — documented
 | Print Job Costing: Final Selling Price + "List for sale" | Live — status renamed `Printed`/`Estimate`; new admin-editable Final Selling Price (defaults to the computed Minimum Selling Price); a job can be explicitly published as a real category product and stays linked so re-listing updates the same item's stock/price instead of duplicating it. See `listPrintJobForSale`/`updatePrintJobListing` in `server/print-jobs.js` |
 | Historical print-job import | `scripts/import-historical-print-jobs.mjs` -- one-time backfill of 124 pre-existing print jobs (from a spreadsheet, before this feature existed) into `print_jobs`/`print_job_filaments`. Run once against local dev already; **not yet run against production** -- see the script's header comment for usage and why it deliberately bypasses `createPrintJob()` (doesn't decrement current in-house-filament stock, allows >4 filament slots for jobs that historically used more). Not idempotent -- don't re-run against a DB that already has its output. |
 | Stock Management "Listed on products page" | Live — radio per row (filament colours + category items) in the admin Stock Management grid, alongside the existing stock/price editors. `0`/unchecked pulls just that item off its public grid (filament colour grid or category page) at the next `generate-pages.mjs` run, without touching stock/price, the category-item `available` (add-to-cart) flag, or a filament type's own draft/published `status`. See `server/inventory.js`'s `listed` field, `filament_colours.listed` column |
-| Test suite | 211/211 passing (`node --test`), run before every commit |
+| Audit Logs page | Live — new `audit_log` table + `server/audit-log.js`, `GET /api/audit-log` (filterable by `eventType`/`q`), admin "Audit Logs" page (Settings group). Records every admin login (success/failure), logout, session expiry, and admin-account change (create/delete/password reset) -- append-only, newest first. Scoped to the admin portal's own session/account security, not a general action-audit of every CRUD write in the app |
+| Test suite | 219/219 passing (`node --test`), run before every commit |
 | CI/CD | None — manual test-then-push-then-SSH-deploy |
 | Staging environment | None — the VPS is production from first deploy |
 
