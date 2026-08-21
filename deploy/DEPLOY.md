@@ -114,62 +114,62 @@ installs — nothing further needed.
 Automated daily backups (§Notes below) already write to `data/backups/` on
 the VPS itself -- good against bad data, a bad deploy, or human error, but
 useless against that disk or the whole VPS failing outright. This step
-mirrors that folder to Google Drive nightly via `rclone`, using a Google
-**service account** (not your personal OAuth login) so it works
-unattended, headless, with no browser-based consent step on the server.
+mirrors that folder to Google Drive nightly via `rclone`.
+
+**A Google service account does NOT work here** -- confirmed the hard way.
+It can be shared onto a folder and will list/read it fine, but any *new*
+file upload still fails with `storageQuotaExceeded`: service accounts have
+zero storage quota of their own on a personal (non-Workspace) Google
+account, and sharing a folder doesn't change that. Real Shared Drives
+(where this would work) are a paid Google Workspace feature, not available
+on a plain Gmail account. Use OAuth as your own account instead --
+uploads then count against your normal 15GB quota, like any other file you
+add to Drive yourself.
 
 **One-time setup:**
 
 1. **Google Cloud Console** (console.cloud.google.com) -- create a project
    (or reuse one), then **APIs & Services -> Library**, enable the
    **Google Drive API**.
-2. **APIs & Services -> Credentials -> Create Credentials -> Service
-   Account.** Name it something like `lapanza-backup-uploader`. No roles
-   needed at the project level -- Drive access below is granted by sharing
-   a folder, not IAM.
-3. Open the new service account -> **Keys -> Add Key -> Create new key ->
-   JSON.** Downloads a `.json` key file -- treat it like a password, never
-   commit it.
-4. In your own Google Drive, create a folder for backups (e.g.
-   "Lapanza Backups"). Right-click it -> **Share**, and share it with the
-   service account's email address (looks like
-   `lapanza-backup-uploader@your-project.iam.gserviceaccount.com`,
-   visible on the service account's page) as **Editor**. Service accounts
-   have no personal Drive storage of their own -- this is what lets it
-   write into *your* folder instead.
-5. Get that folder's ID from its URL:
+2. In your own Google Drive, create a folder for backups (e.g.
+   "Lapanza Backups"). Get its ID from the URL:
    `https://drive.google.com/drive/folders/`**`THIS_PART`**.
-6. Copy the key onto the VPS and lock down its permissions:
+3. On a machine with a browser and `rclone` installed locally (not the
+   headless VPS), run:
    ```bash
-   scp -i ~/.ssh/lapanza_vps_deploy gdrive-service-account.json deploy@<VPS_IP>:/opt/lapanza/
-   ssh -i ~/.ssh/lapanza_vps_deploy deploy@<VPS_IP>
-   chmod 600 /opt/lapanza/gdrive-service-account.json
+   rclone authorize "drive"
    ```
-7. Write the rclone config (as the `deploy` user, no interactive `rclone
-   config` browser flow needed with a service account):
+   This opens a browser -- log in with the Google account that owns the
+   folder above and authorize. It prints a JSON blob starting with
+   `{"access_token":...}` -- copy the whole thing.
+4. On the VPS, as the `deploy` user, write the rclone config **as a single
+   line** (a heredoc/multi-line paste is prone to silently mangling in some
+   terminals -- if `rclone config show gdrive` afterward doesn't match what
+   you expect, that's almost certainly what happened; redo it as one line):
    ```bash
-   mkdir -p ~/.config/rclone
-   cat > ~/.config/rclone/rclone.conf <<'EOF'
-   [gdrive]
-   type = drive
-   scope = drive
-   service_account_file = /opt/lapanza/gdrive-service-account.json
-   root_folder_id = PASTE_THE_FOLDER_ID_FROM_STEP_5
-   EOF
+   printf '[gdrive]\ntype = drive\nscope = drive\ntoken = %s\nroot_folder_id = %s\n' 'PASTE_THE_JSON_BLOB_FROM_STEP_3' 'PASTE_THE_FOLDER_ID_FROM_STEP_2' > ~/.config/rclone/rclone.conf
    ```
-8. Test it directly before wiring it into the app:
+5. Verify, then test directly before wiring it into the app:
    ```bash
-   rclone lsd gdrive:          # should print nothing (empty folder) but not error
-   rclone sync /opt/lapanza/app/data/backups gdrive:
-   rclone lsd gdrive:          # now shows what got synced, if anything exists yet
+   rclone config show gdrive    # confirm it shows "token = ..." not "service_account_file"
+   rclone sync /opt/lapanza/app/data/backups gdrive: -v
+   rclone lsf gdrive:           # should now list the synced .db files
    ```
-9. Set the env var and restart:
+6. Set the env var and restart:
    ```bash
    nano /opt/lapanza/app/.env      # BACKUP_RCLONE_REMOTE=gdrive:
    sudo systemctl restart lapanza-admin
    ```
-10. Confirm from the admin UI: **Settings -> Backups -> Sync offsite now**
-    should succeed immediately, rather than waiting for the next daily run.
+7. Confirm from the admin UI: **Settings -> Backups -> Sync offsite now**
+   should succeed immediately, rather than waiting for the next daily run.
+   (Restarting the service also logs out every admin session -- that's
+   expected, just log back in.)
+
+The `refresh_token` inside that JSON blob means rclone renews the access
+token on its own from here on -- this is a one-time setup, not something
+you repeat per sync. Note also the rclone NOTICE about its shared
+`client_id` being retired sometime in 2026 (harmless for now, worth
+revisiting later): https://rclone.org/drive/#making-your-own-client-id
 
 From here, every automated daily backup mirrors to that Drive folder right
 after it's created and pruned locally -- no further action needed. If the
