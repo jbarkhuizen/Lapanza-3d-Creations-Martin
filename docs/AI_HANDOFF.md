@@ -16,7 +16,7 @@ A live e-commerce + operations platform for a South African 3D-printing/filament
 ## Start here, in order
 
 1. `README.md` — quick local-dev setup
-2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (19 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
+2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (20 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
 3. `deploy/DEPLOY.md` — production deployment/SSH runbook specifically
 4. `docs/UPTIME_MONITORING.md` — external monitoring setup (manual, third-party account signup — not something to attempt on the user's behalf)
 5. `.env.example` and `deploy/.env.production.template` — every config variable, documented

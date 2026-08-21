@@ -2,11 +2,11 @@
 
 **Document type:** Consolidated Architecture, Requirements, Functional Specification, Implementation & Test Record
 **Purpose:** Audit record and reimplementation reference — sufficient for a new team to understand, operate, or rebuild this system without access to the original author.
-**System version documented:** `2.0.0` (package.json), repository state as of commit `409037c` (branch `main`)
+**System version documented:** `2.0.0` (package.json), repository state as of commit `6d4196b` (branch `main`)
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-21 (updated for Print Job Costing's status rename, Final Selling Price, and "List for sale")
+**Document date:** 2026-08-21 (updated for the historical print-job import)
 
 ---
 
@@ -73,6 +73,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Atomic stock reservation (closes the real overselling race)** | The earlier "Checkout stock validation" row above only checked current stock at order-creation time — it never reserved it, so two concurrent orders for the same last unit could both pass the check (neither had decremented anything yet) and both later get marked paid, since `decrementStockForOrder` ran at *payment* time and floors at 0 without re-validating. Fixed by moving the actual decrement to **order-creation time**, inside the same `db.transaction()` as the order/order_items INSERT (`reserveStockForOrder` in `server/orders.js`, online checkout only — throws and rolls back the whole order on insufficient stock, re-reading stock fresh rather than trusting the earlier pre-transaction read). Paying an order no longer touches stock at all (`markOrderPaid`/`updateOrderStatus`'s old paid-transition decrement removed). A new symmetric `restoreStockForOrder` releases reserved stock back when an order is cancelled — both via the automatic 5-day stale-order job (`cancelStalePendingOrders`) and an explicit admin cancel (`updateOrderStatus(..., 'cancelled')`), each idempotently guarded against double-restoring an already-cancelled order. `createManualOrder` also now reserves stock immediately at creation (previously only when `alreadyPaid`), though — consistent with its existing "admin free-text prices are trusted as-is" design — without the hard block online checkout gets. | 186/186 |
 | **Todo / Backlog admin page** | New "Todo / Backlog" page (Settings group) tracking tasks, ideas, and gaps identified during development — No, Category (Bug/Feature/Enhancement/Tech Debt), Date Added, Name, Description, Planned Fix Date, Actual Fix Date, Status (Backlog/In Progress/Done/Won't Fix). `server/todos.js` (`listTodos`/`createTodo`/`updateTodo` — no delete function exists at all, append-only by design, same philosophy as `version_history`); `GET/POST/PUT /api/todos` under the existing `requireAuth` admin session — no separate API-key mechanism, so this assistant adds items the same way an admin would, through that same authenticated path, not a new one. `updateTodo` auto-stamps `actualFixDate` the moment status becomes `Done` unless one was already supplied. Seeded on first boot (once, guarded by `todo_items` being empty) with the 13 items then listed in §15 Known Limitations — §15 itself now points here rather than duplicating the detail. | 195/195 |
 | **Print Job Costing: status rename, Final Selling Price, "List for sale"** | Status dropdown relabelled `Printed`/`Estimate` (was `printed`/`planned`, migrated in place). "Selling Price" relabelled **Minimum Selling Price** (unchanged, still purely computed) and a new admin-editable **Final Selling Price** added, defaulting to the minimum. The bigger addition: a print job can now be explicitly published as a real category product ("List for sale") — carries over name/price/weight/photo (if uploaded), admin sets stock qty, stays linked so re-opening it becomes "Update listing" (bump stock/price) instead of creating a duplicate. New `listing_category_id`/`listing_item_id` columns on `print_jobs`; new `listPrintJobForSale`/`updatePrintJobListing` in `server/print-jobs.js`; two new routes (§7.12). Deliberately the *only* crossing of the internal-costing/storefront boundary this module otherwise keeps strict — never automatic. | 203/203 |
+| **Historical print-job import** | `scripts/import-historical-print-jobs.mjs` backfilled 124 print jobs (132 filament-slot rows) from a pre-app spreadsheet into `print_jobs`/`print_job_filaments`, so they appear as history in Print Job Costing. Deliberately bypasses `createPrintJob()`: several historical jobs used more than `MAX_FILAMENT_SLOTS` (4) colours (a real fact, only the live entry form's fixed inputs care about that cap), and the import must never touch current in-house-filament stock (`incrementInHouseFilamentUsage` is never called — these grams were already used in the past, today's roll counts already reflect that). Filament names ("Generic PLA Grey", "SA Filament: Silk PLA - Pink", etc.) matched against the real in-house filament list by stripping the brand/reseller prefix and splitting into type+colour; 22 colour combos didn't exist yet and were auto-created at R0 cost/roll. Cost/Minimum Selling Price computed retroactively using today's Settings. Run against local dev; **not yet run against production** — see `docs/AI_HANDOFF.md`. Data-only, no test-suite change. | 203/203 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -364,7 +365,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-19 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+20 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -1577,7 +1578,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 161 tests across 22 test files, 100% passing at last recorded run.
+- **Current count:** 203 tests across 24 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases
