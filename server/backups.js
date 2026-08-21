@@ -4,12 +4,6 @@ import { execFileSync } from 'child_process';
 import { getDb } from './db.js';
 import { backupsDir } from './paths.js';
 
-// Off-server copy (see docs/DEPLOY.md's "Off-server backups" section for
-// the one-time Google Drive service-account setup this depends on).
-// Un-set until that setup is done, so a fresh box just skips this step
-// with a clear reason rather than a cryptic rclone failure.
-const RCLONE_REMOTE = process.env.BACKUP_RCLONE_REMOTE;
-
 function ensureBackupsDir() {
   const dir = backupsDir();
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -96,7 +90,15 @@ export function pruneOldBackups(keep = 30) {
 // directory copy; rclone already handles auth refresh, retries, and
 // resumable uploads. `run` is injectable so tests can stub it out without
 // a real rclone binary or network access.
-export function syncOffsite({ remote = RCLONE_REMOTE, dir = backupsDir(), run = execFileSync } = {}) {
+//
+// `remote` reads process.env directly in the default-parameter expression
+// (not a module-load-time constant) -- default params re-evaluate on every
+// call, but a top-level `const` would freeze to whatever was in
+// process.env when this module was first imported, which is BEFORE
+// index.js's process.loadEnvFile('.env') call runs (imports execute before
+// the rest of that file's top-level code). Same reason mailer.js/payfast.js
+// read their env vars lazily inside functions instead of module constants.
+export function syncOffsite({ remote = process.env.BACKUP_RCLONE_REMOTE, dir = backupsDir(), run = execFileSync } = {}) {
   if (!remote) {
     throw new Error('BACKUP_RCLONE_REMOTE is not set — off-server backup sync is disabled. See docs/DEPLOY.md.');
   }
