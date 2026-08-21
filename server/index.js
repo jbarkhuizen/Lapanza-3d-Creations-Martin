@@ -176,6 +176,19 @@ const publicFormLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many submissions — please try again later.' },
 });
+// Every other public-write endpoint (register, login, newsletter, design
+// requests) is rate-limited except this one -- checkout was the gap. Looser
+// than publicFormLimiter (a real shopper can plausibly retry a failed
+// payment or fix a validation error a few times in one session) but still
+// low enough to stop a script from hammering it -- each hit creates a real
+// order row, reserves stock, and fires an owner-notification email.
+const checkoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many checkout attempts — please wait a few minutes and try again.' },
+});
 // Much more permissive than the two above -- legitimate traffic hits this
 // on every page load plus a ~45s heartbeat while a tab stays open (see
 // src/js/analytics.js), so a form-submission-style 5-per-hour limit would
@@ -1386,7 +1399,7 @@ app.get('/api/orders/:id/invoice', requireAuth, (req, res) => {
 
 // ---- Checkout (D/E) -- public, no admin auth ----
 
-app.post('/api/checkout', async (req, res) => {
+app.post('/api/checkout', checkoutLimiter, async (req, res) => {
   const body = req.body || {};
   try {
     const order = createOrder({

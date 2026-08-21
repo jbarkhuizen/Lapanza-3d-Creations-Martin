@@ -220,7 +220,7 @@ This lookup happens **server-side on every checkout**, never trusting a client-s
 | `bcryptjs` | ^3.0.3 | Password hashing (admin accounts, client accounts) |
 | `cookie-parser` | ^1.4.7 | Session cookie parsing (two independent session cookies — admin + client) |
 | `cors` | ^2.8.6 | CORS headers (`origin: true, credentials: true`) |
-| `express-rate-limit` | ^8.6.2 | Rate limiting on auth/public-form endpoints (`authLimiter`, `publicFormLimiter`) |
+| `express-rate-limit` | ^8.6.2 | Rate limiting on auth/public-form/checkout endpoints (`authLimiter`, `publicFormLimiter`, `checkoutLimiter`) |
 | `multer` | ^2.2.0 | Multipart file uploads (product images, resource files, design-request attachments, print-job files) |
 | `nodemailer` | ^9.0.5 | All outbound email via Gmail SMTP + app password |
 | `uuid` | ^14.0.1 | (available; most IDs actually use Node's built-in `crypto.randomUUID()`) |
@@ -940,7 +940,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | POST | `/api/orders/:id/send-confirmation` | Admin | Resend confirmation email |
 | GET | `/api/orders/:id/packing-slip` | Admin | Printable packing slip (HTML) |
 | GET | `/api/orders/:id/invoice` | Admin | Printable invoice (HTML) |
-| POST | `/api/checkout` | Public | **The** online checkout endpoint |
+| POST | `/api/checkout` | Public (rate-limited, 20/15min — `checkoutLimiter`) | **The** online checkout endpoint |
 | POST | `/api/payfast/itn` | Public (Payfast only) | Payment webhook |
 
 ### 7.16 Settings & Publish (Admin)
@@ -1749,7 +1749,7 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 |---|---|---|
 | Password storage | bcrypt (`bcryptjs`), both admin and client accounts | — |
 | Session management | Two fully independent httpOnly, sameSite=lax cookies (admin vs client) — sessions held in an in-memory `Map`, not a persistent store | **Sessions are lost on every process restart** (observed directly during deployment — admins had to re-login after each `systemctl restart`). Acceptable for current scale; would need Redis/DB-backed sessions for multi-instance or session-durability requirements. |
-| Rate limiting | `express-rate-limit` on auth endpoints (`authLimiter`) and public form submissions (`publicFormLimiter`) | Correctly configured for the nginx reverse-proxy topology (`trust proxy` set — see §12.5 incident) |
+| Rate limiting | `express-rate-limit` on auth endpoints (`authLimiter`), public form submissions (`publicFormLimiter`), and checkout (`checkoutLimiter`, 20/15min) | Correctly configured for the nginx reverse-proxy topology (`trust proxy` set — see §12.5 incident) |
 | CSRF | Not explicitly implemented (no CSRF tokens) | Mitigated in practice by `sameSite=lax` cookies + JSON-only APIs (no state-changing GET requests), but not a formal CSRF defence |
 | Input validation/XSS | All admin-rendered HTML goes through `escapeHtml`/`escapeAttr` before interpolation into `innerHTML` | Consistently applied; a project-level convention (and an automated pre-write hook) flags dense unescaped interpolation |
 | Payment security | Payfast ITN signature + amount + IP verified server-side before trusting any payment-complete signal; checkout prices always server-resolved | — |
