@@ -111,6 +111,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-backups'), route === 'backups');
   show($('#view-version-history'), route === 'version-history');
+  show($('#view-todos'), route === 'todos');
   show($('#view-settings'), route === 'settings');
 
   const titles = {
@@ -135,12 +136,13 @@ function setRoute(route, { id } = {}) {
     'in-house-filament': ['Local Management', 'In-House Filament'],
     backups: ['Settings', 'Backups'],
     'version-history': ['Settings', 'Version History'],
+    todos: ['Settings', 'Todo / Backlog'],
     settings: ['Settings', 'Site settings'],
   };
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'todos');
 }
 
 async function boot() {
@@ -346,6 +348,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'version-history') {
         setRoute('version-history');
         await renderVersionHistory();
+      } else if (btn.dataset.route === 'todos') {
+        setRoute('todos');
+        await renderTodos();
       } else if (btn.dataset.route === 'settings') {
         setRoute('settings');
         await renderSettings();
@@ -1315,6 +1320,122 @@ async function renderVersionHistory() {
         <tbody>${rows || '<tr><td colspan="3"><div class="empty">No versions recorded yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
+}
+
+// ---- Todo / Backlog (Settings) ----
+
+const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
+const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix"];
+
+function blankTodo() {
+  return { id: null, category: 'Feature', name: '', description: '', status: 'Backlog', plannedFixDate: '', actualFixDate: '' };
+}
+
+function toDateInputValue(iso) {
+  return iso ? String(iso).slice(0, 10) : '';
+}
+
+function todoStatusBadge(status) {
+  const s = escapeHtml(status);
+  const cls = status === 'Done' ? 'published' : status === "Won't Fix" ? 'draft' : '';
+  return `<span class="badge ${cls}">${s}</span>`;
+}
+
+async function renderTodos() {
+  state.editingTodo = state.editingTodo || null;
+  const { todos } = await api('/api/todos');
+
+  const rows = todos
+    .map(
+      (t) => `
+        <tr data-id="${escapeAttr(t.id)}">
+          <td style="width: 50px; text-align: center;">${escapeHtml(String(t.number))}</td>
+          <td style="width: 100px;">${escapeHtml(t.category)}</td>
+          <td style="width: 110px;">${escapeHtml(formatDate(t.dateAdded))}</td>
+          <td>${escapeHtml(t.name)}</td>
+          <td style="max-width: 320px;">${escapeHtml(t.description || '—')}</td>
+          <td style="width: 110px;">${t.plannedFixDate ? escapeHtml(formatDate(t.plannedFixDate)) : '—'}</td>
+          <td style="width: 110px;">${t.actualFixDate ? escapeHtml(formatDate(t.actualFixDate)) : '—'}</td>
+          <td style="width: 100px;">${todoStatusBadge(t.status)}</td>
+          <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
+        </tr>`,
+    )
+    .join('');
+
+  const form = state.editingTodo;
+  $('#view-todos').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-todo" type="button">+ Add Item</button>
+      <span class="muted">${escapeHtml(String(todos.length))} item(s)</span>
+    </div>
+    <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
+      Tasks, ideas, and gaps identified during development -- manually added/edited here, no delete (a stale or duplicate item gets marked "Won't Fix" instead, so this stays a complete record).
+    </p>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:640px">
+        <div class="section-head"><h3>${form.id ? `Edit item` : 'New item'}</h3></div>
+        <div class="grid-3">
+          <label class="field"><span>Category</span>
+            <select id="td-category">
+              ${TODO_CATEGORIES.map((c) => `<option value="${escapeAttr(c)}" ${form.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="field"><span>Status</span>
+            <select id="td-status">
+              ${TODO_STATUSES.map((s) => `<option value="${escapeAttr(s)}" ${form.status === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        <label class="field"><span>Name</span><input id="td-name" value="${escapeAttr(form.name)}" /></label>
+        <label class="field"><span>Description / detail</span><textarea id="td-description" rows="4">${escapeHtml(form.description)}</textarea></label>
+        <div class="grid-3">
+          <label class="field"><span>Planned fix date</span><input id="td-planned" type="date" value="${escapeAttr(toDateInputValue(form.plannedFixDate))}" /></label>
+          <label class="field"><span>Actual fix date</span><input id="td-actual" type="date" value="${escapeAttr(toDateInputValue(form.actualFixDate))}" /></label>
+        </div>
+        <p class="muted" style="font-size: 0.8rem;">Setting Status to "Done" auto-fills today's date here if left blank.</p>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-todo" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-todo" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>No</th><th>Category</th><th>Date Added</th><th>Name</th><th>Description</th><th>Planned Fix</th><th>Actual Fix</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="9"><div class="empty">No items yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#new-todo').addEventListener('click', async () => { state.editingTodo = blankTodo(); await renderTodos(); });
+  $$('#view-todos tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const t = todos.find((x) => x.id === tr.dataset.id);
+      state.editingTodo = { ...t };
+      await renderTodos();
+    });
+  });
+
+  if (form) {
+    $('#cancel-todo').addEventListener('click', async () => { state.editingTodo = null; await renderTodos(); });
+    $('#save-todo').addEventListener('click', async () => {
+      const payload = {
+        category: $('#td-category').value,
+        status: $('#td-status').value,
+        name: $('#td-name').value,
+        description: $('#td-description').value,
+        plannedFixDate: $('#td-planned').value || null,
+        actualFixDate: $('#td-actual').value || null,
+      };
+      try {
+        if (form.id) await api(`/api/todos/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/api/todos', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Saved');
+        state.editingTodo = null;
+        await renderTodos();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
 }
 
 async function renderSettings() {

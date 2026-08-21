@@ -111,6 +111,7 @@ import {
 } from './in-house-filament.js';
 import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
 import { listVersions } from './version-history.js';
+import { listTodos, createTodo, updateTodo } from './todos.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -1577,6 +1578,34 @@ function readPublishWarnings() {
 // "add version" route. This is a read-only view onto that history.
 app.get('/api/version-history', requireAuth, (req, res) => {
   res.json({ versions: listVersions() });
+});
+
+// ---- Todo / Backlog (Settings) ----
+// Append-only: any admin (or this assistant, through the same session) can
+// add or edit an item and change its status -- there is no delete route,
+// same philosophy as version_history. See server/todos.js's updateTodo for
+// why "Won't Fix" exists instead.
+app.get('/api/todos', requireAuth, (_req, res) => {
+  res.json({ todos: listTodos() });
+});
+
+app.post('/api/todos', requireAuth, (req, res) => {
+  try {
+    const todo = createTodo(req.body || {});
+    res.status(201).json({ todo });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/todos/:id', requireAuth, (req, res) => {
+  try {
+    const todo = updateTodo(req.params.id, req.body || {});
+    if (!todo) return res.status(404).json({ error: 'Todo not found' });
+    res.json({ todo });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.use('/admin', express.static(path.join(root, 'admin')));

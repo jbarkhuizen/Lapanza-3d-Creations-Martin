@@ -1,4 +1,5 @@
 ﻿import Database from 'better-sqlite3';
+import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { migrateFromCatalogJson } from './migrate-json.js';
@@ -336,6 +337,25 @@ export function ensureSchema(db) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_version_history_number ON version_history (version_number DESC);
+
+    -- Backlog/todo tracker (admin "Todo / Backlog" page, Settings group).
+    -- number is a separate display sequence from id (like version_history's
+    -- version_number) -- the "No" column -- distinct from date_added, which
+    -- drives sort order and can be backdated for seeded items.
+    CREATE TABLE IF NOT EXISTS todo_items (
+      id TEXT PRIMARY KEY,
+      number INTEGER NOT NULL UNIQUE,
+      category TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'Backlog',
+      planned_fix_date TEXT,
+      actual_fix_date TEXT,
+      date_added TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_todo_items_date_added ON todo_items (date_added DESC);
   `);
   ensureCheckoutColumns(db);
   ensureClientAuthColumns(db);
@@ -343,6 +363,7 @@ export function ensureSchema(db) {
   ensureEngagementColumns(db);
   ensurePasswordResetColumns(db);
   ensureVersionHistoryColumns(db);
+  seedTodoItems(db);
 }
 
 function hasColumn(db, tableInfoStatement, column) {
@@ -485,6 +506,53 @@ function ensureVersionHistoryColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(version_history)', 'version_label')) {
     db.exec('ALTER TABLE version_history ADD COLUMN version_label TEXT');
   }
+}
+
+// Runs once, only while todo_items is still empty -- guards against
+// re-seeding on every boot (not "IF NOT EXISTS" at the table level, since
+// these are rows, not schema) while still populating a genuinely fresh box
+// automatically, no manual step required. Mirrors SYSTEM_DOCUMENTATION.md
+// §15's Known Limitations at the time this table was added -- kept here,
+// not in server/todos.js, so seeding stays part of schema setup rather
+// than something an import cycle or a route could accidentally re-trigger.
+function seedTodoItems(db) {
+  const { count } = db.prepare('SELECT COUNT(*) AS count FROM todo_items').get();
+  if (count > 0) return;
+
+  const seed = [
+    ['Feature', 'No Privacy Policy / Terms & Conditions / Returns Policy pages', 'The site collects real personal information (names, addresses, phone numbers at checkout; visitor analytics for logged-in customers) with no page disclosing what\'s collected or why -- a genuine POPIA-relevant gap, and Payfast\'s merchant approval process typically expects a refund-policy URL too.', 'Backlog'],
+    ['Tech Debt', 'No CI/CD pipeline', 'No GitHub Actions or equivalent -- tests are run manually before each commit, deploys are manually triggered over SSH.', 'Backlog'],
+    ['Tech Debt', 'No staging environment', 'The VPS is production from first deploy; there is no intermediate environment to test against before changes reach real customers.', 'Backlog'],
+    ['Tech Debt', 'In-memory session store', 'Admin/client sessions do not survive a process restart. Accepted tradeoff for this project\'s scale, not a bug to fix reflexively.', "Won't Fix"],
+    ['Tech Debt', 'No E2E/browser test automation', 'Frontend behaviour was verified manually (interactively, during development) rather than via a checked-in Playwright/Cypress suite.', 'Backlog'],
+    ['Enhancement', 'Payfast sandbox mode still active in production', "PAYFAST_MODE=sandbox -- real payments are not yet being processed; flip to 'live' once a real test transaction has been verified end-to-end.", 'Backlog'],
+    ['Feature', 'WhatsApp campaigns not yet functional', 'WHATSAPP_ACCESS_TOKEN/WHATSAPP_PHONE_NUMBER_ID are unset -- requires completing Meta Business Account verification and getting at least one message template approved before any campaign can send.', 'Backlog'],
+    ['Tech Debt', 'Single point of failure', 'One VPS, one Node process, one SQLite file -- no redundancy/failover. Acceptable at current business scale; would need a different architecture to scale beyond it.', 'Backlog'],
+    ['Tech Debt', 'Dual product storage remains unmerged', 'By design -- filament is SQLite, category items (toys/homeware/phones/car-parts) are a gitignored JSON file. Genuine ongoing complexity for any future developer, but not a bug.', "Won't Fix"],
+    ['Tech Debt', "uuid package present but mostly unused", "Most IDs use Node's built-in crypto.randomUUID() instead -- uuid is a listed dependency with limited actual call sites; worth auditing for removal.", 'Backlog'],
+    ['Bug', 'No in-house filament stock-sufficiency check on print jobs', 'server/print-jobs.js logs filament consumption (used_g/used_m) unconditionally when a print job is saved -- no check against rolls_available x weight_g before allowing the save, so logged usage can exceed physically available stock with no warning.', 'Backlog'],
+    ['Feature', 'No cookie/tracking consent notice shown to visitors', 'Visitor analytics collects anonymous behavioural data without any on-page disclosure or opt-out. The tracking itself is privacy-minimal (no IP/fingerprint), but the absence of disclosure is still a gap -- ties into the missing-Privacy-Policy item above.', 'Backlog'],
+    ['Tech Debt', '"Active now" resets on every backend restart', 'The active-visitor map is deliberately in-memory (correct for its purpose), but the live count reads 0 for up to 5 minutes after every deploy/restart until visitors\' next beacon repopulates it -- not an actual outage.', "Won't Fix"],
+  ];
+
+  const now = new Date().toISOString();
+  const insert = db.prepare(
+    `INSERT INTO todo_items (id, number, category, name, description, status, planned_fix_date, actual_fix_date, date_added, created_at, updated_at)
+     VALUES (@id, @number, @category, @name, @description, @status, NULL, NULL, @date_added, @created_at, @updated_at)`,
+  );
+  seed.forEach(([category, name, description, status], i) => {
+    insert.run({
+      id: randomUUID(),
+      number: i + 1,
+      category,
+      name,
+      description,
+      status,
+      date_added: now,
+      created_at: now,
+      updated_at: now,
+    });
+  });
 }
 
 export function openDb(dbPath) {

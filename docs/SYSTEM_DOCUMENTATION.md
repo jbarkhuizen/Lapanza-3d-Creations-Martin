@@ -6,7 +6,7 @@
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-21 (updated for atomic stock reservation)
+**Document date:** 2026-08-21 (updated for the Todo / Backlog admin page)
 
 ---
 
@@ -71,6 +71,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Automated version-history recording (V1.01 versioning scheme)** | Replaces the manual "+ Record Version" admin button with `scripts/record-deploy-version.mjs`, run automatically by `deploy/deploy-app.sh` after every deploy (non-fatal on failure). Version labels switch from a plain incrementing integer to `"<major>.<minor>"` (e.g. `1.01`, `1.02`, ... rolling to `2.01` after `.99`), computed in `server/version-history.js`. `POST /api/version-history` is removed — the admin page is now read-only. | 177/177 |
 | **Offsite backup sync** | Closes the single-point-of-failure gap flagged in §15 — on-server daily backups alone don't survive a disk/VPS failure. `server/backups.js`'s `syncOffsite()` mirrors `data/backups/` to a Google Drive folder via `rclone` right after every automated daily backup, self-correcting to match local 30-backup retention. Manual "Sync offsite now" button added to the admin Backups view; new `POST /api/backups/sync-offsite` route. Confirmed live in production (DEPLOY.md §9) — a Google **service account** was tried first and confirmed broken (`storageQuotaExceeded`: service accounts have zero Drive storage quota on a personal/non-Workspace account, sharing a folder doesn't change that); switched to OAuth as the real account, which works. | 180/180 |
 | **Atomic stock reservation (closes the real overselling race)** | The earlier "Checkout stock validation" row above only checked current stock at order-creation time — it never reserved it, so two concurrent orders for the same last unit could both pass the check (neither had decremented anything yet) and both later get marked paid, since `decrementStockForOrder` ran at *payment* time and floors at 0 without re-validating. Fixed by moving the actual decrement to **order-creation time**, inside the same `db.transaction()` as the order/order_items INSERT (`reserveStockForOrder` in `server/orders.js`, online checkout only — throws and rolls back the whole order on insufficient stock, re-reading stock fresh rather than trusting the earlier pre-transaction read). Paying an order no longer touches stock at all (`markOrderPaid`/`updateOrderStatus`'s old paid-transition decrement removed). A new symmetric `restoreStockForOrder` releases reserved stock back when an order is cancelled — both via the automatic 5-day stale-order job (`cancelStalePendingOrders`) and an explicit admin cancel (`updateOrderStatus(..., 'cancelled')`), each idempotently guarded against double-restoring an already-cancelled order. `createManualOrder` also now reserves stock immediately at creation (previously only when `alreadyPaid`), though — consistent with its existing "admin free-text prices are trusted as-is" design — without the hard block online checkout gets. | 186/186 |
+| **Todo / Backlog admin page** | New "Todo / Backlog" page (Settings group) tracking tasks, ideas, and gaps identified during development — No, Category (Bug/Feature/Enhancement/Tech Debt), Date Added, Name, Description, Planned Fix Date, Actual Fix Date, Status (Backlog/In Progress/Done/Won't Fix). `server/todos.js` (`listTodos`/`createTodo`/`updateTodo` — no delete function exists at all, append-only by design, same philosophy as `version_history`); `GET/POST/PUT /api/todos` under the existing `requireAuth` admin session — no separate API-key mechanism, so this assistant adds items the same way an admin would, through that same authenticated path, not a new one. `updateTodo` auto-stamps `actualFixDate` the moment status becomes `Done` unless one was already supplied. Seeded on first boot (once, guarded by `todo_items` being empty) with the 13 items then listed in §15 Known Limitations — §15 itself now points here rather than duplicating the detail. | 195/195 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -763,6 +764,23 @@ Track deployments and system updates. Every row is created automatically by `scr
 | created_at | TEXT NOT NULL | Row creation timestamp |
 | *(indexes)* | `version_number DESC` | Legacy — `listVersions()` actually orders by `created_at DESC, version_number DESC` |
 
+#### `todo_items`
+Backlog/todo tracker (admin "Todo / Backlog" page, §7.22). Append-only — no delete function exists.
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | |
+| number | INTEGER NOT NULL UNIQUE | The displayed "No" column, auto-incrementing, separate from `date_added` |
+| category | TEXT NOT NULL | `Bug` / `Feature` / `Enhancement` / `Tech Debt` |
+| name | TEXT NOT NULL | |
+| description | TEXT NOT NULL DEFAULT '' | |
+| status | TEXT NOT NULL DEFAULT 'Backlog' | `Backlog` / `In Progress` / `Done` / `Won't Fix` |
+| planned_fix_date | TEXT | Nullable, admin-set |
+| actual_fix_date | TEXT | Nullable — auto-stamped by `updateTodo` the moment `status` becomes `Done`, unless already supplied |
+| date_added | TEXT NOT NULL | Drives sort order (`ORDER BY date_added DESC`); backdatable at creation for seeded items |
+| created_at, updated_at | TEXT NOT NULL | |
+| *(indexes)* | `date_added DESC` | |
+| *(seed)* | 13 rows | Inserted once, automatically, the first time this table is empty (`seedTodoItems` in `server/db.js`) — mirrors §15 Known Limitations at the time this table shipped |
+
 ---
 
 ## 7. API Reference
@@ -965,6 +983,28 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 - `version_label` is the customer/admin-facing string, `"<major>.<minor>"` two-digit-padded (e.g. `"1.01"`), computed by `server/version-history.js`'s `nextLabel()` — starts at `1.01`, increments the minor part each deploy, rolls the major over after `.99`.
 - `version_number` is a legacy plain-incrementing integer, kept only to satisfy the original schema's `NOT NULL UNIQUE` constraint — not shown in the UI.
 - `deployed_date` is always the record-time timestamp (ISO 8601). `deployed_by` is `'deploy'` for every automated row.
+
+### 7.22 Todo / Backlog (Admin)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/todos` | Admin | List all items, newest `dateAdded` first |
+| POST | `/api/todos` | Admin | Create a new item |
+| PUT | `/api/todos/:id` | Admin | Edit an item's fields and/or change its status |
+
+**Responses:**
+
+- **GET** `200` → `{ todos: [ { id, number, category, name, description, status, plannedFixDate, actualFixDate, dateAdded, createdAt, updatedAt }, ... ] }`
+- **POST** `201` → `{ todo }`. `400` → `{ error: "Name is required" }`
+- **PUT** `200` → `{ todo }`. `404` if the id doesn't exist.
+
+**Behaviour:**
+- No DELETE route exists at all — append-only by design (`server/todos.js`), same philosophy as `version_history`: a mistaken or duplicate item is edited to status `"Won't Fix"` with a note, never removed.
+- `category` is one of `Bug`/`Feature`/`Enhancement`/`Tech Debt`; `status` is one of `Backlog`/`In Progress`/`Done`/`"Won't Fix"` — an invalid value on create silently falls back to `Feature`/`Backlog` rather than rejecting the request (mirrors `createPurchase`'s status-clamping pattern elsewhere in this codebase).
+- `number` is a separate display sequence (the "No" column) from `id`, auto-incrementing like `version_history.version_number`.
+- `updateTodo` auto-stamps `actualFixDate` to the current timestamp the moment `status` becomes `Done`, unless the request already supplied one.
+- Seeded once, automatically, the first time `todo_items` is empty (`seedTodoItems` in `server/db.js`) — the 13 items from §15 Known Limitations at the time this table shipped.
+- No separate "Claude" identity or API key — this assistant adds/edits items through the same `requireAuth` admin-session path any logged-in admin uses.
 
 ---
 
@@ -1707,6 +1747,8 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 ---
 
 ## 15. Known Limitations & Technical Debt
+
+These 13 items were seeded as the first entries in the admin **Todo / Backlog** page (Settings group, §7.22) when it shipped — that page is now the **live, authoritative source** for current status (a Backlog item here may since have moved to In Progress/Done/Won't Fix there without this static table being updated to match). This table stays as the point-in-time detail captured when each gap was first identified.
 
 | Item | Detail |
 |---|---|

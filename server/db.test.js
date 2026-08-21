@@ -30,6 +30,7 @@ test('ensureSchema creates every expected table', () => {
     'resources',
     'settings',
     'shipping_options',
+    'todo_items',
     'version_history',
     'whatsapp_campaigns',
   ]);
