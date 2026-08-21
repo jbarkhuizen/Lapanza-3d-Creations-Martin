@@ -51,9 +51,48 @@ test('syncPublicJson writes filaments.json with colour photo, price and stock fi
   assert.strictEqual(filaments.length, 1);
   assert.strictEqual(filaments[0].colours[0].price, 'R299');
   assert.strictEqual(filaments[0].colours[0].stockQty, 5);
+  assert.strictEqual(filaments[0].colours[0].listed, true);
 
   const settings = JSON.parse(fs.readFileSync(paths.settingsSrc, 'utf8'));
   assert.strictEqual(settings.siteName, 'Lapanza 3D Creative Lab');
+
+  Object.values(paths).forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
+  db.close();
+});
+
+test('syncPublicJson carries the Stock Management "listed" flag through to categories.json', () => {
+  const db = openDb(':memory:');
+
+  const paths = {
+    catalogJsonPath: tmpFile('catalog.json'),
+    filamentsSrc: tmpFile('filaments.json'),
+    categoriesSrc: tmpFile('categories.json'),
+    settingsSrc: tmpFile('settings.json'),
+    settingsPublic: tmpFile('site-settings.json'),
+  };
+  fs.writeFileSync(
+    paths.catalogJsonPath,
+    JSON.stringify({
+      products: [
+        {
+          kind: 'category',
+          slug: 'toys',
+          name: 'Toys',
+          items: [
+            { id: 'i1', name: 'Dino', price: 'R150', listed: false },
+            { id: 'i2', name: 'Robot', price: 'R200' },
+          ],
+        },
+      ],
+    }),
+  );
+
+  syncPublicJson(db, paths);
+
+  const categories = JSON.parse(fs.readFileSync(paths.categoriesSrc, 'utf8'));
+  assert.strictEqual(categories.toys.items[0].listed, false);
+  // Items created before the "listed" field existed default to listed.
+  assert.strictEqual(categories.toys.items[1].listed, true);
 
   Object.values(paths).forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
   db.close();

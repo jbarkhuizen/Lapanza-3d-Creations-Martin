@@ -36,6 +36,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
       rollLengthM: c.rollLengthM,
       stockQty: c.stockQty,
       imageUrl: c.imagePath || '',
+      listed: c.listed !== false,
     })),
   }));
 
@@ -64,6 +65,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
           shippingWeight: item.shippingWeight != null && item.shippingWeight !== '' ? Number(item.shippingWeight) : Number(item.weight) || 0,
           stockQty: Number(item.stockQty) || 0,
           available: item.available !== false,
+          listed: item.listed !== false,
         })),
       };
     });

@@ -34,6 +34,9 @@ function rowToColour(row) {
     imagePath: row.image_path,
     notes: row.notes,
     sortOrder: row.sort_order,
+    // Stock Management "Listed on site" radio -- excludes just this colour
+    // from the filament's public colour grid (see export.js/generate-pages.mjs).
+    listed: row.listed !== 0,
   };
 }
 
@@ -196,7 +199,7 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
   db.prepare(
     `UPDATE filament_colours SET
       name = @name, hex = @hex, sku = @sku, weight_g = @weight_g, shipping_weight_g = @shipping_weight_g, roll_length_m = @roll_length_m,
-      price_rand = @price_rand, stock_qty = @stock_qty, notes = @notes, updated_at = @updated_at
+      price_rand = @price_rand, stock_qty = @stock_qty, notes = @notes, listed = @listed, updated_at = @updated_at
      WHERE id = @id`,
   ).run({
     id: colourId,
@@ -220,6 +223,7 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
     price_rand: data.priceRand != null ? toNumberOr(data.priceRand, existing.price_rand) : existing.price_rand,
     stock_qty: data.stockQty != null ? toNumberOr(data.stockQty, existing.stock_qty) : existing.stock_qty,
     notes: data.notes ?? existing.notes,
+    listed: data.listed !== undefined ? (data.listed ? 1 : 0) : existing.listed,
     updated_at: new Date().toISOString(),
   });
   return getFilament(filamentTypeId, db);

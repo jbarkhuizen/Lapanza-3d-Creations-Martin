@@ -317,7 +317,7 @@ lapanza-3d-fullsite/
 | `orders.js` | Checkout order creation (online), manual order creation (admin), invoice numbering, product-price re-resolution, stock decrement, order status lifecycle |
 | `payfast.js` | Payfast redirect-payload signing, ITN (webhook) signature verification |
 | `shipping.js` | Weight-bracket shipping matching (`auto_weight` options) + named flat-price options (`fixed` — PUDO lockers etc.) |
-| `inventory.js` | Bulk stock-quantity updates (admin Stock Management view) |
+| `inventory.js` | Bulk stock/price updates + per-item "Listed on products page" toggle (admin Stock Management view) |
 | `resources.js` | 3D Resources (downloadable files/print settings) CRUD + public listing |
 | `design-requests.js` | Custom design/print request intake, status lifecycle, admin notes |
 | `newsletter.js` | Subscriber list: subscribe (double opt-in), confirm, unsubscribe |
@@ -568,6 +568,7 @@ One row per sellable SKU within a filament type.
 | image_path | TEXT | `/uploads/filaments/...` |
 | notes | TEXT | |
 | sort_order | INTEGER | |
+| listed | INTEGER NOT NULL DEFAULT 1 | Stock Management "Listed on products page" radio — `0` pulls just this colour off its filament's public colour grid without touching stock/price or the parent filament type's own draft/published `status` |
 | created_at, updated_at | TEXT | |
 
 #### `settings`
@@ -1578,7 +1579,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 203 tests across 24 test files, 100% passing at last recorded run.
+- **Current count:** 211 tests across 25 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases

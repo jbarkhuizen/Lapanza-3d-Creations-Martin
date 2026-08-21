@@ -190,6 +190,7 @@ function addToCartButton({ productId, name, price, image, weight, extraClass = '
 function colourCards(colours, filament) {
   if (!colours?.length) return '';
   return colours
+    .filter((c) => c.listed !== false)
     .map(
       (c) => `<div class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
                   ${
@@ -226,8 +227,9 @@ function specsBlock(specs) {
 }
 
 function catalogueItems(label, items, categorySlug) {
-  const list = Array.isArray(items) && items.length ? items : null;
-  if (!list) return cataloguePlaceholders(label);
+  const all = Array.isArray(items) ? items : [];
+  const list = all.filter((item) => item.listed !== false);
+  if (!list.length) return cataloguePlaceholders(label);
 
   return list
     .map((item, i) => {
@@ -296,11 +298,12 @@ function generateFilamentPage(f) {
   const note = f.colourNote
     ? `<p class="text-espresso/50 text-xs mt-4">${f.colourNote}</p>`
     : '';
+  const listedColours = (f.colours || []).filter((c) => c.listed !== false);
   const colours =
-    f.colours?.length > 0
+    listedColours.length > 0
       ? `<div>
           <h2 class="font-serif text-xl mb-5 tracking-tight">Colours</h2>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">${colourCards(f.colours, f)}</div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">${colourCards(listedColours, f)}</div>
           ${note}
         </div>`
       : `<div class="border border-dashed border-charcoal/20 rounded-sm p-6 text-sm text-espresso/60">

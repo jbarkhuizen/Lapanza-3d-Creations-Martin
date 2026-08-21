@@ -3228,12 +3228,14 @@ async function renderStock() {
       const edit = state.stockEdits[item.id] || {};
       const stockVal = edit.stockQty ?? item.stockQty;
       const priceVal = edit.price ?? item.price;
-      const dirty = edit.stockQty !== undefined || edit.price !== undefined;
+      const listedVal = edit.listed ?? item.listed !== false;
+      const dirty = edit.stockQty !== undefined || edit.price !== undefined || edit.listed !== undefined;
       // Phase 3: spool-level fields only exist for filament rows -- read-only
       // here, written only by logging a print job (see renderPrintJobs()).
       const spoolCell = item.kind === 'filament'
         ? `${escapeHtml(item.remainingG != null ? item.remainingG.toFixed(0) : '—')}g / ${escapeHtml(item.percentLeft != null ? Math.round(item.percentLeft * 100) : '—')}%`
         : '—';
+      const radioName = `listed-${escapeAttr(item.id)}`;
       return `
         <tr data-id="${escapeAttr(item.id)}" class="${dirty ? 'row-dirty' : ''}">
           <td><code>${escapeHtml(item.sku || '—')}</code></td>
@@ -3242,6 +3244,10 @@ async function renderStock() {
           <td><input type="number" min="0" step="1" class="stock-input" data-field="stockQty" value="${escapeAttr(String(stockVal))}" style="width:5rem" /></td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></td>
           <td class="muted" style="font-size:0.85rem">${spoolCell}</td>
+          <td style="white-space:nowrap;font-size:0.85rem">
+            <label style="margin-right:0.75rem"><input type="radio" class="stock-listed" name="${radioName}" data-field="listed" value="1" ${listedVal ? 'checked' : ''} /> Listed</label>
+            <label><input type="radio" class="stock-listed" name="${radioName}" data-field="listed" value="0" ${listedVal ? '' : 'checked'} /> Not listed</label>
+          </td>
           <td class="muted" data-status style="font-size:0.8rem">${dirty ? 'Edited' : ''}</td>
         </tr>`;
     })
@@ -3257,8 +3263,8 @@ async function renderStock() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th>Remaining (filament)</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No inventory items</div></td></tr>'}</tbody>
+        <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th>Remaining (filament)</th><th>Products page</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="8"><div class="empty">No inventory items</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -3283,6 +3289,24 @@ async function renderStock() {
       }
       state.stockEdits[id] = state.stockEdits[id] || {};
       state.stockEdits[id][field] = num;
+      tr.classList.add('row-dirty');
+      statusEl.textContent = 'Edited';
+      statusEl.className = 'muted';
+      statusEl.style.fontSize = '0.8rem';
+      const saveBtn = $('#save-stock');
+      saveBtn.disabled = false;
+      saveBtn.textContent = `Save Changes (${Object.keys(state.stockEdits).length})`;
+    });
+  });
+
+  $$('#view-stock .stock-listed').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      const tr = radio.closest('tr');
+      const id = tr.dataset.id;
+      const statusEl = tr.querySelector('[data-status]');
+      state.stockEdits[id] = state.stockEdits[id] || {};
+      state.stockEdits[id].listed = radio.value === '1';
       tr.classList.add('row-dirty');
       statusEl.textContent = 'Edited';
       statusEl.className = 'muted';

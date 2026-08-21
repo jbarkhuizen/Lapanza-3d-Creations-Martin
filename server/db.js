@@ -364,6 +364,7 @@ export function ensureSchema(db) {
   ensurePasswordResetColumns(db);
   ensureVersionHistoryColumns(db);
   ensurePrintJobColumns(db);
+  ensureListingColumns(db);
   seedTodoItems(db);
 }
 
@@ -512,6 +513,17 @@ function ensurePrintJobColumns(db) {
   // the old lowercase values after the first.
   db.exec("UPDATE print_jobs SET status = 'Printed' WHERE status = 'printed'");
   db.exec("UPDATE print_jobs SET status = 'Estimate' WHERE status = 'planned'");
+}
+
+// Stock Management "Listed on site" radio: lets an admin pull a filament
+// colour off the public filament page without deleting stock/pricing data
+// or touching its parent filament type's own draft/published status.
+// Defaults to 1 (listed) so every pre-existing colour keeps shipping
+// unchanged until an admin explicitly excludes it.
+function ensureListingColumns(sqliteDb) {
+  if (!hasColumn(sqliteDb, 'PRAGMA table_info(filament_colours)', 'listed')) {
+    sqliteDb.exec('ALTER TABLE filament_colours ADD COLUMN listed INTEGER NOT NULL DEFAULT 1');
+  }
 }
 
 // Password recovery: separate token pair from verification_token above so a

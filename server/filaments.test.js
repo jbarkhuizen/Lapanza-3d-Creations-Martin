@@ -56,6 +56,23 @@ test('updateColour changes stock/price/weight/roll length', () => {
   db.close();
 });
 
+test('addColour defaults listed to true; updateColour can pull it off the products page', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1' }, db);
+  assert.strictEqual(withColour.colours[0].listed, true);
+
+  const colourId = withColour.colours[0].id;
+  const unlisted = updateColour(f.id, colourId, { listed: false }, db);
+  assert.strictEqual(unlisted.colours[0].listed, false);
+  // Unrelated fields are untouched by the listed-only patch.
+  assert.strictEqual(unlisted.colours[0].sku, 'SKU-1');
+
+  const relisted = updateColour(f.id, colourId, { listed: true }, db);
+  assert.strictEqual(relisted.colours[0].listed, true);
+  db.close();
+});
+
 test('deleteColour removes just that colour', () => {
   const db = openDb(':memory:');
   const f = createFilament({ name: 'PLA' }, db);

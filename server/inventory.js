@@ -33,6 +33,7 @@ export function listInventory(db = getDb()) {
         remainingM: colour.remainingM,
         remainingG: colour.remainingG,
         percentLeft: colour.percentLeft,
+        listed: colour.listed,
       });
     }
   }
@@ -48,6 +49,7 @@ export function listInventory(db = getDb()) {
         category: product.name,
         stockQty: Number(item.stockQty) || 0,
         price: parseRand(item.price),
+        listed: item.listed !== false,
       });
     }
   }
@@ -55,13 +57,14 @@ export function listInventory(db = getDb()) {
   return rows;
 }
 
-function updateCategoryItemStock(productId, itemId, { stockQty, price }) {
+function updateCategoryItemStock(productId, itemId, { stockQty, price, listed }) {
   const product = getProduct(productId);
   if (!product) throw new Error('Product not found');
   const item = (product.items || []).find((i) => i.id === itemId);
   if (!item) throw new Error('Item not found');
   if (stockQty !== undefined) item.stockQty = Math.max(0, Number(stockQty) || 0);
   if (price !== undefined) item.price = `R${Math.max(0, Number(price) || 0)}`;
+  if (listed !== undefined) item.listed = Boolean(listed);
   upsertProduct(product);
 }
 
@@ -71,7 +74,7 @@ function updateCategoryItemStock(productId, itemId, { stockQty, price }) {
 export function bulkUpdateInventory(updates, db = getDb()) {
   const results = [];
   for (const update of updates) {
-    const { kind, id, parentId, stockQty, price } = update;
+    const { kind, id, parentId, stockQty, price, listed } = update;
     if (stockQty !== undefined && Number(stockQty) < 0) {
       results.push({ id, ok: false, error: 'Stock cannot be negative' });
       continue;
@@ -82,9 +85,9 @@ export function bulkUpdateInventory(updates, db = getDb()) {
     }
     try {
       if (kind === 'filament') {
-        updateColour(parentId, id, { stockQty, priceRand: price }, db);
+        updateColour(parentId, id, { stockQty, priceRand: price, listed }, db);
       } else if (kind === 'category') {
-        updateCategoryItemStock(parentId, id, { stockQty, price });
+        updateCategoryItemStock(parentId, id, { stockQty, price, listed });
       } else {
         throw new Error('Unknown inventory kind');
       }

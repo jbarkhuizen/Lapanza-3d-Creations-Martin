@@ -78,6 +78,102 @@ test('generate-pages renders an in-stock count for stocked colours, "Out of stoc
   }
 });
 
+test('generate-pages excludes a colour marked listed:false from the filament page, keeps the rest', () => {
+  const filamentsPath = path.join(root, 'src', 'data', 'filaments.json');
+  const backup = fs.readFileSync(filamentsPath, 'utf8');
+
+  try {
+    fs.writeFileSync(
+      filamentsPath,
+      JSON.stringify([
+        {
+          slug: 'test-pla',
+          name: 'Test PLA',
+          description: 'A test filament',
+          specs: [],
+          colours: [
+            { name: 'Shown Colour', sku: 'SKU-1', price: 'R299', listed: true },
+            { name: 'Hidden Colour', sku: 'SKU-2', price: 'R299', listed: false },
+          ],
+        },
+      ]),
+    );
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    const html = fs.readFileSync(path.join(root, 'filament', 'test-pla.html'), 'utf8');
+    assert.match(html, /Shown Colour/);
+    assert.doesNotMatch(html, /Hidden Colour/);
+  } finally {
+    fs.writeFileSync(filamentsPath, backup);
+    fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+  }
+});
+
+test('generate-pages falls back to the "on request" note when every colour is unlisted', () => {
+  const filamentsPath = path.join(root, 'src', 'data', 'filaments.json');
+  const backup = fs.readFileSync(filamentsPath, 'utf8');
+
+  try {
+    fs.writeFileSync(
+      filamentsPath,
+      JSON.stringify([
+        {
+          slug: 'test-pla',
+          name: 'Test PLA',
+          description: 'A test filament',
+          specs: [],
+          colours: [{ name: 'Hidden Colour', sku: 'SKU-1', price: 'R299', listed: false }],
+        },
+      ]),
+    );
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    const html = fs.readFileSync(path.join(root, 'filament', 'test-pla.html'), 'utf8');
+    assert.doesNotMatch(html, /Hidden Colour/);
+    assert.match(html, /Colour list available on request/);
+  } finally {
+    fs.writeFileSync(filamentsPath, backup);
+    fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+  }
+});
+
+test('generate-pages excludes a category item marked listed:false from its category page', () => {
+  const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
+  const backup = fs.readFileSync(categoriesPath, 'utf8');
+
+  try {
+    fs.writeFileSync(
+      categoriesPath,
+      JSON.stringify({
+        toys: {
+          slug: 'toys',
+          name: 'Toys',
+          description: 'Toys',
+          crumbs: 'Home / Toys',
+          items: [
+            { name: 'Shown Item', price: 'R150', listed: true },
+            { name: 'Hidden Item', price: 'R150', listed: false },
+          ],
+        },
+      }),
+    );
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    const html = fs.readFileSync(path.join(root, 'toys.html'), 'utf8');
+    assert.match(html, /Shown Item/);
+    assert.doesNotMatch(html, /Hidden Item/);
+  } finally {
+    // toys.html is a real, git-tracked file (unlike filament/test-pla.html
+    // above) -- restoring categories.json alone leaves it holding this
+    // test's fixture content, so regenerate it from the real data too.
+    fs.writeFileSync(categoriesPath, backup);
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+  }
+});
+
 test('generate-pages skips category pages missing from categories.json instead of crashing', () => {
   const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
   const warningsPath = path.join(root, 'data', 'publish-warnings.json');
