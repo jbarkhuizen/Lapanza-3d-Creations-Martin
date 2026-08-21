@@ -6,7 +6,7 @@
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-20 (updated for offsite backup sync)
+**Document date:** 2026-08-21 (updated for atomic stock reservation)
 
 ---
 
@@ -65,11 +65,12 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Uptime monitoring** | `/api/health` strengthened to verify real database connectivity (returns `503` on DB failure, not just a bare liveness `200`) so an external monitor actually catches a stuck/corrupted DB, not just a dead process; documented setup guide for a free-tier UptimeRobot monitor | 151/151 |
 | **Visitor analytics** | First-party, privacy-minimal visitor tracking (`page_views` table + in-memory "active now"), new admin Analytics page with live active-visitor count, active-registered-clients list, and historical visit/unique-visitor/top-pages stats | 160/160 |
 | **Storefront stock display** | Each filament colour card on the public site now shows its stock level below the price — `"{N} in stock"` or `"Out of stock"` — sourced from the same `stockQty` already flowing through `filaments.json`, no new data pipeline needed | 161/161 |
-| **Checkout stock validation** | Blocks order creation if any cart item's quantity exceeds available stock (`stockQty`); returns detailed error listing out-of-stock items + quantities. Closes the gap from the pre-validation period where out-of-stock items could be purchased (§15). Covers both online and manual (admin-created) orders via shared `resolveProductSnapshot()` validation. | 167/167 |
+| **Checkout stock validation** | Blocks order creation if any cart item's quantity exceeds available stock (`stockQty`); returns detailed error listing out-of-stock items + quantities. Closes the gap from the pre-validation period where out-of-stock items could be purchased (§15). A check-only fix at this point — see the "Atomic stock reservation" row below for why that alone didn't close the concurrent-overselling case. | 167/167 |
 | **Version history tracking** | Admin "Version History" page in Settings group; manual button to record deployment version with description; auto-incrementing version numbers (v1, v2, ...); table displays all versions in reverse chronological order showing version, description, deployed date. | 167/167 |
 | **Customer password recovery (V1.01)** | Closes the previous "no forgot-password" gap — register/verify/login was the only path in and there was no way back in for a forgotten password. Adds `POST /api/client/forgot-password` (emails a single-use, 1h-expiry reset link; always returns the same generic response so the endpoint can't be used to discover which emails have accounts) and `POST /api/client/reset-password` (consumes the token, sets the new password, marks the account verified, revokes any other live sessions for that client, and logs the requester straight in). New `account.html` "Forgot password?" link and a `?reset_token=` landing view. | 172/172 |
 | **Automated version-history recording (V1.01 versioning scheme)** | Replaces the manual "+ Record Version" admin button with `scripts/record-deploy-version.mjs`, run automatically by `deploy/deploy-app.sh` after every deploy (non-fatal on failure). Version labels switch from a plain incrementing integer to `"<major>.<minor>"` (e.g. `1.01`, `1.02`, ... rolling to `2.01` after `.99`), computed in `server/version-history.js`. `POST /api/version-history` is removed — the admin page is now read-only. | 177/177 |
 | **Offsite backup sync** | Closes the single-point-of-failure gap flagged in §15 — on-server daily backups alone don't survive a disk/VPS failure. `server/backups.js`'s `syncOffsite()` mirrors `data/backups/` to a Google Drive folder via `rclone` right after every automated daily backup, self-correcting to match local 30-backup retention. Manual "Sync offsite now" button added to the admin Backups view; new `POST /api/backups/sync-offsite` route. Confirmed live in production (DEPLOY.md §9) — a Google **service account** was tried first and confirmed broken (`storageQuotaExceeded`: service accounts have zero Drive storage quota on a personal/non-Workspace account, sharing a folder doesn't change that); switched to OAuth as the real account, which works. | 180/180 |
+| **Atomic stock reservation (closes the real overselling race)** | The earlier "Checkout stock validation" row above only checked current stock at order-creation time — it never reserved it, so two concurrent orders for the same last unit could both pass the check (neither had decremented anything yet) and both later get marked paid, since `decrementStockForOrder` ran at *payment* time and floors at 0 without re-validating. Fixed by moving the actual decrement to **order-creation time**, inside the same `db.transaction()` as the order/order_items INSERT (`reserveStockForOrder` in `server/orders.js`, online checkout only — throws and rolls back the whole order on insufficient stock, re-reading stock fresh rather than trusting the earlier pre-transaction read). Paying an order no longer touches stock at all (`markOrderPaid`/`updateOrderStatus`'s old paid-transition decrement removed). A new symmetric `restoreStockForOrder` releases reserved stock back when an order is cancelled — both via the automatic 5-day stale-order job (`cancelStalePendingOrders`) and an explicit admin cancel (`updateOrderStatus(..., 'cancelled')`), each idempotently guarded against double-restoring an already-cancelled order. `createManualOrder` also now reserves stock immediately at creation (previously only when `alreadyPaid`), though — consistent with its existing "admin free-text prices are trusted as-is" design — without the hard block online checkout gets. | 186/186 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -1170,9 +1171,10 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
   - `findOrCreateClientForCheckout()` matches by email case-insensitively; existing client (guest or registered) is reused rather than duplicated.
   - Confirmation email and owner-notification email are both **best-effort** — a failed send never fails the checkout itself.
   - Payfast: browser is redirected via a real `<form>` POST (not fetch/XHR) to Payfast's hosted page — Payfast requires owning the top-level navigation.
+  - **Stock is reserved at order creation, not at payment** (`reserveStockForOrder` in `server/orders.js`, inside the same transaction as the order/order_items INSERT) — this is what actually stops two concurrent checkouts from both claiming the same last unit; the order is rejected outright (`Out of stock: ...`) if current stock can't cover it. Paying the order afterward doesn't touch stock again. If the order is later cancelled (5-day auto-cancel, or an admin cancel) the reservation is released back via `restoreStockForOrder`.
 - **Flow:** See §8.1.
 - **Endpoints:** `POST /api/checkout`, `GET /api/shipping-match`, `GET /api/shipping-options/public/fixed`, `POST /api/payfast/itn` (webhook).
-- **Tables:** `clients`, `orders`, `order_items`, `payment_transactions`, `filament_colours` (stock decrement on paid).
+- **Tables:** `clients`, `orders`, `order_items`, `payment_transactions`, `filament_colours` (stock reserved on order creation, restored on cancellation).
 
 ### 9.4 Customer Accounts
 
@@ -1207,7 +1209,7 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
 - **Business rules:**
   - Invoice numbers are sequential `INV-####`, computed as `MAX(existing invoice number) + 1`, seeded from `settings.invoiceNumberSeed` (default `10`) if no orders exist yet — lets the digital sequence continue a pre-existing paper/spreadsheet sequence without collision.
   - Manual orders (admin-created) can include **free-text line items** (`manual:{uuid}` productId) with an admin-trusted price — unlike online checkout, which always re-resolves against the catalog.
-  - Status transitions: `pending_payment → paid → shipped → completed`, plus `cancelled` reachable at any point (automatic for stale pending Payfast orders, or explicit admin action).
+  - Status transitions: `pending_payment → paid → shipped → completed`, plus `cancelled` reachable at any point (automatic for stale pending Payfast orders, or explicit admin action). Either cancellation path releases the order's reserved stock back (`restoreStockForOrder`) — guarded so re-cancelling an already-cancelled order can't restore twice.
 - **Endpoints:** §7.15.
 - **Tables:** `orders`, `order_items`, `clients`, `shipping_options`.
 
@@ -1216,7 +1218,7 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
 - **Purpose:** Record a sale that didn't go through online checkout (phone order, in-person, WhatsApp order).
 - **Actors:** Admin.
 - **Key fields:** client (existing or new), line items (catalog product OR free-text description + price), shippingOptionId or manual shipping price, discountPct, paymentMethod, alreadyPaid (bool).
-- **Business rules:** Same invoice-numbering and stock-decrement logic as online orders. `alreadyPaid=true` sets `status='paid'` immediately (skips `pending_payment`).
+- **Business rules:** Same invoice-numbering as online orders. Stock is reserved at creation regardless of `alreadyPaid` (matches online checkout's *timing*), but — unlike online checkout — never hard-blocks: an admin's entry is trusted as-is, same as its free-text line items/prices, so it floors at 0 rather than throwing "Out of stock." `alreadyPaid=true` sets `status='paid'` immediately (skips `pending_payment`).
 - **Endpoints:** `POST /api/orders`.
 - **Tables:** `orders`, `order_items`, `clients`.
 
@@ -1538,10 +1540,10 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 | T-04 | Submit checkout with a `productId` for a filament colour that was deleted since the page loaded | Negative | `400` — "Product no longer available" |
 | T-05 | Submit checkout with a client-tampered price in the request body | Negative | Price is silently **ignored** — server re-resolves from catalog regardless of submitted value |
 | T-06 | Submit checkout with an invalid `paymentMethod` value | Negative | `400` — rejected, not in `ALLOWED_PAYMENT_METHODS` |
-| T-07 | Payfast ITN with a valid signature and `COMPLETE` status | Positive | Order → `paid`, stock decremented, low-stock alerts checked |
+| T-07 | Payfast ITN with a valid signature and `COMPLETE` status | Positive | Order → `paid`; stock is unaffected here — it was already reserved at order creation, not this transition |
 | T-08 | Payfast ITN with an invalid/forged signature | Negative | Rejected, order status unchanged, logged as validation failure |
 | T-09 | Payfast ITN for an unknown `m_payment_id` | Negative | Logged and ignored, `200` still returned to Payfast (per their retry-avoidance contract) |
-| T-10 | Duplicate Payfast ITN (same gateway+reference+status) | Negative (idempotency) | Second insert is a no-op (unique index), no double stock decrement |
+| T-10 | Duplicate Payfast ITN (same gateway+reference+status) | Negative (idempotency) | Second insert is a no-op (unique index); moot for stock either way since paying no longer touches it |
 
 #### Customer Accounts
 

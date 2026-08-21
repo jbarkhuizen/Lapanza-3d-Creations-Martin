@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { createFilament, addColour } from './filaments.js';
-import { createOrder, resolveProductSnapshot } from './orders.js';
+import { createFilament, addColour, getFilament } from './filaments.js';
+import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, resolveProductSnapshot } from './orders.js';
 import { createShippingOption } from './shipping.js';
+
+function colourStock(filamentId, sku, db) {
+  return getFilament(filamentId, db).colours.find((c) => c.sku === sku).stockQty;
+}
 
 test('resolveProductSnapshot includes stockQty for filament products', () => {
   const db = openDb(':memory:');
@@ -161,5 +165,174 @@ test('createOrder blocks checkout when product has zero stock', () => {
     ),
     /Out of stock: PLA — Orange \(requested 1, 0 available\)/,
   );
+  db.close();
+});
+
+test('createOrder reserves (decrements) stock immediately at creation, not just at payment', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'Teal', sku: 'PLA-TEAL-1KG', priceRand: 299, weightG: 1000, stockQty: 5 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    {
+      client: { name: 'Test Customer', email: 'test@example.com', phone: '0123456789' },
+      items: [{ productId, quantity: 2 }],
+      paymentMethod: 'payfast_card',
+    },
+    db,
+  );
+
+  assert.strictEqual(order.status, 'pending_payment');
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3);
+  db.close();
+});
+
+test('closes the overselling race: a second order for the same last unit is rejected before payment, not after', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'LastRoll', sku: 'PLA-LASTROLL-1KG', priceRand: 299, weightG: 1000, stockQty: 1 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+  const cartItems = { client: { name: 'Customer', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 1 }], paymentMethod: 'payfast_card' };
+
+  // Customer A checks out first -- succeeds, and the roll is now reserved.
+  const orderA = createOrder(cartItems, db);
+  assert.strictEqual(orderA.status, 'pending_payment');
+
+  // Customer B checks out for the same (now-reserved) roll before A has
+  // paid -- this is exactly the scenario that used to create two
+  // confirmed orders for one physical item. Must be rejected here, at
+  // order-creation time, not silently allowed through to payment.
+  assert.throws(() => createOrder(cartItems, db), /Out of stock: PLA — LastRoll \(requested 1, 0 available\)/);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 0);
+  db.close();
+});
+
+test('paying an order does not decrement stock again -- it was already reserved at creation', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'Silver', sku: 'PLA-SILVER-1KG', priceRand: 299, weightG: 1000, stockQty: 4 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 3 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 1);
+
+  const { changed, lowStock } = markOrderPaid(order.id, db);
+  assert.strictEqual(changed, true);
+  assert.deepStrictEqual(lowStock, []);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 1); // unchanged -- not decremented a second time
+
+  const updated = updateOrderStatus(order.id, 'shipped', db);
+  assert.strictEqual(updated.status, 'shipped');
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 1); // still unchanged
+  db.close();
+});
+
+test('cancelStalePendingOrders restores reserved stock for each order it cancels', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'Gold', sku: 'PLA-GOLD-1KG', priceRand: 299, weightG: 1000, stockQty: 5 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 2 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3);
+
+  // Backdate created_at so it counts as stale, same technique the existing
+  // auto-cancel job tests use.
+  db.prepare("UPDATE orders SET created_at = datetime('now', '-10 days') WHERE id = ?").run(order.id);
+  const cancelledCount = cancelStalePendingOrders(5 * 24 * 60 * 60 * 1000, db);
+  assert.strictEqual(cancelledCount, 1);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5); // back to full
+
+  // A now-freed-up roll can be sold again.
+  const secondOrder = createOrder(
+    { client: { name: 'D', email: 'd@example.com', phone: '0123456789' }, items: [{ productId, quantity: 5 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.ok(secondOrder.id);
+  db.close();
+});
+
+test('admin-cancelling an order via updateOrderStatus restores stock exactly once', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'Bronze', sku: 'PLA-BRONZE-1KG', priceRand: 299, weightG: 1000, stockQty: 5 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 2 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3);
+
+  updateOrderStatus(order.id, 'cancelled', db);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5);
+
+  // Re-saving as cancelled again (e.g. a duplicate admin click) must not
+  // restore a second time.
+  updateOrderStatus(order.id, 'cancelled', db);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5);
+  db.close();
+});
+
+test('createManualOrder reserves stock immediately regardless of alreadyPaid', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'Copper', sku: 'PLA-COPPER-1KG', priceRand: 299, weightG: 1000, stockQty: 6 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createManualOrder(
+    {
+      client: { name: 'Walk-in', email: 'walkin@example.com', phone: '0123456789' },
+      items: [{ productId, quantity: 4 }],
+      paymentMethod: 'cash_on_collection',
+      alreadyPaid: false,
+    },
+    db,
+  );
+
+  assert.strictEqual(order.status, 'pending_payment');
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 2);
   db.close();
 });

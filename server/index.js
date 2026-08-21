@@ -1359,6 +1359,9 @@ app.post('/api/checkout', async (req, res) => {
       shippingOptionId: body.shippingOptionId,
       paymentMethod: body.paymentMethod,
     });
+    const lowStock = order._lowStock;
+    delete order._lowStock;
+    if (lowStock?.length) await sendLowStockAlerts(lowStock);
 
     let emailSent = false;
     try {

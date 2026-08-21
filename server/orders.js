@@ -181,7 +181,13 @@ export function createOrder(
     return { ...snap, quantity };
   });
 
-  // Stock validation: block checkout if any item is out of stock
+  // Fast-path check only, using the read above -- surfaces an obvious
+  // out-of-stock cart before the shipping-option lookup below runs, so a
+  // customer sees the actually-relevant error first. This is NOT what
+  // makes concurrent overselling safe -- reserveStockForOrder inside the
+  // transaction below re-reads stock fresh and is the real, authoritative
+  // guard (a stock change between this line and that one, e.g. a
+  // concurrent order taking the last unit, is still caught there).
   const outOfStock = resolved.filter((item) => item.quantity > item.stockQty);
   if (outOfStock.length > 0) {
     const itemList = outOfStock.map((item) => `${item.name} (requested ${item.quantity}, ${item.stockQty} available)`).join('; ');
@@ -261,11 +267,14 @@ export function createOrder(
         weight: item.weight,
       });
     }
-    return orderId;
+    const lowStock = reserveStockForOrder(getOrder(orderId, db), db);
+    return { orderId, lowStock };
   });
 
-  const orderId = tx();
-  return getOrder(orderId, db);
+  const { orderId, lowStock } = tx();
+  const order = getOrder(orderId, db);
+  order._lowStock = lowStock;
+  return order;
 }
 
 // Phase 3: admin-only order creation for walk-in/WhatsApp/manual sales that
@@ -366,7 +375,11 @@ export function createManualOrder(
         weight: item.weight,
       });
     }
-    const lowStock = alreadyPaid ? decrementStockForOrder(getOrder(orderId, db), db) : [];
+    // Reserved immediately regardless of alreadyPaid -- same reasoning as
+    // online checkout's reserveStockForOrder, just without the hard block:
+    // an admin entering a walk-in/WhatsApp sale is trusted, same as the
+    // free-text line items/prices this function already accepts as-is.
+    const lowStock = decrementStockForOrder(getOrder(orderId, db), db);
     return { orderId, lowStock };
   });
 
@@ -376,19 +389,20 @@ export function createManualOrder(
   return order;
 }
 
-// F.2: forward-only lifecycle, deliberately excludes 'cancelled' -- that
-// transition is automatic-only (see jobs.js), never admin-triggered.
-// #3: decrements stock for every line item when an order is confirmed paid.
+// Non-blocking decrement (floors at 0, never throws) -- used only by
+// createManualOrder, where an admin's entry is trusted as-is. Online
+// checkout uses the blocking reserveStockForOrder below instead.
 // Filament colours live in SQLite and are decremented inside the SAME
-// db.transaction() as the status flip -- genuinely atomic, matches this
-// project's better-sqlite3-is-synchronous-and-single-threaded concurrency
-// model (see db.js). Category items live in catalog.json, a flat file that
-// isn't part of the SQLite transaction -- that update happens immediately
-// after and is logged on failure, but doesn't roll back the payment
-// confirmation, since the payment is real regardless of whether the stock
-// file write succeeds. True cross-system atomicity isn't achievable with a
-// SQLite DB and a separate JSON file as two independent storage backends;
-// this mirrors the same split already accepted in resolveProductSnapshot.
+// db.transaction() as the caller's order/order_items INSERT -- genuinely
+// atomic, matches this project's better-sqlite3-is-synchronous-and-
+// single-threaded concurrency model (see db.js). Category items live in
+// catalog.json, a flat file that isn't part of the SQLite transaction --
+// that update happens immediately after and is logged on failure, but
+// doesn't roll back the order, since a manual order is real regardless of
+// whether the stock file write succeeds. True cross-system atomicity isn't
+// achievable with a SQLite DB and a separate JSON file as two independent
+// storage backends; this mirrors the same split already accepted in
+// resolveProductSnapshot.
 //
 // Returns the inventory rows now at <=1 stock, for the caller to alert on.
 function decrementStockForOrder(order, db) {
@@ -432,22 +446,125 @@ function decrementStockForOrder(order, db) {
   return lowStock;
 }
 
+// Online checkout only, called inside createOrder's transaction. This is
+// what actually stops two concurrent checkouts each claiming the same last
+// unit: reserving (decrementing) stock happens the instant the order
+// exists, not later when it's paid -- so a second order for the same item
+// re-reads stock fresh here and sees what the first one already took, not
+// a stale pre-transaction read. Two-phase (validate every item first, THEN
+// apply every decrement) so a multi-item order can't partially decrement
+// item 1 before discovering item 3 is short -- either the whole order
+// commits or none of it does, matching this function throwing inside the
+// same db.transaction() the order/order_items INSERT already runs in.
+function reserveStockForOrder(order, db) {
+  const insufficient = [];
+  const filamentRows = new Map(); // productId -> fresh row, so phase 2 skips re-querying
+  const categoryEntries = new Map(); // productId -> { product, item }
+
+  for (const item of order.items) {
+    const productId = String(item.productId || '');
+    if (productId.startsWith('filament:')) {
+      const sku = productId.split(':').slice(2).join(':');
+      const row = db.prepare('SELECT id, sku, stock_qty FROM filament_colours WHERE sku = ?').get(sku);
+      if (!row) continue;
+      filamentRows.set(item.productId, row);
+      if (item.quantity > row.stock_qty) {
+        insufficient.push({ name: item.productName, requested: item.quantity, available: row.stock_qty });
+      }
+    } else if (productId.startsWith('category:')) {
+      const rest = productId.split(':').slice(1);
+      const category = readCategoryProducts().find((c) => c.slug === rest[0]);
+      const product = category && getProduct(category.id);
+      const items = product?.items || [];
+      const skuOrIndex = rest.slice(1).join(':');
+      const catItem = skuOrIndex && items.some((i) => i.sku === skuOrIndex)
+        ? items.find((i) => i.sku === skuOrIndex)
+        : items[Number(skuOrIndex)];
+      if (!catItem) continue;
+      categoryEntries.set(item.productId, { product, item: catItem });
+      const available = Number(catItem.stockQty) || 0;
+      if (item.quantity > available) {
+        insufficient.push({ name: item.productName, requested: item.quantity, available });
+      }
+    }
+  }
+
+  if (insufficient.length > 0) {
+    const itemList = insufficient.map((i) => `${i.name} (requested ${i.requested}, ${i.available} available)`).join('; ');
+    throw new Error(`Out of stock: ${itemList}`);
+  }
+
+  const lowStock = [];
+  for (const item of order.items) {
+    const row = filamentRows.get(item.productId);
+    if (row) {
+      const newQty = row.stock_qty - item.quantity;
+      db.prepare('UPDATE filament_colours SET stock_qty = ? WHERE id = ?').run(newQty, row.id);
+      if (newQty <= 1) lowStock.push({ id: row.id, name: item.productName, sku: row.sku, stockQty: newQty });
+      continue;
+    }
+    const cat = categoryEntries.get(item.productId);
+    if (cat) {
+      const newQty = (Number(cat.item.stockQty) || 0) - item.quantity;
+      cat.item.stockQty = newQty;
+      upsertProduct(cat.product);
+      if (newQty <= 1) lowStock.push({ id: cat.item.id, name: item.productName, sku: cat.item.sku, stockQty: newQty });
+    }
+  }
+  return lowStock;
+}
+
+// Symmetric inverse of decrementStockForOrder/reserveStockForOrder -- adds
+// back whatever an order's creation reserved, when that order is cancelled
+// (either automatically, via cancelStalePendingOrders, or by an admin, via
+// updateOrderStatus) instead of ever being fulfilled. No floor/cap needed:
+// adding back exactly what was taken can't overflow past where stock
+// started, regardless of which of the two functions above did the taking.
+function restoreStockForOrder(order, db) {
+  for (const item of order.items) {
+    const productId = String(item.productId || '');
+    if (productId.startsWith('filament:')) {
+      const sku = productId.split(':').slice(2).join(':');
+      const row = db.prepare('SELECT id, stock_qty FROM filament_colours WHERE sku = ?').get(sku);
+      if (!row) continue;
+      db.prepare('UPDATE filament_colours SET stock_qty = ? WHERE id = ?').run(row.stock_qty + item.quantity, row.id);
+    } else if (productId.startsWith('category:')) {
+      try {
+        const rest = productId.split(':').slice(1);
+        const category = readCategoryProducts().find((c) => c.slug === rest[0]);
+        const product = category && getProduct(category.id);
+        if (!product) continue;
+        const items = product.items || [];
+        const skuOrIndex = rest.slice(1).join(':');
+        const catItem = skuOrIndex && items.some((i) => i.sku === skuOrIndex)
+          ? items.find((i) => i.sku === skuOrIndex)
+          : items[Number(skuOrIndex)];
+        if (!catItem) continue;
+        catItem.stockQty = (Number(catItem.stockQty) || 0) + item.quantity;
+        upsertProduct(product);
+      } catch (err) {
+        console.error(`Stock restore failed for category item (order ${order.id}):`, err.message);
+      }
+    }
+  }
+}
+
 export function updateOrderStatus(id, status, db = getDb()) {
   if (!ALLOWED_STATUSES.includes(status)) throw new Error('Invalid status');
-  let lowStock = [];
   const order = db.transaction(() => {
     const existing = db.prepare('SELECT status FROM orders WHERE id = ?').get(id);
     if (!existing) return null;
-    db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, new Date().toISOString(), id);
-    // Only decrement on the transition INTO paid, not every time an already-
-    // paid order is re-saved as paid -- otherwise toggling the admin status
-    // dropdown could decrement stock repeatedly for the same order.
-    if (status === 'paid' && existing.status === 'pending_payment') {
-      lowStock = decrementStockForOrder(getOrder(id, db), db);
+    // Stock is reserved the instant an order is created (reserveStockForOrder
+    // / decrementStockForOrder), not on this paid transition -- so paying no
+    // longer touches stock at all. Only a transition INTO cancelled releases
+    // it back, and only once (same idempotency reasoning the old paid-guard
+    // used) so re-saving an already-cancelled order can't double-restore.
+    if (status === 'cancelled' && existing.status !== 'cancelled') {
+      restoreStockForOrder(getOrder(id, db), db);
     }
+    db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, new Date().toISOString(), id);
     return getOrder(id, db);
   })();
-  if (order) order._lowStock = lowStock;
   return order;
 }
 
@@ -459,14 +576,15 @@ export function updateOrderTracking(id, trackingNumber, db = getDb()) {
   return getOrder(id, db);
 }
 
+// lowStock is always [] now -- kept in the return shape so callers (the
+// Payfast ITN handler) don't need changing. Stock was already reserved
+// when the order was created; paying doesn't touch it.
 export function markOrderPaid(id, db = getDb()) {
   return db.transaction(() => {
     const result = db
       .prepare("UPDATE orders SET status = 'paid', payment_status = 'paid', updated_at = ? WHERE id = ? AND status = 'pending_payment'")
       .run(new Date().toISOString(), id);
-    if (result.changes === 0) return { changed: false, lowStock: [] };
-    const lowStock = decrementStockForOrder(getOrder(id, db), db);
-    return { changed: true, lowStock };
+    return { changed: result.changes > 0, lowStock: [] };
   })();
 }
 
@@ -502,15 +620,22 @@ export function recordPaymentTransaction({ orderId, gateway, gatewayReference, r
 
 // G: only ever moves pending_payment -> cancelled, never touches paid/
 // shipped/completed, and performs no gateway calls (no refund logic).
+// Releases each order's reserved stock back via restoreStockForOrder --
+// otherwise an abandoned/failed checkout would permanently lock up
+// whatever it reserved at creation, never coming back for sale.
 export function cancelStalePendingOrders(olderThanMs, db = getDb()) {
   const cutoff = new Date(Date.now() - olderThanMs).toISOString();
   const stale = db.prepare("SELECT id FROM orders WHERE status = 'pending_payment' AND created_at < ?").all(cutoff);
-  const cancel = db.prepare("UPDATE orders SET status = 'cancelled', updated_at = ? WHERE id = ? AND status = 'pending_payment'");
-  const now = new Date().toISOString();
+  const cancelOne = db.transaction((orderId) => {
+    const order = getOrder(orderId, db);
+    if (!order || order.status !== 'pending_payment') return false;
+    db.prepare("UPDATE orders SET status = 'cancelled', updated_at = ? WHERE id = ?").run(new Date().toISOString(), orderId);
+    restoreStockForOrder(order, db);
+    return true;
+  });
   let count = 0;
   for (const row of stale) {
-    const result = cancel.run(now, row.id);
-    count += result.changes;
+    if (cancelOne(row.id)) count += 1;
   }
   return count;
 }
