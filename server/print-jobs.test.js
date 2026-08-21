@@ -1,8 +1,39 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { openDb } from './db.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { openDb, closeAllCachedDbs } from './db.js';
 import { createInHouseFilament } from './in-house-filament.js';
-import { computeJobCost, createPrintJob, previewPrintJobCost, getPrintJob, listPrintJobs, deletePrintJob } from './print-jobs.js';
+import {
+  computeJobCost,
+  createPrintJob,
+  previewPrintJobCost,
+  getPrintJob,
+  listPrintJobs,
+  deletePrintJob,
+  updatePrintJob,
+  listPrintJobForSale,
+  updatePrintJobListing,
+} from './print-jobs.js';
+import { upsertProduct, getProduct } from './store.js';
+
+// Category products live in data/catalog.json (a flat file keyed off
+// process.cwd(), not SQLite -- see store.js/paths.js), so listing-related
+// tests need their own isolated cwd, same technique store.test.js uses.
+function withTempCatalogDir(fn) {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'print-jobs-listing-test-'));
+  const originalCwd = process.cwd();
+  fs.mkdirSync(path.join(tmpRoot, 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'src', 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'public'), { recursive: true });
+  process.chdir(tmpRoot);
+  return Promise.resolve(fn()).finally(() => {
+    closeAllCachedDbs(); // release the SQLite file handle before deleting its directory (Windows locks open handles)
+    process.chdir(originalCwd);
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+}
 
 const SETTINGS = {
   markupPct: 0.25,
@@ -106,12 +137,120 @@ test('createPrintJob requires an item name', () => {
 test('listPrintJobs filters by status, deletePrintJob removes the row and its filament slots', () => {
   const db = openDb(':memory:');
   const f = makeFilament(db);
-  const a = createPrintJob({ itemName: 'A', status: 'planned', filaments: [{ inHouseFilamentId: f.id, grams: 5, meters: 1 }] }, db);
+  const a = createPrintJob({ itemName: 'A', status: 'Estimate', filaments: [{ inHouseFilamentId: f.id, grams: 5, meters: 1 }] }, db);
   createPrintJob({ itemName: 'B', filaments: [{ inHouseFilamentId: f.id, grams: 5, meters: 1 }] }, db);
-  assert.strictEqual(listPrintJobs({ status: 'planned' }, db).length, 1);
+  assert.strictEqual(listPrintJobs({ status: 'Estimate' }, db).length, 1);
   assert.strictEqual(listPrintJobs({}, db).length, 2);
   assert.strictEqual(deletePrintJob(a.id, db), true);
   assert.strictEqual(getPrintJob(a.id, db), null);
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM print_job_filaments WHERE print_job_id = ?').get(a.id).n, 0);
   db.close();
+});
+
+test('createPrintJob defaults finalSellingPrice to the computed minimum when not supplied', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob({ itemName: 'Widget', filaments: [{ inHouseFilamentId: f.id, grams: 40, meters: 13.4 }] }, db);
+  assert.strictEqual(job.finalSellingPrice, job.sellingPrice);
+  db.close();
+});
+
+test('createPrintJob respects an explicit finalSellingPrice, updatePrintJob can change it later', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob(
+    { itemName: 'Widget', finalSellingPrice: 999, filaments: [{ inHouseFilamentId: f.id, grams: 40, meters: 13.4 }] },
+    db,
+  );
+  assert.strictEqual(job.finalSellingPrice, 999);
+  assert.notStrictEqual(job.finalSellingPrice, job.sellingPrice); // minimum is unaffected by the override
+
+  const updated = updatePrintJob(job.id, { finalSellingPrice: 1200, status: 'Printed' }, db);
+  assert.strictEqual(updated.finalSellingPrice, 1200);
+  assert.strictEqual(updated.status, 'Printed');
+  db.close();
+});
+
+test('updatePrintJob ignores an invalid status/price rather than clobbering existing values', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob({ itemName: 'Widget', status: 'Estimate', filaments: [{ inHouseFilamentId: f.id, grams: 10, meters: 1 }] }, db);
+  const updated = updatePrintJob(job.id, { status: 'Nonsense', finalSellingPrice: -5 }, db);
+  assert.strictEqual(updated.status, 'Estimate');
+  assert.strictEqual(updated.finalSellingPrice, job.finalSellingPrice);
+  db.close();
+});
+
+test('listPrintJobForSale creates a category item, links the job, and stock/price flow through', async () => {
+  await withTempCatalogDir(async () => {
+    const db = openDb(':memory:');
+    upsertProduct({ id: 'cat-toys', kind: 'category', slug: 'toys', name: 'Toys', items: [] }, db);
+    const f = makeFilament(db);
+    const job = createPrintJob(
+      { itemName: 'Dragon Figurine', finalSellingPrice: 249, filaments: [{ inHouseFilamentId: f.id, grams: 80, meters: 26.8 }] },
+      db,
+    );
+
+    const listed = listPrintJobForSale(job.id, { categorySlug: 'toys', stockQty: 3 }, db);
+    assert.strictEqual(listed.listingCategoryId, 'cat-toys');
+    assert.ok(listed.listingItemId);
+
+    const product = getProduct('cat-toys');
+    const item = product.items.find((i) => i.id === listed.listingItemId);
+    assert.strictEqual(item.name, 'Dragon Figurine');
+    assert.strictEqual(item.price, '249');
+    assert.strictEqual(item.stockQty, 3);
+    assert.strictEqual(item.weight, job.totalGrams);
+    db.close();
+  });
+});
+
+test('listPrintJobForSale refuses to list the same job twice', async () => {
+  await withTempCatalogDir(async () => {
+    const db = openDb(':memory:');
+    upsertProduct({ id: 'cat-toys', kind: 'category', slug: 'toys', name: 'Toys', items: [] }, db);
+    const f = makeFilament(db);
+    const job = createPrintJob({ itemName: 'Widget', finalSellingPrice: 100, filaments: [{ inHouseFilamentId: f.id, grams: 10, meters: 1 }] }, db);
+    listPrintJobForSale(job.id, { categorySlug: 'toys', stockQty: 1 }, db);
+    assert.throws(() => listPrintJobForSale(job.id, { categorySlug: 'toys', stockQty: 1 }, db), /Already listed/);
+    db.close();
+  });
+});
+
+test('listPrintJobForSale rejects an unknown category', async () => {
+  await withTempCatalogDir(async () => {
+    const db = openDb(':memory:');
+    const f = makeFilament(db);
+    const job = createPrintJob({ itemName: 'Widget', finalSellingPrice: 100, filaments: [{ inHouseFilamentId: f.id, grams: 10, meters: 1 }] }, db);
+    assert.throws(() => listPrintJobForSale(job.id, { categorySlug: 'nonexistent', stockQty: 1 }, db), /Category not found/);
+    db.close();
+  });
+});
+
+test('updatePrintJobListing requires the job to already be listed', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob({ itemName: 'Widget', finalSellingPrice: 100, filaments: [{ inHouseFilamentId: f.id, grams: 10, meters: 1 }] }, db);
+  assert.throws(() => updatePrintJobListing(job.id, { stockQty: 5 }, db), /not been listed/);
+  db.close();
+});
+
+test('updatePrintJobListing bumps stock ("printed 3 more") on the existing linked item', async () => {
+  await withTempCatalogDir(async () => {
+    const db = openDb(':memory:');
+    upsertProduct({ id: 'cat-toys', kind: 'category', slug: 'toys', name: 'Toys', items: [] }, db);
+    const f = makeFilament(db);
+    const job = createPrintJob({ itemName: 'Widget', finalSellingPrice: 100, filaments: [{ inHouseFilamentId: f.id, grams: 10, meters: 1 }] }, db);
+    const listed = listPrintJobForSale(job.id, { categorySlug: 'toys', stockQty: 1 }, db);
+
+    updatePrintJobListing(job.id, { stockQty: 4, price: 150 }, db);
+
+    const product = getProduct('cat-toys');
+    const item = product.items.find((i) => i.id === listed.listingItemId);
+    assert.strictEqual(item.stockQty, 4);
+    assert.strictEqual(item.price, '150');
+    // Still exactly one item -- an update, not a second duplicate listing.
+    assert.strictEqual(product.items.length, 1);
+    db.close();
+  });
 });

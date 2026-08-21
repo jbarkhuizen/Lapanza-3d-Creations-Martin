@@ -3,8 +3,11 @@ import { getDb } from './db.js';
 import { getSettings } from './settings.js';
 import { getInHouseFilament, incrementInHouseFilamentUsage } from './in-house-filament.js';
 import { deletePrintJobFile as deleteUploadedFile } from './uploads.js';
+import { readCategoryProducts } from './export.js';
+import { getProduct, upsertProduct } from './store.js';
 
 const MAX_FILAMENT_SLOTS = 4;
+const STATUSES = ['Estimate', 'Printed'];
 
 function rowToJob(row, filamentRows = []) {
   if (!row) return null;
@@ -24,12 +27,22 @@ function rowToJob(row, filamentRows = []) {
     runningCost: row.running_cost,
     totalCost: row.total_cost,
     markupAmount: row.markup_amount,
+    // Purely computed (totalCost + markup) -- the floor, never overridden.
+    // Labelled "Minimum Selling Price" in the admin UI.
     sellingPrice: row.selling_price,
+    // Admin-editable, defaults to sellingPrice at creation if not supplied.
+    // What actually gets used as the price if/when this job is listed for
+    // sale (see listPrintJobForSale below).
+    finalSellingPrice: row.final_selling_price,
     referenceFilePath: row.reference_file_path,
     referenceImagePath: row.reference_image_path,
     status: row.status,
     datePrinted: row.date_printed,
     createdAt: row.created_at,
+    // Set once this job has been published as a category product -- see
+    // listPrintJobForSale. Both null until then.
+    listingCategoryId: row.listing_category_id,
+    listingItemId: row.listing_item_id,
     filaments: filamentRows.map((f) => ({
       id: f.id,
       inHouseFilamentId: f.in_house_filament_id,
@@ -41,10 +54,13 @@ function rowToJob(row, filamentRows = []) {
   };
 }
 
-// Internal-only production costing -- mirrors the spreadsheet's Cost
-// Calculator math. Never touches storefront product pricing. `slots` is
-// 1-4 { inHouseFilamentId, grams, meters } entries; each is priced from its
-// own in_house_filament.costPerG (not a single shared filament like the
+// Production costing -- mirrors the spreadsheet's Cost Calculator math.
+// Computing a job's cost/minimum-selling-price never touches storefront
+// pricing on its own. The only bridge to the storefront is the explicit,
+// admin-triggered listPrintJobForSale/updatePrintJobListing pair further
+// down -- everything above that stays internal-only. `slots` is 1-4
+// { inHouseFilamentId, grams, meters } entries; each is priced from its own
+// in_house_filament.costPerG (not a single shared filament like the
 // original single-material design).
 export function computeJobCost(input, settings, resolvedSlots) {
   const totalGrams = resolvedSlots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0);
@@ -148,6 +164,13 @@ export function createPrintJob(data, db = getDb()) {
   const slots = resolveSlots(data.filaments, db);
   const cost = computeJobCost(data, settings, slots);
 
+  // Defaults to the computed minimum if not supplied/invalid -- covers the
+  // common case of just accepting the calculated price without typing it
+  // again, while still letting an admin override it (rounding up, charging
+  // more for a popular design, etc).
+  const finalSellingPriceInput = Number(data.finalSellingPrice);
+  const finalSellingPrice = Number.isFinite(finalSellingPriceInput) && finalSellingPriceInput > 0 ? finalSellingPriceInput : cost.sellingPrice;
+
   const id = randomUUID();
   const now = new Date().toISOString();
   const tx = db.transaction(() => {
@@ -155,11 +178,11 @@ export function createPrintJob(data, db = getDb()) {
       `INSERT INTO print_jobs
         (id, item_name, total_grams, total_meters, print_time_minutes, design_hours, setup_hours, post_processing_hours,
          markup_pct, filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price,
-         status, date_printed, created_at)
+         final_selling_price, status, date_printed, created_at)
        VALUES
         (@id, @item_name, @total_grams, @total_meters, @print_time_minutes, @design_hours, @setup_hours, @post_processing_hours,
          @markup_pct, @filament_cost, @power_cost, @labour_cost, @running_cost, @total_cost, @markup_amount, @selling_price,
-         @status, @date_printed, @created_at)`,
+         @final_selling_price, @status, @date_printed, @created_at)`,
     ).run({
       id,
       item_name: String(data.itemName).trim(),
@@ -176,8 +199,9 @@ export function createPrintJob(data, db = getDb()) {
       running_cost: cost.runningCost,
       total_cost: cost.totalCost,
       markup_amount: cost.markupAmount,
+      final_selling_price: finalSellingPrice,
       selling_price: cost.sellingPrice,
-      status: data.status === 'planned' ? 'planned' : 'printed',
+      status: data.status === 'Estimate' ? 'Estimate' : 'Printed',
       date_printed: data.datePrinted || now,
       created_at: now,
     });
@@ -209,11 +233,85 @@ export function createPrintJob(data, db = getDb()) {
 export function updatePrintJob(id, data, db = getDb()) {
   const existing = db.prepare('SELECT * FROM print_jobs WHERE id = ?').get(id);
   if (!existing) return null;
-  db.prepare('UPDATE print_jobs SET status = ? WHERE id = ?').run(
-    data.status !== undefined ? data.status : existing.status,
-    id,
-  );
+  const status = data.status !== undefined && STATUSES.includes(data.status) ? data.status : existing.status;
+  const finalSellingPrice =
+    data.finalSellingPrice !== undefined && Number(data.finalSellingPrice) > 0
+      ? Number(data.finalSellingPrice)
+      : existing.final_selling_price;
+  db.prepare('UPDATE print_jobs SET status = ?, final_selling_price = ? WHERE id = ?').run(status, finalSellingPrice, id);
   return getPrintJob(id, db);
+}
+
+// A print job's name/photo/weight are trusted as-is here (same reasoning
+// as createManualOrder's free-text items) -- this is an internal admin
+// publishing something they already costed, not a public form re-resolving
+// against an existing catalog entry. Throws (rather than returning null)
+// for every "can't list this" case, so the admin UI's toast shows a real
+// reason instead of a generic 404/400.
+export function listPrintJobForSale(id, { categorySlug, stockQty } = {}, db = getDb()) {
+  const job = getPrintJob(id, db);
+  if (!job) return null;
+  if (job.listingItemId) throw new Error('Already listed for sale -- use "Update listing" instead.');
+  const price = Number(job.finalSellingPrice) || 0;
+  if (price <= 0) throw new Error('Set a Final Selling Price before listing this for sale.');
+
+  const category = readCategoryProducts().find((c) => c.slug === categorySlug);
+  if (!category) throw new Error('Category not found');
+  const product = getProduct(category.id);
+  if (!product) throw new Error('Category not found');
+
+  const item = {
+    id: randomUUID(),
+    name: job.itemName,
+    details: '',
+    material: '',
+    size: '',
+    finish: '',
+    price: String(price),
+    sku: generateListingSku(job.itemName),
+    imageUrl: job.referenceImagePath || '',
+    // Grams -- matches filament_colours.weight_g and every other weight
+    // field end to end. Shipping weight defaults to the same figure; an
+    // admin can adjust it later from the catalog editor if packaging
+    // differs, same as any other category item.
+    weight: job.totalGrams,
+    shippingWeight: job.totalGrams,
+    available: true,
+    sortOrder: (product.items || []).length,
+    stockQty: Math.max(0, Number(stockQty) || 0),
+  };
+  product.items = [...(product.items || []), item];
+  upsertProduct(product, db);
+
+  db.prepare('UPDATE print_jobs SET listing_category_id = ?, listing_item_id = ? WHERE id = ?').run(product.id, item.id, id);
+  return getPrintJob(id, db);
+}
+
+// "Printed 3 more" -- bumps the stock quantity (or price) on the already-
+// linked category item, rather than listPrintJobForSale creating a second,
+// disconnected duplicate product for the same design.
+export function updatePrintJobListing(id, { stockQty, price } = {}, db = getDb()) {
+  const job = getPrintJob(id, db);
+  if (!job) return null;
+  if (!job.listingItemId) throw new Error('This job has not been listed for sale yet.');
+  const product = getProduct(job.listingCategoryId);
+  if (!product) throw new Error('The linked category no longer exists.');
+  const item = (product.items || []).find((i) => i.id === job.listingItemId);
+  if (!item) throw new Error('The linked listing no longer exists.');
+
+  if (stockQty !== undefined) item.stockQty = Math.max(0, Number(stockQty) || 0);
+  if (price !== undefined && price !== '' && Number(price) > 0) item.price = String(Number(price));
+  upsertProduct(product, db);
+  return getPrintJob(id, db);
+}
+
+function generateListingSku(name) {
+  const slug =
+    String(name || 'item')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'item';
+  return `PRINT-${slug}-${randomUUID().slice(0, 6)}`.toUpperCase();
 }
 
 export function setPrintJobImage(id, imagePath, db = getDb()) {
@@ -241,4 +339,4 @@ export function deletePrintJob(id, db = getDb()) {
   return true;
 }
 
-export { MAX_FILAMENT_SLOTS };
+export { MAX_FILAMENT_SLOTS, STATUSES as PRINT_JOB_STATUSES };

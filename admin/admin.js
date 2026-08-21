@@ -2421,6 +2421,7 @@ function blankPrintJob() {
     itemName: '',
     slots: Array.from({ length: MAX_PRINT_JOB_FILAMENT_SLOTS }, () => ({ inHouseFilamentId: '', grams: '', meters: '' })),
     printTimeMinutes: 0, designHours: 0, setupHours: 0, postProcessingHours: 0, markupPct: '',
+    status: 'Printed', finalSellingPrice: '',
     modelFile: null, modelImage: null,
     preview: null,
   };
@@ -2444,6 +2445,8 @@ function readPrintJobPayload(draft) {
     setupHours: Number(draft.setupHours) || 0,
     postProcessingHours: Number(draft.postProcessingHours) || 0,
     markupPct: draft.markupPct === '' ? undefined : Number(draft.markupPct),
+    status: draft.status,
+    finalSellingPrice: draft.finalSellingPrice === '' ? undefined : Number(draft.finalSellingPrice),
   };
 }
 
@@ -2477,20 +2480,49 @@ async function renderPrintJobs() {
         <p><strong>Total cost: R${escapeHtml(String(preview.totalCost))} — Markup: R${escapeHtml(String(preview.markupAmount))} — Selling price: R${escapeHtml(String(preview.sellingPrice))}</strong></p>
       </div>` : '';
 
+  const listing = state.editingListingJobId ? printJobs.find((j) => j.id === state.editingListingJobId) : null;
+  const listingCategories = state.printJobCategories || [];
+
   const rows = printJobs
     .map(
       (j) => `
-        <tr>
+        <tr data-id="${escapeAttr(j.id)}">
           <td>${j.referenceImagePath ? `<img src="${escapeAttr(j.referenceImagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:0.5rem" />` : ''}${escapeHtml(j.itemName)}</td>
           <td>${escapeHtml(j.totalGrams.toFixed(1))}g / ${escapeHtml(j.totalMeters.toFixed(2))}m</td>
           <td>R${escapeHtml(String(j.totalCost))}</td>
           <td>R${escapeHtml(String(j.sellingPrice))}</td>
-          <td>${escapeHtml(j.status)}</td>
+          <td><input class="pj-final-price-cell" type="number" min="0" step="0.01" value="${escapeAttr(String(j.finalSellingPrice ?? ''))}" style="width:90px" /></td>
+          <td>
+            <select class="pj-status-cell">
+              <option value="Printed" ${j.status === 'Printed' ? 'selected' : ''}>Printed</option>
+              <option value="Estimate" ${j.status === 'Estimate' ? 'selected' : ''}>Estimate</option>
+            </select>
+          </td>
           <td>${escapeHtml(formatDate(j.datePrinted || j.createdAt))}</td>
-          <td><button class="btn small btn-danger" data-action="delete-job" data-id="${escapeAttr(j.id)}" type="button">Delete</button></td>
+          <td>
+            <button class="btn small" data-action="${j.listingItemId ? 'update-listing' : 'list-for-sale'}" type="button">${j.listingItemId ? 'Update listing' : 'List for sale'}</button>
+            <button class="btn small btn-danger" data-action="delete-job" type="button">Delete</button>
+          </td>
         </tr>`,
     )
     .join('');
+
+  const listingPanelHtml = listing ? `
+    <div class="panel stack gap-3" style="max-width:480px">
+      <div class="section-head"><h3>${listing.listingItemId ? 'Update listing' : 'List'} "${escapeHtml(listing.itemName)}" for sale</h3></div>
+      ${listing.listingItemId ? '' : `
+        <label class="field"><span>Category</span>
+          <select id="lst-category">
+            ${listingCategories.map((c) => `<option value="${escapeAttr(c.slug)}">${escapeHtml(c.name)}</option>`).join('')}
+          </select>
+        </label>`}
+      <label class="field"><span>Stock quantity</span><input id="lst-stock" type="number" min="0" step="1" value="${listing.listingItemId ? escapeAttr(String(state.listingItemSnapshot?.stockQty ?? 0)) : '1'}" /></label>
+      <p class="muted" style="font-size:0.8rem">Sells at the Final Selling Price (R${escapeHtml(String(listing.finalSellingPrice ?? 0))}) set above -- change that first if it needs updating, then Save here to push it into the listing too.</p>
+      <div class="row-card-actions">
+        <button class="btn btn-primary" id="save-listing" type="button">${listing.listingItemId ? 'Update' : 'List for sale'}</button>
+        <button class="btn btn-ghost" id="cancel-listing" type="button">Cancel</button>
+      </div>
+    </div>` : '';
 
   $('#view-print-jobs').innerHTML = `
     <div class="stack gap-4" style="max-width:900px">
@@ -2507,7 +2539,16 @@ async function renderPrintJobs() {
           <label class="field"><span>Setup (hrs)</span><input id="pj-setup-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.setupHours))}" /></label>
           <label class="field"><span>Post-processing (hrs)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
         </div>
-        <label class="field" style="max-width:220px"><span>Markup override (fraction, blank = Settings default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
+        <div class="grid-3">
+          <label class="field"><span>Markup override (fraction, blank = Settings default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
+          <label class="field"><span>Status</span>
+            <select id="pj-status">
+              <option value="Printed" ${draft.status === 'Printed' ? 'selected' : ''}>Printed</option>
+              <option value="Estimate" ${draft.status === 'Estimate' ? 'selected' : ''}>Estimate</option>
+            </select>
+          </label>
+          <label class="field"><span>Final selling price (blank = Minimum Selling Price)</span><input id="pj-final-price" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.finalSellingPrice))}" placeholder="${preview ? escapeAttr(String(preview.sellingPrice)) : 'R0.00'}" /></label>
+        </div>
 
         <div class="grid-2">
           <label class="field"><span>Model file (optional) — STL/3MF/OBJ/gcode/zip/PDF</span><input type="file" id="pj-model-file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" /></label>
@@ -2521,10 +2562,11 @@ async function renderPrintJobs() {
           <button class="btn btn-primary" id="log-job" type="button">Log job &amp; compute cost</button>
         </div>
       </div>
+      ${listingPanelHtml}
       <div class="panel table-wrap">
         <table class="catalog">
-          <thead><tr><th>Item</th><th>Filament used</th><th>Cost</th><th>Selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="7"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
+          <thead><tr><th>Item</th><th>Filament used</th><th>Cost</th><th>Min. selling price</th><th>Final selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="8"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -2562,6 +2604,8 @@ async function renderPrintJobs() {
     draft.setupHours = $('#pj-setup-hrs').value;
     draft.postProcessingHours = $('#pj-post-hrs').value;
     draft.markupPct = $('#pj-markup').value;
+    draft.status = $('#pj-status').value;
+    draft.finalSellingPrice = $('#pj-final-price').value;
   }
 
   $('#validate-job').addEventListener('click', async () => {
@@ -2581,7 +2625,7 @@ async function renderPrintJobs() {
     if (!draft.itemName.trim()) return toast('Item name is required');
     try {
       const { printJob } = await api('/api/print-jobs', { method: 'POST', body: JSON.stringify(readPrintJobPayload(draft)) });
-      toast(`Cost: R${printJob.totalCost} — Selling price: R${printJob.sellingPrice}`);
+      toast(`Cost: R${printJob.totalCost} — Minimum selling price: R${printJob.sellingPrice}`);
 
       const fileInput = $('#pj-model-file');
       const imageInput = $('#pj-model-image');
@@ -2595,13 +2639,88 @@ async function renderPrintJobs() {
     }
   });
 
-  $$('[data-action="delete-job"]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
+  $$('#view-print-jobs tbody tr[data-id]').forEach((tr) => {
+    const jobId = tr.dataset.id;
+
+    tr.querySelector('[data-action="delete-job"]').addEventListener('click', async () => {
       if (!confirm('Delete this print job?')) return;
-      await api(`/api/print-jobs/${btn.dataset.id}`, { method: 'DELETE' });
+      await api(`/api/print-jobs/${jobId}`, { method: 'DELETE' });
       await renderPrintJobs();
     });
+
+    // Auto-saves on interaction (no separate Save button per row) --
+    // matches this table's existing pattern of committing a change as soon
+    // as it's made, same as the totals-live-update above.
+    tr.querySelector('.pj-status-cell').addEventListener('change', async (e) => {
+      try {
+        await api(`/api/print-jobs/${jobId}`, { method: 'PATCH', body: JSON.stringify({ status: e.target.value }) });
+        toast('Status updated');
+      } catch (ex) {
+        toast(ex.message);
+        await renderPrintJobs();
+      }
+    });
+    tr.querySelector('.pj-final-price-cell').addEventListener('blur', async (e) => {
+      const value = Number(e.target.value);
+      if (!value || value <= 0) return; // ignore an accidental clear -- keeps whatever price was already set
+      try {
+        await api(`/api/print-jobs/${jobId}`, { method: 'PATCH', body: JSON.stringify({ finalSellingPrice: value }) });
+        toast('Final selling price updated');
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+
+    const listBtn = tr.querySelector('[data-action="list-for-sale"]');
+    if (listBtn) {
+      listBtn.addEventListener('click', async () => {
+        if (!state.printJobCategories) {
+          const { products } = await api('/api/products');
+          state.printJobCategories = products.map((p) => ({ slug: p.slug, name: p.name }));
+        }
+        state.editingListingJobId = jobId;
+        state.listingItemSnapshot = null;
+        await renderPrintJobs();
+      });
+    }
+    const updateBtn = tr.querySelector('[data-action="update-listing"]');
+    if (updateBtn) {
+      updateBtn.addEventListener('click', async () => {
+        const job = printJobs.find((j) => j.id === jobId);
+        const { product } = await api(`/api/products/${job.listingCategoryId}`);
+        const item = product.items.find((i) => i.id === job.listingItemId);
+        state.editingListingJobId = jobId;
+        state.listingItemSnapshot = item ? { stockQty: item.stockQty, price: item.price } : { stockQty: 0, price: 0 };
+        await renderPrintJobs();
+      });
+    }
   });
+
+  if (listing) {
+    $('#cancel-listing').addEventListener('click', async () => {
+      state.editingListingJobId = null;
+      state.listingItemSnapshot = null;
+      await renderPrintJobs();
+    });
+    $('#save-listing').addEventListener('click', async () => {
+      const stockQty = Number($('#lst-stock').value) || 0;
+      try {
+        if (listing.listingItemId) {
+          await api(`/api/print-jobs/${listing.id}/listing`, { method: 'PUT', body: JSON.stringify({ stockQty }) });
+          toast('Listing updated');
+        } else {
+          const categorySlug = $('#lst-category').value;
+          await api(`/api/print-jobs/${listing.id}/list-for-sale`, { method: 'POST', body: JSON.stringify({ categorySlug, stockQty }) });
+          toast('Listed for sale');
+        }
+        state.editingListingJobId = null;
+        state.listingItemSnapshot = null;
+        await renderPrintJobs();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
 }
 
 async function uploadPrintJobAsset(jobId, field, file) {

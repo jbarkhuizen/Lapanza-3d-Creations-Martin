@@ -6,7 +6,7 @@
 **Live production URL:** https://lapanza3d.co.za (site) · https://lapanza3d.co.za/admin/ (admin portal)
 **Repository:** `github.com/jbarkhuizen/Lapanza-3d-Creations-Martin` (branch `main`)
 **Author of record:** Johan Barkhuizen, built with Claude Code (Anthropic)
-**Document date:** 2026-08-21 (updated for the Todo / Backlog admin page)
+**Document date:** 2026-08-21 (updated for Print Job Costing's status rename, Final Selling Price, and "List for sale")
 
 ---
 
@@ -72,6 +72,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Offsite backup sync** | Closes the single-point-of-failure gap flagged in §15 — on-server daily backups alone don't survive a disk/VPS failure. `server/backups.js`'s `syncOffsite()` mirrors `data/backups/` to a Google Drive folder via `rclone` right after every automated daily backup, self-correcting to match local 30-backup retention. Manual "Sync offsite now" button added to the admin Backups view; new `POST /api/backups/sync-offsite` route. Confirmed live in production (DEPLOY.md §9) — a Google **service account** was tried first and confirmed broken (`storageQuotaExceeded`: service accounts have zero Drive storage quota on a personal/non-Workspace account, sharing a folder doesn't change that); switched to OAuth as the real account, which works. | 180/180 |
 | **Atomic stock reservation (closes the real overselling race)** | The earlier "Checkout stock validation" row above only checked current stock at order-creation time — it never reserved it, so two concurrent orders for the same last unit could both pass the check (neither had decremented anything yet) and both later get marked paid, since `decrementStockForOrder` ran at *payment* time and floors at 0 without re-validating. Fixed by moving the actual decrement to **order-creation time**, inside the same `db.transaction()` as the order/order_items INSERT (`reserveStockForOrder` in `server/orders.js`, online checkout only — throws and rolls back the whole order on insufficient stock, re-reading stock fresh rather than trusting the earlier pre-transaction read). Paying an order no longer touches stock at all (`markOrderPaid`/`updateOrderStatus`'s old paid-transition decrement removed). A new symmetric `restoreStockForOrder` releases reserved stock back when an order is cancelled — both via the automatic 5-day stale-order job (`cancelStalePendingOrders`) and an explicit admin cancel (`updateOrderStatus(..., 'cancelled')`), each idempotently guarded against double-restoring an already-cancelled order. `createManualOrder` also now reserves stock immediately at creation (previously only when `alreadyPaid`), though — consistent with its existing "admin free-text prices are trusted as-is" design — without the hard block online checkout gets. | 186/186 |
 | **Todo / Backlog admin page** | New "Todo / Backlog" page (Settings group) tracking tasks, ideas, and gaps identified during development — No, Category (Bug/Feature/Enhancement/Tech Debt), Date Added, Name, Description, Planned Fix Date, Actual Fix Date, Status (Backlog/In Progress/Done/Won't Fix). `server/todos.js` (`listTodos`/`createTodo`/`updateTodo` — no delete function exists at all, append-only by design, same philosophy as `version_history`); `GET/POST/PUT /api/todos` under the existing `requireAuth` admin session — no separate API-key mechanism, so this assistant adds items the same way an admin would, through that same authenticated path, not a new one. `updateTodo` auto-stamps `actualFixDate` the moment status becomes `Done` unless one was already supplied. Seeded on first boot (once, guarded by `todo_items` being empty) with the 13 items then listed in §15 Known Limitations — §15 itself now points here rather than duplicating the detail. | 195/195 |
+| **Print Job Costing: status rename, Final Selling Price, "List for sale"** | Status dropdown relabelled `Printed`/`Estimate` (was `printed`/`planned`, migrated in place). "Selling Price" relabelled **Minimum Selling Price** (unchanged, still purely computed) and a new admin-editable **Final Selling Price** added, defaulting to the minimum. The bigger addition: a print job can now be explicitly published as a real category product ("List for sale") — carries over name/price/weight/photo (if uploaded), admin sets stock qty, stays linked so re-opening it becomes "Update listing" (bump stock/price) instead of creating a duplicate. New `listing_category_id`/`listing_item_id` columns on `print_jobs`; new `listPrintJobForSale`/`updatePrintJobListing` in `server/print-jobs.js`; two new routes (§7.12). Deliberately the *only* crossing of the internal-costing/storefront boundary this module otherwise keeps strict — never automatic. | 203/203 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -676,18 +677,22 @@ Simple key-value store (site config, invoicing config, print-job-costing rates).
 | created_at, updated_at | TEXT | |
 
 #### `print_jobs`
-Internal costing record — never linked to storefront orders.
+Internal costing record. Not linked to storefront orders — but as of the "List for sale" feature below, CAN be explicitly, manually published as a real category product; that link is what `listing_category_id`/`listing_item_id` track.
 | Column | Type | Notes |
 |---|---|---|
 | id, item_name | | |
 | total_grams, total_meters | REAL | Sum across all filament slots |
 | print_time_minutes, design_hours, setup_hours, post_processing_hours | | Time inputs |
 | markup_pct | REAL | |
-| filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price | REAL | Calculated outputs |
+| filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price | REAL | Calculated outputs — `selling_price` is the computed floor, labelled **"Minimum Selling Price"** in the admin UI, never overridden |
+| final_selling_price | REAL | Admin-editable — defaults to `selling_price` at creation if not supplied. What actually gets used as the price if/when this job is listed for sale |
 | reference_file_path, reference_image_path | TEXT NULL | |
-| status | TEXT DEFAULT 'printed' | |
+| status | TEXT DEFAULT 'Printed' | `Printed` / `Estimate` (renamed from `printed`/`planned` — see the migration note below) |
 | date_printed | TEXT NULL | |
 | created_at | TEXT | |
+| listing_category_id, listing_item_id | TEXT NULL | Set once this job has been published as a category product — together locate the specific item inside that category's `items` array in `catalog.json` (there's no separate items table, see `store.js`). Both null until then; a second "List for sale" click on an already-listed job updates this same item instead of creating a duplicate. |
+
+> **Migration note:** `status` values were renamed from lowercase `planned`/`printed` to `Estimate`/`Printed` when the "List for sale" feature shipped — `ensurePrintJobColumns()` in `db.js` runs a one-time, idempotent `UPDATE` on every boot to convert any pre-existing rows.
 
 #### `in_house_filament`
 Physical rolls kept for internal/local printing — separate from the sellable `filament_colours` catalog.
@@ -904,8 +909,10 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | GET | `/api/print-jobs`, `/api/print-jobs/:id` | Admin | List/detail |
 | POST | `/api/print-jobs/validate` | Admin | Pre-flight cost calculation (no save) |
 | POST | `/api/print-jobs` | Admin | Create (calculates + logs filament consumption) |
-| PATCH/DELETE | `/api/print-jobs/:id` | Admin | Update/delete |
+| PATCH/DELETE | `/api/print-jobs/:id` | Admin | Update (status, finalSellingPrice) / delete |
 | POST | `/api/print-jobs/:id/image`, `/api/print-jobs/:id/file` | Admin | Upload assets |
+| POST | `/api/print-jobs/:id/list-for-sale` | Admin | Publishes this job as a **new** category product. Body: `{ categorySlug, stockQty }`. `400` if already listed, if `finalSellingPrice` isn't set, or the category doesn't exist |
+| PUT | `/api/print-jobs/:id/listing` | Admin | Updates the **already-linked** listing's stock/price ("printed 3 more"). Body: `{ stockQty, price }`. `400` if this job hasn't been listed yet |
 
 ### 7.13 In-House Filament (Admin)
 
@@ -1299,9 +1306,16 @@ Each subsection: **Purpose · Actors · Key Fields · Business Rules · Flow · 
 - **Business rules:** `PUT /api/settings` only accepts an allow-listed set of keys (prevents arbitrary key injection).
 - **Endpoints:** §7.16. **Tables:** `settings`.
 
-### 9.14 Print Job Costing (Admin, internal-only)
+### 9.14 Print Job Costing (Admin)
 
-- See §8.7. **Purpose:** Calculate the true cost + suggested selling price of a print, factoring filament, electricity, labour (design/setup/post-processing hours × rates), and markup %. **Never** affects storefront pricing.
+- See §8.7. **Purpose:** Calculate the true cost + Minimum Selling Price of a print, factoring filament, electricity, labour (design/setup/post-processing hours × rates), and markup %. Costing itself never touches storefront pricing on its own.
+- **Status:** `Printed` or `Estimate` (dropdown in the Log Job form and inline per row in the table) — a rough quote vs. an actual completed print, purely informational, no other behaviour hangs off it.
+- **Minimum Selling Price** (`sellingPrice`) is the computed floor (`totalCost + markup`) — read-only, never overridden.
+- **Final Selling Price** (`finalSellingPrice`) is admin-editable, defaults to the Minimum Selling Price at creation if left blank, and can be changed any time afterward (inline in the table, blur-saves). This is the price actually used if the job is listed for sale.
+- **"List for sale" — the one deliberate bridge to the storefront:** an admin can explicitly publish a Printed-or-Estimate job as a real category product (toys/homeware/phones/car-parts subcategories) — a new choice per job, not automatic. Carries over the job's name, Final Selling Price, and weight (grams, used for both `weight` and `shippingWeight`); carries over the reference photo only if one was uploaded to the job; the admin sets the stock quantity being listed. Requires `finalSellingPrice > 0` — nothing lists for R0.
+  - The job stays **linked** to the resulting item (`listingCategoryId`/`listingItemId`) — a second click doesn't create a duplicate product; the button becomes **"Update listing"**, which bumps the existing item's stock (e.g. "printed 3 more") and/or price instead.
+  - Implemented in `server/print-jobs.js`'s `listPrintJobForSale`/`updatePrintJobListing`, both operating on the same category/items structure `server/store.js`'s `upsertProduct` already uses for the regular catalog editor — no new product concept, no separate items table.
+- **Flow:** See §8.7. **Endpoints:** §7.12. **Tables:** `print_jobs`, `print_job_filaments`, `in_house_filament`; listing writes into `catalog.json` via `store.js` (not SQLite — same split already accepted for category items elsewhere, see §2.1).
 
 ### 9.15 In-House Filament Stock (Admin, internal-only)
 

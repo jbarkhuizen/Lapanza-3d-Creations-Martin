@@ -101,7 +101,18 @@ import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary 
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
-import { listPrintJobs, getPrintJob, createPrintJob, updatePrintJob, deletePrintJob, previewPrintJobCost, setPrintJobImage, setPrintJobFile } from './print-jobs.js';
+import {
+  listPrintJobs,
+  getPrintJob,
+  createPrintJob,
+  updatePrintJob,
+  deletePrintJob,
+  previewPrintJobCost,
+  setPrintJobImage,
+  setPrintJobFile,
+  listPrintJobForSale,
+  updatePrintJobListing,
+} from './print-jobs.js';
 import {
   listInHouseFilament,
   getInHouseFilament,
@@ -1117,7 +1128,10 @@ app.delete('/api/design-requests/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ---- Print Job Costing (Phase 3, internal-only) ----
+// ---- Print Job Costing (Phase 3) ----
+// Costing itself stays internal-only. The two /list-for-sale and /listing
+// routes below are the sole, explicit bridge to the storefront -- see
+// print-jobs.js's listPrintJobForSale/updatePrintJobListing.
 
 app.get('/api/print-jobs', requireAuth, (req, res) => {
   res.json({ printJobs: listPrintJobs({ status: req.query.status }) });
@@ -1152,6 +1166,28 @@ app.patch('/api/print-jobs/:id', requireAuth, (req, res) => {
   const job = updatePrintJob(req.params.id, req.body || {});
   if (!job) return res.status(404).json({ error: 'Print job not found' });
   res.json({ printJob: job });
+});
+
+// Publishes this job as a new category product (body: { categorySlug, stockQty }).
+app.post('/api/print-jobs/:id/list-for-sale', requireAuth, (req, res) => {
+  try {
+    const job = listPrintJobForSale(req.params.id, req.body || {});
+    if (!job) return res.status(404).json({ error: 'Print job not found' });
+    res.status(201).json({ printJob: job });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Updates the already-linked listing's stock/price (body: { stockQty, price }).
+app.put('/api/print-jobs/:id/listing', requireAuth, (req, res) => {
+  try {
+    const job = updatePrintJobListing(req.params.id, req.body || {});
+    if (!job) return res.status(404).json({ error: 'Print job not found' });
+    res.json({ printJob: job });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.delete('/api/print-jobs/:id', requireAuth, (req, res) => {

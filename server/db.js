@@ -363,6 +363,7 @@ export function ensureSchema(db) {
   ensureEngagementColumns(db);
   ensurePasswordResetColumns(db);
   ensureVersionHistoryColumns(db);
+  ensurePrintJobColumns(db);
   seedTodoItems(db);
 }
 
@@ -483,6 +484,34 @@ function ensureEngagementColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'whatsapp_opt_in')) {
     db.exec('ALTER TABLE clients ADD COLUMN whatsapp_opt_in INTEGER NOT NULL DEFAULT 0');
   }
+}
+
+// "List for sale": lets an admin publish a print job as a real storefront
+// category product (server/print-jobs.js's listPrintJobForSale/
+// updatePrintJobListing) -- a deliberate, explicit crossing of the
+// internal-costing/storefront boundary print-jobs.js otherwise keeps
+// strict, not an automatic one. listing_category_id/listing_item_id
+// together locate the specific item inside that category's items array in
+// catalog.json (there's no separate items table -- see store.js) once
+// listed, so a second "List for sale" click updates the existing listing
+// instead of creating a duplicate. Also renames the status values
+// ('planned'/'printed' -> 'Estimate'/'Printed') and adds final_selling_price
+// alongside the existing computed selling_price (now labelled "Minimum
+// Selling Price" in the UI -- still purely computed, never overridden).
+function ensurePrintJobColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'final_selling_price')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN final_selling_price REAL');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'listing_category_id')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN listing_category_id TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'listing_item_id')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN listing_item_id TEXT');
+  }
+  // Idempotent -- matches nothing on a second run since no row still has
+  // the old lowercase values after the first.
+  db.exec("UPDATE print_jobs SET status = 'Printed' WHERE status = 'printed'");
+  db.exec("UPDATE print_jobs SET status = 'Estimate' WHERE status = 'planned'");
 }
 
 // Password recovery: separate token pair from verification_token above so a
