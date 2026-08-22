@@ -1454,10 +1454,11 @@ const AUDIT_EVENT_LABEL = {
   admin_created: 'Admin created',
   admin_deleted: 'Admin deleted',
   password_reset: 'Password reset',
+  email_failure: 'Email send failed',
 };
 
 function auditEventBadge(eventType) {
-  const cls = eventType === 'login_failure' || eventType === 'admin_deleted' || eventType === 'password_reset' || eventType === 'session_expired' ? 'draft' : 'published';
+  const cls = eventType === 'login_failure' || eventType === 'admin_deleted' || eventType === 'password_reset' || eventType === 'session_expired' || eventType === 'email_failure' ? 'draft' : 'published';
   return `<span class="badge ${cls}">${escapeHtml(AUDIT_EVENT_LABEL[eventType] || eventType)}</span>`;
 }
 
@@ -2020,6 +2021,7 @@ async function renderClients() {
     </div>
     ${form ? `
       <div class="panel stack gap-3" style="max-width:700px">
+        <button class="btn btn-ghost small" id="back-to-clients" type="button" style="align-self:flex-start">&larr; Back to Clients</button>
         <div class="section-head"><h3>${form.id ? `Edit client (${escapeHtml(form.clientCode || '')})` : 'New client'}</h3></div>
         <div class="grid-2">
           <label class="field"><span>First name</span><input id="cf-first-name" value="${escapeAttr(form.firstName || '')}" /></label>
@@ -2092,6 +2094,7 @@ async function renderClients() {
 
   if (form) {
     $('#cancel-client').addEventListener('click', async () => { state.editingClient = null; await renderClients(); });
+    $('#back-to-clients').addEventListener('click', async () => { state.editingClient = null; await renderClients(); });
     $('#save-client').addEventListener('click', async () => {
       const firstName = $('#cf-first-name').value;
       const lastName = $('#cf-last-name').value;
@@ -2598,7 +2601,7 @@ async function renderPrintJobs() {
           <td>${escapeHtml(j.totalGrams.toFixed(1))}g / ${escapeHtml(j.totalMeters.toFixed(2))}m</td>
           <td>R${escapeHtml(String(j.totalCost))}</td>
           <td>R${escapeHtml(String(j.sellingPrice))}</td>
-          <td><input class="pj-final-price-cell" type="number" min="0" step="0.01" value="${escapeAttr(String(j.finalSellingPrice ?? ''))}" style="width:90px" /></td>
+          <td><span class="muted" style="margin-right:0.25rem">R</span><input class="pj-final-price-cell" type="number" min="0" step="0.01" value="${escapeAttr(String(j.finalSellingPrice ?? ''))}" style="width:80px" /></td>
           <td>
             <select class="pj-status-cell">
               <option value="Printed" ${j.status === 'Printed' ? 'selected' : ''}>Printed</option>
@@ -2659,7 +2662,12 @@ async function renderPrintJobs() {
               <option value="Estimate" ${draft.status === 'Estimate' ? 'selected' : ''}>Estimate</option>
             </select>
           </label>
-          <label class="field"><span>Final selling price (blank = Minimum Selling Price)</span><input id="pj-final-price" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.finalSellingPrice))}" placeholder="${preview ? escapeAttr(String(preview.sellingPrice)) : 'R0.00'}" /></label>
+          <label class="field"><span>Final selling price (blank = Minimum Selling Price)</span>
+            <div style="display:flex;align-items:center;gap:0.4rem">
+              <span class="muted">R</span>
+              <input id="pj-final-price" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.finalSellingPrice))}" placeholder="${preview ? escapeAttr(String(preview.sellingPrice)) : '0.00'}" style="flex:1" />
+            </div>
+          </label>
         </div>
 
         <div class="grid-2">

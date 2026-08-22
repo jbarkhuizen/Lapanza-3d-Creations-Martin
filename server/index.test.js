@@ -607,6 +607,25 @@ test('audit log filters by eventType and search text', async (t) => {
   assert.ok(searched.body.entries.every((e) => e.username === 'johan'));
 });
 
+test('a failed outbound email is recorded to the audit log instead of only console.error -- this is what a broken Gmail app password looks like', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  // GMAIL_APP_PASSWORD is deliberately unset in the test env (mailer.js's
+  // lazy-transporter comment) -- registering a client genuinely exercises
+  // the real failure path, not a mock.
+  const register = await request(app).post('/api/client/register').send({ email: 'newcustomer@example.com', password: 'correcthorsebattery' });
+  assert.strictEqual(register.status, 201); // a failed verification email must never fail registration itself
+
+  const res = await request(app).get('/api/audit-log?eventType=email_failure').set('Cookie', cookie);
+  assert.strictEqual(res.body.entries.length, 1);
+  assert.match(res.body.entries[0].detail, /Verification email/);
+  assert.match(res.body.entries[0].detail, /GMAIL_APP_PASSWORD/);
+});
+
 test('deleting an admin and resetting a password are attributed to the acting admin and recorded', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

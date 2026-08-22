@@ -10,6 +10,11 @@ export const AUDIT_EVENTS = {
   ADMIN_CREATED: 'admin_created',
   ADMIN_DELETED: 'admin_deleted',
   PASSWORD_RESET: 'password_reset',
+  // Covers every outbound-email call site that was previously a silent
+  // console.error only (order/verification/reset/newsletter/design-request/
+  // low-stock notifications) -- visible in the admin "Audit Logs" page
+  // instead of requiring server-log/SSH access to ever notice a send failed.
+  EMAIL_FAILURE: 'email_failure',
 };
 
 function rowToEntry(row) {

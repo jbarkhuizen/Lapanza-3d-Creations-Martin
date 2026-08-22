@@ -41,6 +41,15 @@ export function getInHouseFilament(id, db = getDb()) {
 export function createInHouseFilament(data, db = getDb()) {
   if (!data.filamentType || !String(data.filamentType).trim()) throw new Error('Filament type is required');
   if (!data.colorName || !String(data.colorName).trim()) throw new Error('Color name is required');
+  const filamentType = String(data.filamentType).trim();
+  const colorName = String(data.colorName).trim();
+  // Case-insensitive so "PLA"/"Black" and "pla"/"black" count as the same
+  // roll -- there was no check at all before, so the same combo could be
+  // (and was) added more than once with no warning.
+  const existing = db
+    .prepare('SELECT id FROM in_house_filament WHERE LOWER(filament_type) = LOWER(?) AND LOWER(color_name) = LOWER(?)')
+    .get(filamentType, colorName);
+  if (existing) throw new Error(`"${filamentType} — ${colorName}" already exists — add rolls to the existing entry instead of creating a duplicate`);
   const id = randomUUID();
   const now = new Date().toISOString();
   db.prepare(
@@ -48,8 +57,8 @@ export function createInHouseFilament(data, db = getDb()) {
      VALUES (@id, @filament_type, @color_name, @rolls_available, @weight_g, @roll_length_m, @cost_per_roll_rand, @created_at, @updated_at)`,
   ).run({
     id,
-    filament_type: String(data.filamentType).trim(),
-    color_name: String(data.colorName).trim(),
+    filament_type: filamentType,
+    color_name: colorName,
     rolls_available: Math.max(0, Math.round(Number(data.rollsAvailable) || 0)),
     weight_g: Math.max(0, Math.round(Number(data.weightG) || 0)),
     roll_length_m: Math.max(0, Number(data.rollLengthM) || 0),

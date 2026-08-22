@@ -223,6 +223,20 @@ function requestMeta(req) {
   return { ip: req.ip, userAgent: req.get('user-agent') || null };
 }
 
+// Every outbound-email call site in this file used to just console.error on
+// failure -- meaning a broken Gmail app password (the actual cause behind
+// one real "verify email not working" report) was invisible outside SSH/
+// server logs. `req` is optional since a couple of call sites (the low-stock
+// alert loop) run outside any request.
+function logEmailFailure(context, err, req = null) {
+  console.error(`${context} failed to send:`, err.message);
+  recordAuditEvent({
+    eventType: AUDIT_EVENTS.EMAIL_FAILURE,
+    detail: `${context}: ${err.message}`,
+    ...(req ? requestMeta(req) : {}),
+  });
+}
+
 function requireAuth(req, res, next) {
   const token = req.cookies[SESSION_COOKIE];
   const session = token && sessions.get(token);
@@ -306,7 +320,7 @@ app.post('/api/client/register', authLimiter, async (req, res) => {
     try {
       await sendClientVerificationEmail(client, verifyUrl);
     } catch (err) {
-      console.error('Verification email failed to send:', err.message);
+      logEmailFailure('Verification email', err, req);
     }
     res.status(201).json({ ok: true, message: 'Account created — check your email to verify it before logging in.' });
   } catch (err) {
@@ -352,7 +366,7 @@ app.post('/api/client/forgot-password', authLimiter, async (req, res) => {
       try {
         await sendClientPasswordResetEmail(result.client, resetUrl);
       } catch (err) {
-        console.error('Password reset email failed to send:', err.message);
+        logEmailFailure('Password reset email', err, req);
       }
     }
   } catch (err) {
@@ -456,7 +470,7 @@ app.post('/api/newsletter/subscribe', publicFormLimiter, async (req, res) => {
       try {
         await sendNewsletterConfirmationEmail((req.body || {}).email, `${base}/confirm?token=${token}`, `${base}/unsubscribe?token=${token}`);
       } catch (err) {
-        console.error('Newsletter confirmation email failed to send:', err.message);
+        logEmailFailure('Newsletter confirmation email', err, req);
       }
     }
     res.status(201).json({ ok: true, message: alreadyConfirmed ? "You're already subscribed." : 'Check your email to confirm your subscription.' });
@@ -1018,7 +1032,7 @@ async function sendLowStockAlerts(rows) {
     try {
       await sendLowStockAlert(item, '/admin/');
     } catch (err) {
-      console.error(`Low-stock alert failed for ${item.name}:`, err.message);
+      logEmailFailure(`Low-stock alert for ${item.name}`, err);
     }
   }
 }
@@ -1129,7 +1143,7 @@ app.post(
       try {
         await sendNewDesignRequestNotificationEmail(request);
       } catch (err) {
-        console.error('New design request owner-notification email failed:', err.message);
+        logEmailFailure('New design request owner-notification email', err, req);
       }
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -1160,7 +1174,7 @@ app.patch('/api/design-requests/:id', requireAuth, async (req, res) => {
       try {
         await sendDesignRequestStatusEmail(updated, updated.status);
       } catch (err) {
-        console.error('Design request status email failed to send:', err.message);
+        logEmailFailure('Design request status email', err, req);
       }
     }
     res.json({ designRequest: updated });
@@ -1369,7 +1383,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     try {
       await sendNewOrderNotificationEmail(order);
     } catch (err) {
-      console.error('New order owner-notification email failed:', err.message);
+      logEmailFailure('New order owner-notification email', err, req);
     }
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1460,13 +1474,13 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
       // is already placed and (for Payfast) about to redirect to payment.
       // The admin "resend" action (H.2) exists specifically to recover
       // from this.
-      console.error(`Order ${order.id} confirmation email failed to send:`, err.message);
+      logEmailFailure(`Order ${order.id} confirmation email`, err, req);
     }
 
     try {
       await sendNewOrderNotificationEmail(order);
     } catch (err) {
-      console.error('New order owner-notification email failed:', err.message);
+      logEmailFailure('New order owner-notification email', err, req);
     }
 
     if (body.paymentMethod === 'manual_eft' || body.paymentMethod === 'cash_on_collection') {

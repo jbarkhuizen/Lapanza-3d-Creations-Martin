@@ -17,6 +17,18 @@ test('createInHouseFilament requires filament type and color name', () => {
   db.close();
 });
 
+test('createInHouseFilament rejects a duplicate filamentType+colorName, case-insensitively', () => {
+  const db = openDb(':memory:');
+  createInHouseFilament({ filamentType: 'PLA', colorName: 'Black', rollsAvailable: 1, weightG: 1000, rollLengthM: 335, costPerRollRand: 300 }, db);
+  assert.throws(
+    () => createInHouseFilament({ filamentType: 'pla', colorName: '  black  ', rollsAvailable: 1, weightG: 1000, rollLengthM: 335, costPerRollRand: 300 }, db),
+    /already exists/,
+  );
+  // A genuinely different colour for the same type is still fine.
+  assert.doesNotThrow(() => createInHouseFilament({ filamentType: 'PLA', colorName: 'White', rollsAvailable: 1, weightG: 1000, rollLengthM: 335, costPerRollRand: 300 }, db));
+  db.close();
+});
+
 test('createInHouseFilament computes remaining/percentLeft from rolls x per-roll spec', () => {
   const db = openDb(':memory:');
   const f = createInHouseFilament({ filamentType: 'PLA', colorName: 'Black', rollsAvailable: 3, weightG: 1000, rollLengthM: 335, costPerRollRand: 300 }, db);
