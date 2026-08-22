@@ -18,6 +18,9 @@ function htmlEntries() {
     resources: resolve(__dirname, 'resources.html'),
     designRequest: resolve(__dirname, 'design-request.html'),
     account: resolve(__dirname, 'account.html'),
+    terms: resolve(__dirname, 'terms.html'),
+    privacy: resolve(__dirname, 'privacy.html'),
+    returns: resolve(__dirname, 'returns.html'),
   };
 
   for (const dir of ['filament', 'car-parts']) {
