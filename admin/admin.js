@@ -2628,8 +2628,8 @@ async function renderPrintJobs() {
     </div>` : '';
 
   $('#view-print-jobs').innerHTML = `
-    <div class="stack gap-4" style="max-width:900px">
-      <div class="panel stack gap-3">
+    <div class="stack gap-4">
+      <div class="panel stack gap-3" style="max-width:900px">
         <div class="section-head"><h3>Log a print job</h3></div>
         <label class="field"><span>Item / file name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
 
