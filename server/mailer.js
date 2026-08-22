@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer';
 import { getSettings } from './settings.js';
 
-const FROM_ADDRESS = process.env.GMAIL_USER || 'lapanzaoline@gmail.com';
+const FROM_ADDRESS = process.env.GMAIL_USER || 'lapanzaonline@gmail.com';
 
 // Lazy singleton -- only created on first real send, so booting the server
 // without GMAIL_APP_PASSWORD set (e.g. running tests) doesn't throw.

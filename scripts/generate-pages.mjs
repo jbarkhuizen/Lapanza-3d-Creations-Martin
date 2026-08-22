@@ -139,6 +139,11 @@ function footer({ depth = 0, home = false } = {}) {
         <a href="${SITE.instagram}" target="_blank" rel="noopener noreferrer" class="hover:text-terracotta transition-colors">Instagram</a>
       </div>
     </div>
+    <div class="max-w-7xl mx-auto px-6 md:px-10 mt-8 pt-6 border-t border-charcoal/10 flex flex-wrap gap-x-5 gap-y-2 text-xs text-espresso/55">
+      <a href="${prefix}terms.html" class="hover:text-terracotta transition-colors">Terms &amp; Conditions</a>
+      <a href="${prefix}privacy.html" class="hover:text-terracotta transition-colors">Privacy Policy</a>
+      <a href="${prefix}returns.html" class="hover:text-terracotta transition-colors">Returns &amp; Refunds</a>
+    </div>
   </footer>
     </div>
   </div>
@@ -153,6 +158,11 @@ function footer({ depth = 0, home = false } = {}) {
     <div class="mx-auto max-w-5xl px-6 sm:px-10 lg:px-16 xl:px-24 text-xs text-espresso/60 flex flex-wrap gap-4 justify-between">
       <span>&copy; <span data-year>2026</span> Lapanza 3D Creative Lab</span>
       <span>${SITE.email} &middot; ${SITE.phone}</span>
+    </div>
+    <div class="mx-auto max-w-5xl px-6 sm:px-10 lg:px-16 xl:px-24 mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-espresso/55">
+      <a href="${prefix}terms.html" class="hover:text-terracotta transition-colors">Terms &amp; Conditions</a>
+      <a href="${prefix}privacy.html" class="hover:text-terracotta transition-colors">Privacy Policy</a>
+      <a href="${prefix}returns.html" class="hover:text-terracotta transition-colors">Returns &amp; Refunds</a>
     </div>
   </footer>
 </body>
@@ -449,9 +459,40 @@ ${footer({ depth })}`;
   write(file, html);
 }
 
+// Legal pages (Terms, Privacy, Returns) -- content lives as HTML fragments in
+// src/data/legal/ (edited independently of this script, same reasoning as
+// filaments.json/categories.json being separate data) and gets dropped into
+// the same reading-column shell every catalog/story page uses, so they share
+// nav/header/footer without duplicating that markup a fourth time.
+function generateLegalPage({ file, title, description, lastUpdated }) {
+  const bodyHtml = fs.readFileSync(path.join(root, 'src/data/legal', file), 'utf8');
+  const html = `${head({
+    title: `${title} — Lapanza 3D Creative Lab`,
+    description,
+    depth: 0,
+    pagePath: file,
+  })}
+${shellStart({ depth: 0 })}
+    <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-3xl">
+      <p class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6"><a href="index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/80">${title}</span></p>
+      <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-2">${title}</h1>
+      <p class="text-espresso/45 text-sm mb-10">Last updated: ${lastUpdated}</p>
+      <div class="legal-body max-w-none text-espresso/80 leading-relaxed space-y-8">${bodyHtml}</div>
+      </div>
+    </main>
+${footer({ depth: 0 })}`;
+  write(file, html);
+}
+
 // Handcrafted homepage lives in index.html — do not overwrite it here.
 filaments.forEach(generateFilamentPage);
 generateCategoryPage({ file: 'story.html', depth: 0, pagePath: 'story.html', crumbs: 'Home / Our Story', name: 'Our Story', description: '', kind: 'story' });
+
+const LEGAL_LAST_UPDATED = '22 August 2026';
+generateLegalPage({ file: 'terms.html', title: 'Terms & Conditions', description: 'Terms and conditions for buying from Lapanza 3D Creative Lab.', lastUpdated: LEGAL_LAST_UPDATED });
+generateLegalPage({ file: 'privacy.html', title: 'Privacy Policy', description: 'How Lapanza 3D Creative Lab collects, uses and protects your personal information, in line with POPIA.', lastUpdated: LEGAL_LAST_UPDATED });
+generateLegalPage({ file: 'returns.html', title: 'Returns & Refunds Policy', description: 'Returns, refunds and warranty policy for custom-printed products and filament from Lapanza 3D Creative Lab.', lastUpdated: LEGAL_LAST_UPDATED });
 
 // Each entry pulls its data from categories[slug] (written by server/export.js
 // from catalog.json's kind:'category' rows). That data is per-environment and
