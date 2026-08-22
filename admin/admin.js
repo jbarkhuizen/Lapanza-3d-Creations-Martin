@@ -1330,7 +1330,7 @@ async function renderVersionHistory() {
 // ---- Todo / Backlog (Settings) ----
 
 const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
-const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix"];
+const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix'];
 
 function blankTodo() {
   return { id: null, category: 'Feature', name: '', description: '', status: 'Backlog', plannedFixDate: '', actualFixDate: '' };
@@ -1342,7 +1342,7 @@ function toDateInputValue(iso) {
 
 function todoStatusBadge(status) {
   const s = escapeHtml(status);
-  const cls = status === 'Done' ? 'published' : status === "Won't Fix" ? 'draft' : '';
+  const cls = status === 'Done' || status === 'Claude Fix' ? 'published' : status === "Won't Fix" ? 'draft' : '';
   return `<span class="badge ${cls}">${s}</span>`;
 }
 
@@ -2552,11 +2552,15 @@ async function renderPrintJobs() {
   const totalMeters = draft.slots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0);
 
   const preview = draft.preview;
+  const stockWarningsHtml = (warnings) => (warnings && warnings.length
+    ? `<p class="error-text" style="margin-top:0.5rem">⚠ Exceeds recorded stock: ${warnings.map((w) => `${escapeHtml(w.name)} (needs ${escapeHtml(String(w.requestedG))}g, ${escapeHtml(String(w.remainingG))}g on record)`).join('; ')}</p>`
+    : '');
   const previewHtml = preview ? `
       <div class="panel stack gap-2" style="background:var(--panel-2, transparent)">
         <div class="section-head"><h3>Validation result</h3></div>
         <p>Filament cost: R${escapeHtml(String(preview.filamentCost))} · Power: R${escapeHtml(String(preview.powerCost))} · Labour: R${escapeHtml(String(preview.labourCost))} · Running: R${escapeHtml(String(preview.runningCost))}</p>
         <p><strong>Total cost: R${escapeHtml(String(preview.totalCost))} — Markup: R${escapeHtml(String(preview.markupAmount))} — Selling price: R${escapeHtml(String(preview.sellingPrice))}</strong></p>
+        ${stockWarningsHtml(preview.stockWarnings)}
       </div>` : '';
 
   const listing = state.editingListingJobId ? printJobs.find((j) => j.id === state.editingListingJobId) : null;
@@ -2734,7 +2738,10 @@ async function renderPrintJobs() {
     if (!draft.itemName.trim()) return toast('Item name is required');
     try {
       const { printJob } = await api('/api/print-jobs', { method: 'POST', body: JSON.stringify(readPrintJobPayload(draft)) });
-      toast(`Cost: R${printJob.totalCost} — Minimum selling price: R${printJob.sellingPrice}`);
+      const warningSuffix = printJob._stockWarnings?.length
+        ? ` — ⚠ exceeds recorded stock: ${printJob._stockWarnings.map((w) => w.name).join(', ')}`
+        : '';
+      toast(`Cost: R${printJob.totalCost} — Minimum selling price: R${printJob.sellingPrice}${warningSuffix}`);
 
       const fileInput = $('#pj-model-file');
       const imageInput = $('#pj-model-image');

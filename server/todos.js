@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 
 export const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
-export const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix"];
+export const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix'];
 
 function rowToTodo(row) {
   if (!row) return null;
@@ -73,11 +73,12 @@ export function updateTodo(id, data, db = getDb()) {
   if (!existing) return null;
   const category = data.category !== undefined && TODO_CATEGORIES.includes(data.category) ? data.category : existing.category;
   const status = data.status !== undefined && TODO_STATUSES.includes(data.status) ? data.status : existing.status;
-  // Auto-stamps actualFixDate the moment status becomes Done, unless the
-  // caller already supplied one -- covers the common case of an admin just
-  // flipping the status dropdown without separately filling in a date.
+  // Auto-stamps actualFixDate the moment status becomes Done or Claude Fix,
+  // unless the caller already supplied one -- covers the common case of an
+  // admin (or Claude) just flipping the status dropdown without separately
+  // filling in a date.
   let actualFixDate = data.actualFixDate !== undefined ? data.actualFixDate : existing.actualFixDate;
-  if (status === 'Done' && !actualFixDate) {
+  if ((status === 'Done' || status === 'Claude Fix') && !actualFixDate) {
     actualFixDate = new Date().toISOString();
   }
   db.prepare(

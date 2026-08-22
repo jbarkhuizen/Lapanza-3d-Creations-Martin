@@ -26,8 +26,7 @@
     "gsap": "^3.12.7",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",
-    "three": "^0.172.0",
-    "uuid": "^14.0.1"
+    "three": "^0.172.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.6",

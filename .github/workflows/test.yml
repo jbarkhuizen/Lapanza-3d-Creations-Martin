@@ -1,0 +1,21 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # better-sqlite3 requires Node >=22 -- see docs/DEPLOY.md's note on
+          # this (Node 20 "succeeds" with a warning, then segfaults at runtime).
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build

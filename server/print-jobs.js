@@ -126,9 +126,24 @@ function resolveSlots(items, db) {
       grams: Math.max(0, Number(s.grams) || 0),
       meters: Math.max(0, Number(s.meters) || 0),
       costPerG: filament.costPerG,
+      remainingG: filament.remainingG,
       slotOrder: idx,
     };
   });
+}
+
+// A slot logging more grams than the filament currently has on record is a
+// real signal (mis-counted rolls, a failed print re-logged without
+// adjusting rollsAvailable, etc) but not something to hard-block on --
+// consumption already physically happened whether or not our roll count
+// agrees with it, and scripts/import-historical-print-jobs.mjs deliberately
+// backfills jobs that exceed available stock for exactly this reason. So:
+// warn, don't reject. Shared by both the Validate preview and the real
+// create path so they never disagree about which jobs are worth flagging.
+function stockWarnings(slots) {
+  return slots
+    .filter((s) => s.grams > s.remainingG)
+    .map((s) => ({ inHouseFilamentId: s.inHouseFilamentId, name: s.name, requestedG: s.grams, remainingG: s.remainingG }));
 }
 
 // Computes the cost breakdown WITHOUT writing anything -- the "Validate"
@@ -141,6 +156,7 @@ export function previewPrintJobCost(data, db = getDb()) {
   return {
     ...cost,
     filaments: slots.map((s, i) => ({ inHouseFilamentId: s.inHouseFilamentId, name: s.name, grams: s.grams, meters: s.meters, cost: cost.slotCosts[i] })),
+    stockWarnings: stockWarnings(slots),
   };
 }
 
@@ -165,6 +181,9 @@ export function createPrintJob(data, db = getDb()) {
   const settings = getSettings(db);
   const slots = resolveSlots(data.filaments, db);
   const cost = computeJobCost(data, settings, slots);
+  // Computed before the transaction below decrements usage -- remainingG
+  // must reflect stock as it stood before *this* job's own consumption.
+  const warnings = stockWarnings(slots);
 
   // Defaults to the computed minimum if not supplied/invalid -- covers the
   // common case of just accepting the calculated price without typing it
@@ -229,7 +248,11 @@ export function createPrintJob(data, db = getDb()) {
   });
 
   const jobId = tx();
-  return getPrintJob(jobId, db);
+  const job = getPrintJob(jobId, db);
+  // Transient, not persisted -- matches orders.js's _lowStock convention for
+  // a warning attached to the response but never stored on the row itself.
+  if (warnings.length) job._stockWarnings = warnings;
+  return job;
 }
 
 export function updatePrintJob(id, data, db = getDb()) {

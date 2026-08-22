@@ -63,6 +63,15 @@ test('updateTodo auto-stamps actualFixDate when status moves to Done, unless alr
   db.close();
 });
 
+test('updateTodo also auto-stamps actualFixDate when status moves to Claude Fix', () => {
+  const db = openDb(':memory:');
+  const todo = createTodo({ name: 'Fix the thing', status: 'Backlog' }, db);
+  assert.strictEqual(todo.actualFixDate, null);
+  const fixed = updateTodo(todo.id, { status: 'Claude Fix' }, db);
+  assert.ok(fixed.actualFixDate);
+  db.close();
+});
+
 test('updateTodo edits fields without touching status', () => {
   const db = openDb(':memory:');
   const todo = createTodo({ name: 'Original name', category: 'Bug', description: 'Original desc' }, db);

@@ -129,6 +129,38 @@ test('previewPrintJobCost computes the same breakdown as createPrintJob but writ
   db.close();
 });
 
+test('logging more grams than a filament has on record warns but does not block the save', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db, { rollsAvailable: 1, weightG: 1000 }); // 1000g on record
+  const input = { itemName: 'Overconsumed', filaments: [{ inHouseFilamentId: f.id, grams: 1500, meters: 10 }] };
+
+  const preview = previewPrintJobCost(input, db);
+  assert.strictEqual(preview.stockWarnings.length, 1);
+  assert.strictEqual(preview.stockWarnings[0].requestedG, 1500);
+  assert.strictEqual(preview.stockWarnings[0].remainingG, 1000);
+
+  const job = createPrintJob(input, db);
+  assert.strictEqual(job._stockWarnings.length, 1);
+  // The job itself still saves and still decrements usage -- this is a
+  // warning, not a validation failure (see stockWarnings' comment).
+  assert.strictEqual(listPrintJobs({}, db).length, 1);
+  assert.strictEqual(db.prepare('SELECT used_g FROM in_house_filament WHERE id = ?').get(f.id).used_g, 1500);
+  db.close();
+});
+
+test('logging within available stock produces no warning', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db, { rollsAvailable: 5, weightG: 1000 }); // 5000g on record
+  const input = { itemName: 'Fine', filaments: [{ inHouseFilamentId: f.id, grams: 40, meters: 13.4 }] };
+
+  const preview = previewPrintJobCost(input, db);
+  assert.deepStrictEqual(preview.stockWarnings, []);
+
+  const job = createPrintJob(input, db);
+  assert.strictEqual(job._stockWarnings, undefined);
+  db.close();
+});
+
 test('createPrintJob requires an item name', () => {
   const db = openDb(':memory:');
   const f = makeFilament(db);
