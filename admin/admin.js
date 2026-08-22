@@ -2496,7 +2496,10 @@ function blankPrintJob() {
   return {
     itemName: '',
     slots: Array.from({ length: MAX_PRINT_JOB_FILAMENT_SLOTS }, () => ({ inHouseFilamentId: '', grams: '', meters: '' })),
-    printTimeMinutes: 0, designHours: 0, setupHours: 0, postProcessingHours: 0, markupPct: '',
+    // Captured as separate hours/minutes fields for easier data entry --
+    // combined into the single printTimeMinutes the API/DB actually store
+    // (see readPrintJobPayload) only when the payload is built.
+    printTimeHours: 0, printTimeMins: 0, designHours: 0, setupHours: 0, postProcessingHours: 0, markupPct: '',
     status: 'Printed', finalSellingPrice: '',
     modelFile: null, modelImage: null,
     preview: null,
@@ -2516,7 +2519,7 @@ function readPrintJobPayload(draft) {
   return {
     itemName: draft.itemName.trim(),
     filaments,
-    printTimeMinutes: Number(draft.printTimeMinutes) || 0,
+    printTimeMinutes: (Number(draft.printTimeHours) || 0) * 60 + (Number(draft.printTimeMins) || 0),
     designHours: Number(draft.designHours) || 0,
     setupHours: Number(draft.setupHours) || 0,
     postProcessingHours: Number(draft.postProcessingHours) || 0,
@@ -2559,11 +2562,35 @@ async function renderPrintJobs() {
   const listing = state.editingListingJobId ? printJobs.find((j) => j.id === state.editingListingJobId) : null;
   const listingCategories = state.printJobCategories || [];
 
+  // Storage filenames are randomized (see uploads.js) so uploads never
+  // collide -- referenceFile/ImageOriginalName is what a human recognizes.
+  // Rows uploaded before that column existed have no original name on
+  // record, so fall back to the randomized name rather than showing nothing.
+  const basename = (p) => (p ? p.split('/').pop() : '');
+
   const rows = printJobs
     .map(
       (j) => `
         <tr data-id="${escapeAttr(j.id)}">
           <td>${j.referenceImagePath ? `<img src="${escapeAttr(j.referenceImagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:0.5rem" />` : ''}${escapeHtml(j.itemName)}</td>
+          <td style="font-size:0.8rem">
+            <div class="stack gap-1">
+              <div>
+                ${j.referenceFilePath
+                  ? `<a href="${escapeAttr(j.referenceFilePath)}" download="${escapeAttr(j.referenceFileOriginalName || basename(j.referenceFilePath))}" class="text-terracotta" style="text-decoration:underline">${escapeHtml(j.referenceFileOriginalName || basename(j.referenceFilePath))}</a>`
+                  : '<span class="muted">No file</span>'}
+                <button class="btn small" data-action="upload-file" type="button">${j.referenceFilePath ? 'Replace' : '+ Add file'}</button>
+                <input type="file" class="hidden" data-role="file-input" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" />
+              </div>
+              <div>
+                ${j.referenceImagePath
+                  ? `<a href="${escapeAttr(j.referenceImagePath)}" target="_blank" rel="noopener" class="text-terracotta" style="text-decoration:underline">${escapeHtml(j.referenceImageOriginalName || basename(j.referenceImagePath))}</a>`
+                  : '<span class="muted">No photo</span>'}
+                <button class="btn small" data-action="upload-image" type="button">${j.referenceImagePath ? 'Replace' : '+ Add photo'}</button>
+                <input type="file" class="hidden" data-role="image-input" accept="image/jpeg,image/png,image/webp" />
+              </div>
+            </div>
+          </td>
           <td>${escapeHtml(j.totalGrams.toFixed(1))}g / ${escapeHtml(j.totalMeters.toFixed(2))}m</td>
           <td>R${escapeHtml(String(j.totalCost))}</td>
           <td>R${escapeHtml(String(j.sellingPrice))}</td>
@@ -2610,7 +2637,12 @@ async function renderPrintJobs() {
         <p class="muted" style="font-size:0.85rem">Totals: <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
 
         <div class="grid-4">
-          <label class="field"><span>Print time (min)</span><input id="pj-time" type="number" min="0" step="1" value="${escapeAttr(String(draft.printTimeMinutes))}" /></label>
+          <label class="field"><span>Print time</span>
+            <div class="grid-2" style="gap:0.4rem">
+              <input id="pj-time-h" type="number" min="0" step="1" placeholder="Hours" value="${escapeAttr(String(draft.printTimeHours))}" />
+              <input id="pj-time-m" type="number" min="0" max="59" step="1" placeholder="Minutes" value="${escapeAttr(String(draft.printTimeMins))}" />
+            </div>
+          </label>
           <label class="field"><span>Design (hrs)</span><input id="pj-design-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.designHours))}" /></label>
           <label class="field"><span>Setup (hrs)</span><input id="pj-setup-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.setupHours))}" /></label>
           <label class="field"><span>Post-processing (hrs)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
@@ -2641,8 +2673,8 @@ async function renderPrintJobs() {
       ${listingPanelHtml}
       <div class="panel table-wrap">
         <table class="catalog">
-          <thead><tr><th>Item</th><th>Filament used</th><th>Cost</th><th>Min. selling price</th><th>Final selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="8"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
+          <thead><tr><th>Item</th><th>Attachments</th><th>Filament used</th><th>Cost</th><th>Min. selling price</th><th>Final selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="9"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -2675,7 +2707,8 @@ async function renderPrintJobs() {
 
   function syncFormIntoDraft() {
     draft.itemName = $('#pj-name').value;
-    draft.printTimeMinutes = $('#pj-time').value;
+    draft.printTimeHours = $('#pj-time-h').value;
+    draft.printTimeMins = $('#pj-time-m').value;
     draft.designHours = $('#pj-design-hrs').value;
     draft.setupHours = $('#pj-setup-hrs').value;
     draft.postProcessingHours = $('#pj-post-hrs').value;
@@ -2721,6 +2754,24 @@ async function renderPrintJobs() {
     tr.querySelector('[data-action="delete-job"]').addEventListener('click', async () => {
       if (!confirm('Delete this print job?')) return;
       await api(`/api/print-jobs/${jobId}`, { method: 'DELETE' });
+      await renderPrintJobs();
+    });
+
+    // Attach/replace the model file or reference photo on an already-logged
+    // job -- previously only possible at the moment a job was first created.
+    const fileInputCell = tr.querySelector('[data-role="file-input"]');
+    tr.querySelector('[data-action="upload-file"]').addEventListener('click', () => fileInputCell.click());
+    fileInputCell.addEventListener('change', async () => {
+      if (!fileInputCell.files[0]) return;
+      await uploadPrintJobAsset(jobId, 'file', fileInputCell.files[0]);
+      await renderPrintJobs();
+    });
+
+    const imageInputCell = tr.querySelector('[data-role="image-input"]');
+    tr.querySelector('[data-action="upload-image"]').addEventListener('click', () => imageInputCell.click());
+    imageInputCell.addEventListener('change', async () => {
+      if (!imageInputCell.files[0]) return;
+      await uploadPrintJobAsset(jobId, 'image', imageInputCell.files[0]);
       await renderPrintJobs();
     });
 

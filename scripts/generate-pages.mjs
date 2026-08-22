@@ -297,6 +297,17 @@ function cataloguePlaceholders(label) {
     .join('\n');
 }
 
+// Filament/category detail pages were the one spot admins/customers reported
+// feeling stuck -- the breadcrumb's "Home" link is small and easy to miss,
+// mobile hides the sidebar catalogue nav behind the hamburger Menu button,
+// and a long colour/product grid pushes that breadcrumb well off-screen by
+// the time you're done browsing. A real button-styled link, repeated at the
+// top AND the bottom of the page, fixes both without depending on browser
+// history (a shared/bookmarked link has none) or the sidebar being visible.
+function backToHomeButton({ depth, label = '← Back to Home' }) {
+  return `<a href="${'../'.repeat(depth)}index.html" class="inline-flex text-sm font-semibold border-2 border-charcoal rounded-full px-5 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">${label}</a>`;
+}
+
 function write(file, content) {
   const abs = path.join(root, file);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -329,9 +340,10 @@ function generateFilamentPage(f) {
 ${shellStart({ depth: 1 })}
     <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
       <div class="mx-auto w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl">
-      <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-10" aria-label="Breadcrumb">
-        <a href="../index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <a href="../filament/pla.html" class="hover:text-terracotta">Filament</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">${f.name}</span>
+      <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
+        <a href="../index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <a href="../index.html#range" class="hover:text-terracotta">Filament</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">${f.name}</span>
       </nav>
+      <div class="mb-6">${backToHomeButton({ depth: 1 })}</div>
 
       <div class="flex flex-wrap items-end justify-between gap-4 mb-5">
         <h1 class="font-serif text-4xl md:text-6xl tracking-[-0.03em]">${f.name}</h1>
@@ -341,6 +353,7 @@ ${shellStart({ depth: 1 })}
       <p class="text-espresso/75 leading-relaxed max-w-2xl mb-12 text-lg">${f.description}</p>
       ${specsBlock(f.specs)}
       ${colours}
+      <div class="mt-14 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth: 1 })}</div>
       </div>
     </main>
 ${footer({ depth: 1 })}`;
@@ -445,7 +458,8 @@ ${footer({ depth: 0 })}`;
 ${shellStart({ depth })}
     <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
       <div class="mx-auto w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl">
-      <nav class="text-xs text-espresso/50 mb-8" aria-label="Breadcrumb">${crumbHtml}</nav>
+      <nav class="text-xs text-espresso/50 mb-4" aria-label="Breadcrumb">${crumbHtml}</nav>
+      <div class="mb-6">${backToHomeButton({ depth })}</div>
       <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
         <h1 class="font-serif text-4xl md:text-5xl">${name}</h1>
         <a href="${SITE.whatsapp}" target="_blank" rel="noopener noreferrer"
@@ -453,6 +467,7 @@ ${shellStart({ depth })}
       </div>
       <p class="text-espresso/80 leading-relaxed max-w-2xl mb-10">${description}</p>
       ${body}
+      <div class="mt-10 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth })}</div>
       </div>
     </main>
 ${footer({ depth })}`;

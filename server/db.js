@@ -526,6 +526,18 @@ function ensurePrintJobColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'listing_item_id')) {
     db.exec('ALTER TABLE print_jobs ADD COLUMN listing_item_id TEXT');
   }
+  // Uploaded files/photos are stored on disk under a randomized name (see
+  // uploads.js) so two uploads can never collide -- these columns keep the
+  // admin-facing original filename (e.g. "Joint Box 8x5.3mf") separately,
+  // purely for display/download-as. Rows uploaded before this column
+  // existed have no original name on record; the admin UI falls back to
+  // the randomized stored filename for those.
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'reference_file_original_name')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN reference_file_original_name TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'reference_image_original_name')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN reference_image_original_name TEXT');
+  }
   // Idempotent -- matches nothing on a second run since no row still has
   // the old lowercase values after the first.
   db.exec("UPDATE print_jobs SET status = 'Printed' WHERE status = 'printed'");

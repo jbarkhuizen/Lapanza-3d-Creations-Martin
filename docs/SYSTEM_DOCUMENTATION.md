@@ -689,7 +689,8 @@ Internal costing record. Not linked to storefront orders — but as of the "List
 | markup_pct | REAL | |
 | filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price | REAL | Calculated outputs — `selling_price` is the computed floor, labelled **"Minimum Selling Price"** in the admin UI, never overridden |
 | final_selling_price | REAL | Admin-editable — defaults to `selling_price` at creation if not supplied. What actually gets used as the price if/when this job is listed for sale |
-| reference_file_path, reference_image_path | TEXT NULL | |
+| reference_file_path, reference_image_path | TEXT NULL | Storage path under a randomized filename (see `uploads.js`) — never the original filename, so two uploads can't collide |
+| reference_file_original_name, reference_image_original_name | TEXT NULL | The human-recognizable filename (e.g. `"Joint Box 8x5.3mf"`), stored purely for admin UI display/download-as. Rows uploaded before this column existed have `NULL` here; the admin UI falls back to the randomized stored filename for those |
 | status | TEXT DEFAULT 'Printed' | `Printed` / `Estimate` (renamed from `printed`/`planned` — see the migration note below) |
 | date_printed | TEXT NULL | |
 | created_at | TEXT | |
@@ -1595,7 +1596,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 219 tests across 27 test files, 100% passing at last recorded run.
+- **Current count:** 222 tests across 27 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases

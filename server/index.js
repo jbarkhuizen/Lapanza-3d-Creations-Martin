@@ -1252,7 +1252,7 @@ app.post(
   uploadPrintJobImage.single('image'),
   (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
-    const job = setPrintJobImage(req.params.id, `/uploads/print-jobs/${req.file.filename}`);
+    const job = setPrintJobImage(req.params.id, `/uploads/print-jobs/${req.file.filename}`, req.file.originalname);
     if (!job) return res.status(404).json({ error: 'Print job not found' });
     res.json({ printJob: job });
   },
@@ -1268,7 +1268,7 @@ app.post(
   uploadPrintJobFile.single('file'),
   (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded, or file type not allowed (stl/3mf/obj/gcode/zip/pdf only)' });
-    const job = setPrintJobFile(req.params.id, `/uploads/print-jobs/${req.file.filename}`);
+    const job = setPrintJobFile(req.params.id, `/uploads/print-jobs/${req.file.filename}`, req.file.originalname);
     if (!job) return res.status(404).json({ error: 'Print job not found' });
     res.json({ printJob: job });
   },

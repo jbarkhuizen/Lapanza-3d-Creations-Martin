@@ -15,6 +15,8 @@ import {
   updatePrintJob,
   listPrintJobForSale,
   updatePrintJobListing,
+  setPrintJobFile,
+  setPrintJobImage,
 } from './print-jobs.js';
 import { upsertProduct, getProduct } from './store.js';
 
@@ -144,6 +146,31 @@ test('listPrintJobs filters by status, deletePrintJob removes the row and its fi
   assert.strictEqual(deletePrintJob(a.id, db), true);
   assert.strictEqual(getPrintJob(a.id, db), null);
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM print_job_filaments WHERE print_job_id = ?').get(a.id).n, 0);
+  db.close();
+});
+
+test('setPrintJobFile/setPrintJobImage store the original filename alongside the randomized storage path', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob({ itemName: 'Joint Box 8x5', filaments: [{ inHouseFilamentId: f.id, grams: 40, meters: 13.4 }] }, db);
+  assert.strictEqual(job.referenceFileOriginalName, null);
+
+  const withFile = setPrintJobFile(job.id, '/uploads/print-jobs/abc123.3mf', 'Joint Box 8x5.3mf', db);
+  assert.strictEqual(withFile.referenceFilePath, '/uploads/print-jobs/abc123.3mf');
+  assert.strictEqual(withFile.referenceFileOriginalName, 'Joint Box 8x5.3mf');
+
+  const withImage = setPrintJobImage(job.id, '/uploads/print-jobs/def456.jpg', 'photo.jpg', db);
+  assert.strictEqual(withImage.referenceImagePath, '/uploads/print-jobs/def456.jpg');
+  assert.strictEqual(withImage.referenceImageOriginalName, 'photo.jpg');
+  db.close();
+});
+
+test('setPrintJobFile without an originalName (e.g. an older caller) stores null rather than throwing', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob({ itemName: 'Widget', filaments: [{ inHouseFilamentId: f.id, grams: 10, meters: 1 }] }, db);
+  const updated = setPrintJobFile(job.id, '/uploads/print-jobs/xyz.stl', undefined, db);
+  assert.strictEqual(updated.referenceFileOriginalName, null);
   db.close();
 });
 

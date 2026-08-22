@@ -36,6 +36,8 @@ function rowToJob(row, filamentRows = []) {
     finalSellingPrice: row.final_selling_price,
     referenceFilePath: row.reference_file_path,
     referenceImagePath: row.reference_image_path,
+    referenceFileOriginalName: row.reference_file_original_name,
+    referenceImageOriginalName: row.reference_image_original_name,
     status: row.status,
     datePrinted: row.date_printed,
     createdAt: row.created_at,
@@ -314,19 +316,19 @@ function generateListingSku(name) {
   return `PRINT-${slug}-${randomUUID().slice(0, 6)}`.toUpperCase();
 }
 
-export function setPrintJobImage(id, imagePath, db = getDb()) {
+export function setPrintJobImage(id, imagePath, originalName, db = getDb()) {
   const existing = db.prepare('SELECT reference_image_path FROM print_jobs WHERE id = ?').get(id);
   if (!existing) return null;
   if (existing.reference_image_path) deleteUploadedFile(existing.reference_image_path);
-  db.prepare('UPDATE print_jobs SET reference_image_path = ? WHERE id = ?').run(imagePath, id);
+  db.prepare('UPDATE print_jobs SET reference_image_path = ?, reference_image_original_name = ? WHERE id = ?').run(imagePath, originalName || null, id);
   return getPrintJob(id, db);
 }
 
-export function setPrintJobFile(id, filePath, db = getDb()) {
+export function setPrintJobFile(id, filePath, originalName, db = getDb()) {
   const existing = db.prepare('SELECT reference_file_path FROM print_jobs WHERE id = ?').get(id);
   if (!existing) return null;
   if (existing.reference_file_path) deleteUploadedFile(existing.reference_file_path);
-  db.prepare('UPDATE print_jobs SET reference_file_path = ? WHERE id = ?').run(filePath, id);
+  db.prepare('UPDATE print_jobs SET reference_file_path = ?, reference_file_original_name = ? WHERE id = ?').run(filePath, originalName || null, id);
   return getPrintJob(id, db);
 }
 

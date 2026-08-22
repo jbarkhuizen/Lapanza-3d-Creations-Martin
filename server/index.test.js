@@ -359,6 +359,44 @@ test('uploading an image over the 5MB limit returns clean 400 JSON, not a raw 50
   assert.match(res.body.error, /5MB/i);
 });
 
+test('uploading a print job model file/photo records the original filename, not just the randomized storage name', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/in-house-filament').set('Cookie', cookie).send({
+    filamentType: 'PLA', colorName: 'Black', rollsAvailable: 5, weightG: 1000, rollLengthM: 335, costPerRollRand: 300,
+  });
+  const job = await request(app)
+    .post('/api/print-jobs')
+    .set('Cookie', cookie)
+    .send({ itemName: 'Joint Box 8x5', filaments: [{ inHouseFilamentId: filament.body.filament.id, grams: 40, meters: 13.4 }] });
+  const jobId = job.body.printJob.id;
+
+  const fileRes = await request(app)
+    .post(`/api/print-jobs/${jobId}/file`)
+    .set('Cookie', cookie)
+    .attach('file', Buffer.from('fake 3mf content'), { filename: 'Joint Box 8x5.3mf', contentType: 'application/octet-stream' });
+  assert.strictEqual(fileRes.status, 200);
+  assert.strictEqual(fileRes.body.printJob.referenceFileOriginalName, 'Joint Box 8x5.3mf');
+  // Storage path is still the randomized name, not the original -- uploads.js
+  // deliberately never trusts a client-supplied filename for the disk path.
+  assert.doesNotMatch(fileRes.body.printJob.referenceFilePath, /Joint Box/);
+
+  const imageRes = await request(app)
+    .post(`/api/print-jobs/${jobId}/image`)
+    .set('Cookie', cookie)
+    .attach('image', Buffer.from('fake jpeg content'), { filename: 'bench photo.jpg', contentType: 'image/jpeg' });
+  assert.strictEqual(imageRes.status, 200);
+  assert.strictEqual(imageRes.body.printJob.referenceImageOriginalName, 'bench photo.jpg');
+
+  const fetched = await request(app).get(`/api/print-jobs/${jobId}`).set('Cookie', cookie);
+  assert.strictEqual(fetched.body.printJob.referenceFileOriginalName, 'Joint Box 8x5.3mf');
+  assert.strictEqual(fetched.body.printJob.referenceImageOriginalName, 'bench photo.jpg');
+});
+
 test('PUT /api/settings with a non-array homeTiles is rejected/ignored instead of 500ing', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
