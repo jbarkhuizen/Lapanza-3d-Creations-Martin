@@ -8,6 +8,7 @@ import {
   pruneActiveVisitors,
   getActiveVisitors,
   getVisitSummary,
+  pruneOldPageViews,
   _activeVisitorsMap,
 } from './analytics.js';
 
@@ -118,5 +119,40 @@ test('getVisitSummary returns zeroes/empty arrays on a database with no visits',
   assert.strictEqual(summary.todayVisits, 0);
   assert.deepStrictEqual(summary.dailyVisits, []);
   assert.deepStrictEqual(summary.topPages, []);
+  db.close();
+});
+
+test('pruneOldPageViews removes only page_views rows older than the retention window, leaving the permanent all-time tallies untouched', () => {
+  const db = openDb(':memory:');
+  recordPageView({ visitorId: 'v1', path: '/toys.html' }, db);
+  recordPageView({ visitorId: 'v2', path: '/homeware.html' }, db);
+  // Backdate one row directly (recordPageView always stamps "now") to
+  // simulate a pageview from well outside the retention window.
+  db.prepare('UPDATE page_views SET created_at = ? WHERE visitor_id = ?').run(
+    new Date(Date.now() - 400 * 24 * 60 * 60 * 1000).toISOString(), // ~13 months ago
+    'v1',
+  );
+
+  const removed = pruneOldPageViews(12, db);
+  assert.strictEqual(removed, 1);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM page_views').get().c, 1);
+
+  // The whole point: all-time totals/top-pages/unique-visitors must still
+  // reflect both original pageviews, even though one detail row is gone.
+  const summary = getVisitSummary(db);
+  assert.strictEqual(summary.totalVisits, 2);
+  assert.strictEqual(summary.uniqueVisitorsAllTime, 2);
+  assert.strictEqual(summary.topPages.length, 2);
+  db.close();
+});
+
+test('a repeat visit from the same visitor does not inflate uniqueVisitorsAllTime', () => {
+  const db = openDb(':memory:');
+  recordPageView({ visitorId: 'v1', path: '/toys.html' }, db);
+  recordPageView({ visitorId: 'v1', path: '/homeware.html' }, db);
+  recordPageView({ visitorId: 'v1', path: '/phones.html' }, db);
+  const summary = getVisitSummary(db);
+  assert.strictEqual(summary.totalVisits, 3);
+  assert.strictEqual(summary.uniqueVisitorsAllTime, 1);
   db.close();
 });

@@ -2,6 +2,10 @@ import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 
 const ACTIVE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes with no beacon = no longer "active"
+// How long raw page_views detail rows are kept before startPageViewsPruneJob
+// (server/jobs.js) removes them -- backlog #32. Same window as audit_log's
+// retention, chosen for consistency rather than a technical requirement.
+export const PAGE_VIEWS_RETENTION_MONTHS = 12;
 
 // Deliberately in-memory only, never persisted -- "who's on the site right
 // now" has no historical value once they leave, and writing a row per
@@ -35,6 +39,7 @@ export function recordPageView({ visitorId, clientId, path, referrer }, db = get
   if (!cleanPath) throw new Error('path is required');
   const id = randomUUID();
   const now = new Date().toISOString();
+  const truncatedPath = cleanPath.slice(0, 300);
   db.prepare(
     `INSERT INTO page_views (id, visitor_id, client_id, path, referrer, created_at)
      VALUES (@id, @visitor_id, @client_id, @path, @referrer, @created_at)`,
@@ -42,10 +47,19 @@ export function recordPageView({ visitorId, clientId, path, referrer }, db = get
     id,
     visitor_id: cleanVisitorId,
     client_id: clientId || null,
-    path: cleanPath.slice(0, 300),
+    path: truncatedPath,
     referrer: String(referrer || '').slice(0, 300),
     created_at: now,
   });
+  // Permanent tallies (see db.js's comment on these two tables) -- updated
+  // alongside the page_views insert above so getVisitSummary's "all-time"
+  // numbers stay accurate even after old page_views rows are pruned
+  // (pruneOldPageViews below).
+  db.prepare(
+    `INSERT INTO analytics_page_totals (path, visit_count) VALUES (?, 1)
+     ON CONFLICT(path) DO UPDATE SET visit_count = visit_count + 1`,
+  ).run(truncatedPath);
+  db.prepare('INSERT OR IGNORE INTO analytics_seen_visitors (visitor_id, first_seen_at) VALUES (?, ?)').run(cleanVisitorId, now);
   touchActiveVisitor({ visitorId: cleanVisitorId, clientId, path: cleanPath });
   return { id };
 }
@@ -89,8 +103,14 @@ export function getActiveVisitors(db = getDb()) {
 // midnight otherwise (this exact class of bug already bit invoice-date
 // import once in this project -- see docs/SYSTEM_DOCUMENTATION.md 12.5).
 export function getVisitSummary(db = getDb()) {
-  const totalVisits = db.prepare('SELECT COUNT(*) c FROM page_views').get().c;
-  const uniqueVisitorsAllTime = db.prepare('SELECT COUNT(DISTINCT visitor_id) c FROM page_views').get().c;
+  // "All-time" figures read from the permanent tally tables, NOT page_views
+  // directly -- page_views itself is subject to pruneOldPageViews below, so
+  // COUNT(*) FROM page_views would quietly turn "all-time" into "since the
+  // last prune" the moment retention kicks in. today/last-30-days are
+  // always well within the 12-month retention window, so those two still
+  // read page_views directly.
+  const totalVisits = db.prepare('SELECT COALESCE(SUM(visit_count), 0) c FROM analytics_page_totals').get().c;
+  const uniqueVisitorsAllTime = db.prepare('SELECT COUNT(*) c FROM analytics_seen_visitors').get().c;
   const todayVisits = db
     .prepare("SELECT COUNT(*) c FROM page_views WHERE date(created_at, 'localtime') = date('now', 'localtime')")
     .get().c;
@@ -104,7 +124,17 @@ export function getVisitSummary(db = getDb()) {
     )
     .all();
   const topPages = db
-    .prepare('SELECT path, COUNT(*) AS visits FROM page_views GROUP BY path ORDER BY visits DESC LIMIT 10')
+    .prepare('SELECT path, visit_count AS visits FROM analytics_page_totals ORDER BY visit_count DESC LIMIT 10')
     .all();
   return { totalVisits, uniqueVisitorsAllTime, todayVisits, dailyVisits, topPages };
+}
+
+// Detail rows only -- analytics_page_totals/analytics_seen_visitors are
+// permanent by design (see db.js's comment on those two tables) and are
+// never touched here.
+export function pruneOldPageViews(monthsToKeep = PAGE_VIEWS_RETENTION_MONTHS, db = getDb()) {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - monthsToKeep);
+  const result = db.prepare('DELETE FROM page_views WHERE created_at < ?').run(cutoff.toISOString());
+  return result.changes;
 }

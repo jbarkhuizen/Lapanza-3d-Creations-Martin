@@ -13,6 +13,8 @@ test('ensureSchema creates every expected table', () => {
     .map((r) => r.name);
   assert.deepStrictEqual(tables, [
     'admins',
+    'analytics_page_totals',
+    'analytics_seen_visitors',
     'audit_log',
     'clients',
     'design_requests',
@@ -41,6 +43,39 @@ test('ensureSchema creates every expected table', () => {
 test('ensureSchema is idempotent (safe to call twice)', () => {
   const db = openDb(':memory:');
   assert.doesNotThrow(() => ensureSchema(db));
+  db.close();
+});
+
+test('analytics_page_totals/analytics_seen_visitors are backfilled once from pre-existing page_views history, not left empty', () => {
+  const db = openDb(':memory:'); // ensureSchema already ran here -- tables exist, page_views is empty, backfill was a no-op
+  // Simulate a production DB that already had real traffic before this
+  // migration shipped -- insert page_views rows directly, bypassing
+  // recordPageView (which would populate the tally tables itself and mask
+  // the bug this backfill exists to prevent: the tally tables silently
+  // starting at zero and making "all-time" totals reset on deploy).
+  const insert = db.prepare('INSERT INTO page_views (id, visitor_id, path, referrer, created_at) VALUES (?, ?, ?, ?, ?)');
+  insert.run('r1', 'v1', '/toys.html', '', '2026-01-01T00:00:00.000Z');
+  insert.run('r2', 'v1', '/toys.html', '', '2026-01-02T00:00:00.000Z');
+  insert.run('r3', 'v2', '/homeware.html', '', '2026-01-01T12:00:00.000Z');
+
+  // Re-running ensureSchema is exactly what happens on the next boot after
+  // this code deploys to a server that already has page_views history.
+  ensureSchema(db);
+
+  const totals = db.prepare('SELECT path, visit_count FROM analytics_page_totals ORDER BY path').all();
+  assert.deepStrictEqual(totals, [
+    { path: '/homeware.html', visit_count: 1 },
+    { path: '/toys.html', visit_count: 2 },
+  ]);
+  const visitors = db.prepare('SELECT visitor_id, first_seen_at FROM analytics_seen_visitors ORDER BY visitor_id').all();
+  assert.strictEqual(visitors.length, 2);
+  assert.strictEqual(visitors[0].first_seen_at, '2026-01-01T00:00:00.000Z'); // earliest of v1's two rows, not the latest
+
+  // Running it a third time must not double-count -- the guard is "only
+  // while analytics_page_totals is still empty", and it's not empty anymore.
+  ensureSchema(db);
+  const totalsAfterAgain = db.prepare('SELECT visit_count FROM analytics_page_totals WHERE path = ?').get('/toys.html');
+  assert.strictEqual(totalsAfterAgain.visit_count, 2);
   db.close();
 });
 

@@ -1,12 +1,14 @@
 import { cancelStalePendingOrders } from './orders.js';
 import { createBackup, pruneOldBackups, syncOffsite } from './backups.js';
 import { pruneOldAuditLogEntries, AUDIT_LOG_RETENTION_MONTHS } from './audit-log.js';
+import { pruneOldPageViews, PAGE_VIEWS_RETENTION_MONTHS } from './analytics.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const CANCEL_AFTER_MS = 5 * 24 * HOUR_MS; // 5 days, per spec G.1
 const BACKUP_INTERVAL_MS = 24 * HOUR_MS; // daily
 const BACKUP_RETENTION_COUNT = 30; // ~1 month of daily backups
 const AUDIT_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
+const PAGE_VIEWS_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 
 // G.2: this project has no external process manager, cron, or container
 // orchestrator -- it runs as a single persistent `node server/index.js`
@@ -70,6 +72,27 @@ export function startAuditLogPruneJob(intervalMs = AUDIT_PRUNE_INTERVAL_MS, mont
       if (pruned > 0) console.log(`Audit-log prune: removed ${pruned} entr${pruned === 1 ? 'y' : 'ies'} older than ${monthsToKeep} months`);
     } catch (err) {
       console.error('Audit-log prune job failed:', err);
+    }
+  }
+  run();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
+  return timer;
+}
+
+// Same shape again, closing the other half of backlog #32. Only prunes raw
+// page_views detail rows -- analytics_page_totals/analytics_seen_visitors
+// (server/analytics.js's getVisitSummary "all-time" figures) are permanent
+// running tallies updated on every pageview and are never touched here, so
+// pruning old detail rows doesn't quietly shrink the Analytics dashboard's
+// all-time numbers.
+export function startPageViewsPruneJob(intervalMs = PAGE_VIEWS_PRUNE_INTERVAL_MS, monthsToKeep = PAGE_VIEWS_RETENTION_MONTHS) {
+  function run() {
+    try {
+      const pruned = pruneOldPageViews(monthsToKeep);
+      if (pruned > 0) console.log(`Page-views prune: removed ${pruned} row(s) older than ${monthsToKeep} months`);
+    } catch (err) {
+      console.error('Page-views prune job failed:', err);
     }
   }
   run();

@@ -96,7 +96,7 @@ import {
   sendCampaign as sendWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
-import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob } from './jobs.js';
+import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
@@ -1989,6 +1989,7 @@ if (isMainModule) {
   startAutoCancelJob();
   startAutoBackupJob();
   startAuditLogPruneJob();
+  startPageViewsPruneJob();
 }
 
 export default app;

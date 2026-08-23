@@ -328,6 +328,22 @@ export function ensureSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views (created_at);
     CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON page_views (visitor_id);
 
+    -- Permanent running tallies, updated alongside every page_views insert
+    -- (recordPageView in analytics.js) -- exist specifically so pruning old
+    -- page_views rows (pruneOldPageViews, backlog #32) doesn't quietly turn
+    -- the Analytics dashboard's "all-time" totals/top-pages into "since
+    -- last prune" numbers. Both stay tiny regardless of traffic volume:
+    -- one row per unique path ever seen / per unique visitor ever seen,
+    -- not one row per pageview -- so they're intentionally never pruned.
+    CREATE TABLE IF NOT EXISTS analytics_page_totals (
+      path TEXT PRIMARY KEY,
+      visit_count INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS analytics_seen_visitors (
+      visitor_id TEXT PRIMARY KEY,
+      first_seen_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS version_history (
       id TEXT PRIMARY KEY,
       version_number INTEGER NOT NULL UNIQUE,
@@ -383,6 +399,7 @@ export function ensureSchema(db) {
   ensurePrintJobColumns(db);
   ensureListingColumns(db);
   seedTodoItems(db);
+  backfillAnalyticsTotals(db);
 }
 
 function hasColumn(db, tableInfoStatement, column) {
@@ -623,6 +640,29 @@ function seedTodoItems(db) {
       updated_at: now,
     });
   });
+}
+
+// One-time backfill for the day analytics_page_totals/analytics_seen_visitors
+// (backlog #32's page_views retention) are introduced on a database that
+// already has real page_views history -- without this, the Analytics
+// dashboard's "all-time" totals would silently reset to (near) zero on
+// deploy, since those two tables start genuinely empty and only accumulate
+// going forward via recordPageView (server/analytics.js). Guarded exactly
+// like seedTodoItems above: runs once, only while analytics_page_totals is
+// still empty, so it's a no-op on every boot after the first.
+function backfillAnalyticsTotals(db) {
+  const { count } = db.prepare('SELECT COUNT(*) AS count FROM analytics_page_totals').get();
+  if (count > 0) return;
+  const { totalRows } = db.prepare('SELECT COUNT(*) AS totalRows FROM page_views').get();
+  if (totalRows === 0) return; // nothing to backfill from -- a genuinely fresh install
+
+  db.exec(`
+    INSERT INTO analytics_page_totals (path, visit_count)
+    SELECT path, COUNT(*) FROM page_views GROUP BY path;
+
+    INSERT INTO analytics_seen_visitors (visitor_id, first_seen_at)
+    SELECT visitor_id, MIN(created_at) FROM page_views GROUP BY visitor_id;
+  `);
 }
 
 export function openDb(dbPath) {
