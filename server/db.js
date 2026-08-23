@@ -398,6 +398,7 @@ export function ensureSchema(db) {
   ensureVersionHistoryColumns(db);
   ensurePrintJobColumns(db);
   ensureListingColumns(db);
+  ensureUploadOriginalNameColumns(db);
   seedTodoItems(db);
   backfillAnalyticsTotals(db);
 }
@@ -559,6 +560,24 @@ function ensurePrintJobColumns(db) {
   // the old lowercase values after the first.
   db.exec("UPDATE print_jobs SET status = 'Printed' WHERE status = 'printed'");
   db.exec("UPDATE print_jobs SET status = 'Estimate' WHERE status = 'planned'");
+}
+
+// Same original-filename gap as print_jobs above (backlog #31): resources
+// and design_requests also store uploads under a randomized on-disk name
+// with no human-readable name kept for admin display/download-as.
+function ensureUploadOriginalNameColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(resources)', 'image_original_name')) {
+    db.exec('ALTER TABLE resources ADD COLUMN image_original_name TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(resources)', 'file_original_name')) {
+    db.exec('ALTER TABLE resources ADD COLUMN file_original_name TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(design_requests)', 'reference_image_original_name')) {
+    db.exec('ALTER TABLE design_requests ADD COLUMN reference_image_original_name TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(design_requests)', 'reference_file_original_name')) {
+    db.exec('ALTER TABLE design_requests ADD COLUMN reference_file_original_name TEXT');
+  }
 }
 
 // Stock Management "Listed on site" radio: lets an admin pull a filament

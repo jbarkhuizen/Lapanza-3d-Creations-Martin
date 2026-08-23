@@ -14,7 +14,9 @@ function rowToDesignRequest(row) {
     description: row.description,
     budgetNote: row.budget_note,
     referenceImagePath: row.reference_image_path,
+    referenceImageOriginalName: row.reference_image_original_name,
     referenceFilePath: row.reference_file_path,
+    referenceFileOriginalName: row.reference_file_original_name,
     status: row.status,
     adminNotes: row.admin_notes,
     createdAt: row.created_at,
@@ -39,8 +41,8 @@ export function createDesignRequest(data, db = getDb()) {
   const id = randomUUID();
   const now = new Date().toISOString();
   db.prepare(
-    `INSERT INTO design_requests (id, client_id, name, email, phone, description, budget_note, reference_image_path, reference_file_path, status, admin_notes, created_at, updated_at)
-     VALUES (@id, @client_id, @name, @email, @phone, @description, @budget_note, @reference_image_path, @reference_file_path, 'new', '', @created_at, @updated_at)`,
+    `INSERT INTO design_requests (id, client_id, name, email, phone, description, budget_note, reference_image_path, reference_image_original_name, reference_file_path, reference_file_original_name, status, admin_notes, created_at, updated_at)
+     VALUES (@id, @client_id, @name, @email, @phone, @description, @budget_note, @reference_image_path, @reference_image_original_name, @reference_file_path, @reference_file_original_name, 'new', '', @created_at, @updated_at)`,
   ).run({
     id,
     client_id: data.clientId || null,
@@ -50,7 +52,9 @@ export function createDesignRequest(data, db = getDb()) {
     description: String(data.description).trim(),
     budget_note: data.budgetNote || '',
     reference_image_path: data.referenceImagePath || null,
+    reference_image_original_name: data.referenceImageOriginalName || null,
     reference_file_path: data.referenceFilePath || null,
+    reference_file_original_name: data.referenceFileOriginalName || null,
     created_at: now,
     updated_at: now,
   });
@@ -64,7 +68,8 @@ export function updateDesignRequest(id, data, db = getDb()) {
   if (!VALID_STATUSES.includes(status)) throw new Error(`Status must be one of: ${VALID_STATUSES.join(', ')}`);
   db.prepare(
     `UPDATE design_requests SET name = @name, phone = @phone, description = @description, budget_note = @budget_note,
-      reference_image_path = @reference_image_path, reference_file_path = @reference_file_path,
+      reference_image_path = @reference_image_path, reference_image_original_name = @reference_image_original_name,
+      reference_file_path = @reference_file_path, reference_file_original_name = @reference_file_original_name,
       status = @status, admin_notes = @admin_notes, updated_at = @updated_at WHERE id = @id`,
   ).run({
     id,
@@ -73,7 +78,9 @@ export function updateDesignRequest(id, data, db = getDb()) {
     description: data.description ?? existing.description,
     budget_note: data.budgetNote ?? existing.budgetNote,
     reference_image_path: data.referenceImagePath ?? existing.referenceImagePath,
+    reference_image_original_name: data.referenceImageOriginalName ?? existing.referenceImageOriginalName,
     reference_file_path: data.referenceFilePath ?? existing.referenceFilePath,
+    reference_file_original_name: data.referenceFileOriginalName ?? existing.referenceFileOriginalName,
     status,
     admin_notes: data.adminNotes ?? existing.adminNotes,
     updated_at: new Date().toISOString(),

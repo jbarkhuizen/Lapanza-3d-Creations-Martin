@@ -50,6 +50,23 @@ test('updateDesignRequest returns null for a missing id', () => {
   db.close();
 });
 
+test('createDesignRequest and updateDesignRequest store original filenames alongside the randomized upload paths', () => {
+  const db = openDb(':memory:');
+  const request = createDesignRequest(
+    basePayload({ referenceImagePath: '/uploads/design-requests/abc.jpg', referenceImageOriginalName: 'my part.jpg' }),
+    db,
+  );
+  assert.strictEqual(request.referenceImageOriginalName, 'my part.jpg');
+  const updated = updateDesignRequest(
+    request.id,
+    { referenceFilePath: '/uploads/design-requests/def.stl', referenceFileOriginalName: 'my part v2.stl' },
+    db,
+  );
+  assert.strictEqual(updated.referenceFileOriginalName, 'my part v2.stl');
+  assert.strictEqual(updated.referenceImageOriginalName, 'my part.jpg');
+  db.close();
+});
+
 test('deleteDesignRequest removes the row and getDesignRequest returns null afterward', () => {
   const db = openDb(':memory:');
   const request = createDesignRequest(basePayload(), db);

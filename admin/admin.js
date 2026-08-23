@@ -3575,7 +3575,7 @@ async function renderResources() {
             <label class="field">
               <span>Downloadable file ${form.filePath ? '(replace)' : ''}</span>
               <input type="file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" id="rf-file-upload" />
-              ${form.filePath ? `<p class="muted" style="font-size:0.8rem;margin-top:0.5rem">Current: ${escapeHtml(form.filePath.split('/').pop())}</p>` : ''}
+              ${form.filePath ? `<p class="muted" style="font-size:0.8rem;margin-top:0.5rem">Current: ${escapeHtml(form.fileOriginalName || form.filePath.split('/').pop())}</p>` : ''}
             </label>
           </div>` : '<p class="muted" style="font-size:0.85rem">Save the resource first to enable image/file upload.</p>'}
         <div class="row-card-actions">
@@ -3704,7 +3704,7 @@ async function renderDesignRequests() {
         ${form.budgetNote ? `<p class="muted" style="font-size:0.85rem">Budget: ${escapeHtml(form.budgetNote)}</p>` : ''}
         <div class="grid-2">
           ${form.referenceImagePath ? `<img src="${escapeAttr(form.referenceImagePath)}" alt="Reference image" style="width:120px;height:120px;object-fit:cover;border-radius:4px" />` : ''}
-          ${form.referenceFilePath ? `<a class="btn small" href="${escapeAttr(form.referenceFilePath)}" target="_blank" rel="noopener">Reference file</a>` : ''}
+          ${form.referenceFilePath ? `<a class="btn small" href="${escapeAttr(form.referenceFilePath)}" download="${escapeAttr(form.referenceFileOriginalName || form.referenceFilePath.split('/').pop())}" target="_blank" rel="noopener">${escapeHtml(form.referenceFileOriginalName || 'Reference file')}</a>` : ''}
         </div>
         <label class="field"><span>Status</span><select id="dr-status">${statusOptions}</select></label>
         <label class="field"><span>Admin notes</span><textarea id="dr-notes">${escapeHtml(form.adminNotes || '')}</textarea></label>

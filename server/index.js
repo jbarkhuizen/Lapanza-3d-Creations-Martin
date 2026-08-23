@@ -1140,7 +1140,7 @@ app.post(
   uploadResourceImage.single('image'),
   (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
-    const resource = updateResource(req.params.id, { imagePath: `/uploads/resources/${req.file.filename}` });
+    const resource = updateResource(req.params.id, { imagePath: `/uploads/resources/${req.file.filename}`, imageOriginalName: req.file.originalname });
     if (!resource) return res.status(404).json({ error: 'Resource not found' });
     res.json({ resource });
   },
@@ -1156,7 +1156,7 @@ app.post(
   uploadResourceFile.single('file'),
   (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded, or file type not allowed (stl/3mf/obj/gcode/zip/pdf only)' });
-    const resource = updateResource(req.params.id, { filePath: `/uploads/resources/${req.file.filename}` });
+    const resource = updateResource(req.params.id, { filePath: `/uploads/resources/${req.file.filename}`, fileOriginalName: req.file.originalname });
     if (!resource) return res.status(404).json({ error: 'Resource not found' });
     res.json({ resource });
   },
@@ -1203,7 +1203,9 @@ app.post(
       const request = createDesignRequest({
         ...(req.body || {}),
         referenceImagePath: imageFile ? `/uploads/design-requests/${imageFile.filename}` : undefined,
+        referenceImageOriginalName: imageFile ? imageFile.originalname : undefined,
         referenceFilePath: fileFile ? `/uploads/design-requests/${fileFile.filename}` : undefined,
+        referenceFileOriginalName: fileFile ? fileFile.originalname : undefined,
       });
       res.status(201).json({ ok: true, designRequest: request });
       try {
