@@ -653,3 +653,104 @@ test('deleting an admin and resetting a password are attributed to the acting ad
   assert.strictEqual(deleted.username, 'johan');
   assert.match(deleted.detail, /martin/);
 });
+
+test('tripping a rate limiter records rate_limit_exceeded instead of failing silently', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  // authLimiter allows 10 requests per window -- the setup+login calls above
+  // already used 1, so 10 more wrong-password attempts trips it on the 10th.
+  let tripped = null;
+  for (let i = 0; i < 10; i++) {
+    const res = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'wrong' });
+    if (res.status === 429) tripped = res;
+  }
+  assert.ok(tripped, 'expected the limiter to trip within 10 attempts');
+
+  const audit = await request(app).get('/api/audit-log?eventType=rate_limit_exceeded').set('Cookie', cookie);
+  assert.ok(audit.body.entries.length >= 1);
+  assert.match(audit.body.entries[0].detail, /authLimiter/);
+});
+
+test('hitting a protected admin route with no session cookie at all records unauthorized_access; a stale/unknown cookie does not', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const noCookie = await request(app).get('/api/filaments');
+  assert.strictEqual(noCookie.status, 401);
+
+  const staleCookie = await request(app).get('/api/filaments').set('Cookie', 'lapanza_admin_session=not-a-real-token');
+  assert.strictEqual(staleCookie.status, 401);
+
+  const audit = await request(app).get('/api/audit-log?eventType=unauthorized_access').set('Cookie', cookie);
+  assert.strictEqual(audit.body.entries.length, 1); // only the no-cookie-at-all request, not the stale-cookie one
+});
+
+test('a failed customer login records client_login_failure', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  await request(app).post('/api/client/register').send({ email: 'customer@example.com', password: 'correcthorsebattery' });
+  await request(app).post('/api/client/login').send({ email: 'customer@example.com', password: 'wrongpassword' });
+
+  const audit = await request(app).get('/api/audit-log?eventType=client_login_failure').set('Cookie', cookie);
+  assert.strictEqual(audit.body.entries.length, 1);
+  assert.strictEqual(audit.body.entries[0].username, 'customer@example.com');
+});
+
+test('order status changes, inventory updates, catalog changes, and settings changes are all recorded', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  // Orders
+  const filament = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA', slug: 'pla' });
+  const colour = await request(app)
+    .post(`/api/filaments/${filament.body.filament.id}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'White', sku: 'SKU-1', priceRand: 100, stockQty: 5 });
+  const order = await request(app)
+    .post('/api/orders')
+    .set('Cookie', cookie)
+    .send({
+      client: { name: 'Buyer', email: 'buyer@example.com', phone: '0123456789' },
+      items: [{ productId: 'filament:pla:SKU-1', quantity: 1 }],
+      paymentMethod: 'cash_on_collection',
+      alreadyPaid: false,
+    });
+  assert.strictEqual(order.status, 201);
+  await request(app).put(`/api/orders/${order.body.order.id}/status`).set('Cookie', cookie).send({ status: 'cancelled' });
+
+  // Stock/pricing
+  await request(app).put('/api/inventory').set('Cookie', cookie).send({ updates: [{ kind: 'filament', id: colour.body.filament.colours[0].id, parentId: filament.body.filament.id, stockQty: 3 }] });
+
+  // Catalog (filament delete, on top of the create above)
+  await request(app).delete(`/api/filaments/${filament.body.filament.id}`).set('Cookie', cookie);
+
+  // Settings
+  await request(app).put('/api/settings').set('Cookie', cookie).send({ siteName: 'Renamed Lab' });
+
+  const audit = await request(app).get('/api/audit-log').set('Cookie', cookie);
+  const types = audit.body.entries.map((e) => e.eventType);
+  assert.ok(types.includes('order_updated'));
+  assert.ok(types.includes('stock_updated'));
+  assert.ok(types.includes('catalog_updated'));
+  assert.ok(types.includes('settings_updated'));
+
+  const statusChange = audit.body.entries.find((e) => e.eventType === 'order_updated' && e.detail.includes('status'));
+  assert.match(statusChange.detail, /pending_payment.*cancelled/i);
+
+  const settingsChange = audit.body.entries.find((e) => e.eventType === 'settings_updated');
+  assert.match(settingsChange.detail, /siteName/);
+});

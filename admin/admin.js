@@ -1445,20 +1445,55 @@ async function renderTodos() {
 
 // ---- Audit Logs (Settings) ----
 
-const AUDIT_EVENT_LABEL = {
-  setup: 'Initial setup',
-  login_success: 'Login',
-  login_failure: 'Login failed',
-  logout: 'Logout',
-  session_expired: 'Session expired',
-  admin_created: 'Admin created',
-  admin_deleted: 'Admin deleted',
-  password_reset: 'Password reset',
-  email_failure: 'Email send failed',
-};
+// Grouped (not a flat object) so the filter dropdown below can render
+// optgroups -- with 16 event types spanning auth/actions/security, a flat
+// alphabetical list would be a lot to scan for "just show me the security
+// stuff". The flat AUDIT_EVENT_LABEL lookup and DRAFT_EVENT_TYPES set below
+// are both derived from this so there's exactly one place to add a new type.
+const AUDIT_EVENT_GROUPS = [
+  {
+    label: 'Auth & sessions',
+    events: {
+      setup: 'Initial setup',
+      login_success: 'Login',
+      login_failure: 'Login failed',
+      logout: 'Logout',
+      session_expired: 'Session expired',
+      admin_created: 'Admin created',
+      admin_deleted: 'Admin deleted',
+      password_reset: 'Password reset',
+      email_failure: 'Email send failed',
+    },
+  },
+  {
+    label: 'Actions',
+    events: {
+      order_updated: 'Order updated',
+      stock_updated: 'Stock/pricing updated',
+      catalog_updated: 'Catalog updated',
+      settings_updated: 'Settings updated',
+    },
+  },
+  {
+    label: 'Security',
+    events: {
+      client_login_failure: 'Customer login failed',
+      rate_limit_exceeded: 'Rate limit hit',
+      unauthorized_access: 'Unauthorized access attempt',
+    },
+  },
+];
+const AUDIT_EVENT_LABEL = Object.fromEntries(AUDIT_EVENT_GROUPS.flatMap((g) => Object.entries(g.events)));
+// Amber/"needs a look" styling -- failures, security signals, and account
+// removals. Everything else (successful logins, the four Actions types)
+// reads as a routine, successful event.
+const DRAFT_EVENT_TYPES = new Set([
+  'login_failure', 'admin_deleted', 'password_reset', 'session_expired', 'email_failure',
+  'client_login_failure', 'rate_limit_exceeded', 'unauthorized_access',
+]);
 
 function auditEventBadge(eventType) {
-  const cls = eventType === 'login_failure' || eventType === 'admin_deleted' || eventType === 'password_reset' || eventType === 'session_expired' || eventType === 'email_failure' ? 'draft' : 'published';
+  const cls = DRAFT_EVENT_TYPES.has(eventType) ? 'draft' : 'published';
   return `<span class="badge ${cls}">${escapeHtml(AUDIT_EVENT_LABEL[eventType] || eventType)}</span>`;
 }
 
@@ -1490,12 +1525,15 @@ async function renderAuditLog() {
       <input id="audit-q" type="search" placeholder="Search username, IP, detail…" value="${escapeAttr(state.auditQ)}" />
       <select id="audit-event-filter">
         <option value="">All events</option>
-        ${Object.entries(AUDIT_EVENT_LABEL).map(([value, label]) => `<option value="${escapeAttr(value)}" ${state.auditEventFilter === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+        ${AUDIT_EVENT_GROUPS.map((g) => `
+          <optgroup label="${escapeAttr(g.label)}">
+            ${Object.entries(g.events).map(([value, label]) => `<option value="${escapeAttr(value)}" ${state.auditEventFilter === value ? 'selected' : ''}>${escapeHtml(label)}</option>`).join('')}
+          </optgroup>`).join('')}
       </select>
       <span class="muted">${escapeHtml(String(entries.length))} entr${entries.length === 1 ? 'y' : 'ies'}</span>
     </div>
     <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
-      Every admin login (success/failure), logout, session expiry, and admin-account change (create/delete/password reset) -- append-only, newest first, most recent 500 shown.
+      Auth &amp; sessions (login/logout/admin-account changes) plus Actions (order/stock/catalog/settings changes) and Security signals (customer login failures, rate-limit hits, unauthenticated admin-route access) -- append-only, newest first, most recent 500 shown. Older than 12 months is pruned automatically.
     </p>
     <div class="panel table-wrap">
       <table class="catalog">

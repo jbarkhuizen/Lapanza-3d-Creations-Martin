@@ -15,7 +15,48 @@ export const AUDIT_EVENTS = {
   // low-stock notifications) -- visible in the admin "Audit Logs" page
   // instead of requiring server-log/SSH access to ever notice a send failed.
   EMAIL_FAILURE: 'email_failure',
+
+  // Deliberately fewer, broader buckets rather than one enum value per
+  // route (order status vs tracking vs manual-creation, filament vs colour
+  // vs category product, etc) -- with ~25 instrumented routes across
+  // orders/stock/catalog/settings, a one-event-per-route enum would make
+  // the Audit Logs filter dropdown unusably long. The specific action
+  // always lives in `detail` (e.g. `Order abc123: status Pending -> Paid`);
+  // filter by these four to narrow by area, then read/search `detail` for
+  // the specifics.
+  ORDER_UPDATED: 'order_updated',
+  STOCK_UPDATED: 'stock_updated',
+  CATALOG_UPDATED: 'catalog_updated',
+  SETTINGS_UPDATED: 'settings_updated',
+
+  // Security/abuse signals -- passive logging only (no email alert), same
+  // reasoning as everything else on this page: visible when you look,
+  // not something that pages you.
+  CLIENT_LOGIN_FAILURE: 'client_login_failure',
+  RATE_LIMIT_EXCEEDED: 'rate_limit_exceeded',
+  // Only fires when there's no session cookie at all (a probe/bot hitting
+  // an admin API path directly, never having been through login) -- NOT
+  // for a cookie that exists but points at a since-expired/restarted
+  // session (that's the existing, unrelated SESSION_EXPIRED case). This
+  // distinction is what keeps it a real signal instead of firing on every
+  // admin's first request after a routine server restart (see the
+  // "in-memory session store" tradeoff, Won't Fix #4).
+  UNAUTHORIZED_ACCESS: 'unauthorized_access',
 };
+
+// How long audit_log rows are kept before startAuditLogPruneJob (server/jobs.js)
+// removes them -- the widened logging added alongside this (orders/stock/
+// catalog/settings actions, plus security signals) meaningfully raises the
+// row count, closing backlog tech-debt #32's "no retention" gap for this
+// table specifically (page_views is a separate, still-open part of #32).
+export const AUDIT_LOG_RETENTION_MONTHS = 12;
+
+export function pruneOldAuditLogEntries(monthsToKeep = AUDIT_LOG_RETENTION_MONTHS, db = getDb()) {
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - monthsToKeep);
+  const result = db.prepare('DELETE FROM audit_log WHERE created_at < ?').run(cutoff.toISOString());
+  return result.changes;
+}
 
 function rowToEntry(row) {
   return {

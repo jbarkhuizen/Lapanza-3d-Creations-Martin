@@ -1,10 +1,12 @@
 import { cancelStalePendingOrders } from './orders.js';
 import { createBackup, pruneOldBackups, syncOffsite } from './backups.js';
+import { pruneOldAuditLogEntries, AUDIT_LOG_RETENTION_MONTHS } from './audit-log.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const CANCEL_AFTER_MS = 5 * 24 * HOUR_MS; // 5 days, per spec G.1
 const BACKUP_INTERVAL_MS = 24 * HOUR_MS; // daily
 const BACKUP_RETENTION_COUNT = 30; // ~1 month of daily backups
+const AUDIT_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 
 // G.2: this project has no external process manager, cron, or container
 // orchestrator -- it runs as a single persistent `node server/index.js`
@@ -50,6 +52,24 @@ export function startAutoBackupJob(intervalMs = BACKUP_INTERVAL_MS, keep = BACKU
       console.log('Auto-backup: synced to offsite remote');
     } catch (err) {
       console.error('Offsite backup sync failed (local backup still succeeded):', err.message);
+    }
+  }
+  run();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
+  return timer;
+}
+
+// Same shape again -- keeps audit_log from growing forever now that it
+// covers a lot more than just admin login/session events (see AUDIT_EVENTS
+// in server/audit-log.js). Runs once on boot too, same as the jobs above.
+export function startAuditLogPruneJob(intervalMs = AUDIT_PRUNE_INTERVAL_MS, monthsToKeep = AUDIT_LOG_RETENTION_MONTHS) {
+  function run() {
+    try {
+      const pruned = pruneOldAuditLogEntries(monthsToKeep);
+      if (pruned > 0) console.log(`Audit-log prune: removed ${pruned} entr${pruned === 1 ? 'y' : 'ies'} older than ${monthsToKeep} months`);
+    } catch (err) {
+      console.error('Audit-log prune job failed:', err);
     }
   }
   run();

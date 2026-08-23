@@ -96,7 +96,7 @@ import {
   sendCampaign as sendWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
-import { startAutoCancelJob, startAutoBackupJob } from './jobs.js';
+import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
@@ -158,6 +158,23 @@ app.use('/uploads', express.static(path.join(root, 'public', 'uploads')));
 
 const sessions = new Map();
 
+// Shared by every security-relevant limiter below (not analyticsLimiter --
+// tripping that one is heavy legitimate traffic, not an abuse signal). Kept
+// as a plain function (not an arrow const) so it's hoisted -- it references
+// recordAuditEvent/requestMeta/AUDIT_EVENTS, which are declared further down
+// this file; that's fine since this only ever *runs* at request time, well
+// after the whole module has finished loading.
+function rateLimitHandler(limiterName) {
+  return (req, res, _next, options) => {
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.RATE_LIMIT_EXCEEDED,
+      detail: `${limiterName}: ${req.method} ${req.originalUrl}`,
+      ...requestMeta(req),
+    });
+    res.status(options.statusCode).json(options.message);
+  };
+}
+
 // In-memory, per-process limiters -- consistent with the rest of the app's
 // single-process assumption (sessions Maps above have the same limitation).
 // authLimiter guards brute-force login/registration attempts; publicFormLimiter
@@ -169,6 +186,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many attempts — please wait a few minutes and try again.' },
+  handler: rateLimitHandler('authLimiter'),
 });
 const publicFormLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
@@ -176,6 +194,7 @@ const publicFormLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many submissions — please try again later.' },
+  handler: rateLimitHandler('publicFormLimiter'),
 });
 // Every other public-write endpoint (register, login, newsletter, design
 // requests) is rate-limited except this one -- checkout was the gap. Looser
@@ -189,6 +208,7 @@ const checkoutLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many checkout attempts — please wait a few minutes and try again.' },
+  handler: rateLimitHandler('checkoutLimiter'),
 });
 // Much more permissive than the two above -- legitimate traffic hits this
 // on every page load plus a ~45s heartbeat while a tab stays open (see
@@ -241,6 +261,14 @@ function requireAuth(req, res, next) {
   const token = req.cookies[SESSION_COOKIE];
   const session = token && sessions.get(token);
   if (!session) {
+    // Only when there's no cookie at all -- a probe/bot hitting an admin API
+    // path directly, never having been through login. A cookie that exists
+    // but points at nothing (e.g. every admin's first request after a
+    // routine restart wipes the in-memory sessions Map -- Won't Fix #4) is
+    // NOT logged here; that's expected, not a security signal.
+    if (!token) {
+      recordAuditEvent({ eventType: AUDIT_EVENTS.UNAUTHORIZED_ACCESS, detail: `${req.method} ${req.originalUrl}`, ...requestMeta(req) });
+    }
     return res.status(401).json({ error: 'Unauthorized' });
   }
   if (Date.now() - session.createdAt >= SESSION_TTL_MS) {
@@ -338,13 +366,17 @@ app.get('/api/client/verify', (req, res) => {
 app.post('/api/client/login', authLimiter, (req, res) => {
   const { email, password } = req.body || {};
   if (typeof email !== 'string' || !email || typeof password !== 'string' || !password) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CLIENT_LOGIN_FAILURE, username: typeof email === 'string' ? email : null, ...requestMeta(req), detail: 'Missing or malformed credentials' });
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   const result = loginClient(email, password);
   if (!result.ok && result.reason === 'unverified') {
     return res.status(403).json({ error: 'Please verify your email before logging in — check your inbox for the verification link.' });
   }
-  if (!result.ok) return res.status(401).json({ error: 'Invalid email or password' });
+  if (!result.ok) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CLIENT_LOGIN_FAILURE, username: email, ...requestMeta(req), detail: 'Invalid email or password' });
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
   startClientSession(res, result.client.id);
   res.json({ ok: true, client: result.client });
 });
@@ -718,6 +750,7 @@ app.post('/api/filaments', requireAuth, (req, res) => {
   try {
     const filament = createFilament(req.body || {});
     syncPublicJson(getDb());
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created filament type "${filament.name}"` });
     res.status(201).json({ filament });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
@@ -730,6 +763,7 @@ app.put('/api/filaments/:id', requireAuth, (req, res) => {
     const filament = updateFilament(req.params.id, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Filament not found' });
     syncPublicJson(getDb());
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated filament type "${filament.name}"` });
     res.json({ filament });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
@@ -738,9 +772,11 @@ app.put('/api/filaments/:id', requireAuth, (req, res) => {
 });
 
 app.delete('/api/filaments/:id', requireAuth, (req, res) => {
+  const existing = getFilament(req.params.id);
   const ok = deleteFilament(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Filament not found' });
   syncPublicJson(getDb());
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted filament type "${existing?.name || req.params.id}"` });
   res.json({ ok: true });
 });
 
@@ -749,6 +785,8 @@ app.post('/api/filaments/:id/colours', requireAuth, (req, res) => {
     const filament = addColour(req.params.id, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Filament not found' });
     syncPublicJson(getDb());
+    const added = filament.colours[filament.colours.length - 1];
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added colour "${added?.name}" to "${filament.name}"` });
     res.status(201).json({ filament });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
@@ -761,6 +799,8 @@ app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) 
     const filament = updateColour(req.params.filamentId, req.params.colourId, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Colour not found' });
     syncPublicJson(getDb());
+    const colour = filament.colours.find((c) => c.id === req.params.colourId);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated colour "${colour?.name}" on "${filament.name}"` });
     res.json({ filament });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
@@ -769,9 +809,12 @@ app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) 
 });
 
 app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) => {
+  const existing = getFilament(req.params.filamentId);
+  const colour = existing?.colours.find((c) => c.id === req.params.colourId);
   const ok = deleteColour(req.params.filamentId, req.params.colourId);
   if (!ok) return res.status(404).json({ error: 'Colour not found' });
   syncPublicJson(getDb());
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted colour "${colour?.name || req.params.colourId}" from "${existing?.name || req.params.filamentId}"` });
   res.json({ ok: true });
 });
 
@@ -851,6 +894,7 @@ app.post('/api/products', requireAuth, (req, res) => {
     items: normalizeItems(body.items),
   };
   upsertProduct(product);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created category product "${product.name}"` });
   res.status(201).json({ product });
 });
 
@@ -882,12 +926,15 @@ app.put('/api/products/:id', requireAuth, (req, res) => {
     internalNotes: body.internalNotes ?? existing.internalNotes,
   };
   upsertProduct(product);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated category product "${product.name}"` });
   res.json({ product });
 });
 
 app.delete('/api/products/:id', requireAuth, (req, res) => {
+  const existing = getProduct(req.params.id);
   const ok = deleteProduct(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Product not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted category product "${existing?.name || req.params.id}"` });
   res.json({ ok: true });
 });
 
@@ -957,7 +1004,9 @@ app.get('/api/shipping-options', requireAuth, (req, res) => {
 
 app.post('/api/shipping-options', requireAuth, (req, res) => {
   try {
-    res.status(201).json({ shippingOption: createShippingOption(req.body || {}) });
+    const shippingOption = createShippingOption(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created shipping option "${shippingOption.name}"` });
+    res.status(201).json({ shippingOption });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -967,6 +1016,7 @@ app.put('/api/shipping-options/:id', requireAuth, (req, res) => {
   try {
     const option = updateShippingOption(req.params.id, req.body || {});
     if (!option) return res.status(404).json({ error: 'Shipping option not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated shipping option "${option.name}"` });
     res.json({ shippingOption: option });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -974,8 +1024,10 @@ app.put('/api/shipping-options/:id', requireAuth, (req, res) => {
 });
 
 app.delete('/api/shipping-options/:id', requireAuth, (req, res) => {
+  const existing = getShippingOption(req.params.id);
   const ok = deleteShippingOption(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Shipping option not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted shipping option "${existing?.name || req.params.id}"` });
   res.json({ ok: true });
 });
 
@@ -1008,6 +1060,20 @@ app.put('/api/inventory', requireAuth, async (req, res) => {
   const updates = Array.isArray(req.body?.updates) ? req.body.updates : [];
   const results = bulkUpdateInventory(updates);
   await alertOnLowStock(updates.filter((u, i) => results[i]?.ok && u.stockQty !== undefined).map((u) => u.id));
+  const okCount = results.filter((r) => r.ok).length;
+  if (okCount > 0) {
+    // Capped to keep `detail` readable for a genuinely bulk save (e.g. a
+    // 50-row Stock Management edit) -- the exact ids are still in the raw
+    // request if ever needed, this is a scan-friendly summary, not a log.
+    const ids = results.filter((r) => r.ok).map((r) => r.id).slice(0, 10);
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.STOCK_UPDATED,
+      adminId: req.adminId,
+      username: req.adminUsername,
+      ...requestMeta(req),
+      detail: `Updated ${okCount} inventory item(s): ${ids.join(', ')}${okCount > ids.length ? `, +${okCount - ids.length} more` : ''}`,
+    });
+  }
   res.json({ results });
 });
 
@@ -1229,6 +1295,7 @@ app.post('/api/print-jobs', requireAuth, (req, res) => {
 app.patch('/api/print-jobs/:id', requireAuth, (req, res) => {
   const job = updatePrintJob(req.params.id, req.body || {});
   if (!job) return res.status(404).json({ error: 'Print job not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Print job "${job.itemName}": status=${job.status}, finalSellingPrice=R${job.finalSellingPrice}` });
   res.json({ printJob: job });
 });
 
@@ -1237,6 +1304,7 @@ app.post('/api/print-jobs/:id/list-for-sale', requireAuth, (req, res) => {
   try {
     const job = listPrintJobForSale(req.params.id, req.body || {});
     if (!job) return res.status(404).json({ error: 'Print job not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Listed print job "${job.itemName}" for sale` });
     res.status(201).json({ printJob: job });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1248,6 +1316,7 @@ app.put('/api/print-jobs/:id/listing', requireAuth, (req, res) => {
   try {
     const job = updatePrintJobListing(req.params.id, req.body || {});
     if (!job) return res.status(404).json({ error: 'Print job not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated listing for print job "${job.itemName}"` });
     res.json({ printJob: job });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1255,8 +1324,10 @@ app.put('/api/print-jobs/:id/listing', requireAuth, (req, res) => {
 });
 
 app.delete('/api/print-jobs/:id', requireAuth, (req, res) => {
+  const existing = getPrintJob(req.params.id);
   const ok = deletePrintJob(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Print job not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted print job "${existing?.itemName || req.params.id}"` });
   res.json({ ok: true });
 });
 
@@ -1306,7 +1377,9 @@ app.get('/api/in-house-filament/:id', requireAuth, (req, res) => {
 
 app.post('/api/in-house-filament', requireAuth, (req, res) => {
   try {
-    res.status(201).json({ filament: createInHouseFilament(req.body || {}) });
+    const filament = createInHouseFilament(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added in-house filament "${filament.filamentType} — ${filament.colorName}"` });
+    res.status(201).json({ filament });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -1316,6 +1389,7 @@ app.put('/api/in-house-filament/:id', requireAuth, (req, res) => {
   try {
     const filament = updateInHouseFilament(req.params.id, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Filament not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated in-house filament "${filament.filamentType} — ${filament.colorName}"` });
     res.json({ filament });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1324,8 +1398,10 @@ app.put('/api/in-house-filament/:id', requireAuth, (req, res) => {
 
 app.delete('/api/in-house-filament/:id', requireAuth, (req, res) => {
   try {
+    const existing = getInHouseFilament(req.params.id);
     const ok = deleteInHouseFilament(req.params.id);
     if (!ok) return res.status(404).json({ error: 'Filament not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted in-house filament "${existing ? `${existing.filamentType} — ${existing.colorName}` : req.params.id}"` });
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1378,6 +1454,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     const order = createManualOrder(req.body || {});
     const lowStock = order._lowStock;
     delete order._lowStock;
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created manual order ${order.id} (R${order.total})` });
     res.status(201).json({ order });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
     try {
@@ -1398,10 +1475,12 @@ app.get('/api/orders/:id', requireAuth, (req, res) => {
 
 app.put('/api/orders/:id/status', requireAuth, async (req, res) => {
   try {
+    const before = getOrder(req.params.id);
     const order = updateOrderStatus(req.params.id, (req.body || {}).status);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     const lowStock = order._lowStock;
     delete order._lowStock;
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.id}: status ${before?.status} → ${order.status}` });
     res.json({ order });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
   } catch (err) {
@@ -1412,6 +1491,7 @@ app.put('/api/orders/:id/status', requireAuth, async (req, res) => {
 app.put('/api/orders/:id/tracking', requireAuth, (req, res) => {
   const order = updateOrderTracking(req.params.id, (req.body || {}).trackingNumber);
   if (!order) return res.status(404).json({ error: 'Order not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.id}: tracking number set to "${order.trackingNumber}"` });
   res.json({ order });
 });
 
@@ -1589,6 +1669,13 @@ app.put('/api/settings', requireAuth, (req, res) => {
   }
   const settings = updateSettings(patch);
   syncPublicJson(getDb());
+  // Field names only, never values -- several of these (bankAccountNumber
+  // etc) shouldn't end up sitting in plaintext inside an audit-log detail
+  // string just because they happened to change.
+  const changedKeys = Object.keys(patch);
+  if (changedKeys.length) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Settings updated: ${changedKeys.join(', ')}` });
+  }
   res.json({ settings: publicSettings(settings) });
 });
 
@@ -1901,6 +1988,7 @@ if (isMainModule) {
   });
   startAutoCancelJob();
   startAutoBackupJob();
+  startAuditLogPruneJob();
 }
 
 export default app;
