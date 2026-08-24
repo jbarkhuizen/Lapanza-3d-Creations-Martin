@@ -397,6 +397,54 @@ test('uploading a print job model file/photo records the original filename, not 
   assert.strictEqual(fetched.body.printJob.referenceImageOriginalName, 'bench photo.jpg');
 });
 
+test('category product items support photo upload/remove and a "listed" visibility flag', async (t) => {
+  const { app, tmpRoot, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app)
+    .post('/api/products')
+    .set('Cookie', cookie)
+    .send({ name: 'GWM', parent: 'car-parts', items: [{ name: 'Rear Floor Clip Cup Holder' }] });
+  const productId = created.body.product.id;
+  const itemId = created.body.product.items[0].id;
+
+  // New items default to listed (visible) -- matches scripts/generate-pages.mjs's
+  // `item.listed !== false` filter and the existing `available` default.
+  assert.strictEqual(created.body.product.items[0].listed, true);
+
+  const uploadRes = await request(app)
+    .post(`/api/products/${productId}/items/${itemId}/image`)
+    .set('Cookie', cookie)
+    .attach('image', Buffer.from('fake jpeg content'), { filename: 'cup holder.jpg', contentType: 'image/jpeg' });
+  assert.strictEqual(uploadRes.status, 200);
+  const uploadedItem = uploadRes.body.product.items.find((i) => i.id === itemId);
+  assert.match(uploadedItem.imageUrl, /^\/uploads\/category-items\//);
+
+  // syncPublicJson() must run on every product/item mutation, or an admin's
+  // edits would silently never reach src/data/categories.json (the file the
+  // next `npm run build` actually reads) until some unrelated filament edit
+  // happened to trigger a sync.
+  const categoriesSrc = JSON.parse(fs.readFileSync(path.join(tmpRoot, 'src', 'data', 'categories.json'), 'utf8'));
+  const syncedItem = categoriesSrc['gwm'].items.find((i) => i.name === 'Rear Floor Clip Cup Holder');
+  assert.match(syncedItem.imageUrl, /^\/uploads\/category-items\//);
+  assert.strictEqual(syncedItem.listed, true);
+
+  const putRes = await request(app)
+    .put(`/api/products/${productId}`)
+    .set('Cookie', cookie)
+    .send({ items: [{ ...uploadedItem, listed: false }] });
+  assert.strictEqual(putRes.body.product.items[0].listed, false);
+  const categoriesAfterHide = JSON.parse(fs.readFileSync(path.join(tmpRoot, 'src', 'data', 'categories.json'), 'utf8'));
+  assert.strictEqual(categoriesAfterHide['gwm'].items.find((i) => i.name === 'Rear Floor Clip Cup Holder').listed, false);
+
+  const removeRes = await request(app).delete(`/api/products/${productId}/items/${itemId}/image`).set('Cookie', cookie);
+  assert.strictEqual(removeRes.status, 200);
+  assert.strictEqual(removeRes.body.product.items.find((i) => i.id === itemId).imageUrl, '');
+});
+
 test('PUT /api/settings with a non-array homeTiles is rejected/ignored instead of 500ing', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

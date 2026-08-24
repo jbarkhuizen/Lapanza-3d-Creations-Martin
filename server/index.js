@@ -33,6 +33,8 @@ import {
   deleteDesignRequestFile,
   uploadPrintJobImage,
   uploadPrintJobFile,
+  uploadCategoryItemImage,
+  deleteCategoryItemImage,
 } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
@@ -894,6 +896,7 @@ app.post('/api/products', requireAuth, (req, res) => {
     items: normalizeItems(body.items),
   };
   upsertProduct(product);
+  syncPublicJson(getDb());
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created category product "${product.name}"` });
   res.status(201).json({ product });
 });
@@ -926,6 +929,7 @@ app.put('/api/products/:id', requireAuth, (req, res) => {
     internalNotes: body.internalNotes ?? existing.internalNotes,
   };
   upsertProduct(product);
+  syncPublicJson(getDb());
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated category product "${product.name}"` });
   res.json({ product });
 });
@@ -934,8 +938,48 @@ app.delete('/api/products/:id', requireAuth, (req, res) => {
   const existing = getProduct(req.params.id);
   const ok = deleteProduct(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Product not found' });
+  syncPublicJson(getDb());
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted category product "${existing?.name || req.params.id}"` });
   res.json({ ok: true });
+});
+
+app.post(
+  '/api/products/:productId/items/:itemId/image',
+  requireAuth,
+  uploadCategoryItemImage.single('image'),
+  (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const product = getProduct(req.params.productId);
+    if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
+    const item = (product.items || []).find((i) => i.id === req.params.itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    // Only ever delete a file we ourselves stored under /uploads/category-items/
+    // -- item.imageUrl may still be an admin-typed external URL from before
+    // this upload flow existed.
+    if (item.imageUrl && item.imageUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.imageUrl);
+    item.imageUrl = `/uploads/category-items/${req.file.filename}`;
+    upsertProduct(product);
+    syncPublicJson(getDb());
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated photo for "${item.name}" on "${product.name}"` });
+    res.json({ product });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
+    next(err);
+  },
+);
+
+app.delete('/api/products/:productId/items/:itemId/image', requireAuth, (req, res) => {
+  const product = getProduct(req.params.productId);
+  if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
+  const item = (product.items || []).find((i) => i.id === req.params.itemId);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (item.imageUrl && item.imageUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.imageUrl);
+  item.imageUrl = '';
+  upsertProduct(product);
+  syncPublicJson(getDb());
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed photo for "${item.name}" on "${product.name}"` });
+  res.json({ product });
 });
 
 // ---- Clients (B) ----
@@ -1964,6 +2008,12 @@ function normalizeItems(list) {
     // before, only the `available` boolean.
     stockQty: Math.max(0, Number(item.stockQty) || 0),
     available: item.available !== false,
+    // Whether this item shows on its category page at all -- separate from
+    // `available` (which only controls whether the Add to Cart button shows;
+    // an unavailable-but-listed item still displays with an Enquire link).
+    // scripts/generate-pages.mjs and export.js's syncPublicJson() already
+    // filter/pass this through; it was just never settable from the admin UI.
+    listed: item.listed !== false,
     sortOrder: item.sortOrder ?? i,
   }));
 }

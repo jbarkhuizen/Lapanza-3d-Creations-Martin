@@ -219,3 +219,39 @@ export function deletePrintJobFile(filePath) {
   const abs = path.join(PRINT_JOB_UPLOAD_DIR, filename);
   if (fs.existsSync(abs)) fs.unlinkSync(abs);
 }
+
+// ---- Category product item photos (Toys/Homeware/Phones/Car Parts/GWM/
+// Landrover etc) ----
+// Same pattern as uploadResourceImage above. Category items live inside
+// catalog.json's product.items[] (see store.js), not their own DB table, so
+// there's no colourSku-style value to build a traceable filename from --
+// a random name is the same tradeoff resources.js already made.
+
+export const CATEGORY_ITEM_UPLOAD_DIR = path.join(root, 'public', 'uploads', 'category-items');
+
+function ensureCategoryItemUploadDir() {
+  if (!fs.existsSync(CATEGORY_ITEM_UPLOAD_DIR)) fs.mkdirSync(CATEGORY_ITEM_UPLOAD_DIR, { recursive: true });
+}
+
+function randomCategoryItemFilename(ext) {
+  return `${crypto.randomBytes(8).toString('hex')}${ext}`;
+}
+
+export const uploadCategoryItemImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureCategoryItemUploadDir();
+      cb(null, CATEGORY_ITEM_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => cb(null, randomCategoryItemFilename(MIME_EXTENSIONS[file.mimetype] || '.jpg')),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),
+});
+
+export function deleteCategoryItemImage(imagePath) {
+  if (!imagePath) return;
+  const filename = path.basename(imagePath);
+  const abs = path.join(CATEGORY_ITEM_UPLOAD_DIR, filename);
+  if (fs.existsSync(abs)) fs.unlinkSync(abs);
+}

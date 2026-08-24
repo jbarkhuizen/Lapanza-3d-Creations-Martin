@@ -759,7 +759,7 @@ function renderEditor() {
             These fields power the public site pages:
             ${isFilament
               ? '<strong>name, slug, description, specs[], colours[{name,sku,weightG,rollLengthM,priceRand,stockQty,imagePath}], colourNote</strong>.'
-              : '<strong>name, slug, description, crumbs, parent, items[{name,details,material,size,finish,price,sku,imageUrl}]</strong>.'}
+              : '<strong>name, slug, description, crumbs, parent, items[{name,details,material,size,finish,price,sku,imageUrl,listed,available}]</strong>.'}
           </p>
           <div class="meta-list" style="margin-top:1rem">
             <div><span>ID</span><span>${p.id.slice(0, 8)}…</span></div>
@@ -874,6 +874,17 @@ function renderCategorySections(p) {
               <strong>#${i + 1} ${escapeHtml(item.name || 'Untitled')}</strong>
               <button class="btn small btn-danger" data-remove-item type="button">Remove</button>
             </div>
+            <div class="row-card-actions">
+              <div class="flex items-center gap-3">
+                ${item.imageUrl
+                  ? `<img src="${escapeAttr(item.imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" />`
+                  : '<span class="muted" style="font-size:0.78rem">No photo</span>'}
+                ${item._isNew
+                  ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'
+                  : `<input type="file" accept="image/jpeg,image/png,image/webp" data-item-image="${item.id}" style="max-width:200px" />`}
+              </div>
+              ${item.imageUrl && !item._isNew ? `<button class="btn small btn-danger" data-remove-item-image="${item.id}" type="button">Remove photo</button>` : ''}
+            </div>
             <div class="grid-2">
               <label class="field"><span>Item name</span><input data-item="name" value="${escapeAttr(item.name || '')}" /></label>
               <label class="field"><span>SKU</span><input data-item="sku" value="${escapeAttr(item.sku || '')}" /></label>
@@ -891,7 +902,10 @@ function renderCategorySections(p) {
             </div>
             <div class="grid-3">
               <label class="field"><span>Stock quantity</span><input data-item="stockQty" type="number" min="0" step="1" value="${item.stockQty ?? 0}" /></label>
-              <label class="field"><span>Image URL</span><input data-item="imageUrl" value="${escapeAttr(item.imageUrl || '')}" /></label>
+              <label class="field checkbox" style="margin-top:1.5rem">
+                <input data-item="listed" type="checkbox" ${item.listed !== false ? 'checked' : ''} />
+                <span>Visible on site</span>
+              </label>
               <label class="field checkbox" style="margin-top:1.5rem">
                 <input data-item="available" type="checkbox" ${item.available !== false ? 'checked' : ''} />
                 <span>Available</span>
@@ -976,7 +990,9 @@ function bindEditorEvents() {
       shippingWeight: 0,
       stockQty: 0,
       available: true,
+      listed: true,
       sortOrder: p.items.length,
+      _isNew: true, // not yet persisted -- photo upload needs a real item id from the server first
     });
     renderEditor();
   });
@@ -1061,6 +1077,47 @@ function bindEditorEvents() {
         if (!res.ok) throw new Error(data.error || 'Upload failed');
         state.draft = { ...data.filament, kind: 'filament' };
         toast('Photo uploaded');
+        renderEditor();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  // Catalog item photo upload/remove -- same immediate-fire pattern as the
+  // colour photo upload above. Only rendered for already-persisted items
+  // (see renderCategorySections), so p.id/item.id here are always the real,
+  // server-assigned ids by the time this can fire.
+  $$('[data-item-image]').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      const itemId = input.dataset.itemImage;
+      const formData = new FormData();
+      formData.append('image', file);
+      try {
+        const res = await fetch(`/api/products/${p.id}/items/${itemId}/image`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        state.draft = data.product;
+        toast('Photo uploaded');
+        renderEditor();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+  $$('[data-remove-item-image]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const itemId = btn.dataset.removeItemImage;
+      try {
+        const res = await api(`/api/products/${p.id}/items/${itemId}/image`, { method: 'DELETE' });
+        state.draft = res.product;
+        toast('Photo removed');
         renderEditor();
       } catch (ex) {
         toast(ex.message);
@@ -1195,22 +1252,29 @@ function syncNestedFromDom() {
     };
   });
 
-  p.items = $$('[data-item-index]').map((row, i) => ({
-    id: p.items?.[Number(row.dataset.itemIndex)]?.id || uid(),
-    name: $('[data-item="name"]', row)?.value || '',
-    details: $('[data-item="details"]', row)?.value || '',
-    material: $('[data-item="material"]', row)?.value || '',
-    size: $('[data-item="size"]', row)?.value || '',
-    finish: $('[data-item="finish"]', row)?.value || '',
-    price: $('[data-item="price"]', row)?.value || '',
-    sku: $('[data-item="sku"]', row)?.value || '',
-    imageUrl: $('[data-item="imageUrl"]', row)?.value || '',
-    weight: Number($('[data-item="weight"]', row)?.value) || 0,
-    shippingWeight: Number($('[data-item="shippingWeight"]', row)?.value) || 0,
-    stockQty: Math.max(0, Number($('[data-item="stockQty"]', row)?.value) || 0),
-    available: $('[data-item="available"]', row)?.checked !== false,
-    sortOrder: i,
-  }));
+  p.items = $$('[data-item-index]').map((row, i) => {
+    const prev = p.items?.[Number(row.dataset.itemIndex)] || {};
+    return {
+      id: prev.id || uid(),
+      name: $('[data-item="name"]', row)?.value || '',
+      details: $('[data-item="details"]', row)?.value || '',
+      material: $('[data-item="material"]', row)?.value || '',
+      size: $('[data-item="size"]', row)?.value || '',
+      finish: $('[data-item="finish"]', row)?.value || '',
+      price: $('[data-item="price"]', row)?.value || '',
+      sku: $('[data-item="sku"]', row)?.value || '',
+      // No longer a text field -- set only via the photo upload/remove
+      // handlers below, so carry the current value forward unchanged here.
+      imageUrl: prev.imageUrl || '',
+      weight: Number($('[data-item="weight"]', row)?.value) || 0,
+      shippingWeight: Number($('[data-item="shippingWeight"]', row)?.value) || 0,
+      stockQty: Math.max(0, Number($('[data-item="stockQty"]', row)?.value) || 0),
+      available: $('[data-item="available"]', row)?.checked !== false,
+      listed: $('[data-item="listed"]', row)?.checked !== false,
+      sortOrder: i,
+      _isNew: prev._isNew ?? false,
+    };
+  });
 }
 
 // ---- Database backups ----
