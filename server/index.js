@@ -1729,13 +1729,14 @@ app.post('/api/publish', requireAuth, async (_req, res) => {
   syncPublicJson(getDb());
   try {
     await runGenerate();
+    await runBuild();
     const warnings = readPublishWarnings();
     const message = warnings.length
-      ? `Site pages regenerated, but ${warnings.length} category page(s) were skipped: ${warnings.join(', ')}. Check that these categories still exist in the catalog.`
-      : 'Site pages regenerated from catalog.';
+      ? `Site pages regenerated and published, but ${warnings.length} category page(s) were skipped: ${warnings.join(', ')}. Check that these categories still exist in the catalog.`
+      : 'Site pages regenerated and published live.';
     res.json({ ok: true, message, skippedCategories: warnings });
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Generate failed' });
+    res.status(500).json({ error: err.message || 'Publish failed' });
   }
 });
 
@@ -2027,6 +2028,24 @@ function runGenerate() {
     child.on('exit', (code) => {
       if (code === 0) resolve();
       else reject(new Error(`generate-pages exited with code ${code}`));
+    });
+  });
+}
+
+// nginx serves the static site from dist/ (see deploy/nginx-lapanza.conf), which
+// is only ever produced by `vite build` -- generate-pages.mjs above rewrites the
+// *source* html at repo root, which vite build then bundles into dist/. Without
+// this second step, "Publish to site" updated the source pages but never the
+// live served output -- catalog edits (a photo, a price, anything) looked
+// published in the admin but silently never appeared on the real site until
+// the next full code deploy happened to run `npm run build` too.
+function runBuild() {
+  return new Promise((resolve, reject) => {
+    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const child = spawn(npmCmd, ['run', 'build'], { cwd: root, stdio: 'inherit' });
+    child.on('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`vite build exited with code ${code}`));
     });
   });
 }
