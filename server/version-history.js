@@ -1,20 +1,21 @@
 import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 
-// "<major>.<minor two-digit>" (e.g. "1.01"), not a plain incrementing
-// integer -- V1.01 is the deliberate starting point for the automated
-// scheme. Rolls major over after .99 rather than growing the minor part
-// past two digits.
+// Pre-release versions use "<major>.<minor two-digit>" (e.g. "0.01").
+// V1.0 is deliberately reserved for the first official release; later
+// maintenance releases continue as V1.01, V1.02, and so on.
 function nextLabel(db) {
   // version_number tiebreaks created_at -- two rows can land on the same
   // millisecond in a fast test/CI run, but version_number is always
   // strictly monotonic per insert, so it alone decides "most recent" then.
   const last = db.prepare('SELECT version_label FROM version_history ORDER BY created_at DESC, version_number DESC LIMIT 1').get();
-  const match = last?.version_label ? /^(\d+)\.(\d{2})$/.exec(last.version_label) : null;
-  if (!match) return '1.01';
+  const match = last?.version_label ? /^(\d+)\.(\d{1,2})$/.exec(last.version_label) : null;
+  if (!match) return '0.01';
   const major = Number(match[1]);
-  const minor = Number(match[2]) + 1;
-  return minor > 99 ? `${major + 1}.01` : `${major}.${String(minor).padStart(2, '0')}`;
+  const minor = Number(match[2]);
+  if (minor === 99) return `${major + 1}.0`;
+  if (minor === 0) return `${major}.01`;
+  return `${major}.${String(minor + 1).padStart(2, '0')}`;
 }
 
 export function listVersions(db = getDb()) {

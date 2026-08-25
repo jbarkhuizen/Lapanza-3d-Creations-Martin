@@ -780,7 +780,7 @@ Track deployments and system updates. Every row is created automatically by `scr
 |---|---|---|
 | id | TEXT PK | |
 | version_number | INTEGER NOT NULL UNIQUE | Legacy plain-incrementing integer, kept only to satisfy this constraint — not the displayed version |
-| version_label | TEXT | V1.01 — the displayed version, `"<major>.<minor>"` two-digit-padded (e.g. `"1.01"`), computed by `nextLabel()` in `server/version-history.js` |
+| version_label | TEXT | V0.01 during pre-release, then V1.0 for the first official release — the displayed version, computed by `nextLabel()` in `server/version-history.js` |
 | description | TEXT NOT NULL | Latest git commit subject + short hash at deploy time, unless passed explicitly |
 | deployed_date | TEXT NOT NULL | ISO timestamp when this version was recorded |
 | deployed_by | TEXT NOT NULL DEFAULT 'admin' | Always `'deploy'` for automated rows |
@@ -1022,7 +1022,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 
 **Behaviour:**
 - There is no POST route and no "Record Version" button in the admin UI as of V1.01 — a row is created only by `scripts/record-deploy-version.mjs`, which `deploy/deploy-app.sh` runs automatically after every deploy (non-fatal if it fails — a version-history hiccup never blocks a deploy). It reads the latest git commit subject/hash as the description unless one is passed explicitly as `argv[2]`.
-- `version_label` is the customer/admin-facing string, `"<major>.<minor>"` two-digit-padded (e.g. `"1.01"`), computed by `server/version-history.js`'s `nextLabel()` — starts at `1.01`, increments the minor part each deploy, rolls the major over after `.99`.
+- `version_label` is the customer/admin-facing string, computed by `server/version-history.js`'s `nextLabel()`. Automated pre-release deployments start at `0.01` and increment through `0.99`; `1.0` is reserved for the first official release, after which maintenance deployments continue at `1.01`, `1.02`, and so on.
 - `version_number` is a legacy plain-incrementing integer, kept only to satisfy the original schema's `NOT NULL UNIQUE` constraint — not shown in the UI.
 - `deployed_date` is always the record-time timestamp (ISO 8601). `deployed_by` is `'deploy'` for every automated row.
 
