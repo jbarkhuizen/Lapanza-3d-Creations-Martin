@@ -47,6 +47,6 @@ Production: AlmaLinux 10 VPS, nginx (TLS + reverse proxy), systemd-managed Node 
 - Email newsletter and WhatsApp marketing campaigns (compose → approve → send)
 - Audit Logs — admin login/session/account events, order/stock/catalog/settings changes, and security signals (rate-limit trips, unauthorized access attempts, customer login failures); 12-month retention, "all-time" analytics totals survive pruning via permanent tally tables
 - Todo / Backlog — tracks bugs/features/tech debt, including a "Claude Fix" status for items this assistant resolved directly
-- **Publish to site** regenerates public HTML from current catalog data — storefront content is only as fresh as the last publish
+- **Publish to site** regenerates public HTML from current catalog data and rebuilds the deployed `dist/` output — storefront content is only as fresh as the last publish
 
 Sidebar is organised into three groups: **Client Side**, **Local Management**, **Settings**.

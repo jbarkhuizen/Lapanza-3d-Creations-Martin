@@ -78,6 +78,14 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Legal pages: sole proprietorship → partnership correction (closes #29)** | `terms.html`/`privacy.html` originally described the business as a sole proprietorship owned by Johan Barkhuizen — legally impossible once a second owner is real (a sole proprietorship has exactly one owner by definition). Confirmed with the business owner that **Linandi Barkhuizen is a real co-owner**; both `src/data/legal/terms.html` and `privacy.html` corrected to describe Lapanza as **a partnership** owned and operated by Johan Barkhuizen and Linandi Barkhuizen. Johan remains the sole named POPIA Information Officer. Content-only change (no code/schema), regenerated via `npm run generate`. | 227/227 |
 | **Widened audit log + security signals** | Backlog #27. Extended `AUDIT_EVENTS` with four broad action buckets (`order_updated`/`stock_updated`/`catalog_updated`/`settings_updated`) instrumented across ~24 `requireAuth` routes (order status/tracking/manual-creation, Stock Management + In-House Filament + Print Job Costing edits, filament/colour/category-product/shipping-option CRUD, Settings saves) — deliberately one type per *area* rather than per route, with the specific action always in `detail`, to keep the Audit Logs filter dropdown scannable at ~16 total event types (now grouped into Auth & sessions / Actions / Security `<optgroup>`s). Added three security signals: `client_login_failure` (customer-side login, mirroring the existing admin one), `rate_limit_exceeded` (custom `handler` on `authLimiter`/`publicFormLimiter`/`checkoutLimiter`, not `analyticsLimiter` — that one trips on legitimate heavy traffic, not abuse), and `unauthorized_access` (only when a protected admin route is hit with **no session cookie at all** — deliberately excludes the "cookie present but unknown" case, which is just every admin's first request after a routine restart wiping the in-memory sessions Map, Won't Fix #4 — so a routine restart doesn't look like an attack). Passive logging only, no email alerting, per explicit scope decision. Paired with `pruneOldAuditLogEntries()`/`startAuditLogPruneJob()` (12-month retention, daily) since this materially raises row volume — closes tech-debt #32 for `audit_log` (`page_views` remains open — see the "page_views retention" feature-history row below). | 232/232 |
 | **page_views retention (closes #32)** | `pruneOldPageViews()`/`startPageViewsPruneJob()` — same 12-month/daily shape as `audit_log`'s. The catch: `getVisitSummary()`'s "all-time" totals/top-pages/unique-visitors were computed live from `page_views` with no date filter, so pruning old rows would have quietly turned "all-time" into "since the last prune". Fixed by introducing two small permanent tally tables (`analytics_page_totals`, `analytics_seen_visitors`) updated on every real pageview and never pruned — `getVisitSummary()` now reads all-time figures from those instead (today/last-30-days still read `page_views` directly, always well inside the retention window). Also needed a one-time backfill (`backfillAnalyticsTotals()` in `server/db.js`) for existing installs that already had `page_views` history before these tables existed — without it, the tally tables would start at zero and the dashboard would show a false reset the moment this shipped, before any pruning had even happened. | 235/235 |
+| **Upload original-filename tracking for resources & design requests (closes #31)** | Same gap `print_jobs` already had a fix for: uploads are stored on disk under a randomized name (collision-proof), but `resources`/`design_requests` never separately captured the customer/admin-supplied original filename, so there was nothing human-readable to show or download-as. Added `image_original_name`/`file_original_name` to `resources` and `reference_image_original_name`/`reference_file_original_name` to `design_requests`, mirroring the `print_jobs` pattern exactly — upload routes now pass `req.file.originalname` through; admin UI shows/downloads-as the original name, falling back to the randomized stored filename for pre-existing rows. | 240/240 |
+| **Category-item photo upload + "Visible on site" toggle (closes #33)** | Toys/Homeware/Phones/Car-Parts (GWM, Landrover, etc.) catalog items only had a plain Image URL text field, and no way to unlist an item from its category page without deleting it. Replaced the URL field with upload/replace/remove photo (`uploadCategoryItemImage`, mirrors the filament-colour photo pattern) and added a `listed` checkbox wired to a field `scripts/generate-pages.mjs` and `export.js` already read but the admin UI never exposed. Also fixed a real bug found along the way: `POST`/`PUT`/`DELETE /api/products` never called `syncPublicJson()`, so category-product edits never reached `src/data/categories.json` (what `npm run build` actually reads) until an unrelated filament edit happened to trigger a sync. | 241/241 |
+| **"Publish to site" now actually publishes (closes #34)** | `POST /api/publish` only ran `scripts/generate-pages.mjs`, which rewrites the *source* HTML at repo root — `vite build` is what bundles that into `dist/`, which is what nginx actually serves (§12.3). Without it, clicking "Publish to site" silently updated the source pages but never the live output, so any catalog edit looked published in the admin but never appeared on the real site until the next full code deploy happened to run `npm run build` too. Found while investigating a reported "uploaded photo not showing on the frontend." `runBuild()` (spawns `npm run build`) now runs after `runGenerate()` on every publish. | 241/241 |
+| **Consistent "R 350.00" currency formatting site-wide** | Prices displayed inconsistently everywhere — bare numbers with no currency symbol (category item prices), no decimals (filament colour prices baked as `"R299"` into `filaments.json`, cart/checkout totals, most of admin), and the one place that *did* show decimals (invoices) stripped a trailing `.00`. Root cause: five separate ad-hoc `formatRand`/`formatPrice` implementations with three different, mutually inconsistent behaviours — no shared source of truth. Consolidated into one canonical format, duplicated only where the serving/bundling boundary requires it: `server/money.js` (server + `generate-pages.mjs`), `admin/money.js` (admin is its own static directory), `src/js/money.js` (separate client bundle) — all three documented as twins of each other. Category item prices stay free text (an admin can type "POA"), so `formatItemPrice()` formats only numeric-looking values and passes anything else through unchanged. | 253/253 (after rebase onto parallel newsletter/in-house-filament work landed in the same window) |
+| **Payfast `payment_method` sent the wrong EFT code** | Payfast's documented `payment_method` values are `cc` (credit card) and `ef` (EFT) — ours sent `eft`, which Payfast doesn't recognise. Found live during the go-live test below: a customer choosing "Payfast — Instant EFT" landed on an unrelated Mobicred page instead of the EFT flow, an invalid value silently falling through to Payfast's own fallback method rather than erroring. | 253/253 |
+| **Payfast live payments enabled (closes #6)** | `payfast.js` was already fully live-mode-capable (mode-gated URLs, separate live/sandbox credential sets, full ITN signature + server-to-server `/validate` + amount verification, idempotent paid-transition) — confirmed by code review, no code changes needed beyond the `payment_method` fix above. The business owner entered the real Merchant ID/Key/Passphrase into `.env` directly (credentials are never entered by this assistant) and flipped `PAYFAST_MODE=live`; verified end-to-end with a real transaction. Closes the "sandbox mode still active" item in §15. | 253/253 (config-only) |
+| **Checkout page cleanup: consent placement, self-service details, cancel order, persisted selections (closes #127)** | Moved the two marketing-consent checkboxes from the Your Details panel to the bottom of the page, above Place Order. "Update Details" is now a real button (was an underlined text link), hidden by default — only shown for a logged-in customer, and only once they've actually changed a detail field from what's on file (reverting hides it again); saves via a new self-service `PATCH /api/client/me` (explicitly allow-listed fields — `discountPct`/`discountNote`/`source` stay admin-only, unreachable from a customer's own session even if included in the request body). Added a Cancel Order button (confirms, clears the cart, returns home). Fixed shipping method / payment method / PUDO-fixed-option resetting to the HTML defaults on every page load — this is a static page, so navigating away and back was a full reload; both now persist to `localStorage` and restore. | 255/255 |
+| **Order reference shortened to 8 chars, banking details shown on Manual EFT confirmation (closes #128)** | Order reference shown to customers was the full 36-char UUID — unusable as an actual EFT payment reference. Shortened to the first 8 characters everywhere it still showed the full ID (Manual EFT/Cash-on-Collection confirmation panel, the order confirmation email, `checkout-complete.html`), matching the convention already used in email subject lines and the "Order placed" heading. Also added the real banking details (bank/account name/account number/branch code, from public site settings) directly on the Manual EFT confirmation panel — previously it only said details had been emailed, with nothing to pay against on the page itself. | 255/255 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -258,7 +266,7 @@ This lookup happens **server-side on every checkout**, never trusting a client-s
 |---|---|
 | Vite (multi-page) | Bundles every top-level `*.html` + `car-parts/*.html` + `filament/*.html` as separate entries (see `vite.config.js`'s `htmlEntries()`) into `dist/` |
 | `scripts/generate-pages.mjs` | **Not** part of the Vite build — a separate Node script, run via `npm run generate` or the admin "Publish to site" button, that reads the DB/catalog.json and regenerates the committed static HTML source files (which Vite then bundles) |
-| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 235 tests across 27 `*.test.js` files (current count — see §14 for the authoritative figure) |
+| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 255 tests across 30 `*.test.js` files (current count — see §14 for the authoritative figure) |
 
 ---
 
@@ -370,7 +378,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-30 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+31 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -658,7 +666,8 @@ Simple key-value store (site config, invoicing config, print-job-costing rates).
 | Column | Type |
 |---|---|
 | id, title, description | |
-| image_path, file_path | `/uploads/resources/...` |
+| image_path, file_path | `/uploads/resources/...` — storage path under a randomized filename, never the original |
+| image_original_name, file_original_name | TEXT NULL — the human-recognizable filename, for admin UI display/download-as (same pattern as `print_jobs`, §6.2). `NULL` for rows uploaded before this column existed |
 | print_settings, filament_type, dimensions | TEXT |
 | active, sort_order | |
 | created_at, updated_at | |
@@ -678,7 +687,8 @@ Simple key-value store (site config, invoicing config, print-job-costing rates).
 | id | TEXT PK | |
 | client_id | TEXT FK → clients(id) NULL | Linked if the submitter is a known client |
 | name, email, phone, description, budget_note | TEXT | |
-| reference_image_path, reference_file_path | TEXT NULL | |
+| reference_image_path, reference_file_path | TEXT NULL | Storage path under a randomized filename, never the original |
+| reference_image_original_name, reference_file_original_name | TEXT NULL | The human-recognizable filename, for admin UI display/download-as (same pattern as `print_jobs`, §6.2). `NULL` for rows uploaded before this column existed |
 | status | TEXT DEFAULT 'new' | `new` \| `in_review` \| `quoted` \| `accepted` \| `rejected` \| `completed` |
 | admin_notes | TEXT | |
 | created_at, updated_at | TEXT | |
@@ -877,6 +887,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | POST | `/api/client/logout` | Public | Customer logout |
 | GET | `/api/client/me` | Public | Current client session status |
 | GET | `/api/client/orders` | Client | Own order history |
+| PATCH | `/api/client/me` | Client | Self-service profile update (name/contact/address/marketing consent only) — explicit allow-list, `discountPct`/`discountNote`/`source` are admin-only and never reachable here even if included in the request body |
 | PATCH | `/api/client/:id/marketing-preferences` | Guarded (email-matched, rate-limited) | Post-checkout WhatsApp opt-in toggle |
 
 ### 7.3 Newsletter (Public)
@@ -922,6 +933,7 @@ Newsletter template, image, draft, approval, test-send, and queued-send changes 
 | POST/PUT/DELETE | `/api/filaments/:id/colours`, `/api/filaments/:filamentId/colours/:colourId` | Admin | Colour/SKU CRUD |
 | POST | `/api/filaments/:filamentId/colours/:colourId/image` | Admin | Colour image upload |
 | GET/POST/PUT/DELETE | `/api/products`, `/api/products/:id` | Admin | Category-item CRUD (toys/homeware/phones/car-parts) |
+| POST/DELETE | `/api/products/:productId/items/:itemId/image` | Admin | Category-item photo upload/remove — mirrors the colour-image pattern above |
 
 ### 7.7 Clients / Registered Users (Admin)
 
@@ -1014,7 +1026,7 @@ Newsletter template, image, draft, approval, test-send, and queued-send changes 
 |---|---|---|---|
 | GET | `/api/settings` | Admin | All settings + font options |
 | PUT | `/api/settings` | Admin | Update settings (allow-listed keys only) |
-| POST | `/api/publish` | Admin | Runs `generate-pages.mjs` logic to regenerate static HTML from current catalog data |
+| POST | `/api/publish` | Admin | Regenerates static HTML from current catalog data (`generate-pages.mjs`) **and** runs `npm run build` so the change actually reaches `dist/` (what nginx serves) — see the "Publish to site" fix in §2 Evolution History; before that fix this route only did the first half |
 
 ### 7.17 Database Backups (Admin)
 
@@ -1256,6 +1268,7 @@ flowchart LR
     D --> E[Regenerates static HTML:<br/>filament/*.html, car-parts/*.html,<br/>toys.html, homeware.html, phones.html, story.html]
     E --> F["index.html is explicitly<br/>NEVER touched (hand-authored)"]
     E --> G[Writes data/publish-warnings.json<br/>if any category was skipped]
+    E --> H["npm run build (vite)<br/>bundles source HTML into dist/ --<br/>the directory nginx actually serves"]
 ```
 
 ### 8.9 Deployment / Release Flow
@@ -1681,7 +1694,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 235 tests across 27 test files, 100% passing at last recorded run.
+- **Current count:** 255 tests across 30 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases
@@ -1875,7 +1888,7 @@ These 13 items were seeded as the first entries in the admin **Todo / Backlog** 
 | **No staging environment** | The VPS is production from first deploy; there is no intermediate environment to test against before changes reach real customers. |
 | **In-memory session store** | Admin/client sessions do not survive a process restart (see §14). |
 | **No E2E/browser test automation** | Frontend behaviour was verified manually (interactively, during development) rather than via a checked-in Playwright/Cypress suite. |
-| **Payfast sandbox mode still active in production `.env`** at time of writing | `PAYFAST_MODE=sandbox` — real payments are not yet being processed; flip to `live` only once a real test transaction has been verified end-to-end. |
+| ~~Payfast sandbox mode still active in production `.env`~~ **Closed** | `PAYFAST_MODE=live` since backlog #6 — real merchant credentials entered by the business owner, verified with a real transaction end-to-end (§2 Evolution History). Left here struck through rather than deleted, per this table's own "point-in-time detail" note above. |
 | **WhatsApp campaigns not yet functional** | `WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` are unset — requires the business to complete Meta Business Account verification and get at least one message template approved before any campaign can actually send. |
 | **`GMAIL_APP_PASSWORD` initially unset, now configured** | Was a launch blocker resolved during deployment (§12.5) — flagged here as a category of risk (external credential dependency) rather than a current issue. |
 | **Single point of failure** | One VPS, one Node process, one SQLite file — no redundancy/failover. Acceptable at current business scale; would need a different architecture (managed Postgres, multi-instance, load balancer) to scale beyond it. |
