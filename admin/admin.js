@@ -1493,10 +1493,10 @@ async function renderTodos() {
           </label>
         </div>
         <label class="field"><span>Name</span><input id="td-name" value="${escapeAttr(form.name)}" /></label>
-        <label class="field"><span>Description / detail</span><textarea id="td-description" rows="4">${escapeHtml(form.description)}</textarea></label>
+        <label class="field"><span>Description / Detail</span><textarea id="td-description" rows="4">${escapeHtml(form.description)}</textarea></label>
         <div class="grid-3">
-          <label class="field"><span>Planned fix date</span><input id="td-planned" type="date" value="${escapeAttr(toDateInputValue(form.plannedFixDate))}" /></label>
-          <label class="field"><span>Actual fix date</span><input id="td-actual" type="date" value="${escapeAttr(toDateInputValue(form.actualFixDate))}" /></label>
+          <label class="field"><span>Planned Fix Date</span><input id="td-planned" type="date" value="${escapeAttr(toDateInputValue(form.plannedFixDate))}" /></label>
+          <label class="field"><span>Actual Fix Date</span><input id="td-actual" type="date" value="${escapeAttr(toDateInputValue(form.actualFixDate))}" /></label>
         </div>
         <p class="muted" style="font-size: 0.8rem;">Setting Status to "Done" auto-fills today's date here if left blank.</p>
         <div class="row-card-actions">
