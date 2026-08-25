@@ -3533,7 +3533,7 @@ function campaignStatusBadge(status) {
 
 async function renderNewsletterCampaigns() {
   state.newsletterBlocks = state.newsletterBlocks || [{ type: 'heading', text: 'Lapanza 3D' }, { type: 'text', text: '' }];
-  const [{ campaigns }, { recipients }, { templates }, { assets }] = await Promise.all([api('/api/newsletter-campaigns'), api('/api/newsletter-recipients'), api('/api/newsletter-templates'), api('/api/newsletter-assets')]);
+  const [{ campaigns }, { analytics }, { recipients }, { templates }, { assets }] = await Promise.all([api('/api/newsletter-campaigns'), api('/api/newsletter-campaigns/analytics'), api('/api/newsletter-recipients'), api('/api/newsletter-templates'), api('/api/newsletter-assets')]);
   const blockEditor = state.newsletterBlocks.map((block, index) => `
     <div class="newsletter-block" data-block-index="${index}">
       <select class="nb-type"><option value="heading" ${block.type === 'heading' ? 'selected' : ''}>Heading</option><option value="text" ${block.type === 'text' ? 'selected' : ''}>Text</option><option value="image" ${block.type === 'image' ? 'selected' : ''}>Image</option><option value="button" ${block.type === 'button' ? 'selected' : ''}>Button</option><option value="divider" ${block.type === 'divider' ? 'selected' : ''}>Divider</option></select>
@@ -3554,13 +3554,22 @@ async function renderNewsletterCampaigns() {
           <td>
             ${c.status === 'draft' ? '<button class="btn small" data-action="approve" type="button">Approve</button>' : ''}
             ${['approved', 'partial'].includes(c.status) ? '<button class="btn small" data-action="test" type="button">Send test</button><button class="btn small btn-primary" data-action="send" type="button">Send</button>' : ''}
-            <button class="btn small" data-action="recipients" type="button">Recipients</button>
+            <button class="btn small" data-action="recipients" type="button">Report</button>
           </td>
         </tr>`,
     )
     .join('');
 
   $('#view-newsletter').innerHTML = `
+    <div class="newsletter-analytics panel">
+      <div><span>Campaigns</span><strong>${escapeHtml(String(analytics.campaignCount))}</strong></div>
+      <div><span>Saved audience</span><strong>${escapeHtml(String(analytics.audienceCount))}</strong></div>
+      <div><span>Accepted by mail server</span><strong>${escapeHtml(String(analytics.acceptedCount))}</strong></div>
+      <div><span>Failed</span><strong>${escapeHtml(String(analytics.failedCount))}</strong></div>
+      <div><span>Acceptance rate</span><strong>${analytics.acceptanceRate === null ? '—' : `${escapeHtml(String(analytics.acceptanceRate))}%`}</strong></div>
+      <p class="muted newsletter-analytics-note">Acceptance confirms Gmail accepted the message for delivery; it does not confirm opens, clicks, or inbox placement.</p>
+      ${analytics.bySource.length ? `<div class="newsletter-source-summary">${analytics.bySource.map((source) => `<span>${escapeHtml(source.sourceType)}: ${escapeHtml(String(source.acceptedCount))}/${escapeHtml(String(source.audienceCount))} accepted</span>`).join('')}</div>` : ''}
+    </div>
     <div class="panel stack gap-3">
       <div class="section-head"><div><h3>Compose newsletter</h3><p class="muted">Select only recipients with confirmed newsletter consent or recorded client email-marketing consent.</p></div></div>
       <label class="field"><span>Subject</span><input id="nc-subject" value="${escapeAttr(state.newsletterSubject || '')}" /></label>

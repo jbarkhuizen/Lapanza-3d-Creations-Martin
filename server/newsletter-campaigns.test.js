@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
 import { subscribe, confirm } from './newsletter.js';
-import { approveCampaign, createCampaign, getCampaign, listCampaignRecipients, listEligibleRecipients, sendCampaign } from './newsletter-campaigns.js';
+import { approveCampaign, createCampaign, getCampaign, getCampaignAnalytics, listCampaignRecipients, listEligibleRecipients, sendCampaign } from './newsletter-campaigns.js';
 
 function recipientKey(db, email = 'campaign-recipient@example.com') {
   const { subscriber, token } = subscribe(email, db);
@@ -51,5 +51,19 @@ test('suppressed addresses are excluded from future eligible recipient lists', (
   recipientKey(db, 'blocked@example.com');
   db.prepare("INSERT INTO newsletter_suppressions (email, reason, created_at) VALUES ('blocked@example.com', 'unsubscribe', 'now')").run();
   assert.strictEqual(listEligibleRecipients(db).some((recipient) => recipient.email === 'blocked@example.com'), false);
+  db.close();
+});
+
+test('campaign analytics aggregates audience and final delivery outcomes', () => {
+  const db = openDb(':memory:');
+  const campaign = createCampaign({ subject: 'Subj', bodyText: 'Body', recipientKeys: [recipientKey(db)] }, db);
+  db.prepare("UPDATE newsletter_campaign_recipients SET status = 'sent', sent_at = 'now' WHERE campaign_id = ?").run(campaign.id);
+
+  const analytics = getCampaignAnalytics(db);
+  assert.deepStrictEqual(
+    { campaignCount: analytics.campaignCount, audienceCount: analytics.audienceCount, acceptedCount: analytics.acceptedCount, failedCount: analytics.failedCount, pendingCount: analytics.pendingCount, acceptanceRate: analytics.acceptanceRate },
+    { campaignCount: 1, audienceCount: 1, acceptedCount: 1, failedCount: 0, pendingCount: 0, acceptanceRate: 100 },
+  );
+  assert.deepStrictEqual(analytics.bySource, [{ sourceType: 'subscriber', audienceCount: 1, acceptedCount: 1, failedCount: 0 }]);
   db.close();
 });

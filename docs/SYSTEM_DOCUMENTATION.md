@@ -889,6 +889,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/newsletter-campaigns` | Admin | List campaigns |
+| GET | `/api/newsletter-campaigns/analytics` | Admin | Aggregate saved audience, accepted, failed, pending, and source metrics |
 | GET | `/api/newsletter-recipients` | Admin | List eligible confirmed subscribers and explicitly opted-in clients |
 | POST | `/api/newsletter-campaigns` | Admin | Create draft |
 | PATCH | `/api/newsletter-campaigns/:id/approve` | Admin | draft → approved |
@@ -897,6 +898,8 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | POST | `/api/newsletter-campaigns/:id/send` | Admin | Queue delivery to the saved snapshot |
 
 Client email marketing consent is distinct from WhatsApp consent. Only clients with explicit consent, a consent source, and a generated unsubscribe token are eligible; unsubscribing adds the address to the global suppression list.
+
+The Newsletter dashboard reports SMTP acceptance, failures, pending saved recipients, and recipient-source totals. SMTP acceptance only confirms Gmail accepted the message for onward delivery; it does not claim inbox placement, opens, or clicks.
 
 ### 7.5 WhatsApp Campaigns (Admin)
 

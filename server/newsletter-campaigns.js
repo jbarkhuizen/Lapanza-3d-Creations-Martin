@@ -60,6 +60,41 @@ export function listCampaignRecipients(id, db = getDb()) {
   `).all(id);
 }
 
+export function getCampaignAnalytics(db = getDb()) {
+  const totals = db.prepare(`
+    SELECT
+      COUNT(DISTINCT c.id) AS campaignCount,
+      COUNT(r.id) AS audienceCount,
+      SUM(CASE WHEN r.status = 'sent' THEN 1 ELSE 0 END) AS acceptedCount,
+      SUM(CASE WHEN r.status = 'failed' THEN 1 ELSE 0 END) AS failedCount,
+      SUM(CASE WHEN r.status = 'selected' THEN 1 ELSE 0 END) AS pendingCount
+    FROM newsletter_campaigns c
+    LEFT JOIN newsletter_campaign_recipients r ON r.campaign_id = c.id
+  `).get();
+  const bySource = db.prepare(`
+    SELECT
+      source_type AS sourceType,
+      COUNT(*) AS audienceCount,
+      SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) AS acceptedCount,
+      SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failedCount
+    FROM newsletter_campaign_recipients
+    GROUP BY source_type
+    ORDER BY audienceCount DESC, source_type
+  `).all();
+  const acceptedCount = totals.acceptedCount || 0;
+  const failedCount = totals.failedCount || 0;
+  const attemptedCount = acceptedCount + failedCount;
+  return {
+    campaignCount: totals.campaignCount || 0,
+    audienceCount: totals.audienceCount || 0,
+    acceptedCount,
+    failedCount,
+    pendingCount: totals.pendingCount || 0,
+    acceptanceRate: attemptedCount ? Math.round((acceptedCount / attemptedCount) * 100) : null,
+    bySource,
+  };
+}
+
 export function createCampaign(data, db = getDb()) {
   if (!data.subject || !String(data.subject).trim()) throw new Error('Subject is required');
   const content = data.importedHtml ? sanitizeImportedHtml(data.importedHtml) : data.blocks ? renderBlocks(data.blocks) : { bodyText: String(data.bodyText || '').trim(), bodyHtml: '' };

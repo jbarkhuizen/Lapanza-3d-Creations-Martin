@@ -90,6 +90,7 @@ import {
   createCampaign as createNewsletterCampaign,
   listEligibleRecipients as listNewsletterRecipients,
   listCampaignRecipients as listNewsletterCampaignRecipients,
+  getCampaignAnalytics as getNewsletterCampaignAnalytics,
   approveCampaign as approveNewsletterCampaign,
   sendTestCampaign,
   queueCampaign as queueNewsletterCampaign,
@@ -547,6 +548,10 @@ app.get('/api/newsletter/unsubscribe', (req, res) => {
 
 app.get('/api/newsletter-campaigns', requireAuth, (_req, res) => {
   res.json({ campaigns: listNewsletterCampaigns() });
+});
+
+app.get('/api/newsletter-campaigns/analytics', requireAuth, (_req, res) => {
+  res.json({ analytics: getNewsletterCampaignAnalytics() });
 });
 
 app.get('/api/newsletter-recipients', requireAuth, (_req, res) => {
