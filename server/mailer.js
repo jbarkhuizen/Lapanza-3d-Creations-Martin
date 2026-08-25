@@ -53,7 +53,7 @@ function buildOrderEmailBody(order) {
 
 Thanks for your order from Lapanza 3D Creative Lab.
 
-Order reference: ${order.id}
+Order reference: ${order.id.slice(0, 8)}
 
 Items:
 ${lines}

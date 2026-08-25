@@ -10,5 +10,5 @@ clearCart();
 
 const orderId = new URLSearchParams(window.location.search).get('order');
 if (orderId) {
-  document.getElementById('order-ref').textContent = `Order reference: ${orderId}`;
+  document.getElementById('order-ref').textContent = `Order reference: ${orderId.slice(0, 8)}`;
 }

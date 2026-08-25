@@ -155,24 +155,43 @@ function wireOptInPanel(client) {
   });
 }
 
-function showOrderPlacedSuccess(order, paymentMethod) {
+async function bankingDetailsHtml() {
+  try {
+    const res = await fetch('/site-settings.json', { cache: 'no-store' });
+    if (!res.ok) return '';
+    const s = await res.json();
+    if (!s.bankName) return '';
+    return `
+          <p class="mt-3 mb-1"><strong>Banking details</strong></p>
+          <p>Bank: ${escapeHtml(s.bankName)}</p>
+          <p>Account name: ${escapeHtml(s.bankAccountName)}</p>
+          <p>Account number: ${escapeHtml(s.bankAccountNumber)}</p>
+          <p>Branch code: ${escapeHtml(s.bankBranchCode)}</p>`;
+  } catch {
+    return ''; // Banking details were also emailed -- this panel is a convenience, not the only place to find them.
+  }
+}
+
+async function showOrderPlacedSuccess(order, paymentMethod) {
   document.getElementById('checkout-form').classList.add('hidden');
   const box = document.getElementById('checkout-success');
   box.classList.remove('hidden');
+  const reference = order.id.slice(0, 8);
   const paymentNote =
     paymentMethod === 'manual_eft'
       ? `<div class="border border-charcoal/10 rounded-sm p-4 bg-linen text-sm mb-4">
-          <p><strong>Order reference:</strong> ${escapeHtml(order.id)}</p>
+          <p><strong>Order reference:</strong> ${escapeHtml(reference)}</p>
           <p><strong>Amount:</strong> ${escapeHtml(formatPrice(order.total))}</p>
-          <p class="mt-2 text-espresso/60">Please pay via EFT using your order reference. Banking details have also been emailed to you.</p>
+          <p class="mt-2 text-espresso/60">Please pay via EFT using your order reference.</p>
+          ${await bankingDetailsHtml()}
         </div>`
       : `<div class="border border-charcoal/10 rounded-sm p-4 bg-linen text-sm mb-4">
-          <p><strong>Order reference:</strong> ${escapeHtml(order.id)}</p>
+          <p><strong>Order reference:</strong> ${escapeHtml(reference)}</p>
           <p><strong>Amount due on collection:</strong> ${escapeHtml(formatPrice(order.total))}</p>
           <p class="mt-2 text-espresso/60">We'll let you know when your order is ready to collect. Pay in cash when you pick it up.</p>
         </div>`;
   box.innerHTML = `
-    <h2 class="font-serif text-2xl mb-3">Order placed — ${escapeHtml(order.id.slice(0, 8))}</h2>
+    <h2 class="font-serif text-2xl mb-3">Order placed — ${escapeHtml(reference)}</h2>
     ${paymentNote}
     <a href="index.html" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors">Back to shop</a>
     ${order.client ? optInPanelHtml(order.client) : ''}`;
@@ -364,7 +383,7 @@ async function init() {
 
       if (paymentMethod === 'manual_eft' || paymentMethod === 'cash_on_collection') {
         clearCart();
-        showOrderPlacedSuccess(order, paymentMethod);
+        await showOrderPlacedSuccess(order, paymentMethod);
       } else {
         // Cart is cleared on the return_url page (checkout-complete.html),
         // not here -- clearing it before the customer has actually reached
@@ -393,7 +412,7 @@ async function init() {
   let detailsSnapshot = null;
 
   function currentDetailValues() {
-    return DETAIL_FIELDS.map((name) => form.querySelector(`[name="${name}"]`)?.value || '').join(' ');
+    return DETAIL_FIELDS.map((name) => form.querySelector(`[name="${name}"]`)?.value || '').join(' ');
   }
 
   function checkDetailsDirty() {
