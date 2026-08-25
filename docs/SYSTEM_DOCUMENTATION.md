@@ -703,6 +703,9 @@ Internal costing record. Not linked to storefront orders — but as of the "List
 > **Migration note:** `status` values were renamed from lowercase `planned`/`printed` to `Estimate`/`Printed` when the "List for sale" feature shipped — `ensurePrintJobColumns()` in `db.js` runs a one-time, idempotent `UPDATE` on every boot to convert any pre-existing rows.
 
 #### `in_house_filament`
+In-house printing stock is grouped by filament type and stores `brand`, `filament_type`, and `color_name`. The triple is case-insensitively unique for new records, preventing duplicate local stock entries. Available brands are maintained in Site Settings (`inHouseFilamentBrands`), initially SunLu, SA Filament, Build Volume, and Creality.
+
+An administrator transfers a roll by explicitly selecting the exact sellable filament item from Stock Management. The transaction atomically subtracts one from `filament_colours.stock_qty` and adds one to `in_house_filament.rolls_available`; transfers fail if the chosen sellable item does not exist or has no stock. This keeps customer-facing sellable stock separate from material reserved for internal printing.
 Physical rolls kept for internal/local printing — separate from the sellable `filament_colours` catalog.
 | Column | Type | Notes |
 |---|---|---|
@@ -978,6 +981,7 @@ Newsletter template, image, draft, approval, test-send, and queued-send changes 
 | PUT | `/api/print-jobs/:id/listing` | Admin | Updates the **already-linked** listing's stock/price ("printed 3 more"). Body: `{ stockQty, price }`. `400` if this job hasn't been listed yet |
 
 ### 7.13 In-House Filament (Admin)
+| POST | `/api/in-house-filament/:id/transfer-roll` | Admin | Transfer one selected sellable filament roll into in-house stock |
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
