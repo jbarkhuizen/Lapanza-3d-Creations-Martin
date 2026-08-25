@@ -44,13 +44,13 @@
     <form id="checkout-form" class="grid md:grid-cols-[1.4fr_1fr] gap-8 items-start">
       <div class="stack gap-6">
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Your items</h2>
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Your Items</h2>
           <ul id="checkout-lines" class="stack gap-3"></ul>
           <p class="text-sm text-espresso/60 mt-4">Total weight: <span id="checkout-weight">0g</span></p>
         </div>
 
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Your details</h2>
+          <div class="flex items-center justify-between mb-4"><h2 class="font-serif text-xl tracking-tight">Your Details</h2><button type="button" id="checkout-update-details" class="text-sm font-semibold underline">Update Details</button></div>
           <div class="grid sm:grid-cols-2 gap-4">
             <label class="block text-sm"><span class="block mb-1 text-espresso/70">First name *</span>
               <input name="firstName" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
@@ -59,6 +59,7 @@
               <input name="lastName" required class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
             </label>
           </div>
+          <div class="mt-4 stack gap-2 text-sm"><label class="flex gap-2"><input name="whatsappOptIn" type="checkbox" checked /> Consent to receive WhatsApp updates on new products and features</label><label class="flex gap-2"><input name="emailMarketingOptIn" type="checkbox" checked /> Consent to receive email updates and newsletters</label></div>
           <div class="grid sm:grid-cols-2 gap-4 mt-4">
             <label class="block text-sm"><span class="block mb-1 text-espresso/70">Business name (optional)</span>
               <input name="businessName" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent" />
@@ -99,7 +100,7 @@
 
       <div class="stack gap-6">
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping method</h2>
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping Options</h2>
           <div class="stack gap-2 text-sm mb-4">
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="courier" checked /> Our shipping (courier)</label>
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed" /> PUDO locker / local delivery</label>
@@ -110,12 +111,12 @@
         </div>
 
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Payment method</h2>
+          <h2 class="font-serif text-xl mb-4 tracking-tight">Payment Options</h2>
           <div class="stack gap-2 text-sm">
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_card" checked /> Payfast — Card</label>
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_eft" /> Payfast — Instant EFT</label>
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="manual_eft" /> Manual EFT</label>
-            <label id="checkout-coc-label" class="hidden items-center gap-2"><input type="radio" name="paymentMethod" value="cash_on_collection" /> Cash on Collection</label>
+            <label id="checkout-coc-label" class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="cash_on_collection" /> Cash on Collection</label>
           </div>
         </div>
 
@@ -124,7 +125,7 @@
           <div class="flex justify-between text-sm mb-3"><span>Shipping</span><span id="checkout-shipping-price">R0</span></div>
           <div class="flex justify-between font-serif text-xl mb-4"><span>Total</span><span id="checkout-total" class="text-terracotta">R0</span></div>
           <p id="checkout-error" class="hidden text-sm text-terracotta mb-3"></p>
-          <button type="submit" id="checkout-submit" class="w-full text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-3 hover:bg-terracotta transition-colors">Place order</button>
+          <button type="submit" id="checkout-submit" class="w-full text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-5 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Place Order</button>
           <p class="text-xs text-espresso/50 mt-3 text-center">By placing this order you agree to our <a href="terms.html" class="hover:text-terracotta underline">Terms &amp; Conditions</a> and <a href="returns.html" class="hover:text-terracotta underline">Returns Policy</a>.</p>
         </div>
       </div>

@@ -79,8 +79,8 @@ function insertClient(db, data) {
   // lastName (checkout) or just name (admin's own client form).
   const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim();
   db.prepare(
-    `INSERT INTO clients (id, client_code, name, first_name, last_name, business_name, email, phone, street, suburb, city, province, postal_code, country, discount_pct, discount_note, source, email_marketing_opt_in, email_marketing_opted_in_at, email_marketing_consent_source, email_marketing_token, created_at)
-     VALUES (@id, @client_code, @name, @first_name, @last_name, @business_name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @discount_pct, @discount_note, @source, @email_marketing_opt_in, @email_marketing_opted_in_at, @email_marketing_consent_source, @email_marketing_token, @created_at)`,
+    `INSERT INTO clients (id, client_code, name, first_name, last_name, business_name, email, phone, street, suburb, city, province, postal_code, country, discount_pct, discount_note, source, whatsapp_opt_in, email_marketing_opt_in, email_marketing_opted_in_at, email_marketing_consent_source, email_marketing_token, created_at)
+     VALUES (@id, @client_code, @name, @first_name, @last_name, @business_name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @discount_pct, @discount_note, @source, @whatsapp_opt_in, @email_marketing_opt_in, @email_marketing_opted_in_at, @email_marketing_consent_source, @email_marketing_token, @created_at)`,
   ).run({
     id,
     client_code: clientCode,
@@ -99,6 +99,7 @@ function insertClient(db, data) {
     discount_pct: Number(data.discountPct) || 0,
     discount_note: data.discountNote || '',
     source: data.source || '',
+    whatsapp_opt_in: data.whatsappOptIn ? 1 : 0,
     email_marketing_opt_in: emailMarketingOptIn ? 1 : 0,
     email_marketing_opted_in_at: emailMarketingOptIn ? new Date().toISOString() : null,
     email_marketing_consent_source: emailMarketingOptIn ? emailMarketingConsentSource : '',
@@ -120,13 +121,14 @@ export function updateClient(id, data, db = getDb()) {
   const email = data.email !== undefined ? String(data.email).trim() : existing.email;
   if (!email) throw new Error('Email is required');
   const emailMarketingOptIn = data.emailMarketingOptIn !== undefined ? Boolean(data.emailMarketingOptIn) : existing.emailMarketingOptIn;
+  const whatsappOptIn = data.whatsappOptIn !== undefined ? Boolean(data.whatsappOptIn) : existing.whatsappOptIn;
   const consentChanged = emailMarketingOptIn !== existing.emailMarketingOptIn;
   const emailMarketingConsentSource = String(data.emailMarketingConsentSource ?? existing.emailMarketingConsentSource ?? '').trim();
   if (emailMarketingOptIn && !emailMarketingConsentSource) throw new Error('Email marketing consent source is required');
   const existingMarketingToken = db.prepare('SELECT email_marketing_token FROM clients WHERE id = ?').get(id).email_marketing_token;
   db.prepare(
     `UPDATE clients SET name = @name, first_name = @first_name, last_name = @last_name, business_name = @business_name,
-      email = @email, phone = @phone, street = @street, suburb = @suburb,
+      email = @email, phone = @phone, whatsapp_opt_in = @whatsapp_opt_in, street = @street, suburb = @suburb,
       city = @city, province = @province, postal_code = @postal_code, country = @country,
       discount_pct = @discount_pct, discount_note = @discount_note, source = @source,
       email_marketing_opt_in = @email_marketing_opt_in, email_marketing_opted_in_at = @email_marketing_opted_in_at,
@@ -139,6 +141,7 @@ export function updateClient(id, data, db = getDb()) {
     business_name: data.businessName ?? existing.businessName,
     email,
     phone: data.phone ?? existing.phone,
+    whatsapp_opt_in: whatsappOptIn ? 1 : 0,
     street: data.street ?? existing.street,
     suburb: data.suburb ?? existing.suburb,
     city: data.city ?? existing.city,
@@ -165,7 +168,7 @@ export function findOrCreateClientForCheckout(data, db = getDb()) {
   if (!email) throw new Error('Email is required');
   const tx = db.transaction((d) => {
     const existing = findClientByEmail(email, db);
-    if (existing) return existing;
+    if (existing) return updateClient(existing.id, d, db);
     return insertClient(db, d);
   });
   return tx(data);

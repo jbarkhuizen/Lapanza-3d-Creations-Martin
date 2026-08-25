@@ -257,15 +257,7 @@ async function init() {
   }
 
   function updatePaymentOptions() {
-    const isCollect = form.shippingMethod.value === 'collect';
-    cocLabel.classList.toggle('hidden', !isCollect);
-    cocLabel.classList.toggle('flex', isCollect);
-    // Cash on Collection only makes sense when actually collecting -- if the
-    // customer had it selected and then switches to a shipped method, fall
-    // back to a sane default rather than submitting an invalid combination.
-    if (!isCollect && form.paymentMethod.value === 'cash_on_collection') {
-      form.querySelector('[name="paymentMethod"][value="payfast_card"]').checked = true;
-    }
+    cocLabel.classList.add('flex');
   }
 
   form.querySelectorAll('[name="shippingMethod"]').forEach((r) =>
@@ -281,6 +273,7 @@ async function init() {
     if (!shippingReady) return;
 
     const data = new FormData(form);
+    if (!form.reportValidity()) return;
     const client = {
       name: `${data.get('firstName')} ${data.get('lastName')}`.trim(),
       firstName: data.get('firstName'),
@@ -294,6 +287,9 @@ async function init() {
       province: data.get('province'),
       postalCode: data.get('postalCode'),
       country: data.get('country'),
+      whatsappOptIn: data.get('whatsappOptIn') === 'on',
+      emailMarketingOptIn: data.get('emailMarketingOptIn') === 'on',
+      emailMarketingConsentSource: data.get('emailMarketingOptIn') === 'on' ? 'checkout' : '',
     };
     const paymentMethod = data.get('paymentMethod');
     const shippingMethod = data.get('shippingMethod');
@@ -328,6 +324,10 @@ async function init() {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Place order';
     }
+  });
+  document.getElementById('checkout-update-details').addEventListener('click', () => {
+    form.querySelector('[name="firstName"]').focus();
+    form.querySelector('[name="firstName"]').scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 }
 
