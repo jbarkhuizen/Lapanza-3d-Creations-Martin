@@ -76,6 +76,23 @@ export function unsubscribe(token, db = getDb()) {
   return rowToSubscriber(getSubscriberById(row.id, db));
 }
 
+export function unsubscribeMarketing(token, db = getDb()) {
+  const subscriber = unsubscribe(token, db);
+  if (subscriber) {
+    db.prepare('INSERT OR IGNORE INTO newsletter_suppressions (email, reason, created_at) VALUES (?, ?, ?)')
+      .run(subscriber.email, 'unsubscribe', new Date().toISOString());
+    return subscriber;
+  }
+  const client = db.prepare('SELECT id, email FROM clients WHERE email_marketing_token = ? AND email_marketing_opt_in = 1').get(token);
+  if (!client) return null;
+  db.transaction(() => {
+    db.prepare("UPDATE clients SET email_marketing_opt_in = 0, email_marketing_opted_in_at = NULL, email_marketing_consent_source = '', email_marketing_token = NULL WHERE id = ?").run(client.id);
+    db.prepare('INSERT OR IGNORE INTO newsletter_suppressions (email, reason, created_at) VALUES (?, ?, ?)')
+      .run(client.email, 'unsubscribe', new Date().toISOString());
+  })();
+  return { id: client.id, email: client.email };
+}
+
 export function listSubscribers({ status } = {}, db = getDb()) {
   const rows = status
     ? db.prepare('SELECT * FROM newsletter_subscribers WHERE status = ? ORDER BY subscribed_at DESC').all(status)

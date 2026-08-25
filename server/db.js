@@ -293,6 +293,27 @@ export function ensureSchema(db) {
       sent_count INTEGER NOT NULL DEFAULT 0,
       failed_count INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS newsletter_campaign_recipients (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES newsletter_campaigns(id) ON DELETE CASCADE,
+      recipient_key TEXT NOT NULL,
+      email TEXT NOT NULL,
+      display_name TEXT NOT NULL DEFAULT '',
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      unsubscribe_token TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'selected',
+      selected_at TEXT NOT NULL,
+      sent_at TEXT,
+      failure_reason TEXT NOT NULL DEFAULT '',
+      UNIQUE(campaign_id, email)
+    );
+    CREATE INDEX IF NOT EXISTS idx_newsletter_campaign_recipients_campaign ON newsletter_campaign_recipients (campaign_id, status);
+    CREATE TABLE IF NOT EXISTS newsletter_suppressions (
+      email TEXT PRIMARY KEY COLLATE NOCASE,
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
 
     -- template_params_json holds the {{1}}/{{2}}... substitution values for
     -- the Meta-approved template named by template_name -- WhatsApp Business
@@ -430,6 +451,7 @@ export function ensureSchema(db) {
   `);
   ensureCheckoutColumns(db);
   ensureClientAuthColumns(db);
+  ensureNewsletterCampaignColumns(db);
   ensureManagementColumns(db);
   ensureEngagementColumns(db);
   ensurePasswordResetColumns(db);
@@ -639,6 +661,21 @@ function ensurePasswordResetColumns(db) {
   }
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'reset_token_expires')) {
     db.exec('ALTER TABLE clients ADD COLUMN reset_token_expires TEXT');
+  }
+}
+
+function ensureNewsletterCampaignColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'email_marketing_opt_in')) {
+    db.exec('ALTER TABLE clients ADD COLUMN email_marketing_opt_in INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'email_marketing_opted_in_at')) {
+    db.exec('ALTER TABLE clients ADD COLUMN email_marketing_opted_in_at TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'email_marketing_consent_source')) {
+    db.exec("ALTER TABLE clients ADD COLUMN email_marketing_consent_source TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'email_marketing_token')) {
+    db.exec('ALTER TABLE clients ADD COLUMN email_marketing_token TEXT');
   }
 }
 

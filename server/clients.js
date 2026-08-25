@@ -35,6 +35,9 @@ function rowToClient(row) {
     // Phase 4
     lastLoginAt: row.last_login_at,
     whatsappOptIn: Boolean(row.whatsapp_opt_in),
+    emailMarketingOptIn: Boolean(row.email_marketing_opt_in),
+    emailMarketingOptedInAt: row.email_marketing_opted_in_at,
+    emailMarketingConsentSource: row.email_marketing_consent_source,
   };
 }
 
@@ -68,13 +71,16 @@ export function findClientByEmail(email, db = getDb()) {
 function insertClient(db, data) {
   const id = randomUUID();
   const clientCode = nextClientCode(db);
+  const emailMarketingOptIn = Boolean(data.emailMarketingOptIn);
+  const emailMarketingConsentSource = String(data.emailMarketingConsentSource || '').trim();
+  if (emailMarketingOptIn && !emailMarketingConsentSource) throw new Error('Email marketing consent source is required');
   // `name` is kept as a single display field (used by admin list, packing
   // slip, order emails) regardless of whether the caller sent firstName/
   // lastName (checkout) or just name (admin's own client form).
   const name = data.name || `${data.firstName || ''} ${data.lastName || ''}`.trim();
   db.prepare(
-    `INSERT INTO clients (id, client_code, name, first_name, last_name, business_name, email, phone, street, suburb, city, province, postal_code, country, discount_pct, discount_note, source, created_at)
-     VALUES (@id, @client_code, @name, @first_name, @last_name, @business_name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @discount_pct, @discount_note, @source, @created_at)`,
+    `INSERT INTO clients (id, client_code, name, first_name, last_name, business_name, email, phone, street, suburb, city, province, postal_code, country, discount_pct, discount_note, source, email_marketing_opt_in, email_marketing_opted_in_at, email_marketing_consent_source, email_marketing_token, created_at)
+     VALUES (@id, @client_code, @name, @first_name, @last_name, @business_name, @email, @phone, @street, @suburb, @city, @province, @postal_code, @country, @discount_pct, @discount_note, @source, @email_marketing_opt_in, @email_marketing_opted_in_at, @email_marketing_consent_source, @email_marketing_token, @created_at)`,
   ).run({
     id,
     client_code: clientCode,
@@ -93,6 +99,10 @@ function insertClient(db, data) {
     discount_pct: Number(data.discountPct) || 0,
     discount_note: data.discountNote || '',
     source: data.source || '',
+    email_marketing_opt_in: emailMarketingOptIn ? 1 : 0,
+    email_marketing_opted_in_at: emailMarketingOptIn ? new Date().toISOString() : null,
+    email_marketing_consent_source: emailMarketingOptIn ? emailMarketingConsentSource : '',
+    email_marketing_token: emailMarketingOptIn ? randomBytes(32).toString('hex') : null,
     created_at: new Date().toISOString(),
   });
   return getClient(id, db);
@@ -109,11 +119,18 @@ export function updateClient(id, data, db = getDb()) {
   if (!existing) return null;
   const email = data.email !== undefined ? String(data.email).trim() : existing.email;
   if (!email) throw new Error('Email is required');
+  const emailMarketingOptIn = data.emailMarketingOptIn !== undefined ? Boolean(data.emailMarketingOptIn) : existing.emailMarketingOptIn;
+  const consentChanged = emailMarketingOptIn !== existing.emailMarketingOptIn;
+  const emailMarketingConsentSource = String(data.emailMarketingConsentSource ?? existing.emailMarketingConsentSource ?? '').trim();
+  if (emailMarketingOptIn && !emailMarketingConsentSource) throw new Error('Email marketing consent source is required');
+  const existingMarketingToken = db.prepare('SELECT email_marketing_token FROM clients WHERE id = ?').get(id).email_marketing_token;
   db.prepare(
     `UPDATE clients SET name = @name, first_name = @first_name, last_name = @last_name, business_name = @business_name,
       email = @email, phone = @phone, street = @street, suburb = @suburb,
       city = @city, province = @province, postal_code = @postal_code, country = @country,
-      discount_pct = @discount_pct, discount_note = @discount_note, source = @source WHERE id = @id`,
+      discount_pct = @discount_pct, discount_note = @discount_note, source = @source,
+      email_marketing_opt_in = @email_marketing_opt_in, email_marketing_opted_in_at = @email_marketing_opted_in_at,
+      email_marketing_consent_source = @email_marketing_consent_source, email_marketing_token = @email_marketing_token WHERE id = @id`,
   ).run({
     id,
     name: data.name ?? existing.name,
@@ -131,6 +148,10 @@ export function updateClient(id, data, db = getDb()) {
     discount_pct: data.discountPct !== undefined ? Number(data.discountPct) || 0 : existing.discountPct,
     discount_note: data.discountNote ?? existing.discountNote,
     source: data.source ?? existing.source,
+    email_marketing_opt_in: emailMarketingOptIn ? 1 : 0,
+    email_marketing_opted_in_at: emailMarketingOptIn ? (consentChanged ? new Date().toISOString() : existing.emailMarketingOptedInAt) : null,
+    email_marketing_consent_source: emailMarketingOptIn ? emailMarketingConsentSource : '',
+    email_marketing_token: emailMarketingOptIn ? (consentChanged || !existingMarketingToken ? randomBytes(32).toString('hex') : existingMarketingToken) : null,
   });
   return getClient(id, db);
 }

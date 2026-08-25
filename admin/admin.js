@@ -2381,7 +2381,7 @@ function blankClient() {
   return {
     id: null, name: '', firstName: '', lastName: '', businessName: '', email: '', phone: '',
     street: '', suburb: '', city: '', province: '', postalCode: '', country: 'South Africa',
-    discountPct: 0, discountNote: '', source: '',
+    discountPct: 0, discountNote: '', source: '', emailMarketingOptIn: false, emailMarketingConsentSource: '',
   };
 }
 
@@ -2480,6 +2480,11 @@ async function renderClients() {
           <label class="field"><span>Lead source</span><input id="cf-source" value="${escapeAttr(form.source || '')}" placeholder="e.g. Website, Facebook, WA Group" /></label>
         </div>
         <p class="muted" style="font-size:0.8rem">Discount only applies on manually-created orders (New Order) — never automatically at online checkout.</p>
+        <div class="grid-2">
+          <label class="field checkbox"><input id="cf-email-marketing-opt-in" type="checkbox" ${form.emailMarketingOptIn ? 'checked' : ''} /><span>Email marketing consent recorded</span></label>
+          <label class="field"><span>Consent source</span><input id="cf-email-marketing-source" value="${escapeAttr(form.emailMarketingConsentSource || '')}" placeholder="e.g. Written consent, website signup" ${form.emailMarketingOptIn ? '' : 'disabled'} /></label>
+        </div>
+        <p class="muted" style="font-size:0.8rem">Only clients with explicit email-marketing consent can be selected for a newsletter. WhatsApp consent is separate.</p>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-client" type="button">Save</button>
           <button class="btn btn-ghost" id="cancel-client" type="button">Cancel</button>
@@ -2546,6 +2551,8 @@ async function renderClients() {
         discountPct: Number($('#cf-discount-pct').value) || 0,
         discountNote: $('#cf-discount-note').value,
         source: $('#cf-source').value,
+        emailMarketingOptIn: $('#cf-email-marketing-opt-in').checked,
+        emailMarketingConsentSource: $('#cf-email-marketing-source').value,
       };
       try {
         if (form.id) await api(`/api/clients/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
@@ -2556,6 +2563,9 @@ async function renderClients() {
       } catch (ex) {
         toast(ex.message);
       }
+    });
+    $('#cf-email-marketing-opt-in').addEventListener('change', (event) => {
+      $('#cf-email-marketing-source').disabled = !event.target.checked;
     });
   }
 }
@@ -3522,7 +3532,7 @@ function campaignStatusBadge(status) {
 }
 
 async function renderNewsletterCampaigns() {
-  const { campaigns } = await api('/api/newsletter-campaigns');
+  const [{ campaigns }, { recipients }] = await Promise.all([api('/api/newsletter-campaigns'), api('/api/newsletter-recipients')]);
 
   const rows = campaigns
     .map(
@@ -3531,20 +3541,25 @@ async function renderNewsletterCampaigns() {
           <td>${escapeHtml(c.subject)}</td>
           <td>${campaignStatusBadge(c.status)}</td>
           <td>${formatDate(c.createdAt)}</td>
-          <td>${c.status === 'sent' ? `${escapeHtml(String(c.sentCount))} sent${c.failedCount ? `, ${escapeHtml(String(c.failedCount))} failed` : ''}` : '—'}</td>
+          <td>${escapeHtml(String(c.selectedCount))} selected · ${escapeHtml(String(c.sentCount))} sent${c.failedCount ? ` · ${escapeHtml(String(c.failedCount))} failed` : ''}</td>
           <td>
             ${c.status === 'draft' ? '<button class="btn small" data-action="approve" type="button">Approve</button>' : ''}
-            ${c.status === 'approved' ? '<button class="btn small btn-primary" data-action="send" type="button">Send</button>' : ''}
+            ${['approved', 'partial'].includes(c.status) ? '<button class="btn small" data-action="test" type="button">Send test</button><button class="btn small btn-primary" data-action="send" type="button">Send</button>' : ''}
+            <button class="btn small" data-action="recipients" type="button">Recipients</button>
           </td>
         </tr>`,
     )
     .join('');
 
   $('#view-newsletter').innerHTML = `
-    <div class="panel stack gap-3" style="max-width:600px">
-      <div class="section-head"><h3>Compose newsletter</h3></div>
+    <div class="panel stack gap-3">
+      <div class="section-head"><div><h3>Compose newsletter</h3><p class="muted">Select only recipients with confirmed newsletter consent or recorded client email-marketing consent.</p></div></div>
       <label class="field"><span>Subject</span><input id="nc-subject" /></label>
       <label class="field"><span>Body</span><textarea id="nc-body" rows="6"></textarea></label>
+      <div class="newsletter-recipient-picker">
+        <div class="section-head"><strong>Eligible recipients (${escapeHtml(String(recipients.length))})</strong><label class="field checkbox"><input id="nc-select-all" type="checkbox" /><span>Select all</span></label></div>
+        <div class="newsletter-recipient-list">${recipients.map((recipient) => `<label class="newsletter-recipient"><input class="nc-recipient" type="checkbox" value="${escapeAttr(recipient.key)}" /><span><strong>${escapeHtml(recipient.name || recipient.email)}</strong><small>${escapeHtml(recipient.email)} · ${escapeHtml(recipient.sourceType)}</small></span></label>`).join('') || '<p class="muted">No eligible recipients. Record client email-marketing consent or wait for a subscriber to confirm.</p>'}</div>
+      </div>
       <div class="row-card-actions">
         <button class="btn btn-primary" id="save-campaign" type="button">Save as draft</button>
       </div>
@@ -3559,14 +3574,16 @@ async function renderNewsletterCampaigns() {
   $('#save-campaign').addEventListener('click', async () => {
     const subject = $('#nc-subject').value;
     const bodyText = $('#nc-body').value;
+    const recipientKeys = $$('.nc-recipient:checked', $('#view-newsletter')).map((input) => input.value);
     try {
-      await api('/api/newsletter-campaigns', { method: 'POST', body: JSON.stringify({ subject, bodyText }) });
+      await api('/api/newsletter-campaigns', { method: 'POST', body: JSON.stringify({ subject, bodyText, recipientKeys }) });
       toast('Campaign saved as draft');
       await renderNewsletterCampaigns();
     } catch (ex) {
       toast(ex.message);
     }
   });
+  $('#nc-select-all').addEventListener('change', (event) => $$('.nc-recipient', $('#view-newsletter')).forEach((input) => { input.checked = event.target.checked; }));
 
   $$('#view-newsletter tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="approve"]')?.addEventListener('click', async () => {
@@ -3579,14 +3596,30 @@ async function renderNewsletterCampaigns() {
       }
     });
     tr.querySelector('[data-action="send"]')?.addEventListener('click', async () => {
-      if (!confirm('Send this campaign to every confirmed newsletter subscriber now?')) return;
+      if (!confirm('Queue this campaign for its saved recipients now?')) return;
       try {
         const { campaign } = await api(`/api/newsletter-campaigns/${tr.dataset.id}/send`, { method: 'POST' });
-        toast(`Sent to ${campaign.sentCount} subscriber(s)${campaign.failedCount ? `, ${campaign.failedCount} failed` : ''}`);
+        toast(`Campaign is sending to ${campaign.selectedCount} selected recipient(s)`);
         await renderNewsletterCampaigns();
+        setTimeout(() => renderNewsletterCampaigns().catch(() => {}), 3000);
       } catch (ex) {
         toast(ex.message);
       }
+    });
+    tr.querySelector('[data-action="test"]')?.addEventListener('click', async () => {
+      const email = prompt('Send a test email to:');
+      if (!email) return;
+      try {
+        await api(`/api/newsletter-campaigns/${tr.dataset.id}/test`, { method: 'POST', body: JSON.stringify({ email }) });
+        toast('Test email sent');
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="recipients"]')?.addEventListener('click', async () => {
+      const { recipients: selected } = await api(`/api/newsletter-campaigns/${tr.dataset.id}/recipients`);
+      const summary = selected.map((recipient) => `${recipient.email} — ${recipient.status}${recipient.failureReason ? ` (${recipient.failureReason})` : ''}`).join('\n');
+      alert(summary || 'No recipients selected.');
     });
   });
 }

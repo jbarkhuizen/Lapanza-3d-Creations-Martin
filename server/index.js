@@ -84,12 +84,15 @@ import {
   sendNewOrderNotificationEmail,
   sendNewDesignRequestNotificationEmail,
 } from './mailer.js';
-import { subscribe as subscribeNewsletter, confirm as confirmNewsletter, unsubscribe as unsubscribeNewsletter } from './newsletter.js';
+import { subscribe as subscribeNewsletter, confirm as confirmNewsletter, unsubscribeMarketing } from './newsletter.js';
 import {
   listCampaigns as listNewsletterCampaigns,
   createCampaign as createNewsletterCampaign,
+  listEligibleRecipients as listNewsletterRecipients,
+  listCampaignRecipients as listNewsletterCampaignRecipients,
   approveCampaign as approveNewsletterCampaign,
-  sendCampaign as sendNewsletterCampaign,
+  sendTestCampaign,
+  queueCampaign as queueNewsletterCampaign,
 } from './newsletter-campaigns.js';
 import {
   listCampaigns as listWhatsAppCampaigns,
@@ -524,7 +527,7 @@ app.get('/api/newsletter/confirm', (req, res) => {
 });
 
 app.get('/api/newsletter/unsubscribe', (req, res) => {
-  const subscriber = unsubscribeNewsletter(req.query.token);
+  const subscriber = unsubscribeMarketing(req.query.token);
   const siteUrl = siteUrlFor(req);
   res.redirect(`${siteUrl}/index.html?newsletter=${subscriber ? 'unsubscribed' : 'invalid'}`);
 });
@@ -533,6 +536,16 @@ app.get('/api/newsletter/unsubscribe', (req, res) => {
 
 app.get('/api/newsletter-campaigns', requireAuth, (_req, res) => {
   res.json({ campaigns: listNewsletterCampaigns() });
+});
+
+app.get('/api/newsletter-recipients', requireAuth, (_req, res) => {
+  res.json({ recipients: listNewsletterRecipients() });
+});
+
+app.get('/api/newsletter-campaigns/:id/recipients', requireAuth, (req, res) => {
+  const campaign = listNewsletterCampaigns().find((item) => item.id === req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  res.json({ recipients: listNewsletterCampaignRecipients(req.params.id) });
 });
 
 app.post('/api/newsletter-campaigns', requireAuth, (req, res) => {
@@ -555,7 +568,17 @@ app.patch('/api/newsletter-campaigns/:id/approve', requireAuth, (req, res) => {
 
 app.post('/api/newsletter-campaigns/:id/send', requireAuth, async (req, res) => {
   try {
-    const campaign = await sendNewsletterCampaign(req.params.id, { siteUrl: siteUrlFor(req) });
+    const campaign = queueNewsletterCampaign(req.params.id, { siteUrl: siteUrlFor(req) });
+    if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    res.status(202).json({ campaign });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/newsletter-campaigns/:id/test', requireAuth, async (req, res) => {
+  try {
+    const campaign = await sendTestCampaign(req.params.id, (req.body || {}).email, { siteUrl: siteUrlFor(req) });
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
     res.json({ campaign });
   } catch (err) {

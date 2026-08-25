@@ -370,7 +370,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-26 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+28 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -739,9 +739,12 @@ Supplier expense tracking.
 | Column | Type | Notes |
 |---|---|---|
 | id, subject, body_text | | |
-| status | TEXT DEFAULT 'draft' | `draft` \| `approved` \| `sent` |
+| status | TEXT DEFAULT 'draft' | `draft` \| `approved` \| `sending` \| `sent` \| `partial` |
 | created_at, approved_at, sent_at | TEXT NULL | |
 | sent_count, failed_count | INTEGER | Per-recipient send outcome tally |
+
+#### `newsletter_campaign_recipients` and `newsletter_suppressions`
+Campaign recipient rows are an immutable audience snapshot: email, source, unsubscribe token, selected/sent/failed status, delivery time, and bounded failure reason. `newsletter_suppressions` is the global no-send list populated by an unsubscribe, preventing a contact from being selected by any future campaign.
 
 #### `whatsapp_campaigns`
 | Column | Type | Notes |
@@ -883,9 +886,14 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/newsletter-campaigns` | Admin | List campaigns |
+| GET | `/api/newsletter-recipients` | Admin | List eligible confirmed subscribers and explicitly opted-in clients |
 | POST | `/api/newsletter-campaigns` | Admin | Create draft |
 | PATCH | `/api/newsletter-campaigns/:id/approve` | Admin | draft → approved |
-| POST | `/api/newsletter-campaigns/:id/send` | Admin | approved → sent (emails every `confirmed` subscriber) |
+| GET | `/api/newsletter-campaigns/:id/recipients` | Admin | View a campaign's saved recipient snapshot and delivery statuses |
+| POST | `/api/newsletter-campaigns/:id/test` | Admin | Send a test email to an administrator-supplied address |
+| POST | `/api/newsletter-campaigns/:id/send` | Admin | Queue delivery to the saved snapshot |
+
+Client email marketing consent is distinct from WhatsApp consent. Only clients with explicit consent, a consent source, and a generated unsubscribe token are eligible; unsubscribing adds the address to the global suppression list.
 
 ### 7.5 WhatsApp Campaigns (Admin)
 
@@ -1172,13 +1180,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A[Admin composes<br/>subject + body] -->|Save as draft| B(status: draft)
+    A[Admin composes<br/>subject + body + recipients] -->|Save as draft| B(status: draft)
     B -->|Approve| C(status: approved)
-    C -->|Send| D{For each subscriber<br/>where status=confirmed}
-    D -->|success| E[sent_count++]
-    D -->|failure e.g. SMTP not configured| F[failed_count++<br/>never aborts the run]
+    C -->|Queue send| D{Saved consented-recipient snapshot}
+    D -->|success| E[Recipient marked sent]
+    D -->|failure e.g. SMTP unavailable| F[Recipient marked failed]
     E --> G(status: sent)
-    F --> G
+    F --> H(status: partial; retry allowed)
 ```
 
 ### 8.5 WhatsApp Campaign Lifecycle
