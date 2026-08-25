@@ -294,6 +294,21 @@ code {
 }
 .release-commit summary { cursor: pointer; }
 .release-commit .muted { margin: 0.5rem 0 0; }
+.documentation-list { display: grid; gap: 0.75rem; }
+.documentation-card {
+  display: flex; justify-content: space-between; gap: 1rem; align-items: center;
+  padding: 0.9rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg-soft);
+}
+.documentation-card h4 { margin: 0; }
+.documentation-card .muted { margin: 0.35rem 0; }
+.test-run-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.test-run-controls select { min-width: 220px; border: 1px solid var(--line); background: var(--bg-elevated); border-radius: 8px; padding: 0.6rem; }
+.test-run-status { color: var(--muted); }
+.badge.test-passed { background: rgb(31 122 69 / 0.14); color: var(--ok); }
+.badge.test-failed { background: rgb(178 34 34 / 0.16); color: #a51d1d; }
+.badge.test-running { background: rgb(163 107 18 / 0.16); color: var(--warn); }
+.test-run-history { display: flex; gap: 0.5rem; align-items: center; text-align: left; border: 0; padding: 0.6rem; background: var(--bg-soft); cursor: pointer; border-radius: 8px; color: inherit; }
+.test-output { max-height: 32rem; overflow: auto; white-space: pre-wrap; padding: 0.8rem; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-soft); font-size: 0.8rem; }
 
 .table-wrap { overflow: auto; }
 table.catalog {

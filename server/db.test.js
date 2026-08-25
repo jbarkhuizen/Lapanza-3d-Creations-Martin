@@ -33,6 +33,8 @@ test('ensureSchema creates every expected table', () => {
     'resources',
     'settings',
     'shipping_options',
+    'test_run_cases',
+    'test_runs',
     'todo_items',
     'version_history',
     'version_release_details',

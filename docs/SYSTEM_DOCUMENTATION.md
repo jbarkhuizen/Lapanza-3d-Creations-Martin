@@ -370,7 +370,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-24 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+26 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -788,7 +788,7 @@ Track deployments and system updates. Every row is created automatically by `scr
 | *(indexes)* | `version_number DESC` | Legacy — `listVersions()` actually orders by `created_at DESC, version_number DESC` |
 
 #### `todo_items`
-Backlog/todo tracker (admin "Todo / Backlog" page, §7.22). Append-only — no delete function exists.
+Backlog/todo tracker (admin "Todo / Backlog" page, §7.23). Append-only — no delete function exists.
 | Column | Type | Notes |
 |---|---|---|
 | id | TEXT PK | |
@@ -1042,7 +1042,27 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 - `version_number` is a legacy plain-incrementing integer, kept only to satisfy the original schema's `NOT NULL UNIQUE` constraint — not shown in the UI.
 - `deployed_date` is always the record-time timestamp (ISO 8601). `deployed_by` is `'deploy'` for every automated row.
 
-### 7.22 Todo / Backlog (Admin)
+### 7.22 Documentation and Test Cases (Admin)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/documentation` | Admin | List all checked-in Markdown documentation (`README.md` and `docs/**/*.md`) |
+| GET | `/api/documentation/:id` | Admin | Open one catalogued Markdown document |
+| GET | `/api/test-cases` | Admin | List discovered Node test cases and recent test-run summaries |
+| POST | `/api/test-runs` | Admin | Start an `all`, `suite`, or `selected` catalogued test run |
+| GET | `/api/test-runs/:id` | Admin | Read a run's current state, result counts, captured output, and individual selected-case results |
+
+**Behaviour:**
+- The Documentation page links every Markdown file committed under `docs/`, plus the root `README.md`. The server generates an opaque document ID from the allowlisted path; the download endpoint cannot read arbitrary server files.
+- The Test Cases page discovers `server/*.test.js` test names, displays each test's latest individual result, and keeps recent full/suite/selected run summaries in `test_runs`.
+- Administrators can run all test cases, one complete suite, or selected individual test cases. Commands are constructed server-side with `node --test`; the browser sends only catalog IDs and never command text, file paths, or shell arguments. On a Git checkout, each run executes from a temporary detached Git worktree with the checked-out dependency directory linked in, so generated test artifacts cannot modify the live application checkout or its local business data.
+- Only one test run can be active at a time. Output is captured (up to 100 KB per run) for the report and selected-case output (up to 25 KB per case) is retained in `test_run_cases`.
+
+#### `test_runs` and `test_run_cases`
+
+`test_runs` stores the requested scope, status, requesting admin, start/end time, duration, passed/failed/skipped totals, and bounded runner output. `test_run_cases` stores the result of each individually selected test case, allowing the Test Cases page to show the most recent case-level status.
+
+### 7.23 Todo / Backlog (Admin)
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -1814,7 +1834,7 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 
 ## 15. Known Limitations & Technical Debt
 
-These 13 items were seeded as the first entries in the admin **Todo / Backlog** page (Settings group, §7.22) when it shipped — that page is now the **live, authoritative source** for current status (a Backlog item here may since have moved to In Progress/Done/Won't Fix there without this static table being updated to match). This table stays as the point-in-time detail captured when each gap was first identified.
+These 13 items were seeded as the first entries in the admin **Todo / Backlog** page (Settings group, §7.23) when it shipped — that page is now the **live, authoritative source** for current status (a Backlog item here may since have moved to In Progress/Done/Won't Fix there without this static table being updated to match). This table stays as the point-in-time detail captured when each gap was first identified.
 
 | Item | Detail |
 |---|---|

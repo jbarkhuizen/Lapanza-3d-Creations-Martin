@@ -127,6 +127,8 @@ import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurch
 import { getVersion, listVersions } from './version-history.js';
 import { getReleaseDetails } from './release-details.js';
 import { listTodos, createTodo, updateTodo } from './todos.js';
+import { getDocumentation, listDocumentation } from './documentation.js';
+import { getTestRun, listTestCases, listTestRuns, startTestRun } from './test-runs.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -1819,6 +1821,35 @@ app.get('/api/version-history/:id', requireAuth, (req, res) => {
   const version = getVersion(req.params.id);
   if (!version) return res.status(404).json({ error: 'Version not found' });
   res.json({ version, releaseDetails: getReleaseDetails(version.id) });
+});
+
+app.get('/api/documentation', requireAuth, (_req, res) => {
+  res.json({ documents: listDocumentation(root) });
+});
+
+app.get('/api/documentation/:id', requireAuth, (req, res) => {
+  const document = getDocumentation(req.params.id, root);
+  if (!document) return res.status(404).json({ error: 'Documentation not found' });
+  res.type('text/markdown').set('Content-Disposition', `inline; filename="${path.basename(document.path)}"`).send(document.content);
+});
+
+app.get('/api/test-cases', requireAuth, (_req, res) => {
+  res.json({ cases: listTestCases(root), runs: listTestRuns() });
+});
+
+app.get('/api/test-runs/:id', requireAuth, (req, res) => {
+  const run = getTestRun(req.params.id);
+  if (!run) return res.status(404).json({ error: 'Test run not found' });
+  res.json({ run });
+});
+
+app.post('/api/test-runs', requireAuth, (req, res) => {
+  try {
+    const run = startTestRun({ ...(req.body || {}), requestedBy: req.adminUsername }, root);
+    res.status(202).json({ run });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ---- Todo / Backlog (Settings) ----

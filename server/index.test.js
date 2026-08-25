@@ -12,7 +12,16 @@ async function freshApp() {
   fs.mkdirSync(path.join(tmpRoot, 'src', 'data'), { recursive: true });
   fs.mkdirSync(path.join(tmpRoot, 'public'), { recursive: true });
   fs.mkdirSync(path.join(tmpRoot, 'admin'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'server'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'docs'), { recursive: true });
   fs.writeFileSync(path.join(tmpRoot, 'admin', 'index.html'), '<html></html>');
+  fs.writeFileSync(path.join(tmpRoot, 'package.json'), '{"type":"module"}');
+  fs.writeFileSync(path.join(tmpRoot, 'README.md'), '# Test application\n\nTest application documentation.');
+  fs.writeFileSync(path.join(tmpRoot, 'docs', 'GUIDE.md'), '# Test guide\n\nTest guide documentation.');
+  fs.writeFileSync(
+    path.join(tmpRoot, 'server', 'sample.test.js'),
+    "import { test } from 'node:test';\ntest('sample test passes', () => {});\n",
+  );
   const originalCwd = process.cwd();
   process.chdir(tmpRoot);
   const mod = await import(`./index.js?t=${Date.now()}-${Math.random()}`);
@@ -121,6 +130,34 @@ test('version history detail endpoint returns Git-backed release details to an a
   assert.strictEqual(res.body.version.version_label, '0.01');
   assert.strictEqual(res.body.releaseDetails.commitHash, 'abc123');
   assert.strictEqual(res.body.releaseDetails.filesAdded, 4);
+});
+
+test('documentation and selected test cases are available to an authenticated admin', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const documents = await request(app).get('/api/documentation').set('Cookie', cookie);
+  assert.strictEqual(documents.status, 200);
+  const guide = documents.body.documents.find((document) => document.path === 'docs/GUIDE.md');
+  const guideResponse = await request(app).get(`/api/documentation/${guide.id}`).set('Cookie', cookie);
+  assert.strictEqual(guideResponse.status, 200);
+  assert.match(guideResponse.text, /Test guide/);
+
+  const catalog = await request(app).get('/api/test-cases').set('Cookie', cookie);
+  assert.strictEqual(catalog.status, 200);
+  assert.strictEqual(catalog.body.cases.length, 1);
+  const started = await request(app).post('/api/test-runs').set('Cookie', cookie).send({ scope: 'selected', testCaseIds: [catalog.body.cases[0].id] });
+  assert.strictEqual(started.status, 202);
+  let result = started.body.run;
+  for (let i = 0; i < 20 && result.status === 'running'; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    result = (await request(app).get(`/api/test-runs/${result.id}`).set('Cookie', cookie)).body.run;
+  }
+  assert.strictEqual(result.status, 'passed');
+  assert.strictEqual(result.passed_count, 1);
 });
 
 test('filament create/update/colour flow end to end through the API', async (t) => {

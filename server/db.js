@@ -364,6 +364,32 @@ export function ensureSchema(db) {
       files_deleted INTEGER NOT NULL DEFAULT 0,
       captured_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS test_runs (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      status TEXT NOT NULL,
+      requested_by TEXT NOT NULL DEFAULT '',
+      started_at TEXT NOT NULL,
+      completed_at TEXT,
+      duration_ms INTEGER,
+      passed_count INTEGER NOT NULL DEFAULT 0,
+      failed_count INTEGER NOT NULL DEFAULT 0,
+      skipped_count INTEGER NOT NULL DEFAULT 0,
+      output TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_test_runs_started_at ON test_runs (started_at DESC);
+    CREATE TABLE IF NOT EXISTS test_run_cases (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL REFERENCES test_runs(id) ON DELETE CASCADE,
+      test_case_id TEXT NOT NULL,
+      test_name TEXT NOT NULL,
+      test_file TEXT NOT NULL,
+      status TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      output TEXT NOT NULL DEFAULT '',
+      completed_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_test_run_cases_case ON test_run_cases (test_case_id, completed_at DESC);
 
     -- Backlog/todo tracker (admin "Todo / Backlog" page, Settings group).
     -- number is a separate display sequence from id (like version_history's

@@ -72,6 +72,7 @@ function show(el, on = true) {
 }
 
 let analyticsPollTimer = null;
+let testRunPollTimer = null;
 
 function setRoute(route, { id } = {}) {
   state.route = route;
@@ -82,6 +83,10 @@ function setRoute(route, { id } = {}) {
   if (route !== 'analytics' && analyticsPollTimer) {
     clearInterval(analyticsPollTimer);
     analyticsPollTimer = null;
+  }
+  if (route !== 'test-cases' && testRunPollTimer) {
+    clearInterval(testRunPollTimer);
+    testRunPollTimer = null;
   }
   $$('.nav-btn').forEach((btn) =>
     btn.classList.toggle(
@@ -114,6 +119,8 @@ function setRoute(route, { id } = {}) {
   show($('#view-backups'), route === 'backups');
   show($('#view-version-history'), route === 'version-history');
   show($('#view-version-detail'), route === 'version-detail');
+  show($('#view-documentation'), route === 'documentation');
+  show($('#view-test-cases'), route === 'test-cases');
   show($('#view-todos'), route === 'todos');
   show($('#view-audit-log'), route === 'audit-log');
   show($('#view-settings'), route === 'settings');
@@ -141,6 +148,8 @@ function setRoute(route, { id } = {}) {
     backups: ['Settings', 'Backups'],
     'version-history': ['Settings', 'Version History'],
     'version-detail': ['Settings', 'Release details'],
+    documentation: ['Settings', 'Documentation'],
+    'test-cases': ['Settings', 'Test Cases'],
     todos: ['Settings', 'Todo / Backlog'],
     'audit-log': ['Settings', 'Audit Logs'],
     settings: ['Settings', 'Site settings'],
@@ -148,7 +157,7 @@ function setRoute(route, { id } = {}) {
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'version-detail' && route !== 'todos' && route !== 'audit-log');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'version-detail' && route !== 'documentation' && route !== 'test-cases' && route !== 'todos' && route !== 'audit-log');
 }
 
 async function boot() {
@@ -354,6 +363,12 @@ function bindChrome() {
       } else if (btn.dataset.route === 'version-history') {
         setRoute('version-history');
         await renderVersionHistory();
+      } else if (btn.dataset.route === 'documentation') {
+        setRoute('documentation');
+        await renderDocumentation();
+      } else if (btn.dataset.route === 'test-cases') {
+        setRoute('test-cases');
+        await renderTestCases();
       } else if (btn.dataset.route === 'todos') {
         setRoute('todos');
         await renderTodos();
@@ -1455,6 +1470,98 @@ async function renderVersionDetail(id) {
     setRoute('version-history');
     await renderVersionHistory();
   });
+}
+
+async function renderDocumentation() {
+  const { documents } = await api('/api/documentation');
+  $('#view-documentation').innerHTML = `
+    <div class="panel stack gap-3">
+      <div class="section-head">
+        <div><h3>System documentation</h3><p class="muted">Current documents stored with this application. Open any document in a new tab.</p></div>
+      </div>
+      <div class="documentation-list">
+        ${documents.map((document) => `
+          <article class="documentation-card">
+            <div><h4>${escapeHtml(document.title)}</h4><p class="muted">${escapeHtml(document.description || document.path)}</p><code>${escapeHtml(document.path)}</code></div>
+            <a class="btn btn-secondary" href="/api/documentation/${encodeURIComponent(document.id)}" target="_blank" rel="noopener">Open</a>
+          </article>`).join('') || '<div class="empty">No documentation files are available.</div>'}
+      </div>
+    </div>`;
+}
+
+function testStatusBadge(status) {
+  if (!status) return '<span class="muted">Not run</span>';
+  return `<span class="badge test-${escapeAttr(status)}">${escapeHtml(status)}</span>`;
+}
+
+function testRunSummary(run) {
+  if (!run) return 'No test runs have been recorded.';
+  const duration = run.duration_ms == null ? 'Running…' : `${(run.duration_ms / 1000).toFixed(1)}s`;
+  return `${testStatusBadge(run.status)} ${escapeHtml(run.scope)} · ${escapeHtml(String(run.passed_count))} passed · ${escapeHtml(String(run.failed_count))} failed · ${escapeHtml(duration)}`;
+}
+
+async function renderTestCases() {
+  const { cases, runs } = await api('/api/test-cases');
+  const suites = [...new Set(cases.map((item) => item.file))];
+  const activeRun = runs.find((run) => run.status === 'running');
+  $('#view-test-cases').innerHTML = `
+    <div class="stack gap-3">
+      <div class="panel stack gap-3">
+        <div class="section-head"><div><h3>Automated test runner</h3><p class="muted">Runs only checked-in Node test cases from this application. Test execution is restricted to the catalog below.</p></div></div>
+        <div class="test-run-controls">
+          <button class="btn btn-primary" id="run-all-tests" type="button" ${activeRun ? 'disabled' : ''}>Run all test cases</button>
+          <select id="test-suite-select" ${activeRun ? 'disabled' : ''}><option value="">Run a test suite…</option>${suites.map((file) => `<option value="${escapeAttr(file)}">${escapeHtml(file)}</option>`).join('')}</select>
+          <button class="btn" id="run-suite-tests" type="button" ${activeRun ? 'disabled' : ''}>Run suite</button>
+          <button class="btn" id="run-selected-tests" type="button" ${activeRun ? 'disabled' : ''}>Run selected</button>
+        </div>
+        <div id="test-run-status" class="test-run-status">${testRunSummary(runs[0])}</div>
+      </div>
+      <div class="panel table-wrap">
+        <div class="section-head"><div><h3>Test cases</h3><p class="muted">${escapeHtml(String(cases.length))} discovered test case(s). Select individual cases, a suite, or the complete suite.</p></div></div>
+        <table class="catalog">
+          <thead><tr><th><input id="select-all-test-cases" type="checkbox" aria-label="Select all test cases" /></th><th>Test case</th><th>Suite</th><th>Last result</th></tr></thead>
+          <tbody>${cases.map((item) => `<tr><td><input class="test-case-select" type="checkbox" value="${escapeAttr(item.id)}" aria-label="Select ${escapeAttr(item.name)}" /></td><td>${escapeHtml(item.name)}</td><td><code>${escapeHtml(item.file)}</code></td><td>${testStatusBadge(item.lastStatus)} ${item.lastRunAt ? `<span class="muted">${escapeHtml(formatDate(item.lastRunAt))}</span>` : ''}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <div class="panel stack gap-2">
+        <div class="section-head"><h3>Recent runs</h3></div>
+        ${runs.map((run) => `<button class="test-run-history" type="button" data-run-id="${escapeAttr(run.id)}">${testRunSummary(run)} <span class="muted">${escapeHtml(formatDate(run.started_at))}</span></button>`).join('') || '<div class="empty">No test runs have been recorded.</div>'}
+        <pre id="test-run-output" class="test-output hidden"></pre>
+      </div>
+    </div>`;
+
+  const start = async (body) => {
+    const { run } = await api('/api/test-runs', { method: 'POST', body: JSON.stringify(body) });
+    toast('Test run started');
+    await renderTestCases();
+    testRunPollTimer = setInterval(async () => {
+      const current = await api(`/api/test-runs/${encodeURIComponent(run.id)}`);
+      if (current.run.status !== 'running') {
+        clearInterval(testRunPollTimer);
+        testRunPollTimer = null;
+        await renderTestCases();
+        toast(current.run.status === 'passed' ? 'Test run passed' : 'Test run failed');
+      }
+    }, 1500);
+  };
+  $('#run-all-tests').addEventListener('click', () => start({ scope: 'all' }).catch((err) => toast(err.message)));
+  $('#run-suite-tests').addEventListener('click', () => {
+    const suiteFile = $('#test-suite-select').value;
+    if (!suiteFile) return toast('Select a test suite first');
+    start({ scope: 'suite', suiteFile }).catch((err) => toast(err.message));
+  });
+  $('#run-selected-tests').addEventListener('click', () => {
+    const testCaseIds = $$('.test-case-select:checked', $('#view-test-cases')).map((input) => input.value);
+    if (!testCaseIds.length) return toast('Select one or more test cases first');
+    start({ scope: 'selected', testCaseIds }).catch((err) => toast(err.message));
+  });
+  $('#select-all-test-cases').addEventListener('change', (event) => $$('.test-case-select', $('#view-test-cases')).forEach((input) => { input.checked = event.target.checked; }));
+  $$('.test-run-history', $('#view-test-cases')).forEach((button) => button.addEventListener('click', async () => {
+    const { run } = await api(`/api/test-runs/${encodeURIComponent(button.dataset.runId)}`);
+    const output = $('#test-run-output');
+    output.textContent = run.output || 'No output was captured.';
+    output.classList.remove('hidden');
+  }));
 }
 
 // ---- Todo / Backlog (Settings) ----
