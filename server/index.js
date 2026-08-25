@@ -124,7 +124,8 @@ import {
   deleteInHouseFilament,
 } from './in-house-filament.js';
 import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
-import { listVersions } from './version-history.js';
+import { getVersion, listVersions } from './version-history.js';
+import { getReleaseDetails } from './release-details.js';
 import { listTodos, createTodo, updateTodo } from './todos.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
@@ -1812,6 +1813,12 @@ function readPublishWarnings() {
 // "add version" route. This is a read-only view onto that history.
 app.get('/api/version-history', requireAuth, (req, res) => {
   res.json({ versions: listVersions() });
+});
+
+app.get('/api/version-history/:id', requireAuth, (req, res) => {
+  const version = getVersion(req.params.id);
+  if (!version) return res.status(404).json({ error: 'Version not found' });
+  res.json({ version, releaseDetails: getReleaseDetails(version.id) });
 });
 
 // ---- Todo / Backlog (Settings) ----

@@ -97,6 +97,32 @@ test('login requires username + password, protected routes require a session', a
   assert.deepStrictEqual(withAuth.body.filaments, []);
 });
 
+test('version history detail endpoint returns Git-backed release details to an admin', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO version_history (id, version_number, version_label, description, deployed_date, deployed_by, created_at)
+     VALUES ('release-1', 1, '0.01', 'Release test', datetime('now'), 'deploy', datetime('now'))`,
+  ).run();
+  db.prepare(
+    `INSERT INTO version_release_details (
+       version_id, commit_hash, commit_range, release_notes, commits_json, files_json, files_added, files_deleted, captured_at
+     ) VALUES (
+       'release-1', 'abc123', 'abc123', 'Release test notes', '[]', '[]', 4, 1, datetime('now')
+     )`,
+  ).run();
+
+  const res = await request(app).get('/api/version-history/release-1').set('Cookie', cookie);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.version.version_label, '0.01');
+  assert.strictEqual(res.body.releaseDetails.commitHash, 'abc123');
+  assert.strictEqual(res.body.releaseDetails.filesAdded, 4);
+});
+
 test('filament create/update/colour flow end to end through the API', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

@@ -353,6 +353,17 @@ export function ensureSchema(db) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_version_history_number ON version_history (version_number DESC);
+    CREATE TABLE IF NOT EXISTS version_release_details (
+      version_id TEXT PRIMARY KEY REFERENCES version_history(id) ON DELETE CASCADE,
+      commit_hash TEXT,
+      commit_range TEXT,
+      release_notes TEXT NOT NULL DEFAULT '',
+      commits_json TEXT NOT NULL DEFAULT '[]',
+      files_json TEXT NOT NULL DEFAULT '[]',
+      files_added INTEGER NOT NULL DEFAULT 0,
+      files_deleted INTEGER NOT NULL DEFAULT 0,
+      captured_at TEXT NOT NULL
+    );
 
     -- Backlog/todo tracker (admin "Todo / Backlog" page, Settings group).
     -- number is a separate display sequence from id (like version_history's

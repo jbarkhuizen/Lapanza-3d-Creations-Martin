@@ -22,6 +22,10 @@ export function listVersions(db = getDb()) {
   return db.prepare('SELECT * FROM version_history ORDER BY created_at DESC, version_number DESC').all();
 }
 
+export function getVersion(id, db = getDb()) {
+  return db.prepare('SELECT * FROM version_history WHERE id = ?').get(id) || null;
+}
+
 // The only way a row gets created -- see scripts/record-deploy-version.mjs,
 // invoked automatically by deploy/deploy-app.sh after every deploy.
 // deployedBy defaults to 'deploy' but stays a parameter so a test (or any

@@ -35,6 +35,7 @@ test('ensureSchema creates every expected table', () => {
     'shipping_options',
     'todo_items',
     'version_history',
+    'version_release_details',
     'whatsapp_campaigns',
   ]);
   db.close();

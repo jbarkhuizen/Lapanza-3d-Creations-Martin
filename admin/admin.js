@@ -88,6 +88,7 @@ function setRoute(route, { id } = {}) {
       'active',
       btn.dataset.route === route ||
         (route === 'editor' && btn.dataset.route === 'catalog') ||
+        (route === 'version-detail' && btn.dataset.route === 'version-history') ||
         (route === 'order-detail' && btn.dataset.route === 'orders'),
     ),
   );
@@ -112,6 +113,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-backups'), route === 'backups');
   show($('#view-version-history'), route === 'version-history');
+  show($('#view-version-detail'), route === 'version-detail');
   show($('#view-todos'), route === 'todos');
   show($('#view-audit-log'), route === 'audit-log');
   show($('#view-settings'), route === 'settings');
@@ -138,6 +140,7 @@ function setRoute(route, { id } = {}) {
     'in-house-filament': ['Local Management', 'In-House Filament'],
     backups: ['Settings', 'Backups'],
     'version-history': ['Settings', 'Version History'],
+    'version-detail': ['Settings', 'Release details'],
     todos: ['Settings', 'Todo / Backlog'],
     'audit-log': ['Settings', 'Audit Logs'],
     settings: ['Settings', 'Site settings'],
@@ -145,7 +148,7 @@ function setRoute(route, { id } = {}) {
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'todos' && route !== 'audit-log');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'version-detail' && route !== 'todos' && route !== 'audit-log');
 }
 
 async function boot() {
@@ -1370,7 +1373,7 @@ async function renderVersionHistory() {
     .map(
       (v) => `
         <tr>
-          <td style="width: 80px; text-align: center;"><strong>V${v.version_label || v.version_number}</strong></td>
+          <td style="width: 100px; text-align: center;"><button class="btn small" data-version-id="${escapeAttr(v.id)}" type="button">V${escapeHtml(v.version_label || v.version_number)}</button></td>
           <td>${escapeHtml(v.description)}</td>
           <td style="width: 180px;">${escapeHtml(formatDate(v.deployed_date))}</td>
         </tr>`,
@@ -1386,10 +1389,72 @@ async function renderVersionHistory() {
     </p>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th style="width: 80px;">Version</th><th>Description</th><th style="width: 180px;">Deployed Date</th></tr></thead>
+        <thead><tr><th style="width: 100px;">Version</th><th>Description</th><th style="width: 180px;">Deployed Date</th></tr></thead>
         <tbody>${rows || '<tr><td colspan="3"><div class="empty">No versions recorded yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
+
+  $$('#view-version-history [data-version-id]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      setRoute('version-detail');
+      await renderVersionDetail(button.dataset.versionId);
+    });
+  });
+}
+
+function renderReleaseCommit(commit) {
+  const body = commit.body ? `<pre class="release-commit-body">${escapeHtml(commit.body)}</pre>` : '';
+  return `
+    <details class="release-commit">
+      <summary><strong>${escapeHtml(commit.subject)}</strong> <code>${escapeHtml(commit.hash.slice(0, 7))}</code></summary>
+      <p class="muted">${escapeHtml(commit.authorName)} · ${escapeHtml(commit.authorEmail)} · ${escapeHtml(formatDate(commit.authoredAt))}</p>
+      ${body}
+    </details>`;
+}
+
+async function renderVersionDetail(id) {
+  const { version, releaseDetails } = await api(`/api/version-history/${encodeURIComponent(id)}`);
+  const label = `V${version.version_label || version.version_number}`;
+  const commits = releaseDetails?.commits || [];
+  const files = releaseDetails?.files || [];
+  const filesRows = files
+    .map((file) => `<tr><td><code>${escapeHtml(file.file)}</code></td><td>${escapeHtml(String(file.added))}</td><td>${escapeHtml(String(file.deleted))}</td></tr>`)
+    .join('');
+
+  $('#view-version-detail').innerHTML = `
+    <div class="toolbar">
+      <button class="btn" id="back-to-version-history" type="button">← Version History</button>
+    </div>
+    <div class="panel stack gap-3">
+      <div class="section-head"><h3>${escapeHtml(label)} — ${escapeHtml(version.description)}</h3></div>
+      <div class="release-meta">
+        <span><strong>Deployed:</strong> ${escapeHtml(formatDate(version.deployed_date))}</span>
+        <span><strong>Recorded by:</strong> ${escapeHtml(version.deployed_by)}</span>
+        <span><strong>Commit range:</strong> <code>${escapeHtml(releaseDetails?.commitRange || 'Not available')}</code></span>
+        <span><strong>Lines:</strong> +${escapeHtml(String(releaseDetails?.filesAdded || 0))} / -${escapeHtml(String(releaseDetails?.filesDeleted || 0))}</span>
+      </div>
+      ${releaseDetails ? `
+        <div>
+          <h4>Release notes</h4>
+          <pre class="release-notes">${escapeHtml(releaseDetails.releaseNotes || 'No commit notes were recorded for this release.')}</pre>
+        </div>
+        <div>
+          <h4>Commits (${escapeHtml(String(commits.length))})</h4>
+          <div class="stack gap-2">${commits.map(renderReleaseCommit).join('') || '<div class="empty">No Git commit was associated with this baseline release.</div>'}</div>
+        </div>
+        <div class="table-wrap">
+          <h4>Changed files (${escapeHtml(String(files.length))})</h4>
+          <table class="catalog">
+            <thead><tr><th>File</th><th>Added</th><th>Deleted</th></tr></thead>
+            <tbody>${filesRows || '<tr><td colspan="3"><div class="empty">No changed files were recorded for this baseline release.</div></td></tr>'}</tbody>
+          </table>
+        </div>` : '<div class="empty">Release detail has not been captured for this version.</div>'}
+    </div>`;
+
+  $('#back-to-version-history').addEventListener('click', async () => {
+    setRoute('version-history');
+    await renderVersionHistory();
+  });
 }
 
 // ---- Todo / Backlog (Settings) ----

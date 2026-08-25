@@ -58,7 +58,7 @@ else
 fi
 
 echo "==> Recording deployed version"
-node scripts/record-deploy-version.mjs || echo "    WARNING: failed to record version history (non-fatal, deploy continues)"
+node scripts/record-deploy-version.mjs
 
 echo ""
 echo "==================================================================="

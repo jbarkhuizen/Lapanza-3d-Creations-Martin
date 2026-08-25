@@ -68,7 +68,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Checkout stock validation** | Blocks order creation if any cart item's quantity exceeds available stock (`stockQty`); returns detailed error listing out-of-stock items + quantities. Closes the gap from the pre-validation period where out-of-stock items could be purchased (§15). A check-only fix at this point — see the "Atomic stock reservation" row below for why that alone didn't close the concurrent-overselling case. | 167/167 |
 | **Version history tracking** | Admin "Version History" page in Settings group; manual button to record deployment version with description; auto-incrementing version numbers (v1, v2, ...); table displays all versions in reverse chronological order showing version, description, deployed date. | 167/167 |
 | **Customer password recovery (V1.01)** | Closes the previous "no forgot-password" gap — register/verify/login was the only path in and there was no way back in for a forgotten password. Adds `POST /api/client/forgot-password` (emails a single-use, 1h-expiry reset link; always returns the same generic response so the endpoint can't be used to discover which emails have accounts) and `POST /api/client/reset-password` (consumes the token, sets the new password, marks the account verified, revokes any other live sessions for that client, and logs the requester straight in). New `account.html` "Forgot password?" link and a `?reset_token=` landing view. | 172/172 |
-| **Automated version-history recording (V1.01 versioning scheme)** | Replaces the manual "+ Record Version" admin button with `scripts/record-deploy-version.mjs`, run automatically by `deploy/deploy-app.sh` after every deploy (non-fatal on failure). Version labels switch from a plain incrementing integer to `"<major>.<minor>"` (e.g. `1.01`, `1.02`, ... rolling to `2.01` after `.99`), computed in `server/version-history.js`. `POST /api/version-history` is removed — the admin page is now read-only. | 177/177 |
+| **Automated version-history recording** | Replaces the manual "+ Record Version" admin button with `scripts/record-deploy-version.mjs`, run automatically by `deploy/deploy-app.sh` after every deploy. Pre-release labels start at `0.01`; `1.0` is reserved for the first official release. Each deploy atomically records Git-backed release detail: commit metadata, release notes, changed files, and added/deleted line counts. `POST /api/version-history` is removed — the admin page is read-only. | 177/177 |
 | **Offsite backup sync** | Closes the single-point-of-failure gap flagged in §15 — on-server daily backups alone don't survive a disk/VPS failure. `server/backups.js`'s `syncOffsite()` mirrors `data/backups/` to a Google Drive folder via `rclone` right after every automated daily backup, self-correcting to match local 30-backup retention. Manual "Sync offsite now" button added to the admin Backups view; new `POST /api/backups/sync-offsite` route. Confirmed live in production (DEPLOY.md §9) — a Google **service account** was tried first and confirmed broken (`storageQuotaExceeded`: service accounts have zero Drive storage quota on a personal/non-Workspace account, sharing a folder doesn't change that); switched to OAuth as the real account, which works. | 180/180 |
 | **Atomic stock reservation (closes the real overselling race)** | The earlier "Checkout stock validation" row above only checked current stock at order-creation time — it never reserved it, so two concurrent orders for the same last unit could both pass the check (neither had decremented anything yet) and both later get marked paid, since `decrementStockForOrder` ran at *payment* time and floors at 0 without re-validating. Fixed by moving the actual decrement to **order-creation time**, inside the same `db.transaction()` as the order/order_items INSERT (`reserveStockForOrder` in `server/orders.js`, online checkout only — throws and rolls back the whole order on insufficient stock, re-reading stock fresh rather than trusting the earlier pre-transaction read). Paying an order no longer touches stock at all (`markOrderPaid`/`updateOrderStatus`'s old paid-transition decrement removed). A new symmetric `restoreStockForOrder` releases reserved stock back when an order is cancelled — both via the automatic 5-day stale-order job (`cancelStalePendingOrders`) and an explicit admin cancel (`updateOrderStatus(..., 'cancelled')`), each idempotently guarded against double-restoring an already-cancelled order. `createManualOrder` also now reserves stock immediately at creation (previously only when `alreadyPaid`), though — consistent with its existing "admin free-text prices are trusted as-is" design — without the hard block online checkout gets. | 186/186 |
 | **Todo / Backlog admin page** | New "Todo / Backlog" page (Settings group) tracking tasks, ideas, and gaps identified during development — No, Category (Bug/Feature/Enhancement/Tech Debt), Priority (Critical/High/Medium/Low), Date Added, Name, Description, Planned Fix Date, Actual Fix Date, Status (Backlog/In Progress/Done/Won't Fix/Claude Fix). `server/todos.js` (`listTodos`/`createTodo`/`updateTodo` — no delete function exists at all, append-only by design, same philosophy as `version_history`); `GET/POST/PUT /api/todos` under the existing `requireAuth` admin session — no separate API-key mechanism, so this assistant adds items the same way an admin would, through that same authenticated path, not a new one. `updateTodo` auto-stamps `actualFixDate` the moment status becomes `Done` unless one was already supplied. Seeded on first boot (once, guarded by `todo_items` being empty) with the 13 items then listed in §15 Known Limitations — §15 itself now points here rather than duplicating the detail. | 195/195 |
@@ -370,7 +370,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-23 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+24 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -775,7 +775,7 @@ Permanent running tallies, updated alongside every `page_views` insert (`recordP
 Backfilled once, automatically, by `backfillAnalyticsTotals()` (`server/db.js`, same "runs once while empty" guard as `seedTodoItems`) the first time the app boots after these tables were introduced on a database that already had `page_views` history — without this, the two tables would start genuinely empty and the Analytics dashboard's "all-time" numbers would have silently reset to (near) zero on that deploy, even though nothing had been pruned yet.
 
 #### `version_history`
-Track deployments and system updates. Every row is created automatically by `scripts/record-deploy-version.mjs` after a deploy (V1.01) — nothing writes here manually.
+Track deployments and system updates. Every row is created automatically by `scripts/record-deploy-version.mjs` after a deploy — nothing writes here manually.
 | Column | Type | Notes |
 |---|---|---|
 | id | TEXT PK | |
@@ -804,6 +804,19 @@ Backlog/todo tracker (admin "Todo / Backlog" page, §7.22). Append-only — no d
 | created_at, updated_at | TEXT NOT NULL | |
 | *(indexes)* | `date_added DESC` | |
 | *(seed)* | 13 rows | Inserted once, automatically, the first time this table is empty (`seedTodoItems` in `server/db.js`) — mirrors §15 Known Limitations at the time this table shipped |
+
+#### `version_release_details`
+One immutable release-detail record per `version_history` row. It supports the Version History drill-down view and is captured from Git during deployment.
+| Column | Type | Notes |
+|---|---|---|
+| version_id | TEXT PK / FK | References `version_history.id`; one record per version |
+| commit_hash | TEXT | Full Git commit SHA for the deployment; null only for the pre-history baseline |
+| commit_range | TEXT | Git range since the preceding recorded release |
+| release_notes | TEXT NOT NULL | Commit subjects and bodies for the release |
+| commits_json | TEXT NOT NULL | Structured commit metadata: hash, subject, body, author, email, and authored time |
+| files_json | TEXT NOT NULL | Structured changed-file entries with line additions/deletions |
+| files_added, files_deleted | INTEGER NOT NULL | Aggregate non-binary line counts |
+| captured_at | TEXT NOT NULL | When Git metadata was captured |
 
 #### `audit_log`
 Security/session/action audit trail (admin "Audit Logs" page, Settings group). Append-only — no update/delete function exists (only `pruneOldAuditLogEntries()`, age-based, see below). Originally scoped to just the admin portal's own auth/session lifecycle; widened to also cover orders/stock/catalog/settings actions and security signals (client login failures, rate-limit trips, unauthenticated admin-route access) — see the "Widened audit log" feature-history row.
@@ -1010,19 +1023,22 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | `/uploads/*` | `express.static(public/uploads/)` |
 | `/` | Redirects to `/admin/` (the Node server itself does **not** serve the public storefront — that's nginx's job in production, or a separate Vite dev server locally) |
 
-### 7.21 Version History (Admin) — V1.01: now automated, no manual entry
+### 7.21 Version History (Admin) — automated, no manual entry
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/version-history` | Admin | List all recorded versions in reverse chronological order (newest first) — read-only |
+| GET | `/api/version-history/:id` | Admin | Get one version plus its Git-backed release details (release notes, commits, changed files, line statistics) |
 
 **Responses:**
 
 - **GET** `200` → `{ versions: [ { id, version_number, version_label, description, deployed_date, deployed_by, created_at }, ... ] }`
 
 **Behaviour:**
-- There is no POST route and no "Record Version" button in the admin UI as of V1.01 — a row is created only by `scripts/record-deploy-version.mjs`, which `deploy/deploy-app.sh` runs automatically after every deploy (non-fatal if it fails — a version-history hiccup never blocks a deploy). It reads the latest git commit subject/hash as the description unless one is passed explicitly as `argv[2]`.
+- There is no POST route and no "Record Version" button in the admin UI — a row is created only by `scripts/record-deploy-version.mjs`, which `deploy/deploy-app.sh` runs automatically after every deploy. It reads the latest git commit subject/hash as the description unless one is passed explicitly as `argv[2]`.
 - `version_label` is the customer/admin-facing string, computed by `server/version-history.js`'s `nextLabel()`. Automated pre-release deployments start at `0.01` and increment through `0.99`; `1.0` is reserved for the first official release, after which maintenance deployments continue at `1.01`, `1.02`, and so on.
+- Before inserting a version row, the recorder collects the Git commit range since the preceding release. It then writes the version and its `version_release_details` row in the same SQLite transaction. A failure to collect or persist release detail fails the deployment command rather than silently leaving an untraceable version.
+- The Version History admin table links each version number to a drill-down view. The view shows release notes, commit messages/authors/timestamps, changed files, and aggregate added/deleted line counts. `scripts/backfill-version-release-details.mjs --force` backfills or rebuilds these records from Git for historical versions.
 - `version_number` is a legacy plain-incrementing integer, kept only to satisfy the original schema's `NOT NULL UNIQUE` constraint — not shown in the UI.
 - `deployed_date` is always the record-time timestamp (ISO 8601). `deployed_by` is `'deploy'` for every automated row.
 
