@@ -3,6 +3,7 @@ import os from 'os';
 import path from 'path';
 import { spawnSync } from 'child_process';
 import { backupsDir, dataDir, uploadsDir } from './paths.js';
+import { getDb } from './db.js';
 
 const VIRTUAL_PATHS = new Set(['/proc', '/sys', '/dev', '/run']);
 const directoryCache = new Map();
@@ -82,7 +83,7 @@ export function listSiteDirectory(requestedPath, { filesystemRoot = path.parse(p
   return value;
 }
 
-export function getSiteOverview({ appRoot = process.cwd(), filesystemRoot = path.parse(appRoot).root } = {}) {
+export function getSiteOverview({ appRoot = process.cwd(), filesystemRoot = path.parse(appRoot).root, db = getDb() } = {}) {
   const storage = fs.statfsSync(filesystemRoot);
   const diskTotalBytes = Number(storage.blocks) * Number(storage.bsize);
   const diskFreeBytes = Number(storage.bfree) * Number(storage.bsize);
@@ -97,6 +98,12 @@ export function getSiteOverview({ appRoot = process.cwd(), filesystemRoot = path
     ['Backups', backupDirectory],
     ['Dependencies', path.join(appRoot, 'node_modules')],
   ].map(([label, pathname]) => ({ label, path: pathname, ...stat(pathname) }));
+  const latestRelease = db.prepare(`
+    SELECT version_label AS versionLabel, description, deployed_date AS deployedAt
+    FROM version_history
+    ORDER BY created_at DESC, version_number DESC
+    LIMIT 1
+  `).get() || null;
   return {
     system: {
       hostname: os.hostname(),
@@ -119,6 +126,7 @@ export function getSiteOverview({ appRoot = process.cwd(), filesystemRoot = path
       databasePath: path.join(dataDir(), 'lapanza.db'),
       backupCount: backupFiles.length,
       paths: appPaths,
+      latestRelease,
     },
     virtualPaths: [...VIRTUAL_PATHS],
     rootDirectory: listSiteDirectory(filesystemRoot, { filesystemRoot }),

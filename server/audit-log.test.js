@@ -30,6 +30,16 @@ test('listAuditLog filters by eventType and by q across username/ip/detail', () 
   db.close();
 });
 
+test('marketing updates are retained and filterable as audit events', () => {
+  const db = openDb(':memory:');
+  recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, username: 'johan', detail: 'Approved newsletter campaign "Spring offers"' }, db);
+
+  const entries = listAuditLog({ eventType: AUDIT_EVENTS.MARKETING_UPDATED }, db);
+  assert.strictEqual(entries.length, 1);
+  assert.strictEqual(entries[0].detail, 'Approved newsletter campaign "Spring offers"');
+  db.close();
+});
+
 test('listAuditLog clamps limit into [1, 1000] instead of trusting caller input', () => {
   const db = openDb(':memory:');
   recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_SUCCESS, username: 'a' }, db);

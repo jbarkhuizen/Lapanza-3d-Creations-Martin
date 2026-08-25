@@ -28,6 +28,7 @@ export const AUDIT_EVENTS = {
   STOCK_UPDATED: 'stock_updated',
   CATALOG_UPDATED: 'catalog_updated',
   SETTINGS_UPDATED: 'settings_updated',
+  MARKETING_UPDATED: 'marketing_updated',
 
   // Security/abuse signals -- passive logging only (no email alert), same
   // reasoning as everything else on this page: visible when you look,

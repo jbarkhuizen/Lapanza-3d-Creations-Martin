@@ -1614,6 +1614,7 @@ async function renderSiteOverview() {
           <div class="overview-stat"><span>Runtime</span><strong>${escapeHtml(`${overview.system.nodeVersion} · ${overview.system.cpuCount} CPU`)}</strong></div>
           <div class="overview-stat"><span>Memory free</span><strong>${escapeHtml(formatBytes(overview.system.memoryFreeBytes))} / ${escapeHtml(formatBytes(overview.system.memoryTotalBytes))}</strong></div>
           <div class="overview-stat"><span>Backups retained</span><strong>${escapeHtml(String(overview.application.backupCount))}</strong></div>
+          <div class="overview-stat"><span>Current release</span><strong>${overview.application.latestRelease ? `V${escapeHtml(overview.application.latestRelease.versionLabel)}` : 'Unavailable'}</strong></div>
         </div>
         <div>
           <div class="section-head"><h4>Filesystem capacity</h4><strong>${escapeHtml(formatBytes(overview.disk.usedBytes))} used of ${escapeHtml(formatBytes(overview.disk.totalBytes))} (${escapeHtml(String(diskPercent))}%)</strong></div>
@@ -1621,6 +1622,7 @@ async function renderSiteOverview() {
           <p class="muted">${escapeHtml(formatBytes(overview.disk.freeBytes))} free on <code>${escapeHtml(overview.disk.filesystemRoot)}</code></p>
         </div>
       </div>
+      ${overview.application.latestRelease ? `<div class="panel"><div class="section-head"><div><h3>Latest deployed release</h3><p class="muted">${escapeHtml(formatDate(overview.application.latestRelease.deployedAt))}</p></div><strong>V${escapeHtml(overview.application.latestRelease.versionLabel)}</strong></div><p style="margin:0">${escapeHtml(overview.application.latestRelease.description)}</p></div>` : ''}
       <div class="panel table-wrap">
         <div class="section-head"><div><h3>Application storage</h3><p class="muted">Key persistent and operational paths.</p></div></div>
         <table class="catalog"><thead><tr><th>Area</th><th>Path</th><th>Size</th><th>Modified</th></tr></thead>
@@ -1866,6 +1868,7 @@ const AUDIT_EVENT_GROUPS = [
       stock_updated: 'Stock/pricing updated',
       catalog_updated: 'Catalog updated',
       settings_updated: 'Settings updated',
+      marketing_updated: 'Newsletter updated',
     },
   },
   {

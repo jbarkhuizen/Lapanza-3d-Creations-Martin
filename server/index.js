@@ -564,7 +564,9 @@ app.get('/api/newsletter-templates', requireAuth, (_req, res) => {
 
 app.post('/api/newsletter-templates', requireAuth, (req, res) => {
   try {
-    res.status(201).json({ template: createTemplate(req.body || {}) });
+    const template = createTemplate(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Saved newsletter template "${template.name}"` });
+    res.status(201).json({ template });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -573,7 +575,9 @@ app.post('/api/newsletter-templates', requireAuth, (req, res) => {
 app.post('/api/newsletter-templates/import', requireAuth, newsletterTemplateUpload.single('template'), (req, res) => {
   try {
     if (!req.file || !/\.html?$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Upload an HTML template under 500KB' });
-    res.status(201).json({ template: createImportedTemplate({ name: req.body.name || req.file.originalname, subject: req.body.subject, html: req.file.buffer.toString('utf8') }) });
+    const template = createImportedTemplate({ name: req.body.name || req.file.originalname, subject: req.body.subject, html: req.file.buffer.toString('utf8') });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Imported newsletter HTML template "${template.name}"` });
+    res.status(201).json({ template });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -588,6 +592,7 @@ app.post('/api/newsletter-assets', requireAuth, newsletterAssetUpload.single('im
   if (!req.file) return res.status(400).json({ error: 'Upload a JPEG, PNG, or WebP image under 5MB' });
   const asset = { id: randomUUID(), filename: req.file.originalname, url: `/uploads/newsletters/${req.file.filename}`, altText: String(req.body.altText || '').trim(), createdAt: new Date().toISOString() };
   getDb().prepare('INSERT INTO newsletter_assets (id, filename, url, alt_text, created_at) VALUES (?, ?, ?, ?, ?)').run(asset.id, asset.filename, asset.url, asset.altText, asset.createdAt);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Uploaded newsletter image "${asset.filename}"` });
   res.status(201).json({ asset });
 });
 
@@ -599,7 +604,9 @@ app.get('/api/newsletter-campaigns/:id/recipients', requireAuth, (req, res) => {
 
 app.post('/api/newsletter-campaigns', requireAuth, (req, res) => {
   try {
-    res.status(201).json({ campaign: createNewsletterCampaign(req.body || {}) });
+    const campaign = createNewsletterCampaign(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created newsletter draft "${campaign.subject}" for ${campaign.selectedCount} recipient(s)` });
+    res.status(201).json({ campaign });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -609,6 +616,7 @@ app.patch('/api/newsletter-campaigns/:id/approve', requireAuth, (req, res) => {
   try {
     const campaign = approveNewsletterCampaign(req.params.id);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Approved newsletter campaign "${campaign.subject}"` });
     res.json({ campaign });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -619,6 +627,7 @@ app.post('/api/newsletter-campaigns/:id/send', requireAuth, async (req, res) => 
   try {
     const campaign = queueNewsletterCampaign(req.params.id, { siteUrl: siteUrlFor(req) });
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Queued newsletter campaign "${campaign.subject}" for ${campaign.selectedCount} recipient(s)` });
     res.status(202).json({ campaign });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -629,6 +638,7 @@ app.post('/api/newsletter-campaigns/:id/test', requireAuth, async (req, res) => 
   try {
     const campaign = await sendTestCampaign(req.params.id, (req.body || {}).email, { siteUrl: siteUrlFor(req) });
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Sent newsletter test for "${campaign.subject}"` });
     res.json({ campaign });
   } catch (err) {
     res.status(400).json({ error: err.message });

@@ -900,6 +900,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 Client email marketing consent is distinct from WhatsApp consent. Only clients with explicit consent, a consent source, and a generated unsubscribe token are eligible; unsubscribing adds the address to the global suppression list.
 
 The Newsletter dashboard reports SMTP acceptance, failures, pending saved recipients, and recipient-source totals. SMTP acceptance only confirms Gmail accepted the message for onward delivery; it does not claim inbox placement, opens, or clicks.
+Newsletter template, image, draft, approval, test-send, and queued-send changes are recorded in the append-only Audit Logs as **Newsletter updated** events.
 
 ### 7.5 WhatsApp Campaigns (Admin)
 
