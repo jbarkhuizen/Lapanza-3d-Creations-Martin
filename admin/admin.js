@@ -5,6 +5,7 @@ const state = {
   authenticated: false,
   products: [],
   filters: { q: '', kind: '', status: '' },
+  todoFilters: { q: '', category: '', status: '', plannedFixDate: '' },
   editingId: null,
   draft: null,
   dashboard: null,
@@ -1400,6 +1401,18 @@ function blankTodo() {
   return { id: null, category: 'Feature', name: '', description: '', status: 'Backlog', plannedFixDate: '', actualFixDate: '' };
 }
 
+function filterTodos(todos) {
+  const { q, category, status, plannedFixDate } = state.todoFilters;
+  const needle = q.toLowerCase();
+  return todos.filter((todo) => {
+    if (category && todo.category !== category) return false;
+    if (status && todo.status !== status) return false;
+    if (plannedFixDate && toDateInputValue(todo.plannedFixDate) !== plannedFixDate) return false;
+    if (!needle) return true;
+    return [todo.name, todo.description].filter(Boolean).some((value) => value.toLowerCase().includes(needle));
+  });
+}
+
 function toDateInputValue(iso) {
   return iso ? String(iso).slice(0, 10) : '';
 }
@@ -1413,8 +1426,9 @@ function todoStatusBadge(status) {
 async function renderTodos() {
   state.editingTodo = state.editingTodo || null;
   const { todos } = await api('/api/todos');
+  const filteredTodos = filterTodos(todos);
 
-  const rows = todos
+  const rows = filteredTodos
     .map(
       (t) => `
         <tr data-id="${escapeAttr(t.id)}">
@@ -1435,7 +1449,18 @@ async function renderTodos() {
   $('#view-todos').innerHTML = `
     <div class="toolbar">
       <button class="btn btn-primary" id="new-todo" type="button">+ Add Item</button>
-      <span class="muted">${escapeHtml(String(todos.length))} item(s)</span>
+      <input id="todo-filter-q" type="search" placeholder="Search name or description…" value="${escapeAttr(state.todoFilters.q)}" />
+      <select id="todo-filter-category">
+        <option value="">All categories</option>
+        ${TODO_CATEGORIES.map((category) => `<option value="${escapeAttr(category)}" ${state.todoFilters.category === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
+      </select>
+      <select id="todo-filter-status">
+        <option value="">All statuses</option>
+        ${TODO_STATUSES.map((status) => `<option value="${escapeAttr(status)}" ${state.todoFilters.status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}
+      </select>
+      <label class="field" style="min-width: 160px;"><span>Planned fix</span><input id="todo-filter-planned" type="date" value="${escapeAttr(state.todoFilters.plannedFixDate)}" /></label>
+      <button class="btn small" id="clear-todo-filters" type="button">Clear filters</button>
+      <span class="muted">${escapeHtml(String(filteredTodos.length))} of ${escapeHtml(String(todos.length))} item(s)</span>
     </div>
     <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
       Tasks, ideas, and gaps identified during development -- manually added/edited here, no delete (a stale or duplicate item gets marked "Won't Fix" instead, so this stays a complete record).
@@ -1470,9 +1495,28 @@ async function renderTodos() {
     <div class="panel table-wrap">
       <table class="catalog">
         <thead><tr><th>No</th><th>Category</th><th>Date Added</th><th>Name</th><th>Description</th><th>Planned Fix</th><th>Actual Fix</th><th>Status</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="9"><div class="empty">No items yet</div></td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="9"><div class="empty">No items match your filters</div></td></tr>'}</tbody>
       </table>
     </div>`;
+
+  const applyTodoFilters = async () => {
+    state.todoFilters.q = $('#todo-filter-q').value.trim();
+    state.todoFilters.category = $('#todo-filter-category').value;
+    state.todoFilters.status = $('#todo-filter-status').value;
+    state.todoFilters.plannedFixDate = $('#todo-filter-planned').value;
+    await renderTodos();
+  };
+
+  $('#todo-filter-q').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') applyTodoFilters();
+  });
+  $('#todo-filter-category').addEventListener('change', applyTodoFilters);
+  $('#todo-filter-status').addEventListener('change', applyTodoFilters);
+  $('#todo-filter-planned').addEventListener('change', applyTodoFilters);
+  $('#clear-todo-filters').addEventListener('click', async () => {
+    state.todoFilters = { q: '', category: '', status: '', plannedFixDate: '' };
+    await renderTodos();
+  });
 
   $('#new-todo').addEventListener('click', async () => { state.editingTodo = blankTodo(); await renderTodos(); });
   $$('#view-todos tbody tr[data-id]').forEach((tr) => {
