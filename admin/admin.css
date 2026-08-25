@@ -309,6 +309,16 @@ code {
 .badge.test-running { background: rgb(163 107 18 / 0.16); color: var(--warn); }
 .test-run-history { display: flex; gap: 0.5rem; align-items: center; text-align: left; border: 0; padding: 0.6rem; background: var(--bg-soft); cursor: pointer; border-radius: 8px; color: inherit; }
 .test-output { max-height: 32rem; overflow: auto; white-space: pre-wrap; padding: 0.8rem; margin: 0; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-soft); font-size: 0.8rem; }
+.site-overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+.overview-stat { padding: 0.8rem; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-soft); display: grid; gap: 0.3rem; }
+.overview-stat span { color: var(--muted); font-size: 0.78rem; }
+.overview-stat strong { overflow-wrap: anywhere; }
+.capacity-bar { height: 0.7rem; overflow: hidden; border-radius: 999px; background: var(--bg-soft); border: 1px solid var(--line); }
+.capacity-bar span { display: block; height: 100%; background: var(--brand); }
+.directory-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem; }
+.directory-path { overflow-wrap: anywhere; color: var(--muted); }
+.directory-link { border: 0; padding: 0; background: none; color: var(--brand); cursor: pointer; font: inherit; text-align: left; }
+.directory-link:hover { text-decoration: underline; }
 
 .table-wrap { overflow: auto; }
 table.catalog {

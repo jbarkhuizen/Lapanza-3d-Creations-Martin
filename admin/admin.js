@@ -121,6 +121,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-version-detail'), route === 'version-detail');
   show($('#view-documentation'), route === 'documentation');
   show($('#view-test-cases'), route === 'test-cases');
+  show($('#view-site-overview'), route === 'site-overview');
   show($('#view-todos'), route === 'todos');
   show($('#view-audit-log'), route === 'audit-log');
   show($('#view-settings'), route === 'settings');
@@ -150,6 +151,7 @@ function setRoute(route, { id } = {}) {
     'version-detail': ['Settings', 'Release details'],
     documentation: ['Settings', 'Documentation'],
     'test-cases': ['Settings', 'Test Cases'],
+    'site-overview': ['Settings', 'About this Site'],
     todos: ['Settings', 'Todo / Backlog'],
     'audit-log': ['Settings', 'Audit Logs'],
     settings: ['Settings', 'Site settings'],
@@ -157,7 +159,7 @@ function setRoute(route, { id } = {}) {
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'version-detail' && route !== 'documentation' && route !== 'test-cases' && route !== 'todos' && route !== 'audit-log');
+  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'version-detail' && route !== 'documentation' && route !== 'test-cases' && route !== 'site-overview' && route !== 'todos' && route !== 'audit-log');
 }
 
 async function boot() {
@@ -369,6 +371,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'test-cases') {
         setRoute('test-cases');
         await renderTestCases();
+      } else if (btn.dataset.route === 'site-overview') {
+        setRoute('site-overview');
+        await renderSiteOverview();
       } else if (btn.dataset.route === 'todos') {
         setRoute('todos');
         await renderTodos();
@@ -1562,6 +1567,85 @@ async function renderTestCases() {
     output.textContent = run.output || 'No output was captured.';
     output.classList.remove('hidden');
   }));
+}
+
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor((seconds % 86_400) / 3_600);
+  const minutes = Math.floor((seconds % 3_600) / 60);
+  return `${days}d ${hours}h ${minutes}m`;
+}
+
+function renderDirectoryInventory(directory) {
+  const rows = directory.entries.map((entry) => `
+    <tr>
+      <td>${entry.browsable ? `<button class="directory-link" type="button" data-directory-path="${escapeAttr(entry.path)}">${escapeHtml(entry.name)}</button>` : escapeHtml(entry.name)}</td>
+      <td>${escapeHtml(entry.type)}</td>
+      <td>${entry.sizeBytes == null ? '—' : escapeHtml(formatBytes(entry.sizeBytes))}</td>
+      <td>${escapeHtml(formatDate(entry.modifiedAt))}</td>
+    </tr>`).join('');
+  return `
+    <div class="directory-toolbar">
+      <button class="btn" id="directory-root" type="button">Filesystem root</button>
+      ${directory.parentPath ? `<button class="btn" id="directory-parent" type="button" data-directory-path="${escapeAttr(directory.parentPath)}">Up one level</button>` : ''}
+      <code class="directory-path">${escapeHtml(directory.path)}</code>
+    </div>
+    <div class="table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Name</th><th>Type</th><th>Size</th><th>Modified</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4"><div class="empty">No readable entries.</div></td></tr>'}</tbody>
+      </table>
+    </div>
+    ${directory.unreadableEntries ? `<p class="muted">${escapeHtml(String(directory.unreadableEntries))} inaccessible entries were omitted.</p>` : ''}
+    ${directory.truncated ? '<p class="muted">Only the first 1,000 entries are displayed for this directory.</p>' : ''}`;
+}
+
+async function renderSiteOverview() {
+  const overview = await api('/api/site-overview');
+  const diskPercent = overview.disk.totalBytes ? Math.round((overview.disk.usedBytes / overview.disk.totalBytes) * 100) : 0;
+  $('#view-site-overview').innerHTML = `
+    <div class="stack gap-3">
+      <div class="panel stack gap-3">
+        <div class="section-head"><div><h3>VPS operations overview</h3><p class="muted">Read-only inventory for capacity planning, operations review, and future decisions. File contents are never exposed.</p></div></div>
+        <div class="site-overview-grid">
+          <div class="overview-stat"><span>Hostname</span><strong>${escapeHtml(overview.system.hostname)}</strong></div>
+          <div class="overview-stat"><span>Operating system</span><strong>${escapeHtml(overview.system.platform)}</strong></div>
+          <div class="overview-stat"><span>Uptime</span><strong>${escapeHtml(formatUptime(overview.system.uptimeSeconds))}</strong></div>
+          <div class="overview-stat"><span>Runtime</span><strong>${escapeHtml(`${overview.system.nodeVersion} · ${overview.system.cpuCount} CPU`)}</strong></div>
+          <div class="overview-stat"><span>Memory free</span><strong>${escapeHtml(formatBytes(overview.system.memoryFreeBytes))} / ${escapeHtml(formatBytes(overview.system.memoryTotalBytes))}</strong></div>
+          <div class="overview-stat"><span>Backups retained</span><strong>${escapeHtml(String(overview.application.backupCount))}</strong></div>
+        </div>
+        <div>
+          <div class="section-head"><h4>Filesystem capacity</h4><strong>${escapeHtml(formatBytes(overview.disk.usedBytes))} used of ${escapeHtml(formatBytes(overview.disk.totalBytes))} (${escapeHtml(String(diskPercent))}%)</strong></div>
+          <div class="capacity-bar"><span style="width: ${Math.min(100, diskPercent)}%"></span></div>
+          <p class="muted">${escapeHtml(formatBytes(overview.disk.freeBytes))} free on <code>${escapeHtml(overview.disk.filesystemRoot)}</code></p>
+        </div>
+      </div>
+      <div class="panel table-wrap">
+        <div class="section-head"><div><h3>Application storage</h3><p class="muted">Key persistent and operational paths.</p></div></div>
+        <table class="catalog"><thead><tr><th>Area</th><th>Path</th><th>Size</th><th>Modified</th></tr></thead>
+          <tbody>${overview.application.paths.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td><code>${escapeHtml(item.path)}</code></td><td>${item.sizeBytes == null ? 'Unavailable' : escapeHtml(formatBytes(item.sizeBytes))}</td><td>${escapeHtml(formatDate(item.modifiedAt))}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="section-head"><div><h3>Complete filesystem inventory</h3><p class="muted">Browse directories to review names, types, dates, and allocated sizes. Virtual kernel paths (${escapeHtml(overview.virtualPaths.join(', '))}) are intentionally not traversed.</p></div></div>
+        <div id="directory-inventory">${renderDirectoryInventory(overview.rootDirectory)}</div>
+      </div>
+    </div>`;
+  const loadDirectory = async (pathname) => {
+    try {
+      const directory = await api(`/api/site-overview/directory?path=${encodeURIComponent(pathname)}`);
+      $('#directory-inventory').innerHTML = renderDirectoryInventory(directory);
+      bindDirectoryButtons();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  function bindDirectoryButtons() {
+    $('#directory-root').addEventListener('click', () => loadDirectory(overview.disk.filesystemRoot));
+    $$('[data-directory-path]', $('#directory-inventory')).forEach((button) => button.addEventListener('click', () => loadDirectory(button.dataset.directoryPath)));
+  }
+  bindDirectoryButtons();
 }
 
 // ---- Todo / Backlog (Settings) ----

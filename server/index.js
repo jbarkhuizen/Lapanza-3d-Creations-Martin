@@ -129,6 +129,7 @@ import { getReleaseDetails } from './release-details.js';
 import { listTodos, createTodo, updateTodo } from './todos.js';
 import { getDocumentation, listDocumentation } from './documentation.js';
 import { getTestRun, listTestCases, listTestRuns, startTestRun } from './test-runs.js';
+import { getSiteOverview, listSiteDirectory } from './site-overview.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -1847,6 +1848,22 @@ app.post('/api/test-runs', requireAuth, (req, res) => {
   try {
     const run = startTestRun({ ...(req.body || {}), requestedBy: req.adminUsername }, root);
     res.status(202).json({ run });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/site-overview', requireAuth, (_req, res) => {
+  try {
+    res.json(getSiteOverview({ appRoot: root }));
+  } catch (err) {
+    res.status(500).json({ error: `Unable to collect site overview: ${err.message}` });
+  }
+});
+
+app.get('/api/site-overview/directory', requireAuth, (req, res) => {
+  try {
+    res.json(listSiteDirectory(typeof req.query.path === 'string' ? req.query.path : undefined));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

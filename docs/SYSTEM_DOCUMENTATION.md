@@ -788,7 +788,7 @@ Track deployments and system updates. Every row is created automatically by `scr
 | *(indexes)* | `version_number DESC` | Legacy — `listVersions()` actually orders by `created_at DESC, version_number DESC` |
 
 #### `todo_items`
-Backlog/todo tracker (admin "Todo / Backlog" page, §7.23). Append-only — no delete function exists.
+Backlog/todo tracker (admin "Todo / Backlog" page, §7.24). Append-only — no delete function exists.
 | Column | Type | Notes |
 |---|---|---|
 | id | TEXT PK | |
@@ -1062,7 +1062,20 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 
 `test_runs` stores the requested scope, status, requesting admin, start/end time, duration, passed/failed/skipped totals, and bounded runner output. `test_run_cases` stores the result of each individually selected test case, allowing the Test Cases page to show the most recent case-level status.
 
-### 7.23 Todo / Backlog (Admin)
+### 7.23 About this Site (Admin)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET | `/api/site-overview` | Admin | VPS runtime, capacity, application-storage, backup, and root-directory overview |
+| GET | `/api/site-overview/directory?path=…` | Admin | Read-only inventory of one filesystem directory |
+
+**Behaviour:**
+- The page is read-only: it never returns file contents, exposes no download action, and performs no modification or server-management command.
+- It presents hostname, operating system/kernel, architecture, Node runtime, CPU count, uptime, memory availability, disk capacity, backup count, and key application paths (application, data, uploads, backups, and dependencies).
+- The filesystem browser supports the complete VPS tree available to the service account. It displays direct-entry name, type, modification date, and file/directory size; each listing is capped at 1,000 entries and cached for 30 seconds to protect service responsiveness.
+- `/proc`, `/sys`, `/dev`, and `/run` are shown as virtual system paths but deliberately cannot be traversed. They are kernel/runtime pseudo-filesystems rather than normal stored site files and scanning them can block, produce misleading sizes, or expose ephemeral process data. The endpoint also never escalates privileges, so unreadable operating-system paths are reported as inaccessible rather than bypassing permissions.
+
+### 7.24 Todo / Backlog (Admin)
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -1834,7 +1847,7 @@ These mirror the actual automated suite's coverage philosophy and can be used as
 
 ## 15. Known Limitations & Technical Debt
 
-These 13 items were seeded as the first entries in the admin **Todo / Backlog** page (Settings group, §7.23) when it shipped — that page is now the **live, authoritative source** for current status (a Backlog item here may since have moved to In Progress/Done/Won't Fix there without this static table being updated to match). This table stays as the point-in-time detail captured when each gap was first identified.
+These 13 items were seeded as the first entries in the admin **Todo / Backlog** page (Settings group, §7.24) when it shipped — that page is now the **live, authoritative source** for current status (a Backlog item here may since have moved to In Progress/Done/Won't Fix there without this static table being updated to match). This table stays as the point-in-time detail captured when each gap was first identified.
 
 | Item | Detail |
 |---|---|
