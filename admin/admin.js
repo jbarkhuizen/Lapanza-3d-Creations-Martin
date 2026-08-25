@@ -3338,7 +3338,7 @@ function blankInHouseFilament() {
 async function renderInHouseFilament() {
   state.editingInHouseFilament = state.editingInHouseFilament || null;
   state.inHouseFilters = state.inHouseFilters || { q: '', brand: '' };
-  const [{ filaments }, { settings }, { inventory }] = await Promise.all([api('/api/in-house-filament'), api('/api/settings'), api('/api/inventory')]);
+  const [{ filaments }, { settings }, { items: inventory }] = await Promise.all([api('/api/in-house-filament'), api('/api/settings'), api('/api/inventory')]);
   const brands = settings.inHouseFilamentBrands || [];
   const filtered = filaments.filter((f) => (!state.inHouseFilters.brand || f.brand === state.inHouseFilters.brand) && [f.brand, f.filamentType, f.colorName].some((v) => v.toLowerCase().includes(state.inHouseFilters.q.toLowerCase())));
   const stockOptions = inventory.filter((item) => item.kind === 'filament' && item.stockQty > 0);
