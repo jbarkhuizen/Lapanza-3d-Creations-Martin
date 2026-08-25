@@ -2091,6 +2091,11 @@ async function renderSettings() {
         <label class="field" style="max-width:220px"><span>Next invoice number seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
         <label class="field" style="max-width:320px"><span>Order &amp; design-request notification email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
       </div>
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>In-house filament brands</h3></div>
+        <p class="muted" style="margin:0;font-size:0.88rem">One brand per line. Used when adding and filtering local print-stock rolls.</p>
+        <label class="field"><span>Brands</span><textarea id="in-house-filament-brands" rows="4">${escapeHtml((s.inHouseFilamentBrands || []).join('\n'))}</textarea></label>
+      </div>
 
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Print Job Costing rates</h3></div>
@@ -2144,6 +2149,7 @@ async function renderSettings() {
       tiles[i][input.dataset.tileField] = input.value;
     });
     if (tiles.length) patch.homeTiles = tiles;
+    patch.inHouseFilamentBrands = $('#in-house-filament-brands').value.split(/\r?\n/).map((brand) => brand.trim()).filter(Boolean);
     try {
       await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
       toast('Settings saved — refresh the public site to see fonts/theme defaults');
@@ -3326,21 +3332,27 @@ async function uploadPrintJobAsset(jobId, field, file) {
 // ---- In-House Filament ----
 
 function blankInHouseFilament() {
-  return { id: null, filamentType: '', colorName: '', rollsAvailable: 0, weightG: 1000, rollLengthM: 335, costPerRollRand: 0 };
+  return { id: null, brand: '', filamentType: '', colorName: '', rollsAvailable: 0, weightG: 1000, rollLengthM: 335, costPerRollRand: 0 };
 }
 
 async function renderInHouseFilament() {
   state.editingInHouseFilament = state.editingInHouseFilament || null;
-  const { filaments } = await api('/api/in-house-filament');
+  state.inHouseFilters = state.inHouseFilters || { q: '', brand: '' };
+  const [{ filaments }, { settings }, { inventory }] = await Promise.all([api('/api/in-house-filament'), api('/api/settings'), api('/api/inventory')]);
+  const brands = settings.inHouseFilamentBrands || [];
+  const filtered = filaments.filter((f) => (!state.inHouseFilters.brand || f.brand === state.inHouseFilters.brand) && [f.brand, f.filamentType, f.colorName].some((v) => v.toLowerCase().includes(state.inHouseFilters.q.toLowerCase())));
+  const stockOptions = inventory.filter((item) => item.kind === 'filament' && item.stockQty > 0);
 
-  const rows = filaments
+  const rows = filtered
     .map(
-      (f) => `
+      (f, index) => `
+        ${index === 0 || filtered[index - 1].filamentType !== f.filamentType ? `<tr class="table-group"><td colspan="8"><strong>${escapeHtml(f.filamentType)}</strong></td></tr>` : ''}
         <tr data-id="${escapeAttr(f.id)}">
-          <td>${escapeHtml(f.filamentType)}</td>
+          <td>${escapeHtml(f.brand)}</td>
           <td>${escapeHtml(f.colorName)}</td>
+          <td><select class="ihf-stock-item"><option value="">Select stock item…</option>${stockOptions.map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.name)} (${escapeHtml(String(item.stockQty))})</option>`).join('')}</select><button class="btn small" data-action="transfer" type="button">+ Roll</button></td>
           <td>${escapeHtml(String(f.rollsAvailable))}</td>
-          <td>${escapeHtml(String(f.weightG))}g / ${escapeHtml(String(f.rollLengthM))}m</td>
+          <td>${escapeHtml(f.filamentType)} · ${escapeHtml(String(f.weightG))}g / ${escapeHtml(String(f.rollLengthM))}m</td>
           <td>R${escapeHtml(String(f.costPerRollRand))}</td>
           <td>${escapeHtml(f.remainingG.toFixed(0))}g / ${escapeHtml(f.percentLeft != null ? Math.round(f.percentLeft * 100) : '—')}%</td>
           <td>
@@ -3355,12 +3367,15 @@ async function renderInHouseFilament() {
   $('#view-in-house-filament').innerHTML = `
     <div class="toolbar">
       <button class="btn btn-primary" id="new-in-house-filament" type="button">+ Filament</button>
-      <span class="muted">${escapeHtml(String(filaments.length))} filaments</span>
+      <input id="ihf-filter-q" type="search" placeholder="Search brand, type, colour…" value="${escapeAttr(state.inHouseFilters.q)}" />
+      <select id="ihf-filter-brand"><option value="">All brands</option>${brands.map((brand) => `<option value="${escapeAttr(brand)}" ${state.inHouseFilters.brand === brand ? 'selected' : ''}>${escapeHtml(brand)}</option>`).join('')}</select>
+      <span class="muted">${escapeHtml(String(filtered.length))} of ${escapeHtml(String(filaments.length))} filaments</span>
     </div>
     ${form ? `
       <div class="panel stack gap-3" style="max-width:600px">
         <div class="section-head"><h3>${form.id ? 'Edit filament' : 'New filament'}</h3></div>
         <div class="grid-2">
+          <label class="field"><span>Brand</span><select id="ihf-brand"><option value="">Select brand…</option>${brands.map((brand) => `<option value="${escapeAttr(brand)}" ${form.brand === brand ? 'selected' : ''}>${escapeHtml(brand)}</option>`).join('')}</select></label>
           <label class="field"><span>Filament type</span><input id="ihf-type" value="${escapeAttr(form.filamentType)}" placeholder="PLA" /></label>
           <label class="field"><span>Color name</span><input id="ihf-color" value="${escapeAttr(form.colorName)}" placeholder="Black" /></label>
         </div>
@@ -3377,12 +3392,14 @@ async function renderInHouseFilament() {
       </div>` : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Type</th><th>Color</th><th>Rolls</th><th>Per-roll spec</th><th>Cost/roll</th><th>Remaining</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No in-house filament logged yet</div></td></tr>'}</tbody>
+        <thead><tr><th>Brand</th><th>Color</th><th>Add roll from Stock Management</th><th>Rolls</th><th>Type / per-roll spec</th><th>Cost/roll</th><th>Remaining</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="8"><div class="empty">No in-house filament logged yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
   $('#new-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = blankInHouseFilament(); await renderInHouseFilament(); });
+  $('#ihf-filter-q').addEventListener('input', async () => { state.inHouseFilters.q = $('#ihf-filter-q').value; await renderInHouseFilament(); });
+  $('#ihf-filter-brand').addEventListener('change', async () => { state.inHouseFilters.brand = $('#ihf-filter-brand').value; await renderInHouseFilament(); });
   $$('#view-in-house-filament tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { filament } = await api(`/api/in-house-filament/${tr.dataset.id}`);
@@ -3399,12 +3416,22 @@ async function renderInHouseFilament() {
         toast(ex.message);
       }
     });
+    tr.querySelector('[data-action="transfer"]').addEventListener('click', async () => {
+      const stockItemId = $('.ihf-stock-item', tr).value;
+      if (!stockItemId) return toast('Select a Stock Management item first');
+      try {
+        await api(`/api/in-house-filament/${tr.dataset.id}/transfer-roll`, { method: 'POST', body: JSON.stringify({ stockItemId }) });
+        toast('Roll transferred to in-house stock');
+        await renderInHouseFilament();
+      } catch (ex) { toast(ex.message); }
+    });
   });
 
   if (form) {
     $('#cancel-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = null; await renderInHouseFilament(); });
     $('#save-in-house-filament').addEventListener('click', async () => {
       const payload = {
+        brand: $('#ihf-brand').value,
         filamentType: $('#ihf-type').value,
         colorName: $('#ihf-color').value,
         rollsAvailable: Number($('#ihf-rolls').value) || 0,

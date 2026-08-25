@@ -239,6 +239,7 @@ export function ensureSchema(db) {
     -- remaining/percent" pattern as filament_colours.
     CREATE TABLE IF NOT EXISTS in_house_filament (
       id TEXT PRIMARY KEY,
+      brand TEXT NOT NULL DEFAULT '',
       filament_type TEXT NOT NULL,
       color_name TEXT NOT NULL,
       rolls_available INTEGER NOT NULL DEFAULT 0,
@@ -689,6 +690,9 @@ function ensureNewsletterCampaignColumns(db) {
   }
   if (!hasColumn(db, 'PRAGMA table_info(newsletter_campaigns)', 'blocks_json')) {
     db.exec("ALTER TABLE newsletter_campaigns ADD COLUMN blocks_json TEXT NOT NULL DEFAULT '[]'");
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(in_house_filament)', 'brand')) {
+    db.exec("ALTER TABLE in_house_filament ADD COLUMN brand TEXT NOT NULL DEFAULT ''");
   }
 }
 

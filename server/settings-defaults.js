@@ -66,6 +66,7 @@ export const DEFAULT_SETTINGS = {
   // request) get sent -- separate from LOW_STOCK_ALERT_EMAIL's env-var
   // override since this one's admin-editable, not deploy-time config.
   orderNotificationEmail: 'lapanzaonline@gmail.com',
+  inHouseFilamentBrands: ['SunLu', 'SA Filament', 'Build Volume', 'Creality'],
 };
 
 export function findFont(id) {

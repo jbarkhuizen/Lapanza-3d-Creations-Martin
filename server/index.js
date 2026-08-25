@@ -126,6 +126,7 @@ import {
   createInHouseFilament,
   updateInHouseFilament,
   deleteInHouseFilament,
+  transferStockRoll,
 } from './in-house-filament.js';
 import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
 import { getVersion, listVersions } from './version-history.js';
@@ -1522,6 +1523,16 @@ app.put('/api/in-house-filament/:id', requireAuth, (req, res) => {
     const filament = updateInHouseFilament(req.params.id, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Filament not found' });
     recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated in-house filament "${filament.filamentType} — ${filament.colorName}"` });
+    res.json({ filament });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/in-house-filament/:id/transfer-roll', requireAuth, (req, res) => {
+  try {
+    const filament = transferStockRoll(req.params.id, (req.body || {}).stockItemId);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Transferred one Stock Management roll to in-house "${filament.brand} — ${filament.filamentType} — ${filament.colorName}"` });
     res.json({ filament });
   } catch (err) {
     res.status(400).json({ error: err.message });
