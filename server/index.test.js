@@ -865,3 +865,45 @@ test('order status changes, inventory updates, catalog changes, and settings cha
   const settingsChange = audit.body.entries.find((e) => e.eventType === 'settings_updated');
   assert.match(settingsChange.detail, /siteName/);
 });
+
+async function loggedInClientCookie(app, adminCookie, email) {
+  await request(app).post('/api/client/register').send({ email, password: 'correcthorsebattery' });
+  const list = await request(app).get(`/api/clients?q=${encodeURIComponent(email)}`).set('Cookie', adminCookie);
+  const clientId = list.body.clients[0].id;
+  await request(app).patch(`/api/clients/${clientId}/verify`).set('Cookie', adminCookie);
+  const login = await request(app).post('/api/client/login').send({ email, password: 'correcthorsebattery' });
+  return { clientId, cookie: login.headers['set-cookie'] };
+}
+
+test('a logged-in client can update their own details via PATCH /api/client/me, but not admin-only fields', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const { cookie } = await loggedInClientCookie(app, adminCookie, 'selfservice@example.com');
+
+  const me = await request(app).get('/api/client/me').set('Cookie', cookie);
+  assert.strictEqual(me.body.authenticated, true);
+  assert.strictEqual(me.body.client.email, 'selfservice@example.com');
+
+  const update = await request(app)
+    .patch('/api/client/me')
+    .set('Cookie', cookie)
+    .send({ firstName: 'Jane', lastName: 'Doe', city: 'Cape Town', discountPct: 50 });
+  assert.strictEqual(update.status, 200);
+  assert.strictEqual(update.body.client.firstName, 'Jane');
+  assert.strictEqual(update.body.client.city, 'Cape Town');
+  // discountPct is an admin-only business field (set from the admin Clients
+  // view / manual orders) -- must never be reachable from a client's own
+  // self-service session, even if they include it in the request body.
+  assert.strictEqual(update.body.client.discountPct, 0);
+});
+
+test('PATCH /api/client/me is rejected without a client session', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  const res = await request(app).patch('/api/client/me').send({ firstName: 'Jane' });
+  assert.strictEqual(res.status, 401);
+});

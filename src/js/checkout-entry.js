@@ -10,12 +10,39 @@ function escapeHtml(value) {
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
+    // Needed for /api/client/me and /api/client/me (update) to see the
+    // client session cookie -- without this a logged-in customer would
+    // never be detected on this page.
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
+}
+
+// Shipping/payment method choice was resetting to the HTML defaults every
+// time a customer navigated away (e.g. back to browse) and returned, since
+// this is a plain static page reload, not an SPA -- persisted the same way
+// cart.js persists the cart itself.
+const PREFS_KEY = 'lapanza-checkout-prefs';
+
+function readPrefs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePrefs(patch) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...patch }));
+  } catch {
+    /* private-mode/quota-full localStorage -- selection just won't persist */
+  }
 }
 
 function renderLines(items) {
@@ -187,10 +214,19 @@ async function init() {
       shippingOption = fixedOptions.find((o) => o.id === select.value) || null;
       shippingReady = Boolean(shippingOption);
       submitBtn.disabled = !shippingReady;
+      writePrefs({ fixedShippingOptionId: shippingOption?.id || null });
       const price = shippingOption?.price || 0;
       document.getElementById('checkout-shipping-price').textContent = formatPrice(price);
       document.getElementById('checkout-total').textContent = formatPrice(subtotal + price);
     });
+    // Restore a previously-picked PUDO/local-delivery option (the select's
+    // own choices, not just the shippingMethod radio above it) after coming
+    // back to this page.
+    const savedOptionId = readPrefs().fixedShippingOptionId;
+    if (savedOptionId && fixedOptions.some((o) => o.id === savedOptionId)) {
+      select.value = savedOptionId;
+      select.dispatchEvent(new Event('change'));
+    }
   }
 
   function setAddressRequired(required) {
@@ -257,21 +293,31 @@ async function init() {
     cocLabel.classList.add('flex');
   }
 
+  // Restore the shippingMethod/paymentMethod radio the customer had picked
+  // before navigating away -- otherwise every fresh load of this static page
+  // silently resets both back to the hardcoded `checked` defaults in the HTML.
+  const savedPrefs = readPrefs();
+  if (savedPrefs.shippingMethod) {
+    const radio = form.querySelector(`[name="shippingMethod"][value="${savedPrefs.shippingMethod}"]`);
+    if (radio) radio.checked = true;
+  }
+  if (savedPrefs.paymentMethod) {
+    const radio = form.querySelector(`[name="paymentMethod"][value="${savedPrefs.paymentMethod}"]`);
+    if (radio) radio.checked = true;
+  }
+
   form.querySelectorAll('[name="shippingMethod"]').forEach((r) =>
-    r.addEventListener('change', () => { updateShipping(); updatePaymentOptions(); }),
+    r.addEventListener('change', () => { writePrefs({ shippingMethod: r.value }); updateShipping(); updatePaymentOptions(); }),
+  );
+  form.querySelectorAll('[name="paymentMethod"]').forEach((r) =>
+    r.addEventListener('change', () => writePrefs({ paymentMethod: r.value })),
   );
   await updateShipping();
   updatePaymentOptions();
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const errorEl = document.getElementById('checkout-error');
-    errorEl.classList.add('hidden');
-    if (!shippingReady) return;
-
+  function buildClientPayload() {
     const data = new FormData(form);
-    if (!form.reportValidity()) return;
-    const client = {
+    return {
       name: `${data.get('firstName')} ${data.get('lastName')}`.trim(),
       firstName: data.get('firstName'),
       lastName: data.get('lastName'),
@@ -288,6 +334,17 @@ async function init() {
       emailMarketingOptIn: data.get('emailMarketingOptIn') === 'on',
       emailMarketingConsentSource: data.get('emailMarketingOptIn') === 'on' ? 'checkout' : '',
     };
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('checkout-error');
+    errorEl.classList.add('hidden');
+    if (!shippingReady) return;
+
+    if (!form.reportValidity()) return;
+    const client = buildClientPayload();
+    const data = new FormData(form);
     const paymentMethod = data.get('paymentMethod');
     const shippingMethod = data.get('shippingMethod');
 
@@ -322,10 +379,63 @@ async function init() {
       submitBtn.textContent = 'Place order';
     }
   });
-  document.getElementById('checkout-update-details').addEventListener('click', () => {
-    form.querySelector('[name="firstName"]').focus();
-    form.querySelector('[name="firstName"]').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('checkout-cancel').addEventListener('click', () => {
+    if (!confirm('Cancel this order and return to the shop? Your cart will be cleared.')) return;
+    clearCart();
+    window.location.href = 'index.html';
   });
+
+  // Prefill from the logged-in client's saved details, and only surface
+  // "Update Details" once they've actually changed something -- otherwise
+  // the button has no purpose to click (nothing to save) on every visit.
+  const DETAIL_FIELDS = ['firstName', 'lastName', 'businessName', 'email', 'phone', 'street', 'suburb', 'city', 'province', 'postalCode'];
+  const updateDetailsBtn = document.getElementById('checkout-update-details');
+  let detailsSnapshot = null;
+
+  function currentDetailValues() {
+    return DETAIL_FIELDS.map((name) => form.querySelector(`[name="${name}"]`)?.value || '').join(' ');
+  }
+
+  function checkDetailsDirty() {
+    if (!detailsSnapshot) return;
+    updateDetailsBtn.classList.toggle('hidden', currentDetailValues() === detailsSnapshot);
+  }
+
+  try {
+    const { authenticated, client } = await api('/api/client/me');
+    if (authenticated && client) {
+      DETAIL_FIELDS.forEach((name) => {
+        const input = form.querySelector(`[name="${name}"]`);
+        if (input && client[name] != null) input.value = client[name];
+      });
+      form.querySelector('[name="whatsappOptIn"]').checked = client.whatsappOptIn !== false;
+      form.querySelector('[name="emailMarketingOptIn"]').checked = client.emailMarketingOptIn !== false;
+      detailsSnapshot = currentDetailValues();
+      DETAIL_FIELDS.forEach((name) => form.querySelector(`[name="${name}"]`)?.addEventListener('input', checkDetailsDirty));
+
+      updateDetailsBtn.addEventListener('click', async () => {
+        updateDetailsBtn.disabled = true;
+        try {
+          await api('/api/client/me', { method: 'PATCH', body: JSON.stringify(buildClientPayload()) });
+          detailsSnapshot = currentDetailValues();
+          updateDetailsBtn.textContent = 'Saved';
+          setTimeout(() => {
+            updateDetailsBtn.textContent = 'Update Details';
+            updateDetailsBtn.classList.add('hidden');
+            updateDetailsBtn.disabled = false;
+          }, 1200);
+        } catch (err) {
+          updateDetailsBtn.disabled = false;
+          const errorEl = document.getElementById('checkout-error');
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
+      });
+    }
+  } catch {
+    // Not logged in (or the check failed) -- checkout works fine as a guest,
+    // the Update Details button just never has anything to show for.
+  }
 }
 
 document.addEventListener('DOMContentLoaded', init);

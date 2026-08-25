@@ -467,6 +467,36 @@ app.get('/api/client/orders', requireClientAuth, (req, res) => {
   res.json({ orders: listOrdersForClient(req.clientId) });
 });
 
+// Self-service equivalent of the admin PUT /api/clients/:id below, but
+// explicitly allowlisted -- discountPct/discountNote/source are admin-only
+// business fields (set from manual orders / the admin Clients view) and
+// must never be reachable from a logged-in customer's own session.
+app.patch('/api/client/me', requireClientAuth, (req, res) => {
+  const body = req.body || {};
+  try {
+    const client = updateClient(req.clientId, {
+      name: body.name,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      businessName: body.businessName,
+      email: body.email,
+      phone: body.phone,
+      street: body.street,
+      suburb: body.suburb,
+      city: body.city,
+      province: body.province,
+      postalCode: body.postalCode,
+      country: body.country,
+      whatsappOptIn: body.whatsappOptIn,
+      emailMarketingOptIn: body.emailMarketingOptIn,
+      emailMarketingConsentSource: body.emailMarketingConsentSource,
+    });
+    res.json({ client });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ---- Visitor analytics (post-launch) ----
 // Public beacon fired by src/js/analytics.js on every public page load
 // (type: 'pageview') and roughly every 45s while a tab stays open and
