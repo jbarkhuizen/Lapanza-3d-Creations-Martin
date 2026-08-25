@@ -1,13 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { listTodos, getTodo, createTodo, updateTodo, TODO_CATEGORIES, TODO_STATUSES } from './todos.js';
+import { listTodos, getTodo, createTodo, updateTodo, TODO_CATEGORIES, TODO_PRIORITIES, TODO_STATUSES } from './todos.js';
 
 test('a fresh database is seeded with the known-limitations backlog automatically', () => {
   const db = openDb(':memory:');
   const todos = listTodos(db);
   assert.strictEqual(todos.length, 13);
   assert.ok(todos.every((t) => TODO_CATEGORIES.includes(t.category)));
+  assert.ok(todos.every((t) => TODO_PRIORITIES.includes(t.priority)));
   assert.ok(todos.every((t) => TODO_STATUSES.includes(t.status)));
   assert.ok(todos.some((t) => t.name.includes('Privacy Policy')));
   db.close();
@@ -19,11 +20,22 @@ test('createTodo requires a name', () => {
   db.close();
 });
 
-test('createTodo defaults an invalid category/status rather than rejecting the request', () => {
+test('createTodo defaults invalid category, priority, and status rather than rejecting the request', () => {
   const db = openDb(':memory:');
-  const todo = createTodo({ name: 'Something', category: 'Nonsense', status: 'Nonsense' }, db);
+  const todo = createTodo({ name: 'Something', category: 'Nonsense', priority: 'Nonsense', status: 'Nonsense' }, db);
   assert.strictEqual(todo.category, 'Feature');
+  assert.strictEqual(todo.priority, 'Medium');
   assert.strictEqual(todo.status, 'Backlog');
+  db.close();
+});
+
+test('createTodo and updateTodo retain a valid priority', () => {
+  const db = openDb(':memory:');
+  const todo = createTodo({ name: 'Urgent task', priority: 'Critical' }, db);
+  assert.strictEqual(todo.priority, 'Critical');
+
+  const updated = updateTodo(todo.id, { priority: 'Low' }, db);
+  assert.strictEqual(updated.priority, 'Low');
   db.close();
 });
 

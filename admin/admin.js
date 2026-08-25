@@ -1396,9 +1396,10 @@ async function renderVersionHistory() {
 
 const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
 const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix'];
+const TODO_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 
 function blankTodo() {
-  return { id: null, category: 'Feature', name: '', description: '', status: 'Backlog', plannedFixDate: '', actualFixDate: '' };
+  return { id: null, category: 'Feature', priority: 'Medium', name: '', description: '', status: 'Backlog', plannedFixDate: '', actualFixDate: '' };
 }
 
 function filterTodos(todos) {
@@ -1423,6 +1424,11 @@ function todoStatusBadge(status) {
   return `<span class="badge ${cls}">${s}</span>`;
 }
 
+function todoPriorityBadge(priority) {
+  const value = priority || 'Medium';
+  return `<span class="badge priority-${escapeAttr(value.toLowerCase())}">${escapeHtml(value)}</span>`;
+}
+
 async function renderTodos() {
   state.editingTodo = state.editingTodo || null;
   const { todos } = await api('/api/todos');
@@ -1437,9 +1443,10 @@ async function renderTodos() {
           <td style="width: 110px;">${escapeHtml(formatDate(t.dateAdded))}</td>
           <td>${escapeHtml(t.name)}</td>
           <td style="max-width: 320px;">${escapeHtml(t.description || '—')}</td>
-          <td style="width: 110px;">${t.plannedFixDate ? escapeHtml(formatDate(t.plannedFixDate)) : '—'}</td>
-          <td style="width: 110px;">${t.actualFixDate ? escapeHtml(formatDate(t.actualFixDate)) : '—'}</td>
-          <td style="width: 100px;">${todoStatusBadge(t.status)}</td>
+          <td style="width: 90px;">${todoPriorityBadge(t.priority)}</td>
+          <td style="width: 130px;">${t.plannedFixDate ? escapeHtml(formatDate(t.plannedFixDate)) : '—'}</td>
+          <td style="width: 150px;"><input class="todo-inline-control todo-inline-date" data-action="actual-fix-date" type="date" aria-label="Actual Fix Date for ${escapeAttr(t.name)}" value="${escapeAttr(toDateInputValue(t.actualFixDate))}" /></td>
+          <td style="width: 150px;"><select class="todo-inline-control" data-action="status" aria-label="Status for ${escapeAttr(t.name)}">${TODO_STATUSES.map((status) => `<option value="${escapeAttr(status)}" ${t.status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}</select></td>
           <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
         </tr>`,
     )
@@ -1447,7 +1454,7 @@ async function renderTodos() {
 
   const form = state.editingTodo;
   $('#view-todos').innerHTML = `
-    <div class="toolbar">
+    <div class="toolbar todo-toolbar">
       <button class="btn btn-primary" id="new-todo" type="button">+ Add Item</button>
       <input id="todo-filter-q" type="search" placeholder="Search name or description…" value="${escapeAttr(state.todoFilters.q)}" />
       <select id="todo-filter-category">
@@ -1458,7 +1465,7 @@ async function renderTodos() {
         <option value="">All statuses</option>
         ${TODO_STATUSES.map((status) => `<option value="${escapeAttr(status)}" ${state.todoFilters.status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}
       </select>
-      <label class="field" style="min-width: 160px;"><span>Planned fix</span><input id="todo-filter-planned" type="date" value="${escapeAttr(state.todoFilters.plannedFixDate)}" /></label>
+      <label class="field todo-filter-date"><span>Planned Fix Date</span><input id="todo-filter-planned" type="date" value="${escapeAttr(state.todoFilters.plannedFixDate)}" /></label>
       <button class="btn small" id="clear-todo-filters" type="button">Clear filters</button>
       <span class="muted">${escapeHtml(String(filteredTodos.length))} of ${escapeHtml(String(todos.length))} item(s)</span>
     </div>
@@ -1479,6 +1486,11 @@ async function renderTodos() {
               ${TODO_STATUSES.map((s) => `<option value="${escapeAttr(s)}" ${form.status === s ? 'selected' : ''}>${escapeHtml(s)}</option>`).join('')}
             </select>
           </label>
+          <label class="field"><span>Priority</span>
+            <select id="td-priority">
+              ${TODO_PRIORITIES.map((priority) => `<option value="${escapeAttr(priority)}" ${(form.priority || 'Medium') === priority ? 'selected' : ''}>${escapeHtml(priority)}</option>`).join('')}
+            </select>
+          </label>
         </div>
         <label class="field"><span>Name</span><input id="td-name" value="${escapeAttr(form.name)}" /></label>
         <label class="field"><span>Description / detail</span><textarea id="td-description" rows="4">${escapeHtml(form.description)}</textarea></label>
@@ -1494,8 +1506,8 @@ async function renderTodos() {
       </div>` : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>No</th><th>Category</th><th>Date Added</th><th>Name</th><th>Description</th><th>Planned Fix</th><th>Actual Fix</th><th>Status</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="9"><div class="empty">No items match your filters</div></td></tr>'}</tbody>
+        <thead><tr><th>No</th><th>Category</th><th>Date Added</th><th>Name</th><th>Description</th><th>Priority</th><th>Planned Fix Date</th><th>Actual Fix Date</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="10"><div class="empty">No items match your filters</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -1518,6 +1530,23 @@ async function renderTodos() {
     await renderTodos();
   });
 
+  const saveInlineTodo = async (id, payload) => {
+    try {
+      await api(`/api/todos/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      toast('Saved');
+      await renderTodos();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  };
+
+  $$('#view-todos [data-action="status"]').forEach((select) => {
+    select.addEventListener('change', () => saveInlineTodo(select.closest('tr').dataset.id, { status: select.value }));
+  });
+  $$('#view-todos [data-action="actual-fix-date"]').forEach((input) => {
+    input.addEventListener('change', () => saveInlineTodo(input.closest('tr').dataset.id, { actualFixDate: input.value || null }));
+  });
+
   $('#new-todo').addEventListener('click', async () => { state.editingTodo = blankTodo(); await renderTodos(); });
   $$('#view-todos tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
@@ -1533,6 +1562,7 @@ async function renderTodos() {
       const payload = {
         category: $('#td-category').value,
         status: $('#td-status').value,
+        priority: $('#td-priority').value,
         name: $('#td-name').value,
         description: $('#td-description').value,
         plannedFixDate: $('#td-planned').value || null,

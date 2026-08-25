@@ -362,6 +362,7 @@ export function ensureSchema(db) {
       id TEXT PRIMARY KEY,
       number INTEGER NOT NULL UNIQUE,
       category TEXT NOT NULL,
+      priority TEXT NOT NULL DEFAULT 'Medium',
       name TEXT NOT NULL,
       description TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'Backlog',
@@ -399,6 +400,7 @@ export function ensureSchema(db) {
   ensurePrintJobColumns(db);
   ensureListingColumns(db);
   ensureUploadOriginalNameColumns(db);
+  ensureTodoColumns(db);
   seedTodoItems(db);
   backfillAnalyticsTotals(db);
 }
@@ -611,6 +613,12 @@ function ensurePasswordResetColumns(db) {
 function ensureVersionHistoryColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(version_history)', 'version_label')) {
     db.exec('ALTER TABLE version_history ADD COLUMN version_label TEXT');
+  }
+}
+
+function ensureTodoColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(todo_items)', 'priority')) {
+    db.exec("ALTER TABLE todo_items ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'");
   }
 }
 
