@@ -1718,17 +1718,26 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     delete order._lowStock;
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
 
+    // For Payfast (card/EFT), the order isn't actually paid yet at this
+    // point -- it's just been created as pending_payment and the customer
+    // is about to be redirected to Payfast's hosted page. Sending "order
+    // confirmed" here would be a lie if they abandon/decline payment.
+    // The confirmation only goes out once the ITN webhook below confirms
+    // COMPLETE. Manual EFT / Cash on Collection have no online payment gate
+    // to wait for, so they still confirm immediately.
+    const isOnlinePayment = body.paymentMethod === 'payfast_card' || body.paymentMethod === 'payfast_eft';
     let emailSent = false;
-    try {
-      await sendOrderConfirmationEmail(order);
-      emailSent = true;
-      markConfirmationEmailSent(order.id);
-    } catch (err) {
-      // A failed confirmation email must not fail the checkout -- the order
-      // is already placed and (for Payfast) about to redirect to payment.
-      // The admin "resend" action (H.2) exists specifically to recover
-      // from this.
-      logEmailFailure(`Order ${order.id} confirmation email`, err, req);
+    if (!isOnlinePayment) {
+      try {
+        await sendOrderConfirmationEmail(order);
+        emailSent = true;
+        markConfirmationEmailSent(order.id);
+      } catch (err) {
+        // A failed confirmation email must not fail the checkout -- the
+        // order is already placed. The admin "resend" action (H.2) exists
+        // specifically to recover from this.
+        logEmailFailure(`Order ${order.id} confirmation email`, err, req);
+      }
     }
 
     try {
@@ -1795,8 +1804,20 @@ app.post(
     });
 
     if (result.paymentStatus === 'COMPLETE') {
-      const { lowStock } = markOrderPaid(order.id);
-      if (lowStock.length) await sendLowStockAlerts(lowStock);
+      // changed is false on a duplicate ITN redelivery for an order already
+      // marked paid (markOrderPaid's UPDATE only matches status =
+      // 'pending_payment') -- gate the confirmation email on it too, or a
+      // Payfast retry would resend "your order is confirmed" every time.
+      const { changed, lowStock } = markOrderPaid(order.id);
+      if (changed) {
+        if (lowStock.length) await sendLowStockAlerts(lowStock);
+        try {
+          await sendOrderConfirmationEmail(order);
+          markConfirmationEmailSent(order.id);
+        } catch (err) {
+          logEmailFailure(`Order ${order.id} confirmation email (Payfast ITN)`, err, req);
+        }
+      }
     }
   },
 );

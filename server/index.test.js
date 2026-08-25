@@ -737,6 +737,50 @@ test('a failed outbound email is recorded to the audit log instead of only conso
   assert.match(res.body.entries[0].detail, /GMAIL_APP_PASSWORD/);
 });
 
+test('Payfast checkout does not send the order confirmation immediately -- only manual_eft/cash_on_collection do', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA', slug: 'pla' });
+  const colour = await request(app)
+    .post(`/api/filaments/${filament.body.filament.id}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'Red', sku: 'PLA-RED', priceRand: 100, weightG: 100, stockQty: 10 });
+  const productId = `filament:pla:${colour.body.filament.colours[0].sku}`;
+
+  const checkoutPayload = (paymentMethod) => ({
+    client: { firstName: 'Test', lastName: 'Buyer', email: 'buyer@example.com' },
+    items: [{ productId, quantity: 1 }],
+    shippingMethod: 'collect',
+    paymentMethod,
+  });
+
+  const payfastRes = await request(app).post('/api/checkout').send(checkoutPayload('payfast_card'));
+  assert.strictEqual(payfastRes.status, 201);
+  assert.strictEqual(payfastRes.body.emailSent, false);
+  assert.strictEqual(payfastRes.body.redirect.actionUrl.includes('payfast.co.za'), true);
+
+  const manualRes = await request(app).post('/api/checkout').send(checkoutPayload('manual_eft'));
+  assert.strictEqual(manualRes.status, 201);
+
+  // GMAIL_APP_PASSWORD is deliberately unset in the test env, so a real send
+  // attempt fails and is logged as email_failure -- that's how this test
+  // distinguishes "attempted a confirmation email" from "correctly skipped
+  // it because payment isn't confirmed yet" without needing a working SMTP
+  // config. Matching on "Order <id> confirmation email" (the logEmailFailure
+  // context string), not just the substring "confirmation email" -- the
+  // underlying GMAIL_APP_PASSWORD error text itself contains that phrase
+  // too, so every failed send (including the unrelated owner-notification
+  // one both checkouts also trigger) would otherwise false-match.
+  const audit = await request(app).get('/api/audit-log?eventType=email_failure').set('Cookie', cookie);
+  const forOrder = (orderId) => audit.body.entries.filter((e) => e.detail.startsWith(`Order ${orderId} confirmation email`));
+  assert.strictEqual(forOrder(manualRes.body.order.id).length, 1);
+  assert.strictEqual(forOrder(payfastRes.body.order.id).length, 0);
+});
+
 test('deleting an admin and resetting a password are attributed to the acting admin and recorded', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

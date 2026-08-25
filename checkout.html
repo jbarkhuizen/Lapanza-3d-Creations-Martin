@@ -98,14 +98,21 @@
             </div>
           </div>
         </div>
+
+        <div class="panel p-6 border border-charcoal/10 rounded-sm">
+          <div class="stack gap-2 text-sm">
+            <label class="flex gap-2"><input name="whatsappOptIn" type="checkbox" checked /> Consent to receive WhatsApp updates on new products and features</label>
+            <label class="flex gap-2"><input name="emailMarketingOptIn" type="checkbox" checked /> Consent to receive email updates and newsletters</label>
+          </div>
+        </div>
       </div>
 
       <div class="stack gap-6">
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
           <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping Options</h2>
           <div class="stack gap-2 text-sm mb-4">
-            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="courier" checked /> Our shipping (courier)</label>
-            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed" /> PUDO locker / local delivery</label>
+            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed" checked /> PUDO locker / local delivery</label>
+            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="courier" /> Our shipping (courier)</label>
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="own_courier" /> I'll arrange my own courier</label>
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="collect" /> Collect from store</label>
           </div>
@@ -126,10 +133,6 @@
           <div class="flex justify-between text-sm mb-1"><span>Subtotal</span><span id="checkout-subtotal">R 0.00</span></div>
           <div class="flex justify-between text-sm mb-3"><span>Shipping</span><span id="checkout-shipping-price">R 0.00</span></div>
           <div class="flex justify-between font-serif text-xl mb-4"><span>Total</span><span id="checkout-total" class="text-terracotta">R 0.00</span></div>
-          <div class="stack gap-2 text-sm border-t border-charcoal/10 pt-4 mb-4">
-            <label class="flex gap-2"><input name="whatsappOptIn" type="checkbox" checked /> Consent to receive WhatsApp updates on new products and features</label>
-            <label class="flex gap-2"><input name="emailMarketingOptIn" type="checkbox" checked /> Consent to receive email updates and newsletters</label>
-          </div>
           <p id="checkout-error" class="hidden text-sm text-terracotta mb-3"></p>
           <button type="submit" id="checkout-submit" class="w-full text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-5 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Place Order</button>
           <button type="button" id="checkout-cancel" class="w-full text-sm font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-5 py-3 mt-3 hover:bg-charcoal hover:text-cream transition-colors">Cancel Order</button>

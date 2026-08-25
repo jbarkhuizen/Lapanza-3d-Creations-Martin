@@ -224,7 +224,7 @@ async function init() {
 
   function renderFixedOptionsPicker() {
     shippingBox.innerHTML = `
-      <select id="checkout-fixed-shipping" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent text-sm">
+      <select id="checkout-fixed-shipping" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-cream text-charcoal text-sm">
         <option value="">Choose an option…</option>
         ${fixedOptions.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)} — ${escapeHtml(formatPrice(o.price))}</option>`).join('')}
       </select>`;
