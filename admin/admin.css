@@ -326,6 +326,12 @@ code {
 .newsletter-recipient input { width: auto; margin-top: 0.2rem; }
 .newsletter-recipient span { display: grid; gap: 0.1rem; min-width: 0; }
 .newsletter-recipient small { color: var(--muted); overflow-wrap: anywhere; }
+.newsletter-block { display: grid; grid-template-columns: 130px 1fr 1fr auto; gap: 0.45rem; padding: 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: var(--bg-soft); }
+.newsletter-block input, .newsletter-block select { min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 0.5rem; background: var(--bg-elevated); }
+.newsletter-assets { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.newsletter-asset { width: 72px; height: 60px; padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; background: var(--bg-soft); }
+.newsletter-asset img { width: 100%; height: 100%; object-fit: cover; }
+.newsletter-preview { width: 100%; min-height: 420px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 
 .table-wrap { overflow: auto; }
 table.catalog {

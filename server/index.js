@@ -133,6 +133,7 @@ import { listTodos, createTodo, updateTodo } from './todos.js';
 import { getDocumentation, listDocumentation } from './documentation.js';
 import { getTestRun, listTestCases, listTestRuns, startTestRun } from './test-runs.js';
 import { getSiteOverview, listSiteDirectory } from './site-overview.js';
+import { createImportedTemplate, createTemplate, listTemplates } from './newsletter-content.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -149,6 +150,16 @@ try {
 }
 
 const root = process.cwd(); // cwd-based (not __dirname) so tests can isolate via process.chdir()
+const newsletterAssetDir = path.join(root, 'public', 'uploads', 'newsletters');
+const newsletterAssetUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => { fs.mkdirSync(newsletterAssetDir, { recursive: true }); cb(null, newsletterAssetDir); },
+    filename: (_req, file, cb) => cb(null, `${randomUUID()}${({ 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[file.mimetype] || '.bin')}`),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, ['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)),
+});
+const newsletterTemplateUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 } });
 // Render (and most PaaS hosts) inject PORT and require the app to bind to
 // it -- ADMIN_PORT is this project's own local-dev override, checked second.
 const PORT = Number(process.env.PORT || process.env.ADMIN_PORT || 8787);
@@ -540,6 +551,39 @@ app.get('/api/newsletter-campaigns', requireAuth, (_req, res) => {
 
 app.get('/api/newsletter-recipients', requireAuth, (_req, res) => {
   res.json({ recipients: listNewsletterRecipients() });
+});
+
+app.get('/api/newsletter-templates', requireAuth, (_req, res) => {
+  res.json({ templates: listTemplates() });
+});
+
+app.post('/api/newsletter-templates', requireAuth, (req, res) => {
+  try {
+    res.status(201).json({ template: createTemplate(req.body || {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/newsletter-templates/import', requireAuth, newsletterTemplateUpload.single('template'), (req, res) => {
+  try {
+    if (!req.file || !/\.html?$/i.test(req.file.originalname)) return res.status(400).json({ error: 'Upload an HTML template under 500KB' });
+    res.status(201).json({ template: createImportedTemplate({ name: req.body.name || req.file.originalname, subject: req.body.subject, html: req.file.buffer.toString('utf8') }) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/newsletter-assets', requireAuth, (_req, res) => {
+  const assets = getDb().prepare('SELECT id, filename, url, alt_text AS altText, created_at AS createdAt FROM newsletter_assets ORDER BY created_at DESC').all();
+  res.json({ assets });
+});
+
+app.post('/api/newsletter-assets', requireAuth, newsletterAssetUpload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Upload a JPEG, PNG, or WebP image under 5MB' });
+  const asset = { id: randomUUID(), filename: req.file.originalname, url: `/uploads/newsletters/${req.file.filename}`, altText: String(req.body.altText || '').trim(), createdAt: new Date().toISOString() };
+  getDb().prepare('INSERT INTO newsletter_assets (id, filename, url, alt_text, created_at) VALUES (?, ?, ?, ?, ?)').run(asset.id, asset.filename, asset.url, asset.altText, asset.createdAt);
+  res.status(201).json({ asset });
 });
 
 app.get('/api/newsletter-campaigns/:id/recipients', requireAuth, (req, res) => {

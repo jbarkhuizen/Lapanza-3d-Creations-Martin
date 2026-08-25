@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 import { sendNewsletterCampaignEmail } from './mailer.js';
+import { renderBlocks, sanitizeImportedHtml } from './newsletter-content.js';
 
 const activeCampaigns = new Set();
 
@@ -11,7 +12,7 @@ function rowToCampaign(row, db = getDb()) {
   `).all(row.id);
   const counts = Object.fromEntries(recipients.map((item) => [item.status, item.count]));
   return {
-    id: row.id, subject: row.subject, bodyText: row.body_text, status: row.status,
+    id: row.id, subject: row.subject, bodyText: row.body_text, bodyHtml: row.body_html, blocks: JSON.parse(row.blocks_json || '[]'), status: row.status,
     createdAt: row.created_at, approvedAt: row.approved_at, sentAt: row.sent_at,
     sentCount: row.sent_count, failedCount: row.failed_count,
     selectedCount: (counts.selected || 0) + (counts.failed || 0) + (counts.sent || 0),
@@ -61,13 +62,14 @@ export function listCampaignRecipients(id, db = getDb()) {
 
 export function createCampaign(data, db = getDb()) {
   if (!data.subject || !String(data.subject).trim()) throw new Error('Subject is required');
-  if (!data.bodyText || !String(data.bodyText).trim()) throw new Error('Body is required');
+  const content = data.importedHtml ? sanitizeImportedHtml(data.importedHtml) : data.blocks ? renderBlocks(data.blocks) : { bodyText: String(data.bodyText || '').trim(), bodyHtml: '' };
+  if (!content.bodyText) throw new Error('Body is required');
   const recipients = requestedRecipients(data.recipientKeys, db);
   const id = randomUUID();
   const now = new Date().toISOString();
   db.transaction(() => {
-    db.prepare(`INSERT INTO newsletter_campaigns (id, subject, body_text, status, created_at) VALUES (?, ?, ?, 'draft', ?)`)
-      .run(id, String(data.subject).trim(), String(data.bodyText).trim(), now);
+    db.prepare(`INSERT INTO newsletter_campaigns (id, subject, body_text, body_html, blocks_json, status, created_at) VALUES (?, ?, ?, ?, ?, 'draft', ?)`)
+      .run(id, String(data.subject).trim(), content.bodyText, content.bodyHtml, JSON.stringify(data.blocks || []), now);
     const insert = db.prepare(`
       INSERT INTO newsletter_campaign_recipients
         (id, campaign_id, recipient_key, email, display_name, source_type, source_id, unsubscribe_token, status, selected_at)
@@ -95,7 +97,7 @@ export async function sendTestCampaign(id, toEmail, { siteUrl }, db = getDb()) {
   const campaign = getCampaign(id, db);
   if (!campaign) return null;
   if (!toEmail || !String(toEmail).trim()) throw new Error('Test email address is required');
-  await sendNewsletterCampaignEmail(`[TEST] ${campaign.subject}`, campaign.bodyText, String(toEmail).trim(), `${siteUrl}/`);
+  await sendNewsletterCampaignEmail(`[TEST] ${campaign.subject}`, campaign.bodyText, campaign.bodyHtml, String(toEmail).trim(), `${siteUrl}/`);
   return campaign;
 }
 
@@ -109,7 +111,7 @@ export async function sendCampaign(id, { siteUrl }, db = getDb()) {
   `).all(id);
   for (const recipient of recipients) {
     try {
-      await sendNewsletterCampaignEmail(campaign.subject, campaign.bodyText, recipient.email, `${siteUrl}/api/newsletter/unsubscribe?token=${recipient.unsubscribe_token}`);
+      await sendNewsletterCampaignEmail(campaign.subject, campaign.bodyText, campaign.bodyHtml, recipient.email, `${siteUrl}/api/newsletter/unsubscribe?token=${recipient.unsubscribe_token}`);
       db.prepare("UPDATE newsletter_campaign_recipients SET status = 'sent', sent_at = ?, failure_reason = '' WHERE id = ?")
         .run(new Date().toISOString(), recipient.id);
     } catch (error) {

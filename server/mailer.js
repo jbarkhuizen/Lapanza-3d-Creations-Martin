@@ -164,12 +164,15 @@ If you didn't request this, you can ignore this email — or unsubscribe here: $
 // unsubscribeUrl carries that subscriber's own token (see newsletter.js's
 // newToken() comment) so the link in every campaign email works regardless
 // of which campaign it came from.
-export async function sendNewsletterCampaignEmail(subject, bodyText, toEmail, unsubscribeUrl) {
+export async function sendNewsletterCampaignEmail(subject, bodyText, bodyHtml, toEmail, unsubscribeUrl) {
+  const footerText = `\n\n— Lapanza 3D Creative Lab\n\nUnsubscribe: ${unsubscribeUrl}`;
+  const footerHtml = `<p style="font:12px Arial,sans-serif;color:#6d655d;margin-top:28px">Lapanza 3D Creative Lab · <a href="${unsubscribeUrl}">Unsubscribe</a></p>`;
   await getTransporter().sendMail({
     from: FROM_ADDRESS,
     to: toEmail,
     subject,
-    text: `${bodyText}\n\n— Lapanza 3D Creative Lab\n\nUnsubscribe: ${unsubscribeUrl}`,
+    text: `${bodyText}${footerText}`,
+    html: bodyHtml ? `${bodyHtml}${footerHtml}` : undefined,
   });
 }
 

@@ -3532,7 +3532,16 @@ function campaignStatusBadge(status) {
 }
 
 async function renderNewsletterCampaigns() {
-  const [{ campaigns }, { recipients }] = await Promise.all([api('/api/newsletter-campaigns'), api('/api/newsletter-recipients')]);
+  state.newsletterBlocks = state.newsletterBlocks || [{ type: 'heading', text: 'Lapanza 3D' }, { type: 'text', text: '' }];
+  const [{ campaigns }, { recipients }, { templates }, { assets }] = await Promise.all([api('/api/newsletter-campaigns'), api('/api/newsletter-recipients'), api('/api/newsletter-templates'), api('/api/newsletter-assets')]);
+  const blockEditor = state.newsletterBlocks.map((block, index) => `
+    <div class="newsletter-block" data-block-index="${index}">
+      <select class="nb-type"><option value="heading" ${block.type === 'heading' ? 'selected' : ''}>Heading</option><option value="text" ${block.type === 'text' ? 'selected' : ''}>Text</option><option value="image" ${block.type === 'image' ? 'selected' : ''}>Image</option><option value="button" ${block.type === 'button' ? 'selected' : ''}>Button</option><option value="divider" ${block.type === 'divider' ? 'selected' : ''}>Divider</option></select>
+      <input class="nb-text" value="${escapeAttr(block.text || '')}" placeholder="${block.type === 'button' ? 'Button label' : 'Content'}" />
+      ${['image', 'button'].includes(block.type) ? `<input class="nb-url" value="${escapeAttr(block.url || '')}" placeholder="${block.type === 'image' ? 'Image URL' : 'Button URL'}" />` : ''}
+      ${block.type === 'image' ? `<input class="nb-alt" value="${escapeAttr(block.alt || '')}" placeholder="Image alt text" />` : ''}
+      <button class="btn small nb-remove" type="button">Remove</button>
+    </div>`).join('');
 
   const rows = campaigns
     .map(
@@ -3554,8 +3563,12 @@ async function renderNewsletterCampaigns() {
   $('#view-newsletter').innerHTML = `
     <div class="panel stack gap-3">
       <div class="section-head"><div><h3>Compose newsletter</h3><p class="muted">Select only recipients with confirmed newsletter consent or recorded client email-marketing consent.</p></div></div>
-      <label class="field"><span>Subject</span><input id="nc-subject" /></label>
-      <label class="field"><span>Body</span><textarea id="nc-body" rows="6"></textarea></label>
+      <label class="field"><span>Subject</span><input id="nc-subject" value="${escapeAttr(state.newsletterSubject || '')}" /></label>
+      <div class="grid-3"><label class="field"><span>Use template</span><select id="nc-template"><option value="">Choose a saved template…</option>${templates.map((template) => `<option value="${escapeAttr(template.id)}">${escapeHtml(template.name)}</option>`).join('')}</select></label><label class="field"><span>Upload image</span><input id="nc-image-upload" type="file" accept="image/jpeg,image/png,image/webp" /></label><label class="field"><span>Import HTML template</span><input id="nc-template-upload" type="file" accept=".html,.htm,text/html" /></label></div>
+      <div class="newsletter-assets">${assets.map((asset) => `<button class="newsletter-asset" type="button" data-asset-url="${escapeAttr(asset.url)}" data-asset-alt="${escapeAttr(asset.altText)}"><img src="${escapeAttr(asset.url)}" alt="${escapeAttr(asset.altText)}" /></button>`).join('')}</div>
+      <div id="newsletter-block-editor" class="stack gap-2">${blockEditor}</div>
+      <div class="row-card-actions"><button class="btn small" id="nc-add-block" type="button">+ Content block</button><button class="btn small" id="nc-save-template" type="button">Save as template</button><button class="btn small" id="nc-preview" type="button">Preview</button></div>
+      <iframe id="nc-preview-frame" class="newsletter-preview hidden" title="Newsletter preview"></iframe>
       <div class="newsletter-recipient-picker">
         <div class="section-head"><strong>Eligible recipients (${escapeHtml(String(recipients.length))})</strong><label class="field checkbox"><input id="nc-select-all" type="checkbox" /><span>Select all</span></label></div>
         <div class="newsletter-recipient-list">${recipients.map((recipient) => `<label class="newsletter-recipient"><input class="nc-recipient" type="checkbox" value="${escapeAttr(recipient.key)}" /><span><strong>${escapeHtml(recipient.name || recipient.email)}</strong><small>${escapeHtml(recipient.email)} · ${escapeHtml(recipient.sourceType)}</small></span></label>`).join('') || '<p class="muted">No eligible recipients. Record client email-marketing consent or wait for a subscriber to confirm.</p>'}</div>
@@ -3573,16 +3586,28 @@ async function renderNewsletterCampaigns() {
 
   $('#save-campaign').addEventListener('click', async () => {
     const subject = $('#nc-subject').value;
-    const bodyText = $('#nc-body').value;
+    const blocks = collectNewsletterBlocks();
     const recipientKeys = $$('.nc-recipient:checked', $('#view-newsletter')).map((input) => input.value);
     try {
-      await api('/api/newsletter-campaigns', { method: 'POST', body: JSON.stringify({ subject, bodyText, recipientKeys }) });
+      await api('/api/newsletter-campaigns', { method: 'POST', body: JSON.stringify({ subject, blocks, recipientKeys, importedHtml: state.newsletterImportedTemplate?.bodyHtml || '' }) });
       toast('Campaign saved as draft');
       await renderNewsletterCampaigns();
     } catch (ex) {
       toast(ex.message);
     }
   });
+  function collectNewsletterBlocks() {
+    return $$('#newsletter-block-editor [data-block-index]', $('#view-newsletter')).map((row) => ({ type: $('.nb-type', row).value, text: $('.nb-text', row)?.value || '', url: $('.nb-url', row)?.value || '', alt: $('.nb-alt', row)?.value || '' }));
+  }
+  function saveDraftState() { state.newsletterSubject = $('#nc-subject').value; state.newsletterBlocks = collectNewsletterBlocks(); }
+  $('#nc-add-block').addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.push({ type: 'text', text: '' }); await renderNewsletterCampaigns(); });
+  $$('.nb-remove', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.splice(Number(button.closest('[data-block-index]').dataset.blockIndex), 1); await renderNewsletterCampaigns(); }));
+  $('#nc-template').addEventListener('change', async (event) => { const template = templates.find((item) => item.id === event.target.value); if (template) { state.newsletterBlocks = template.blocks; state.newsletterImportedTemplate = template.blocks.length ? null : template; state.newsletterSubject = template.subject; await renderNewsletterCampaigns(); } });
+  $$('.newsletter-asset', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: button.dataset.assetUrl, alt: button.dataset.assetAlt }); await renderNewsletterCampaigns(); }));
+  $('#nc-image-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('image', file); const res = await fetch('/api/newsletter-assets', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: data.asset.url, alt: data.asset.altText }); await renderNewsletterCampaigns(); });
+  $('#nc-template-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('template', file); form.append('name', file.name.replace(/\.html?$/i, '')); form.append('subject', $('#nc-subject').value); const res = await fetch('/api/newsletter-templates/import', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); state.newsletterImportedTemplate = data.template; state.newsletterBlocks = []; state.newsletterSubject = data.template.subject; toast('HTML template imported'); await renderNewsletterCampaigns(); });
+  $('#nc-save-template').addEventListener('click', async () => { const name = prompt('Template name:'); if (!name) return; try { await api('/api/newsletter-templates', { method: 'POST', body: JSON.stringify({ name, subject: $('#nc-subject').value, blocks: collectNewsletterBlocks() }) }); toast('Template saved'); await renderNewsletterCampaigns(); } catch (error) { toast(error.message); } });
+  $('#nc-preview').addEventListener('click', () => { const blocks = collectNewsletterBlocks(); const html = state.newsletterImportedTemplate?.bodyHtml || blocks.map((block) => block.type === 'heading' ? `<h1>${escapeHtml(block.text)}</h1>` : block.type === 'text' ? `<p>${escapeHtml(block.text).replace(/\n/g, '<br>')}</p>` : block.type === 'image' ? `<img src="${escapeAttr(block.url)}" alt="${escapeAttr(block.alt)}" style="max-width:100%">` : block.type === 'button' ? `<p><a href="${escapeAttr(block.url)}">${escapeHtml(block.text)}</a></p>` : '<hr>').join(''); const frame = $('#nc-preview-frame'); frame.srcdoc = `<main style="max-width:640px;margin:auto;font:16px Arial;padding:24px">${html}</main>`; frame.classList.remove('hidden'); });
   $('#nc-select-all').addEventListener('change', (event) => $$('.nc-recipient', $('#view-newsletter')).forEach((input) => { input.checked = event.target.checked; }));
 
   $$('#view-newsletter tbody tr[data-id]').forEach((tr) => {

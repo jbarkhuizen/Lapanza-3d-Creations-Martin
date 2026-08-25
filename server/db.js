@@ -314,6 +314,13 @@ export function ensureSchema(db) {
       reason TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS newsletter_templates (
+      id TEXT PRIMARY KEY, name TEXT NOT NULL, subject TEXT NOT NULL DEFAULT '',
+      blocks_json TEXT NOT NULL DEFAULT '[]', body_html TEXT NOT NULL DEFAULT '', body_text TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS newsletter_assets (
+      id TEXT PRIMARY KEY, filename TEXT NOT NULL, url TEXT NOT NULL UNIQUE, alt_text TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL
+    );
 
     -- template_params_json holds the {{1}}/{{2}}... substitution values for
     -- the Meta-approved template named by template_name -- WhatsApp Business
@@ -676,6 +683,12 @@ function ensureNewsletterCampaignColumns(db) {
   }
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'email_marketing_token')) {
     db.exec('ALTER TABLE clients ADD COLUMN email_marketing_token TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(newsletter_campaigns)', 'body_html')) {
+    db.exec("ALTER TABLE newsletter_campaigns ADD COLUMN body_html TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(newsletter_campaigns)', 'blocks_json')) {
+    db.exec("ALTER TABLE newsletter_campaigns ADD COLUMN blocks_json TEXT NOT NULL DEFAULT '[]'");
   }
 }
 

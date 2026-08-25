@@ -370,7 +370,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-28 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+30 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -745,6 +745,9 @@ Supplier expense tracking.
 
 #### `newsletter_campaign_recipients` and `newsletter_suppressions`
 Campaign recipient rows are an immutable audience snapshot: email, source, unsubscribe token, selected/sent/failed status, delivery time, and bounded failure reason. `newsletter_suppressions` is the global no-send list populated by an unsubscribe, preventing a contact from being selected by any future campaign.
+
+#### `newsletter_templates` and `newsletter_assets`
+Templates store a subject plus a structured block JSON document, rendered HTML, and mandatory plain-text fallback. Assets store allowlisted JPEG/PNG/WebP images uploaded for reuse in newsletters; images are limited to 5MB and served from `/uploads/newsletters/`.
 
 #### `whatsapp_campaigns`
 | Column | Type | Notes |
