@@ -51,7 +51,7 @@ test('live mode uses the real env-provided credentials', () => {
     const result = buildPayfastRedirect({ order: ORDER, siteUrl: 'https://example.com', paymentMethod: 'payfast_eft' });
     const fields = Object.fromEntries(result.fields);
     assert.strictEqual(fields.merchant_id, 'a-real-merchant-id');
-    assert.strictEqual(fields.payment_method, 'eft');
+    assert.strictEqual(fields.payment_method, 'ef');
     assert.match(result.actionUrl, /^https:\/\/www\.payfast\.co\.za/);
   });
 });

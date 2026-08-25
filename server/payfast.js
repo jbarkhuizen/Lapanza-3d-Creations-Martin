@@ -77,10 +77,15 @@ function buildSignature(orderedPairs, passphrase) {
 }
 
 // E.1: builds the hosted-checkout redirect. paymentMethod is 'payfast_card'
-// or 'payfast_eft' -- Payfast's `payment_method` field (cc/eft) skips
-// straight to that method on their hosted page instead of showing the
-// full method picker (which would also show options like Zapper that are
-// explicitly out of scope for this build).
+// or 'payfast_eft' -- Payfast's `payment_method` field skips straight to
+// that method on their hosted page instead of showing the full method
+// picker (which would also show options like Zapper/Mobicred that are
+// explicitly out of scope for this build). Payfast's own valid codes are
+// 'cc' (credit card) and 'ef' (EFT) -- NOT 'eft' -- see
+// https://developers.payfast.co.za/docs#quickstart's Payment Methods table.
+// An unrecognized value here silently fell through to Payfast's own
+// fallback/first-available method instead of erroring, which is how a
+// customer choosing "Instant EFT" ended up on a Mobicred page instead.
 // siteUrl and apiUrl are deliberately separate: siteUrl is where the
 // customer's browser gets sent back to (the static site -- checkout.html/
 // checkout-complete.html), apiUrl is where Payfast's server-to-server ITN
@@ -93,7 +98,7 @@ function buildSignature(orderedPairs, passphrase) {
 export function buildPayfastRedirect({ order, siteUrl, apiUrl, paymentMethod }) {
   const config = getConfig();
   const urls = PAYFAST_URLS[config.mode];
-  const pfMethod = paymentMethod === 'payfast_eft' ? 'eft' : 'cc';
+  const pfMethod = paymentMethod === 'payfast_eft' ? 'ef' : 'cc';
   const amount = (order.total).toFixed(2);
 
   const orderedPairs = [
