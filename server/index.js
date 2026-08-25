@@ -37,6 +37,7 @@ import {
   deleteCategoryItemImage,
 } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
+import { formatRand } from './money.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
 import {
   listClients,
@@ -1428,7 +1429,7 @@ app.post('/api/print-jobs', requireAuth, (req, res) => {
 app.patch('/api/print-jobs/:id', requireAuth, (req, res) => {
   const job = updatePrintJob(req.params.id, req.body || {});
   if (!job) return res.status(404).json({ error: 'Print job not found' });
-  recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Print job "${job.itemName}": status=${job.status}, finalSellingPrice=R${job.finalSellingPrice}` });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Print job "${job.itemName}": status=${job.status}, finalSellingPrice=${formatRand(job.finalSellingPrice)}` });
   res.json({ printJob: job });
 });
 
@@ -1597,7 +1598,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     const order = createManualOrder(req.body || {});
     const lowStock = order._lowStock;
     delete order._lowStock;
-    recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created manual order ${order.id} (R${order.total})` });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created manual order ${order.id} (${formatRand(order.total)})` });
     res.status(201).json({ order });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
     try {
@@ -2047,10 +2048,6 @@ const SHIPPING_METHOD_LABELS = {
   collect: 'Collect from store',
   fixed: 'Shipping',
 };
-
-function formatRand(value) {
-  return `R${Number(value || 0).toFixed(2).replace(/\.00$/, '')}`;
-}
 
 // Phase 3: formal numbered invoice -- same "print-friendly HTML, no PDF
 // dependency" approach as renderPackingSlipHtml above, laid out to match

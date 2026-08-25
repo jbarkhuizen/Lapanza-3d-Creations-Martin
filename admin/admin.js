@@ -1,3 +1,5 @@
+import { formatRand } from './money.js';
+
 const API = '';
 
 const state = {
@@ -920,7 +922,7 @@ function renderCategorySections(p) {
               <label class="field"><span>Finish</span><input data-item="finish" value="${escapeAttr(item.finish || '')}" /></label>
             </div>
             <div class="grid-3">
-              <label class="field"><span>Price</span><input data-item="price" value="${escapeAttr(item.price || '')}" placeholder="R450" /></label>
+              <label class="field"><span>Price</span><input data-item="price" value="${escapeAttr(item.price || '')}" placeholder="450 (or POA)" /></label>
               <label class="field"><span>Weight (g)</span><input data-item="weight" type="number" min="0" step="1" value="${item.weight ?? 0}" /></label>
               <label class="field"><span>Shipping weight (g)</span><input data-item="shippingWeight" type="number" min="0" step="1" value="${item.shippingWeight ?? item.weight ?? 0}" /></label>
             </div>
@@ -2224,7 +2226,7 @@ async function renderOrders() {
         <tr data-id="${escapeAttr(o.id)}">
           <td><code>${escapeHtml(o.id.slice(0, 8))}</code></td>
           <td>${statusBadge(o.status)}</td>
-          <td>R${escapeHtml(String(o.total))}</td>
+          <td>${formatRand(o.total)}</td>
           <td>${escapeHtml(o.paymentMethod)}</td>
           <td>${escapeHtml(formatDate(o.createdAt))}</td>
           <td><button class="btn small" data-action="view" type="button">View</button></td>
@@ -2277,7 +2279,7 @@ async function renderOrderDetail(id) {
 
   const itemRows = order.items
     .map(
-      (i) => `<tr><td>${escapeHtml(i.productName)}</td><td>${escapeHtml(String(i.quantity))}</td><td>R${escapeHtml(String(i.price))}</td><td>${escapeHtml(String(i.weight))}g</td><td>R${escapeHtml(String(i.price * i.quantity))}</td></tr>`,
+      (i) => `<tr><td>${escapeHtml(i.productName)}</td><td>${escapeHtml(String(i.quantity))}</td><td>${formatRand(i.price)}</td><td>${escapeHtml(String(i.weight))}g</td><td>${formatRand(i.price * i.quantity)}</td></tr>`,
     )
     .join('');
 
@@ -2331,8 +2333,8 @@ async function renderOrderDetail(id) {
           <tbody>${itemRows}</tbody>
         </table>
         <p style="text-align:right;margin-top:0.5rem">
-          Subtotal: R${escapeHtml(String(order.subtotal))} &middot; Shipping (${escapeHtml(SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}): R${escapeHtml(String(order.shippingPrice))} &middot;
-          <strong>Total: R${escapeHtml(String(order.total))}</strong> &middot; Weight: ${escapeHtml(String(order.totalWeight))}g
+          Subtotal: ${formatRand(order.subtotal)} &middot; Shipping (${escapeHtml(SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}): ${formatRand(order.shippingPrice)} &middot;
+          <strong>Total: ${formatRand(order.total)}</strong> &middot; Weight: ${escapeHtml(String(order.totalWeight))}g
         </p>
       </div>
 
@@ -2415,7 +2417,7 @@ function ordersNestedRowHtml(clientId, colspan) {
         <td><code>${escapeHtml(o.id.slice(0, 8))}</code></td>
         <td>${escapeHtml(formatDate(o.created_at))}</td>
         <td><span class="badge ${badgeClass}">${escapeHtml(o.status)}</span></td>
-        <td>R${escapeHtml(String(o.total))}</td>
+        <td>${formatRand(o.total)}</td>
       </tr>`;
     })
     .join('');
@@ -2684,7 +2686,7 @@ async function renderInvoiceHistory() {
           <td>${escapeHtml(o.invoiceNumber || '—')}</td>
           <td>${escapeHtml(formatDate(o.createdAt))}</td>
           <td>${escapeHtml(o.client?.name || '')}</td>
-          <td>R${escapeHtml(String(o.total))}</td>
+          <td>${formatRand(o.total)}</td>
           <td>${statusBadge(o.paymentStatus)}</td>
           <td>${escapeHtml(o.paymentMethod)}</td>
           <td><a href="/api/orders/${escapeAttr(o.id)}/invoice" target="_blank" rel="noopener">Print</a></td>
@@ -2781,7 +2783,7 @@ async function renderNewOrder() {
     .join('');
 
   const shippingOptionsHtml = shippingOptions
-    .map((o) => `<option value="${escapeAttr(o.id)}" ${order.shippingOptionId === o.id ? 'selected' : ''}>${escapeHtml(o.name)} — R${escapeHtml(String(o.price))}</option>`)
+    .map((o) => `<option value="${escapeAttr(o.id)}" ${order.shippingOptionId === o.id ? 'selected' : ''}>${escapeHtml(o.name)} — ${formatRand(o.price)}</option>`)
     .join('');
 
   $('#view-new-order').innerHTML = `
@@ -2849,10 +2851,10 @@ async function renderNewOrder() {
 
       <div class="panel stack gap-2">
         <div class="section-head"><h3>Total</h3></div>
-        <p>Subtotal: R${escapeHtml(String(totals.subtotal))}</p>
-        ${totals.discountAmount ? `<p>Discount: -R${escapeHtml(String(totals.discountAmount))}</p>` : ''}
-        <p>Shipping: R${escapeHtml(String(totals.shippingPrice))}</p>
-        <p><strong>Total due: R${escapeHtml(String(totals.total))}</strong></p>
+        <p>Subtotal: ${formatRand(totals.subtotal)}</p>
+        ${totals.discountAmount ? `<p>Discount: -${formatRand(totals.discountAmount)}</p>` : ''}
+        <p>Shipping: ${formatRand(totals.shippingPrice)}</p>
+        <p><strong>Total due: ${formatRand(totals.total)}</strong></p>
         <button class="btn btn-primary" id="create-order" type="button">Create order</button>
       </div>
     </div>`;
@@ -3012,8 +3014,8 @@ async function renderPrintJobs() {
   const previewHtml = preview ? `
       <div class="panel stack gap-2" style="background:var(--panel-2, transparent)">
         <div class="section-head"><h3>Validation result</h3></div>
-        <p>Filament cost: R${escapeHtml(String(preview.filamentCost))} · Power: R${escapeHtml(String(preview.powerCost))} · Labour: R${escapeHtml(String(preview.labourCost))} · Running: R${escapeHtml(String(preview.runningCost))}</p>
-        <p><strong>Total cost: R${escapeHtml(String(preview.totalCost))} — Markup: R${escapeHtml(String(preview.markupAmount))} — Selling price: R${escapeHtml(String(preview.sellingPrice))}</strong></p>
+        <p>Filament cost: ${formatRand(preview.filamentCost)} · Power: ${formatRand(preview.powerCost)} · Labour: ${formatRand(preview.labourCost)} · Running: ${formatRand(preview.runningCost)}</p>
+        <p><strong>Total cost: ${formatRand(preview.totalCost)} — Markup: ${formatRand(preview.markupAmount)} — Selling price: ${formatRand(preview.sellingPrice)}</strong></p>
         ${stockWarningsHtml(preview.stockWarnings)}
       </div>` : '';
 
@@ -3050,8 +3052,8 @@ async function renderPrintJobs() {
             </div>
           </td>
           <td>${escapeHtml(j.totalGrams.toFixed(1))}g / ${escapeHtml(j.totalMeters.toFixed(2))}m</td>
-          <td>R${escapeHtml(String(j.totalCost))}</td>
-          <td>R${escapeHtml(String(j.sellingPrice))}</td>
+          <td>${formatRand(j.totalCost)}</td>
+          <td>${formatRand(j.sellingPrice)}</td>
           <td><span class="muted" style="margin-right:0.25rem">R</span><input class="pj-final-price-cell" type="number" min="0" step="0.01" value="${escapeAttr(String(j.finalSellingPrice ?? ''))}" style="width:80px" /></td>
           <td>
             <select class="pj-status-cell">
@@ -3078,7 +3080,7 @@ async function renderPrintJobs() {
           </select>
         </label>`}
       <label class="field"><span>Stock quantity</span><input id="lst-stock" type="number" min="0" step="1" value="${listing.listingItemId ? escapeAttr(String(state.listingItemSnapshot?.stockQty ?? 0)) : '1'}" /></label>
-      <p class="muted" style="font-size:0.8rem">Sells at the Final Selling Price (R${escapeHtml(String(listing.finalSellingPrice ?? 0))}) set above -- change that first if it needs updating, then Save here to push it into the listing too.</p>
+      <p class="muted" style="font-size:0.8rem">Sells at the Final Selling Price (${formatRand(listing.finalSellingPrice ?? 0)}) set above -- change that first if it needs updating, then Save here to push it into the listing too.</p>
       <div class="row-card-actions">
         <button class="btn btn-primary" id="save-listing" type="button">${listing.listingItemId ? 'Update' : 'List for sale'}</button>
         <button class="btn btn-ghost" id="cancel-listing" type="button">Cancel</button>
@@ -3200,7 +3202,7 @@ async function renderPrintJobs() {
       const warningSuffix = printJob._stockWarnings?.length
         ? ` — ⚠ exceeds recorded stock: ${printJob._stockWarnings.map((w) => w.name).join(', ')}`
         : '';
-      toast(`Cost: R${printJob.totalCost} — Minimum selling price: R${printJob.sellingPrice}${warningSuffix}`);
+      toast(`Cost: ${formatRand(printJob.totalCost)} — Minimum selling price: ${formatRand(printJob.sellingPrice)}${warningSuffix}`);
 
       const fileInput = $('#pj-model-file');
       const imageInput = $('#pj-model-image');
@@ -3353,7 +3355,7 @@ async function renderInHouseFilament() {
           <td><select class="ihf-stock-item"><option value="">Select stock item…</option>${stockOptions.map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.name)} (${escapeHtml(String(item.stockQty))})</option>`).join('')}</select><button class="btn small" data-action="transfer" type="button">+ Roll</button></td>
           <td>${escapeHtml(String(f.rollsAvailable))}</td>
           <td>${escapeHtml(f.filamentType)} · ${escapeHtml(String(f.weightG))}g / ${escapeHtml(String(f.rollLengthM))}m</td>
-          <td>R${escapeHtml(String(f.costPerRollRand))}</td>
+          <td>${formatRand(f.costPerRollRand)}</td>
           <td>${escapeHtml(f.remainingG.toFixed(0))}g / ${escapeHtml(f.percentLeft != null ? Math.round(f.percentLeft * 100) : '—')}%</td>
           <td>
             <button class="btn small" data-action="edit" type="button">Edit</button>
@@ -3468,7 +3470,7 @@ async function renderPurchases() {
         <tr data-id="${escapeAttr(p.id)}">
           <td>${escapeHtml(p.supplier)}</td>
           <td>${escapeHtml(p.goods || '—')}</td>
-          <td>R${escapeHtml(String(p.totalValue))}</td>
+          <td>${formatRand(p.totalValue)}</td>
           <td>${statusBadge(p.status)}</td>
           <td>${escapeHtml(p.paymentType || '—')}</td>
           <td>
@@ -3787,7 +3789,7 @@ async function renderShipping() {
         <tr data-id="${escapeAttr(o.id)}">
           <td>${escapeHtml(o.name)}</td>
           <td>${o.optionType === 'fixed' ? '<span class="badge">flat rate</span>' : `${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}`}</td>
-          <td>R${escapeHtml(String(o.price))}</td>
+          <td>${formatRand(o.price)}</td>
           <td>${o.active ? '<span class="badge published">active</span>' : '<span class="badge draft">inactive</span>'}</td>
           <td>
             <button class="btn small" data-action="edit" type="button">Edit</button>

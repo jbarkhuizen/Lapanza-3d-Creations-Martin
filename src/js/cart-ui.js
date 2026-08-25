@@ -1,9 +1,6 @@
 import gsap from 'gsap';
 import { getCart, getCartCount, getCartTotal, addItem, removeItem, updateQuantity, clearCart } from './cart.js';
-
-function formatPrice(value) {
-  return `R${Number(value || 0).toFixed(0)}`;
-}
+import { formatRand as formatPrice } from './money.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -60,7 +57,7 @@ export function mountCartUI() {
       <div class="px-6 py-5 border-t border-charcoal/10">
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-semibold uppercase tracking-wide">Total</span>
-          <span id="cart-total" class="font-serif text-xl text-terracotta">R0</span>
+          <span id="cart-total" class="font-serif text-xl text-terracotta">R 0.00</span>
         </div>
         <a id="cart-checkout" href="#" class="block text-center text-xs font-semibold bg-charcoal text-cream rounded-full px-4 py-2.5 hover:bg-terracotta transition-colors mb-3">Checkout</a>
         <button type="button" id="cart-clear" class="w-full text-center text-xs text-espresso/50 hover:text-terracotta transition-colors uppercase tracking-wide">Clear cart</button>

@@ -49,7 +49,7 @@ test('syncPublicJson writes filaments.json with colour photo, price and stock fi
 
   const filaments = JSON.parse(fs.readFileSync(paths.filamentsSrc, 'utf8'));
   assert.strictEqual(filaments.length, 1);
-  assert.strictEqual(filaments[0].colours[0].price, 'R299');
+  assert.strictEqual(filaments[0].colours[0].price, 'R 299.00');
   assert.strictEqual(filaments[0].colours[0].stockQty, 5);
   assert.strictEqual(filaments[0].colours[0].listed, true);
 

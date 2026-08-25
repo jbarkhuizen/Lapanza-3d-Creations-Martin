@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { getSettings } from './settings.js';
+import { formatRand } from './money.js';
 
 const FROM_ADDRESS = process.env.GMAIL_USER || 'lapanzaonline@gmail.com';
 
@@ -17,10 +18,6 @@ function getTransporter() {
     auth: { user: FROM_ADDRESS, pass },
   });
   return transporter;
-}
-
-function formatRand(value) {
-  return `R${Number(value || 0).toFixed(0)}`;
 }
 
 // Phase 3: real account details, pulled from Settings (bankName etc in

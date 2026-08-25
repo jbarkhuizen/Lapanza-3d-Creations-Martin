@@ -5,6 +5,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { parsePrice, formatItemPrice } from '../server/money.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const filaments = JSON.parse(fs.readFileSync(path.join(root, 'src/data/filaments.json'), 'utf8'));
@@ -179,11 +180,6 @@ function escapeAttr(value) {
   })[c]);
 }
 
-function parsePrice(value) {
-  const n = parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-}
-
 function addToCartButton({ productId, name, price, image, weight, extraClass = 'w-full' }) {
   // Weight is grams end to end (matches filament_colours.weight_g /
   // order_items.weight / cart.js) so the cart's total-weight math and the
@@ -261,7 +257,7 @@ function catalogueItems(label, items, categorySlug) {
                 <h3 class="font-serif text-lg mb-1">${name}</h3>
                 <p class="text-espresso/60 text-sm mb-2">${item.details || 'Custom printed to order.'}</p>
                 ${meta ? `<p class="text-espresso/45 text-xs mb-2">${meta}</p>` : ''}
-                ${item.price ? `<p class="text-terracotta font-semibold mb-3">${item.price}</p>` : ''}
+                ${item.price ? `<p class="text-terracotta font-semibold mb-3">${formatItemPrice(item.price)}</p>` : ''}
                 <a href="${SITE.whatsapp}" class="text-sm font-semibold text-terracotta hover:underline" target="_blank" rel="noopener noreferrer">Enquire</a>
                 ${
                   canAddToCart

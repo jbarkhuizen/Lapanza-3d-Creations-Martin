@@ -2,6 +2,7 @@ import { getDb } from './db.js';
 import { listFilaments, updateColour } from './filaments.js';
 import { getProduct, upsertProduct } from './store.js';
 import { readCategoryProducts } from './export.js';
+import { formatRand } from './money.js';
 
 function parseRand(value) {
   const n = parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''));
@@ -63,7 +64,7 @@ function updateCategoryItemStock(productId, itemId, { stockQty, price, listed })
   const item = (product.items || []).find((i) => i.id === itemId);
   if (!item) throw new Error('Item not found');
   if (stockQty !== undefined) item.stockQty = Math.max(0, Number(stockQty) || 0);
-  if (price !== undefined) item.price = `R${Math.max(0, Number(price) || 0)}`;
+  if (price !== undefined) item.price = formatRand(Math.max(0, Number(price) || 0));
   if (listed !== undefined) item.listed = Boolean(listed);
   upsertProduct(product);
 }

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { listFilaments } from './filaments.js';
 import { getSettings, publicSettings } from './settings.js';
+import { formatRand } from './money.js';
 
 function defaultPaths() {
   const root = process.cwd();
@@ -30,7 +31,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
     colours: f.colours.map((c) => ({
       name: c.name,
       sku: c.sku,
-      price: `R${c.priceRand}`,
+      price: formatRand(c.priceRand),
       weightG: c.weightG,
       shippingWeightG: c.shippingWeightG,
       rollLengthM: c.rollLengthM,

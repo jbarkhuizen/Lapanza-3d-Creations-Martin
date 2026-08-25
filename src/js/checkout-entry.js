@@ -1,9 +1,6 @@
 import './site.js';
 import { getCart, getCartTotal, getCartTotalWeight, clearCart } from './cart.js';
-
-function formatPrice(value) {
-  return `R${Number(value || 0).toFixed(0)}`;
-}
+import { formatRand as formatPrice } from './money.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
