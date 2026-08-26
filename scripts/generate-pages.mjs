@@ -11,6 +11,22 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const filaments = JSON.parse(fs.readFileSync(path.join(root, 'src/data/filaments.json'), 'utf8'));
 const categories = JSON.parse(fs.readFileSync(path.join(root, 'src/data/categories.json'), 'utf8'));
 
+// SITE-027: this script has no DB access, only the JSON exports export.js
+// already syncs on every publish -- read the threshold from there rather
+// than duplicating a second hardcoded default that could drift from the
+// admin-configurable one in settings-defaults.js. Missing/invalid falls
+// back to that same default (3) so a fresh checkout without a synced
+// settings.json yet (or the unit test below, which never writes one)
+// still generates valid pages.
+let LOW_STOCK_THRESHOLD = 3;
+try {
+  const settings = JSON.parse(fs.readFileSync(path.join(root, 'src/data/settings.json'), 'utf8'));
+  const configured = Number(settings.lowStockThreshold);
+  if (Number.isFinite(configured) && configured > 0) LOW_STOCK_THRESHOLD = configured;
+} catch {
+  /* settings.json not synced yet -- use the default above */
+}
+
 const SITE = {
   name: 'Lapanza 3D Creative Lab',
   whatsapp:
@@ -193,12 +209,20 @@ function addToCartButton({ productId, name, price, image, weight, extraClass = '
             data-image="${escapeAttr(image || '')}">Add to Cart</button>`;
 }
 
+function stockMessage(stockQty) {
+  const qty = Number(stockQty) || 0;
+  if (qty <= 0) return { label: 'Out of stock', className: 'text-terracotta font-semibold' };
+  if (qty <= LOW_STOCK_THRESHOLD) return { label: `Only ${qty} left`, className: 'text-terracotta font-semibold' };
+  return { label: 'In stock', className: 'text-espresso/50' };
+}
+
 function colourCards(colours, filament) {
   if (!colours?.length) return '';
   return colours
     .filter((c) => c.listed !== false)
-    .map(
-      (c) => `<div class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
+    .map((c) => {
+      const stock = stockMessage(c.stockQty);
+      return `<div class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
                   ${
                     c.imageUrl
                       ? `<img src="${c.imageUrl}" alt="${c.name}" class="w-full aspect-square object-cover rounded-sm mb-3" loading="lazy">`
@@ -207,7 +231,7 @@ function colourCards(colours, filament) {
                   <p class="font-medium mb-1 tracking-tight">${c.name}</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">${c.sku}</p>
                   <p class="text-terracotta font-semibold">${c.price}</p>
-                  <p class="text-[0.72rem] mt-0.5 ${c.stockQty > 0 ? 'text-espresso/50' : 'text-terracotta font-semibold'}">${c.stockQty > 0 ? `${c.stockQty} in stock` : 'Out of stock'}</p>
+                  <p class="text-[0.72rem] mt-0.5 ${stock.className}">${stock.label}</p>
                   ${addToCartButton({
                     productId: `filament:${filament.slug}:${c.sku}`,
                     name: `${filament.name} — ${c.name}`,
@@ -215,8 +239,8 @@ function colourCards(colours, filament) {
                     image: c.imageUrl,
                     weight: c.shippingWeightG ?? c.weightG,
                   })}
-                </div>`,
-    )
+                </div>`;
+    })
     .join('\n');
 }
 

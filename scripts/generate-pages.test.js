@@ -43,11 +43,14 @@ test('generate-pages renders an <img> for a colour with imageUrl, placeholder te
   }
 });
 
-test('generate-pages renders an in-stock count for stocked colours, "Out of stock" for zero/missing stock', () => {
+test('generate-pages shows "In stock" above the low-stock threshold, "Only N left" at/below it, "Out of stock" for zero/missing stock', () => {
   const filamentsPath = path.join(root, 'src', 'data', 'filaments.json');
-  const backup = fs.readFileSync(filamentsPath, 'utf8');
+  const settingsPath = path.join(root, 'src', 'data', 'settings.json');
+  const filamentsBackup = fs.readFileSync(filamentsPath, 'utf8');
+  const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath, 'utf8') : null;
 
   try {
+    fs.writeFileSync(settingsPath, JSON.stringify({ lowStockThreshold: 3 }));
     fs.writeFileSync(
       filamentsPath,
       JSON.stringify([
@@ -58,8 +61,10 @@ test('generate-pages renders an in-stock count for stocked colours, "Out of stoc
           specs: [],
           colours: [
             { name: 'Plenty', sku: 'SKU-1', price: 'R299', stockQty: 12 },
-            { name: 'Zero', sku: 'SKU-2', price: 'R299', stockQty: 0 },
-            { name: 'Unset', sku: 'SKU-3', price: 'R299' },
+            { name: 'Low', sku: 'SKU-2', price: 'R299', stockQty: 2 },
+            { name: 'ExactlyAtThreshold', sku: 'SKU-3', price: 'R299', stockQty: 3 },
+            { name: 'Zero', sku: 'SKU-4', price: 'R299', stockQty: 0 },
+            { name: 'Unset', sku: 'SKU-5', price: 'R299' },
           ],
         },
       ]),
@@ -68,12 +73,19 @@ test('generate-pages renders an in-stock count for stocked colours, "Out of stoc
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
 
     const html = fs.readFileSync(path.join(root, 'filament', 'test-pla.html'), 'utf8');
-    assert.match(html, /12 in stock/);
+    // Above the threshold: no raw count shown, just a plain "In stock".
+    assert.match(html, /In stock/);
+    assert.doesNotMatch(html, /12 in stock/);
+    // At or below the threshold: an urgency message with the real count.
+    assert.match(html, /Only 2 left/);
+    assert.match(html, /Only 3 left/);
     // A colour with 0 stock and one with no stockQty field at all must both
     // read "Out of stock" -- undefined is not a truthy stock count.
     assert.strictEqual((html.match(/Out of stock/g) || []).length, 2);
   } finally {
-    fs.writeFileSync(filamentsPath, backup);
+    fs.writeFileSync(filamentsPath, filamentsBackup);
+    if (settingsBackup === null) fs.rmSync(settingsPath, { force: true });
+    else fs.writeFileSync(settingsPath, settingsBackup);
     fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
   }
 });

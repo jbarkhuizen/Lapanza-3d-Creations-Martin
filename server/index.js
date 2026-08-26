@@ -1885,6 +1885,8 @@ app.put('/api/settings', requireAuth, (req, res) => {
     'designRate', 'setupRate', 'postProcessingRate',
     // Phase 4
     'orderNotificationEmail',
+    // SITE-027
+    'lowStockThreshold',
   ];
   const patch = {};
   for (const key of allowed) {

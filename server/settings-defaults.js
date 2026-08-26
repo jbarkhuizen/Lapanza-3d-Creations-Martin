@@ -67,6 +67,14 @@ export const DEFAULT_SETTINGS = {
   // override since this one's admin-editable, not deploy-time config.
   orderNotificationEmail: 'lapanzaonline@gmail.com',
   inHouseFilamentBrands: ['SunLu', 'SA Filament', 'Build Volume', 'Creality'],
+
+  // SITE-027: filament colour swatches show "Only N left" instead of a raw
+  // stock count once a colour's stockQty drops to or below this -- read by
+  // scripts/generate-pages.mjs from the synced src/data/settings.json, not
+  // the DB directly (that script has no DB access, only the JSON exports).
+  // Distinct from LOW_STOCK_ALERT_EMAIL's owner-notification threshold
+  // (hardcoded at <=1 in orders.js) -- this one is customer-facing copy.
+  lowStockThreshold: 3,
 };
 
 export function findFont(id) {

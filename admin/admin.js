@@ -2147,6 +2147,12 @@ async function renderSettings() {
       </div>
 
       <div class="panel stack gap-3">
+        <div class="section-head"><h3>Storefront stock messaging</h3></div>
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
+        <label class="field" style="max-width:220px"><span>Low-stock threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
+      </div>
+
+      <div class="panel stack gap-3">
         <div class="section-head"><h3>Invoicing &amp; bank details</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on every printable invoice (Invoice History → Print).</p>
         <div class="grid-2">
