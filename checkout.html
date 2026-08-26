@@ -27,7 +27,7 @@
 
   <header class="hidden md:flex items-center justify-between px-10 py-6 border-b border-charcoal/10">
     <a href="index.html" class="brand-mark font-serif text-xl tracking-tight font-semibold">Lapanza <span class="mark-3d">3D</span></a>
-    <a href="index.html" class="text-sm text-espresso/60 hover:text-terracotta transition-colors">&larr; Continue shopping</a>
+    <a href="index.html" class="inline-flex items-center gap-2 text-sm font-semibold bg-charcoal text-cream rounded-full px-5 py-2.5 hover:bg-terracotta transition-colors">&larr; Continue shopping</a>
   </header>
 
   <main id="main" class="px-6 sm:px-10 lg:px-16 py-10 md:py-14 max-w-4xl mx-auto">
@@ -111,10 +111,11 @@
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
           <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping Options</h2>
           <div class="stack gap-2 text-sm mb-4">
-            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed" checked /> PUDO locker / local delivery</label>
+            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed_pudo" checked /> PUDO Locker</label>
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="courier" /> Our shipping (courier)</label>
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="own_courier" /> I'll arrange my own courier</label>
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="collect" /> Collect from store</label>
+            <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed_local" /> Local Delivery</label>
           </div>
           <div id="checkout-shipping">Calculating…</div>
         </div>

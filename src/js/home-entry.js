@@ -1,4 +1,5 @@
 import './site.js';
+import './home-header.js';
 import { clearCart } from './cart.js';
 
 document.addEventListener('DOMContentLoaded', async () => {

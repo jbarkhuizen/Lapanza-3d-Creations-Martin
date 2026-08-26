@@ -1,5 +1,6 @@
 import './site.js';
 import { clearCart } from './cart.js';
+import { clearCheckoutPrefs } from './checkout-prefs.js';
 
 // Payfast's return_url only means "the customer's browser was sent back
 // here" -- it says nothing about whether the ITN has actually confirmed
@@ -7,6 +8,7 @@ import { clearCart } from './cart.js';
 // Clearing the cart here (rather than before the Payfast redirect) means a
 // customer who hits Back/Cancel on Payfast's page keeps their cart intact.
 clearCart();
+clearCheckoutPrefs();
 
 const orderId = new URLSearchParams(window.location.search).get('order');
 if (orderId) {

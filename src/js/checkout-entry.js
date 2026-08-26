@@ -1,6 +1,7 @@
 import './site.js';
 import { getCart, getCartTotal, getCartTotalWeight, clearCart } from './cart.js';
 import { formatRand as formatPrice } from './money.js';
+import { readCheckoutPrefs as readPrefs, writeCheckoutPrefs as writePrefs, clearCheckoutPrefs } from './checkout-prefs.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -20,29 +21,6 @@ async function api(path, options = {}) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
-}
-
-// Shipping/payment method choice was resetting to the HTML defaults every
-// time a customer navigated away (e.g. back to browse) and returned, since
-// this is a plain static page reload, not an SPA -- persisted the same way
-// cart.js persists the cart itself.
-const PREFS_KEY = 'lapanza-checkout-prefs';
-
-function readPrefs() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writePrefs(patch) {
-  try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...readPrefs(), ...patch }));
-  } catch {
-    /* private-mode/quota-full localStorage -- selection just won't persist */
-  }
 }
 
 function renderLines(items) {
@@ -222,15 +200,44 @@ async function init() {
   let shippingReady = false;
   let fixedOptions = null;
 
-  function renderFixedOptionsPicker() {
-    shippingBox.innerHTML = `
-      <select id="checkout-fixed-shipping" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-cream text-charcoal text-sm">
-        <option value="">Choose an option…</option>
-        ${fixedOptions.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)} — ${escapeHtml(formatPrice(o.price))}</option>`).join('')}
-      </select>`;
-    const select = document.getElementById('checkout-fixed-shipping');
+  // Admin-managed 'fixed' shipping_options rows have no category field --
+  // just a free-text name (e.g. "PUDO Locker to Locker (Small)", "Local
+  // Delivery") -- so the two radios below are split by name here, purely
+  // for checkout-page display. Both still submit as the single backend
+  // 'fixed' shippingMethod (see backendShippingMethod in the submit handler).
+  const FIXED_BUCKETS = {
+    fixed_local: (o) => /local/i.test(o.name),
+    fixed_pudo: (o) => !/local/i.test(o.name),
+  };
+
+  function renderFixedOptionsPicker(method) {
+    shippingBox.textContent = '';
+    const bucketOptions = fixedOptions.filter(FIXED_BUCKETS[method]);
+    if (!bucketOptions.length) {
+      const note = document.createElement('p');
+      note.className = 'text-sm text-espresso/60';
+      note.textContent = 'No options available right now — please choose another shipping method or contact us.';
+      shippingBox.appendChild(note);
+      return;
+    }
+
+    const select = document.createElement('select');
+    select.id = 'checkout-fixed-shipping';
+    select.className = 'w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-cream text-charcoal text-sm';
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = 'Choose an option…';
+    select.appendChild(blank);
+    bucketOptions.forEach((o) => {
+      const opt = document.createElement('option');
+      opt.value = o.id;
+      opt.textContent = `${o.name} — ${formatPrice(o.price)}`;
+      select.appendChild(opt);
+    });
+    shippingBox.appendChild(select);
+
     select.addEventListener('change', () => {
-      shippingOption = fixedOptions.find((o) => o.id === select.value) || null;
+      shippingOption = bucketOptions.find((o) => o.id === select.value) || null;
       shippingReady = Boolean(shippingOption);
       submitBtn.disabled = !shippingReady;
       writePrefs({ fixedShippingOptionId: shippingOption?.id || null });
@@ -242,7 +249,7 @@ async function init() {
     // own choices, not just the shippingMethod radio above it) after coming
     // back to this page.
     const savedOptionId = readPrefs().fixedShippingOptionId;
-    if (savedOptionId && fixedOptions.some((o) => o.id === savedOptionId)) {
+    if (savedOptionId && bucketOptions.some((o) => o.id === savedOptionId)) {
       select.value = savedOptionId;
       select.dispatchEvent(new Event('change'));
     }
@@ -274,7 +281,7 @@ async function init() {
       return;
     }
 
-    if (method === 'fixed') {
+    if (method === 'fixed_pudo' || method === 'fixed_local') {
       setAddressRequired(true);
       shippingOption = null;
       shippingReady = false;
@@ -285,11 +292,15 @@ async function init() {
           const { shippingOptions } = await api('/api/shipping-options/public/fixed');
           fixedOptions = shippingOptions;
         } catch (err) {
-          shippingBox.innerHTML = `<p class="text-sm text-terracotta">${escapeHtml(err.message)}</p>`;
+          shippingBox.textContent = '';
+          const note = document.createElement('p');
+          note.className = 'text-sm text-terracotta';
+          note.textContent = err.message;
+          shippingBox.appendChild(note);
           return;
         }
       }
-      renderFixedOptionsPicker();
+      renderFixedOptionsPicker(method);
       return;
     }
 
@@ -299,12 +310,20 @@ async function init() {
       const { shippingOption: match } = await api(`/api/shipping-match?weight=${weight}`);
       shippingOption = match;
       shippingReady = true;
-      shippingBox.innerHTML = `<p class="text-sm">${escapeHtml(match.name)} — ${escapeHtml(formatPrice(match.price))}</p>`;
+      shippingBox.textContent = '';
+      const note = document.createElement('p');
+      note.className = 'text-sm';
+      note.textContent = `${match.name} — ${formatPrice(match.price)}`;
+      shippingBox.appendChild(note);
       document.getElementById('checkout-shipping-price').textContent = formatPrice(match.price);
       document.getElementById('checkout-total').textContent = formatPrice(subtotal + match.price);
       submitBtn.disabled = false;
     } catch (err) {
-      shippingBox.innerHTML = `<p class="text-sm text-terracotta">${escapeHtml(err.message)}</p>`;
+      shippingBox.textContent = '';
+      const note = document.createElement('p');
+      note.className = 'text-sm text-terracotta';
+      note.textContent = err.message;
+      shippingBox.appendChild(note);
     }
   }
 
@@ -370,12 +389,16 @@ async function init() {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Placing order…';
     try {
+      // 'fixed_pudo' and 'fixed_local' are a checkout-page-only split of the
+      // single backend 'fixed' shipping method (see FIXED_BUCKETS below) --
+      // the server only knows about 'fixed' plus a shippingOptionId.
+      const backendShippingMethod = shippingMethod.startsWith('fixed') ? 'fixed' : shippingMethod;
       const { order, redirect } = await api('/api/checkout', {
         method: 'POST',
         body: JSON.stringify({
           client,
           items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
-          shippingMethod,
+          shippingMethod: backendShippingMethod,
           shippingOptionId: shippingOption?.id || null,
           paymentMethod,
         }),
@@ -383,6 +406,7 @@ async function init() {
 
       if (paymentMethod === 'manual_eft' || paymentMethod === 'cash_on_collection') {
         clearCart();
+        clearCheckoutPrefs();
         await showOrderPlacedSuccess(order, paymentMethod);
       } else {
         // Cart is cleared on the return_url page (checkout-complete.html),

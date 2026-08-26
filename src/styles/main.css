@@ -273,6 +273,16 @@
     border-right: 1px solid color-mix(in srgb, var(--color-charcoal) 12%, transparent);
   }
 
+  .aside-panel.is-collapsed {
+    display: none !important;
+  }
+
+  @media (min-width: 768px) {
+    #site-header.is-collapsed {
+      left: 0 !important;
+    }
+  }
+
   details > summary {
     cursor: pointer;
     list-style: none;
