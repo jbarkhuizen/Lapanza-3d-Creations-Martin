@@ -86,6 +86,7 @@ The system has no formal change-management tooling (no Jira/ticketing system obs
 | **Payfast live payments enabled (closes #6)** | `payfast.js` was already fully live-mode-capable (mode-gated URLs, separate live/sandbox credential sets, full ITN signature + server-to-server `/validate` + amount verification, idempotent paid-transition) — confirmed by code review, no code changes needed beyond the `payment_method` fix above. The business owner entered the real Merchant ID/Key/Passphrase into `.env` directly (credentials are never entered by this assistant) and flipped `PAYFAST_MODE=live`; verified end-to-end with a real transaction. Closes the "sandbox mode still active" item in §15. | 253/253 (config-only) |
 | **Checkout page cleanup: consent placement, self-service details, cancel order, persisted selections (closes #127)** | Moved the two marketing-consent checkboxes from the Your Details panel to the bottom of the page, above Place Order. "Update Details" is now a real button (was an underlined text link), hidden by default — only shown for a logged-in customer, and only once they've actually changed a detail field from what's on file (reverting hides it again); saves via a new self-service `PATCH /api/client/me` (explicitly allow-listed fields — `discountPct`/`discountNote`/`source` stay admin-only, unreachable from a customer's own session even if included in the request body). Added a Cancel Order button (confirms, clears the cart, returns home). Fixed shipping method / payment method / PUDO-fixed-option resetting to the HTML defaults on every page load — this is a static page, so navigating away and back was a full reload; both now persist to `localStorage` and restore. | 255/255 |
 | **Order reference shortened to 8 chars, banking details shown on Manual EFT confirmation (closes #128)** | Order reference shown to customers was the full 36-char UUID — unusable as an actual EFT payment reference. Shortened to the first 8 characters everywhere it still showed the full ID (Manual EFT/Cash-on-Collection confirmation panel, the order confirmation email, `checkout-complete.html`), matching the convention already used in email subject lines and the "Order placed" heading. Also added the real banking details (bank/account name/account number/branch code, from public site settings) directly on the Manual EFT confirmation panel — previously it only said details had been emailed, with nothing to pay against on the page itself. | 255/255 |
+| **Checkout: PUDO default, unreadable dropdown, consent re-placed, Payfast confirmation sent before payment (closes #129)** | PUDO locker/local delivery moved to the top of Shipping Options and made the default (was courier). The PUDO fixed-option `<select>` was effectively invisible — `bg-transparent` with no explicit text colour rendered unreadable against the panel in at least one theme; now explicit `bg-cream`/`text-charcoal` (paired theme tokens), high-contrast in both themes. Payfast — Card reconfirmed as the default payment selection. Consent checkboxes moved again — directly below Your Details, superseding the "bottom of the page" placement from the #127 row above. The important fix: **order confirmation emails for Payfast (card/EFT) no longer send at order-creation time** — the order is only `pending_payment` at that point, not actually paid, so a customer who abandoned/declined at Payfast was getting a "your order is confirmed" email regardless. The confirmation now sends from the `/api/payfast/itn` webhook handler only once `payment_status=COMPLETE`, guarded by `markOrderPaid`'s `changed` flag (not just its `lowStock` result) so a duplicate ITN redelivery for an already-paid order can't resend it. Manual EFT/Cash on Collection are unaffected — no online payment gate to wait for, so they still confirm immediately. | 256/256 |
 
 ### 2.1 Key architectural decisions and why
 
@@ -266,7 +267,7 @@ This lookup happens **server-side on every checkout**, never trusting a client-s
 |---|---|
 | Vite (multi-page) | Bundles every top-level `*.html` + `car-parts/*.html` + `filament/*.html` as separate entries (see `vite.config.js`'s `htmlEntries()`) into `dist/` |
 | `scripts/generate-pages.mjs` | **Not** part of the Vite build — a separate Node script, run via `npm run generate` or the admin "Publish to site" button, that reads the DB/catalog.json and regenerates the committed static HTML source files (which Vite then bundles) |
-| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 255 tests across 30 `*.test.js` files (current count — see §14 for the authoritative figure) |
+| `node --test` | Node's built-in test runner — no Jest/Mocha/Vitest. 256 tests across 30 `*.test.js` files (current count — see §14 for the authoritative figure) |
 
 ---
 
@@ -1153,13 +1154,14 @@ sequenceDiagram
     API->>DB: Re-resolve every item's real price (never trusts client)
     API->>DB: findOrCreateClientForCheckout()
     API->>DB: INSERT orders, order_items
-    API-->>Site: sendOrderConfirmationEmail() (best-effort)
-    API-->>Site: sendNewOrderNotificationEmail() to owner (best-effort)
+    API-->>Site: sendNewOrderNotificationEmail() to owner (best-effort, always fires)
     alt payment_method = manual_eft | cash_on_collection
+        API-->>Site: sendOrderConfirmationEmail() (best-effort) -- no online payment gate to wait for
         API-->>Site: {order, redirect: null}
         Site->>C: Show success screen + banking details / collect note
         Site->>C: Show post-purchase opt-in panel (account / email / WhatsApp)
     else payment_method = payfast_card | payfast_eft
+        Note over API,DB: NOT sent yet -- order is only pending_payment here
         API-->>Site: {order, redirect: {actionUrl, fields}}
         Site->>PF: Browser-navigated POST (real Payfast checkout page)
         C->>PF: Completes payment
@@ -1167,6 +1169,7 @@ sequenceDiagram
         PF->>API: POST /api/payfast/itn (server-to-server webhook)
         API->>PF: Verify signature + amount + call-back to Payfast /validate
         API->>DB: markOrderPaid() if valid + COMPLETE
+        API-->>Site: sendOrderConfirmationEmail() only if markOrderPaid actually changed the row (not a duplicate ITN redelivery)
     end
 ```
 
@@ -1694,7 +1697,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 255 tests across 30 test files, 100% passing at last recorded run.
+- **Current count:** 256 tests across 30 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases
