@@ -51,8 +51,8 @@
         <form id="design-request-form" class="space-y-5" novalidate>
           <div class="grid sm:grid-cols-2 gap-5">
             <label class="block text-sm">
-              <span class="block mb-1.5 text-espresso/70">Name</span>
-              <input name="name" type="text" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              <span class="block mb-1.5 text-espresso/70">Name *</span>
+              <input name="name" type="text" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
             </label>
             <label class="block text-sm">
               <span class="block mb-1.5 text-espresso/70">Email *</span>
@@ -60,8 +60,8 @@
             </label>
           </div>
           <label class="block text-sm">
-            <span class="block mb-1.5 text-espresso/70">Phone</span>
-            <input name="phone" type="tel" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+            <span class="block mb-1.5 text-espresso/70">Phone *</span>
+            <input name="phone" type="tel" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
           </label>
           <label class="block text-sm">
             <span class="block mb-1.5 text-espresso/70">Describe what you need *</span>
@@ -72,16 +72,28 @@
             <input name="budgetNote" type="text" placeholder="e.g. under R500" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
           </label>
           <div class="grid sm:grid-cols-2 gap-5">
-            <label class="block text-sm">
-              <span class="block mb-1.5 text-espresso/70">Reference image (optional)</span>
-              <input name="referenceImage" type="file" accept="image/jpeg,image/png,image/webp" class="w-full text-sm" />
-            </label>
-            <label class="block text-sm">
-              <span class="block mb-1.5 text-espresso/70">Reference file (optional)</span>
-              <input name="referenceFile" type="file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" class="w-full text-sm" />
-            </label>
+            <div class="text-sm">
+              <span class="block mb-1.5 text-espresso/70" id="referenceImage-label">Reference image (optional)</span>
+              <span class="block text-xs text-espresso/50 mb-2">JPG, PNG or WebP &middot; up to 50MB</span>
+              <div class="flex items-center gap-3">
+                <label for="referenceImage" class="shrink-0 cursor-pointer text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Choose file</label>
+                <input id="referenceImage" name="referenceImage" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="referenceImage-label" class="sr-only" data-file-input />
+                <span class="file-name-display text-sm text-espresso/60 truncate" data-default-text="No file chosen">No file chosen</span>
+                <button type="button" class="file-clear-btn hidden shrink-0 text-espresso/40 hover:text-terracotta text-lg leading-none font-bold" aria-label="Remove selected file">&times;</button>
+              </div>
+            </div>
+            <div class="text-sm">
+              <span class="block mb-1.5 text-espresso/70" id="referenceFile-label">Reference file (optional)</span>
+              <span class="block text-xs text-espresso/50 mb-2">STL, 3MF, OBJ, GCODE, ZIP or PDF &middot; up to 50MB</span>
+              <div class="flex items-center gap-3">
+                <label for="referenceFile" class="shrink-0 cursor-pointer text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Choose file</label>
+                <input id="referenceFile" name="referenceFile" type="file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" aria-describedby="referenceFile-label" class="sr-only" data-file-input />
+                <span class="file-name-display text-sm text-espresso/60 truncate" data-default-text="No file chosen">No file chosen</span>
+                <button type="button" class="file-clear-btn hidden shrink-0 text-espresso/40 hover:text-terracotta text-lg leading-none font-bold" aria-label="Remove selected file">&times;</button>
+              </div>
+            </div>
           </div>
-          <button type="submit" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-6 py-3 hover:bg-terracotta transition-colors">Send request</button>
+          <button type="submit" class="w-full sm:w-auto text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-8 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Send request</button>
           <p id="design-request-note" class="text-sm text-espresso/70" role="status"></p>
         </form>
       </div>

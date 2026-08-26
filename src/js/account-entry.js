@@ -1,16 +1,6 @@
 import './site.js';
 import { formatRand as formatPrice } from './money.js';
 
-function escapeHtml(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (c) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  })[c]);
-}
-
 async function api(path, options = {}) {
   const res = await fetch(path, {
     credentials: 'include',
@@ -22,14 +12,76 @@ async function api(path, options = {}) {
   return data;
 }
 
-function orderRowHtml(order) {
-  const reference = escapeHtml(order.invoice_number || order.id?.slice(0, 8) || order.id);
-  const placedDate = escapeHtml(new Date(order.created_at).toLocaleDateString());
-  const status = escapeHtml(order.status);
-  const total = formatPrice(order.total);
-  const cells = [reference, placedDate, status, total];
-  const tds = cells.map((cell, i) => `<td class="px-4 py-2.5${i === 3 ? ' text-right' : ''}">${cell}</td>`).join('');
-  return `<tr class="border-t border-charcoal/10">${tds}</tr>`;
+function textCell(text, extraClass = '') {
+  const td = document.createElement('td');
+  td.className = `px-4 py-2.5${extraClass}`;
+  td.textContent = text;
+  return td;
+}
+
+function orderRow(order) {
+  const tr = document.createElement('tr');
+  tr.className = 'border-t border-charcoal/10';
+  tr.appendChild(textCell(order.invoice_number || order.id?.slice(0, 8) || order.id));
+  tr.appendChild(textCell(new Date(order.created_at).toLocaleDateString()));
+  tr.appendChild(textCell(order.status));
+
+  const actionTd = document.createElement('td');
+  actionTd.className = 'px-4 py-2.5';
+  // Only an order still awaiting payment can be cancelled self-service --
+  // mirrors cancelOrderByClient's own server-side guard, this is just the
+  // UI-level reflection of the same rule (paid/shipped/completed orders
+  // never show the button at all).
+  if (order.status === 'pending_payment') {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cancel-order-btn text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-3 py-1.5 hover:bg-charcoal hover:text-cream transition-colors';
+    btn.dataset.orderId = order.id;
+    btn.textContent = 'Cancel';
+    actionTd.appendChild(btn);
+  }
+  tr.appendChild(actionTd);
+
+  tr.appendChild(textCell(formatPrice(order.total), ' text-right'));
+  return tr;
+}
+
+async function loadOrders() {
+  const tbody = document.getElementById('account-orders');
+  const emptyEl = document.getElementById('account-orders-empty');
+  try {
+    const { orders } = await api('/api/client/orders');
+    emptyEl.classList.toggle('hidden', orders.length > 0);
+    tbody.replaceChildren(...orders.map(orderRow));
+  } catch {
+    // Order history is a nice-to-have on this page -- a failed fetch
+    // shouldn't block the account page itself from working.
+  }
+}
+
+// Event delegation on the tbody -- orders re-render wholesale after every
+// load/cancel (loadOrders replaces its children), so binding to individual
+// buttons would silently stop working after the first refresh.
+function wireOrderCancelHandler() {
+  const tbody = document.getElementById('account-orders');
+  const note = document.getElementById('account-orders-note');
+  tbody?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.cancel-order-btn');
+    if (!btn) return;
+    if (!confirm('Cancel this order? This cannot be undone.')) return;
+    btn.disabled = true;
+    note.classList.add('hidden');
+    try {
+      await api(`/api/client/orders/${btn.dataset.orderId}/cancel`, { method: 'POST' });
+      await loadOrders();
+      note.textContent = 'Order cancelled.';
+      note.classList.remove('hidden');
+    } catch (err) {
+      btn.disabled = false;
+      note.textContent = err.message || 'Something went wrong.';
+      note.classList.remove('hidden');
+    }
+  });
 }
 
 async function showLoggedIn(client) {
@@ -42,19 +94,8 @@ async function showLoggedIn(client) {
   const welcomeName = client.name ? `, ${client.name}` : '';
   document.getElementById('account-welcome').textContent = `Welcome back${welcomeName}`;
 
-  try {
-    const { orders } = await api('/api/client/orders');
-    const tbody = document.getElementById('account-orders');
-    const emptyEl = document.getElementById('account-orders-empty');
-    if (!orders.length) {
-      emptyEl.classList.remove('hidden');
-    } else {
-      tbody.innerHTML = orders.map(orderRowHtml).join('');
-    }
-  } catch {
-    // Order history is a nice-to-have on this page -- a failed fetch
-    // shouldn't block the account page itself from working.
-  }
+  wireOrderCancelHandler();
+  await loadOrders();
 }
 
 function showGuest() {

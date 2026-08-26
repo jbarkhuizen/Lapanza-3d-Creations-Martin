@@ -4,16 +4,18 @@ import { openDb } from './db.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
 
 function basePayload(overrides = {}) {
-  return { email: 'customer@example.com', name: 'Customer', description: 'A custom bracket for my car', ...overrides };
+  return { email: 'customer@example.com', name: 'Customer', phone: '0821234567', description: 'A custom bracket for my car', ...overrides };
 }
 
-test('createDesignRequest defaults status to new and requires email + description', () => {
+test('createDesignRequest defaults status to new and requires name + email + phone + description', () => {
   const db = openDb(':memory:');
   const request = createDesignRequest(basePayload(), db);
   assert.strictEqual(request.status, 'new');
   assert.strictEqual(request.email, 'customer@example.com');
-  assert.throws(() => createDesignRequest({ email: 'x@example.com' }, db), /Description is required/);
-  assert.throws(() => createDesignRequest({ description: 'no email' }, db), /Email is required/);
+  assert.throws(() => createDesignRequest(basePayload({ name: '' }), db), /Name is required/);
+  assert.throws(() => createDesignRequest(basePayload({ email: '' }), db), /Email is required/);
+  assert.throws(() => createDesignRequest(basePayload({ phone: '' }), db), /Phone is required/);
+  assert.throws(() => createDesignRequest(basePayload({ description: '' }), db), /Description is required/);
   db.close();
 });
 

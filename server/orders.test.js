@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
-import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, resolveProductSnapshot } from './orders.js';
+import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, cancelOrderByClient, resolveProductSnapshot } from './orders.js';
 import { createShippingOption } from './shipping.js';
 
 function colourStock(filamentId, sku, db) {
@@ -270,8 +270,9 @@ test('cancelStalePendingOrders restores reserved stock for each order it cancels
   // Backdate created_at so it counts as stale, same technique the existing
   // auto-cancel job tests use.
   db.prepare("UPDATE orders SET created_at = datetime('now', '-10 days') WHERE id = ?").run(order.id);
-  const cancelledCount = cancelStalePendingOrders(5 * 24 * 60 * 60 * 1000, db);
-  assert.strictEqual(cancelledCount, 1);
+  const cancelledOrders = cancelStalePendingOrders(5 * 24 * 60 * 60 * 1000, db);
+  assert.strictEqual(cancelledOrders.length, 1);
+  assert.strictEqual(cancelledOrders[0].id, order.id);
   assert.strictEqual(colourStock(filament.id, colour.sku, db), 5); // back to full
 
   // A now-freed-up roll can be sold again.
@@ -281,6 +282,60 @@ test('cancelStalePendingOrders restores reserved stock for each order it cancels
   );
   assert.ok(secondOrder.id);
   db.close();
+});
+
+test('cancelOrderByClient cancels a pending_payment order owned by that client and restores stock', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'Gold', sku: 'PLA-GOLD-1KG', priceRand: 299, weightG: 1000, stockQty: 5 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 2 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3);
+
+  const cancelled = cancelOrderByClient(order.id, order.clientId, db);
+  assert.strictEqual(cancelled.status, 'cancelled');
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5);
+});
+
+test('cancelOrderByClient refuses an order that belongs to a different client', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(filament.id, { name: 'Gold', sku: 'PLA-GOLD-1KG', priceRand: 299, weightG: 1000, stockQty: 5 }, db);
+  const productId = `filament:pla:${filamentWithColour.colours[0].sku}`;
+  const order = createOrder(
+    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 1 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+
+  const result = cancelOrderByClient(order.id, 'some-other-client-id', db);
+  assert.strictEqual(result, null);
+  assert.strictEqual(updateOrderStatus(order.id, 'shipped', db).status, 'shipped'); // still untouched -> can still be validly transitioned
+});
+
+test('cancelOrderByClient refuses an order that is no longer pending_payment', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(filament.id, { name: 'Gold', sku: 'PLA-GOLD-1KG', priceRand: 299, weightG: 1000, stockQty: 5 }, db);
+  const productId = `filament:pla:${filamentWithColour.colours[0].sku}`;
+  const order = createOrder(
+    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 1 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  markOrderPaid(order.id, db);
+
+  assert.throws(() => cancelOrderByClient(order.id, order.clientId, db), /awaiting payment/);
 });
 
 test('admin-cancelling an order via updateOrderStatus restores stock exactly once', () => {

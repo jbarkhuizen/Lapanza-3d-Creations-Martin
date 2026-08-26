@@ -221,6 +221,27 @@ View it in the admin portal.`,
   });
 }
 
+// Fires on either cancellation path -- a customer's own self-service cancel
+// (POST /api/client/orders/:id/cancel) or the 7-day auto-cancel job
+// (jobs.js's startAutoCancelJob) -- `reason` is the only thing that tells
+// them apart in the email body.
+export async function sendOrderCancelledNotificationEmail(order, reason) {
+  const s = getSettings();
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: s.orderNotificationEmail,
+    subject: `Order cancelled: ${order.invoiceNumber || order.id.slice(0, 8)}`,
+    text: `An order was cancelled.
+
+Reference: ${order.invoiceNumber || order.id}
+Client: ${order.client?.name || 'Unknown'} (${order.client?.email || 'no email'})
+Total: ${formatRand(order.total)}
+Reason: ${reason}
+
+View it in the admin portal.`,
+  });
+}
+
 export async function sendNewDesignRequestNotificationEmail(request) {
   const s = getSettings();
   await getTransporter().sendMail({

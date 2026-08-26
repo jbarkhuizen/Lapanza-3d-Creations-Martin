@@ -2,9 +2,10 @@ import { cancelStalePendingOrders } from './orders.js';
 import { createBackup, pruneOldBackups, syncOffsite } from './backups.js';
 import { pruneOldAuditLogEntries, AUDIT_LOG_RETENTION_MONTHS } from './audit-log.js';
 import { pruneOldPageViews, PAGE_VIEWS_RETENTION_MONTHS } from './analytics.js';
+import { sendOrderCancelledNotificationEmail } from './mailer.js';
 
 const HOUR_MS = 60 * 60 * 1000;
-const CANCEL_AFTER_MS = 5 * 24 * HOUR_MS; // 5 days, per spec G.1
+const CANCEL_AFTER_MS = 7 * 24 * HOUR_MS; // 7 days
 const BACKUP_INTERVAL_MS = 24 * HOUR_MS; // daily
 const BACKUP_RETENTION_COUNT = 30; // ~1 month of daily backups
 const AUDIT_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
@@ -18,12 +19,24 @@ const PAGE_VIEWS_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 // external scheduler to hit an endpoint instead, and adding one (e.g.
 // node-cron) would be a dependency for something setInterval already does.
 export function startAutoCancelJob(intervalMs = HOUR_MS) {
-  function run() {
+  async function run() {
+    let cancelled = [];
     try {
-      const count = cancelStalePendingOrders(CANCEL_AFTER_MS);
-      if (count > 0) console.log(`Auto-cancel: cancelled ${count} stale pending_payment order(s)`);
+      cancelled = cancelStalePendingOrders(CANCEL_AFTER_MS);
+      if (cancelled.length > 0) console.log(`Auto-cancel: cancelled ${cancelled.length} stale pending_payment order(s)`);
     } catch (err) {
       console.error('Auto-cancel job failed:', err);
+      return;
+    }
+    // Separate from the cancel transaction above -- a Gmail hiccup here
+    // must never be mistaken for the cancel itself having failed, and one
+    // order's failed notification shouldn't skip the rest.
+    for (const order of cancelled) {
+      try {
+        await sendOrderCancelledNotificationEmail(order, 'Automatically cancelled — unpaid after 7 days');
+      } catch (err) {
+        console.error(`Order ${order.id} cancelled-notification email failed to send:`, err.message);
+      }
     }
   }
   run(); // also run once immediately on boot, don't wait a full interval for the first pass

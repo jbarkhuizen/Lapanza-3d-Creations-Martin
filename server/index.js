@@ -73,6 +73,7 @@ import {
   markOrderPaid,
   markConfirmationEmailSent,
   recordPaymentTransaction,
+  cancelOrderByClient,
 } from './orders.js';
 import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
 import {
@@ -84,6 +85,7 @@ import {
   sendDesignRequestStatusEmail,
   sendNewOrderNotificationEmail,
   sendNewDesignRequestNotificationEmail,
+  sendOrderCancelledNotificationEmail,
 } from './mailer.js';
 import { subscribe as subscribeNewsletter, confirm as confirmNewsletter, unsubscribeMarketing } from './newsletter.js';
 import {
@@ -465,6 +467,25 @@ app.get('/api/client/me', (req, res) => {
 
 app.get('/api/client/orders', requireClientAuth, (req, res) => {
   res.json({ orders: listOrdersForClient(req.clientId) });
+});
+
+// Self-service cancel, mirrored from the account page's "Cancel" button --
+// only reachable for the caller's own order, and only while it's still
+// pending_payment (see cancelOrderByClient). Same owner-notification email
+// as the 7-day auto-cancel job, just a different `reason` string.
+app.post('/api/client/orders/:id/cancel', requireClientAuth, async (req, res) => {
+  try {
+    const order = cancelOrderByClient(req.params.id, req.clientId);
+    if (!order) return res.status(404).json({ error: 'Order not found' });
+    res.json({ order });
+    try {
+      await sendOrderCancelledNotificationEmail(order, 'Cancelled by customer');
+    } catch (err) {
+      logEmailFailure('Order cancelled owner-notification email', err, req);
+    }
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Self-service equivalent of the admin PUT /api/clients/:id below, but

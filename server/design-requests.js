@@ -36,7 +36,9 @@ export function getDesignRequest(id, db = getDb()) {
 }
 
 export function createDesignRequest(data, db = getDb()) {
+  if (!data.name || !String(data.name).trim()) throw new Error('Name is required');
   if (!data.email || !String(data.email).trim()) throw new Error('Email is required');
+  if (!data.phone || !String(data.phone).trim()) throw new Error('Phone is required');
   if (!data.description || !String(data.description).trim()) throw new Error('Description is required');
   const id = randomUUID();
   const now = new Date().toISOString();
