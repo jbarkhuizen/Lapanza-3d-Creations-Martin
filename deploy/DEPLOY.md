@@ -176,6 +176,52 @@ after it's created and pruned locally -- no further action needed. If the
 VPS is ever lost, the backups are sitting in that Drive folder, not on the
 dead disk.
 
+## 10. Restoring from a backup
+
+Backups (§9, `data/backups/*.db`) had never actually been restored before
+2026-08-26 (backlog #119/SITE-085) -- the automated create/list/download
+path was live and working, but nobody had verified a `.db` file coming out
+of it was actually usable. It was: `PRAGMA integrity_check` passed and
+`orders`/`clients`/`filament_colours`/`todo_items`/`audit_log` row counts
+all matched expectations on a real backup file, tested read-only in
+`/tmp` without touching the live service.
+
+**To validate a backup without any downtime** (do this after any change to
+the backup job itself, or periodically as a health check):
+```bash
+cd /opt/lapanza/app
+cp data/backups/<filename>.db /tmp/restore-test.db
+node -e "
+const Database = require('better-sqlite3');
+const db = new Database('/tmp/restore-test.db', { readonly: true });
+console.log(db.prepare('PRAGMA integrity_check').get());
+for (const t of ['orders','clients','filament_colours','todo_items','audit_log']) {
+  console.log(t, db.prepare('SELECT COUNT(*) n FROM ' + t).get().n);
+}
+"
+rm /tmp/restore-test.db
+```
+
+**To actually restore** (real outage -- e.g. recovering from bad data or a
+failed migration), this needs a brief service stop:
+```bash
+sudo systemctl stop lapanza-admin
+cd /opt/lapanza/app
+cp data/lapanza.db data/lapanza.db.before-restore   # undo button, just in case
+cp data/backups/<filename>.db data/lapanza.db
+sudo systemctl start lapanza-admin
+curl -s http://localhost:8787/api/health             # {"ok":true,...} expected
+```
+If something's wrong after restarting, `cp data/lapanza.db.before-restore
+data/lapanza.db` and restart again to undo. Once you're confident the
+restore is good, delete `data/lapanza.db.before-restore` -- it's a plain
+file copy, not tracked or pruned automatically.
+
+This has not yet been rehearsed as a full live cutover (stop → swap →
+restart → verify) on this server -- only the read-only integrity path
+above has. Worth doing once during a real maintenance window if you want
+the whole procedure proven end-to-end, not just the backup file itself.
+
 ## Future deploys
 ```bash
 ssh -i ~/.ssh/lapanza_vps_deploy deploy@<VPS_IP>
