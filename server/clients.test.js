@@ -1,0 +1,52 @@
+import { test } from 'node:test';
+import assert from 'node:assert';
+import { openDb } from './db.js';
+import { createClient, mergeClients, getClient } from './clients.js';
+import { createDesignRequest } from './design-requests.js';
+
+test('mergeClients moves order and design-request history from source to target, then deletes the source', () => {
+  const db = openDb(':memory:');
+  const source = createClient({ email: 'duplicate@example.com', name: 'Dup Client' }, db);
+  const target = createClient({ email: 'real@example.com', name: 'Real Client' }, db);
+
+  // Attach an order directly to the source via client_id (mirrors an admin
+  // manual order or a guest checkout that later turned out to be a dupe).
+  const orderId = 'order-1';
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO orders (id, invoice_number, client_id, status, subtotal, shipping_price, shipping_method, total, total_weight, payment_method, payment_status, tracking_number, created_at, updated_at)
+     VALUES (@id, 'INV-0001', @client_id, 'pending_payment', 100, 0, 'courier', 100, 0, 'manual_eft', 'pending', '', @now, @now)`,
+  ).run({ id: orderId, client_id: source.id, now });
+
+  const designRequest = createDesignRequest(
+    { name: source.name, email: source.email, phone: '0123456789', description: 'x', clientId: source.id },
+    db,
+  );
+
+  const merged = mergeClients(source.id, target.id, db);
+  assert.strictEqual(merged.id, target.id);
+
+  const order = db.prepare('SELECT client_id FROM orders WHERE id = ?').get(orderId);
+  assert.strictEqual(order.client_id, target.id);
+
+  const dr = db.prepare('SELECT client_id FROM design_requests WHERE id = ?').get(designRequest.id);
+  assert.strictEqual(dr.client_id, target.id);
+
+  assert.strictEqual(getClient(source.id, db), null);
+  db.close();
+});
+
+test('mergeClients rejects merging a client into itself', () => {
+  const db = openDb(':memory:');
+  const client = createClient({ email: 'solo@example.com' }, db);
+  assert.throws(() => mergeClients(client.id, client.id, db), /itself/);
+  db.close();
+});
+
+test('mergeClients rejects an unknown source or target id', () => {
+  const db = openDb(':memory:');
+  const client = createClient({ email: 'real@example.com' }, db);
+  assert.throws(() => mergeClients('does-not-exist', client.id, db), /Client not found/);
+  assert.throws(() => mergeClients(client.id, 'does-not-exist', db), /Client not found/);
+  db.close();
+});

@@ -354,3 +354,29 @@ export function deleteOrRevokeClient(id, db = getDb()) {
   db.prepare('DELETE FROM clients WHERE id = ?').run(id);
   return { deleted: true, revoked: false };
 }
+
+// Folds a duplicate client record into another: every order and design
+// request the source ever placed is reassigned to the target (so the
+// target's order history becomes the merged history — the whole point of
+// merging), then the now-empty source row is deleted outright. Unlike
+// deleteOrRevokeClient, this never falls back to a revoke-only path,
+// because the source can no longer have any order referencing it by the
+// time the delete runs — the reassignment above already moved them all.
+// page_views.client_id is deliberately left pointing at the old id: it's
+// anonymous visit analytics, not part of anyone's order/service history,
+// and reassigning it would misattribute the source's real browsing history
+// to the target.
+export function mergeClients(sourceId, targetId, db = getDb()) {
+  if (sourceId === targetId) throw new Error('Cannot merge a client into itself');
+  const source = getClientRow(sourceId, db);
+  const target = getClientRow(targetId, db);
+  if (!source || !target) throw new Error('Client not found');
+
+  const tx = db.transaction(() => {
+    db.prepare('UPDATE orders SET client_id = ? WHERE client_id = ?').run(targetId, sourceId);
+    db.prepare('UPDATE design_requests SET client_id = ? WHERE client_id = ?').run(targetId, sourceId);
+    db.prepare('DELETE FROM clients WHERE id = ?').run(sourceId);
+  });
+  tx();
+  return getClient(targetId, db);
+}

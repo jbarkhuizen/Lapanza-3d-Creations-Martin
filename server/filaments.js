@@ -205,7 +205,14 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
     id: colourId,
     name: data.name ?? existing.name,
     hex: data.hex ?? existing.hex,
-    sku: data.sku ?? existing.sku,
+    // sku is UNIQUE NOT NULL -- a blank/cleared SKU field must never be
+    // persisted as '' (data.sku ?? existing.sku alone would do exactly
+    // that, since '' isn't nullish), or the second colour saved with a
+    // blank SKU hits a UNIQUE constraint violation that surfaces to the
+    // admin as a confusing "duplicate SKU" error for two rolls that were
+    // never meant to collide. Same colourId-derived fallback addColour
+    // already uses for a blank SKU on create.
+    sku: data.sku !== undefined ? (data.sku || colourId.slice(0, 8)) : existing.sku,
     weight_g: data.weightG != null ? toNumberOr(data.weightG, existing.weight_g) : existing.weight_g,
     shipping_weight_g: data.shippingWeightG != null
       ? toNumberOr(data.shippingWeightG, existing.shipping_weight_g)

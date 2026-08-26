@@ -86,6 +86,56 @@ test('analytics_page_totals/analytics_seen_visitors are backfilled once from pre
   db.close();
 });
 
+test('design_requests status remap collapses the old 6-stage funnel into new/in_progress/finalized on boot', () => {
+  const db = openDb(':memory:'); // ensureSchema already ran -- table exists, no rows to remap yet
+  const insert = db.prepare(
+    "INSERT INTO design_requests (id, name, email, phone, description, status, updated_at, created_at) VALUES (?, 'C', 'c@example.com', '0821234567', 'x', ?, ?, ?)",
+  );
+  insert.run('r1', 'in_review', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+  insert.run('r2', 'quoted', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+  insert.run('r3', 'accepted', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+  insert.run('r4', 'rejected', '2026-01-02T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+  insert.run('r5', 'completed', '2026-01-03T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+  insert.run('r6', 'new', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z');
+
+  // Re-running ensureSchema is exactly what happens on the next boot after
+  // this remap ships to a server with real pre-existing design requests.
+  ensureSchema(db);
+
+  const rows = db.prepare('SELECT id, status, finalized_at FROM design_requests ORDER BY id').all();
+  assert.deepStrictEqual(rows, [
+    { id: 'r1', status: 'in_progress', finalized_at: null },
+    { id: 'r2', status: 'in_progress', finalized_at: null },
+    { id: 'r3', status: 'in_progress', finalized_at: null },
+    { id: 'r4', status: 'finalized', finalized_at: '2026-01-02T00:00:00.000Z' }, // backfilled from updated_at
+    { id: 'r5', status: 'finalized', finalized_at: '2026-01-03T00:00:00.000Z' },
+    { id: 'r6', status: 'new', finalized_at: null },
+  ]);
+  db.close();
+});
+
+test('shipping_options category is backfilled from name/type on boot, but never overwrites a category an admin already set', () => {
+  const db = openDb(':memory:');
+  const insert = db.prepare(
+    "INSERT INTO shipping_options (id, name, option_type, min_weight, max_weight, price, active, category, created_at, updated_at) VALUES (?, ?, ?, 0, NULL, 100, 1, ?, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')",
+  );
+  insert.run('s1', 'PUDO Locker to Locker (Small)', 'fixed', '');
+  insert.run('s2', 'Local delivery - 10km radius', 'fixed', '');
+  insert.run('s3', 'Standard courier', 'auto_weight', '');
+  insert.run('s4', 'Already categorised', 'fixed', 'Custom Category');
+
+  ensureSchema(db);
+
+  const rows = db.prepare('SELECT id, category FROM shipping_options ORDER BY id').all();
+  assert.deepStrictEqual(rows, [
+    { id: 's1', category: 'PUDO Locker' },
+    { id: 's2', category: 'Local Delivery' },
+    { id: 's3', category: 'Courier' },
+    { id: 's4', category: 'Custom Category' }, // untouched -- already had a category
+  ]);
+  db.close();
+});
+
 test('filament_colours cascades delete when filament_types row is removed', () => {
   const db = openDb(':memory:');
   db.prepare(

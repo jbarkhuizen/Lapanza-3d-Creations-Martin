@@ -23,10 +23,10 @@ test('listDesignRequests filters by status and orders newest first', () => {
   const db = openDb(':memory:');
   const a = createDesignRequest(basePayload({ email: 'a@example.com' }), db);
   createDesignRequest(basePayload({ email: 'b@example.com' }), db);
-  updateDesignRequest(a.id, { status: 'quoted' }, db);
-  const quoted = listDesignRequests({ status: 'quoted' }, db);
-  assert.strictEqual(quoted.length, 1);
-  assert.strictEqual(quoted[0].id, a.id);
+  updateDesignRequest(a.id, { status: 'in_progress' }, db);
+  const inProgress = listDesignRequests({ status: 'in_progress' }, db);
+  assert.strictEqual(inProgress.length, 1);
+  assert.strictEqual(inProgress[0].id, a.id);
   db.close();
 });
 
@@ -48,7 +48,7 @@ test('updateDesignRequest applies partial updates without clobbering other field
 
 test('updateDesignRequest returns null for a missing id', () => {
   const db = openDb(':memory:');
-  assert.strictEqual(updateDesignRequest('does-not-exist', { status: 'quoted' }, db), null);
+  assert.strictEqual(updateDesignRequest('does-not-exist', { status: 'in_progress' }, db), null);
   db.close();
 });
 
@@ -66,6 +66,31 @@ test('createDesignRequest and updateDesignRequest store original filenames along
   );
   assert.strictEqual(updated.referenceFileOriginalName, 'my part v2.stl');
   assert.strictEqual(updated.referenceImageOriginalName, 'my part.jpg');
+  db.close();
+});
+
+test('updateDesignRequest auto-stamps finalizedAt when status moves to finalized, unless already set', () => {
+  const db = openDb(':memory:');
+  const request = createDesignRequest(basePayload(), db);
+  assert.strictEqual(request.finalizedAt, null);
+
+  const finalized = updateDesignRequest(request.id, { status: 'finalized' }, db);
+  assert.ok(finalized.finalizedAt);
+  const firstStamp = finalized.finalizedAt;
+
+  // Re-saving while still finalized (e.g. an admin-notes edit) must not
+  // move the date -- same "unless already set" rule todos.js's Done uses.
+  const resaved = updateDesignRequest(request.id, { adminNotes: 'Delivered' }, db);
+  assert.strictEqual(resaved.finalizedAt, firstStamp);
+  db.close();
+});
+
+test('updateDesignRequest clears finalizedAt when status moves off finalized', () => {
+  const db = openDb(':memory:');
+  const request = createDesignRequest(basePayload(), db);
+  updateDesignRequest(request.id, { status: 'finalized' }, db);
+  const reopened = updateDesignRequest(request.id, { status: 'in_progress' }, db);
+  assert.strictEqual(reopened.finalizedAt, null);
   db.close();
 });
 

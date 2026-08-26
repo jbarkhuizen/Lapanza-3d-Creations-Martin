@@ -4,6 +4,8 @@ import { openDb } from './db.js';
 import { createManualOrder, getOrder } from './orders.js';
 import { createClient } from './clients.js';
 import { updateSettings } from './settings.js';
+import { createFilament, addColour } from './filaments.js';
+import { createShippingOption } from './shipping.js';
 
 function freeTextItem(overrides = {}) {
   return { description: 'Custom bracket', quantity: 1, unitPrice: 100, ...overrides };
@@ -94,5 +96,64 @@ test('createManualOrder round-trips through getOrder with the same invoice numbe
   const order = createManualOrder({ client: { email: 'roundtrip@example.com' }, items: [freeTextItem()], paymentMethod: 'manual_eft' }, db);
   const fetched = getOrder(order.id, db);
   assert.strictEqual(fetched.invoiceNumber, order.invoiceNumber);
+  db.close();
+});
+
+test('createManualOrder defaults shippingMethod to courier (no shippingOptionId) or fixed (with one) for backward compatibility when not sent', () => {
+  const db = openDb(':memory:');
+  const withoutOption = createManualOrder({ client: { email: 'noship-a@example.com' }, items: [freeTextItem()], paymentMethod: 'manual_eft' }, db);
+  assert.strictEqual(withoutOption.shippingMethod, 'courier');
+
+  const option = createShippingOption({ name: 'PUDO Locker (Small)', optionType: 'fixed', price: 65 }, db);
+  const withOption = createManualOrder(
+    { client: { email: 'noship-b@example.com' }, items: [freeTextItem()], paymentMethod: 'manual_eft', shippingOptionId: option.id },
+    db,
+  );
+  assert.strictEqual(withOption.shippingMethod, 'fixed');
+  assert.strictEqual(withOption.shippingPrice, 65);
+  db.close();
+});
+
+test('createManualOrder stores an explicit shippingMethod and zeros the price for own_courier/collect regardless of a manual price', () => {
+  const db = openDb(':memory:');
+  const order = createManualOrder(
+    {
+      client: { email: 'owncourier@example.com' },
+      items: [freeTextItem()],
+      paymentMethod: 'manual_eft',
+      shippingMethod: 'own_courier',
+      shippingPrice: 150, // must be ignored -- own_courier is always free
+    },
+    db,
+  );
+  assert.strictEqual(order.shippingMethod, 'own_courier');
+  assert.strictEqual(order.shippingPrice, 0);
+  assert.strictEqual(order.total, order.subtotal);
+  db.close();
+});
+
+test('createManualOrder rejects an invalid shippingMethod', () => {
+  const db = openDb(':memory:');
+  assert.throws(
+    () => createManualOrder({ client: { email: 'x@example.com' }, items: [freeTextItem()], paymentMethod: 'manual_eft', shippingMethod: 'teleport' }, db),
+    /Invalid shipping method/,
+  );
+  db.close();
+});
+
+test('createManualOrder accepts a catalog product line item by productId, resolved server-side (not the admin-entered price)', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const withColour = addColour(filament.id, { name: 'Red', sku: 'PLA-RED-1KG', priceRand: 299, weightG: 1000, stockQty: 5 }, db);
+  const colour = withColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createManualOrder(
+    { client: { email: 'catalog@example.com' }, items: [{ productId, quantity: 2 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(order.items[0].productId, productId);
+  assert.strictEqual(order.items[0].price, 299);
+  assert.strictEqual(order.subtotal, 598);
   db.close();
 });

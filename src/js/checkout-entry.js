@@ -205,9 +205,14 @@ async function init() {
   // Delivery") -- so the two radios below are split by name here, purely
   // for checkout-page display. Both still submit as the single backend
   // 'fixed' shippingMethod (see backendShippingMethod in the submit handler).
+  // category is now a real admin-set field (server/db.js's
+  // ensureShippingCategoryColumn backfilled every existing row from this
+  // exact name heuristic) -- still falls back to the name check for the
+  // rare row that somehow has no category at all, rather than vanishing
+  // from both buckets.
   const FIXED_BUCKETS = {
-    fixed_local: (o) => /local/i.test(o.name),
-    fixed_pudo: (o) => !/local/i.test(o.name),
+    fixed_local: (o) => (o.category ? o.category === 'Local Delivery' : /local/i.test(o.name)),
+    fixed_pudo: (o) => (o.category ? o.category !== 'Local Delivery' : !/local/i.test(o.name)),
   };
 
   function renderFixedOptionsPicker(method) {

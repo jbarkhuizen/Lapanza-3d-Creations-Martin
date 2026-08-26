@@ -22,11 +22,16 @@ export function listInventory(db = getDb()) {
         kind: 'filament',
         id: colour.id,
         parentId: filament.id,
+        // Matches resolveProductSnapshot's filament: scheme exactly (orders.js)
+        // -- lets the New Order line-item picker select a real catalog
+        // product without duplicating that id-building logic here.
+        productId: `filament:${filament.slug}:${colour.sku}`,
         sku: colour.sku,
         name: `${filament.name} — ${colour.name}`,
         category: 'Filament',
         stockQty: colour.stockQty,
         price: colour.priceRand,
+        weight: colour.shippingWeightG ?? colour.weightG,
         // Phase 3 spool tracking -- read-only here, written only by logging
         // a print job (see print-jobs.js / filaments.js's incrementFilamentUsage).
         usedM: colour.usedM,
@@ -40,19 +45,25 @@ export function listInventory(db = getDb()) {
   }
 
   for (const product of readCategoryProducts()) {
-    for (const item of product.items || []) {
+    const items = product.items || [];
+    items.forEach((item, idx) => {
+      // Matches resolveProductSnapshot's category: scheme exactly (orders.js):
+      // sku when the item has one, otherwise its index within this product.
+      const skuOrIndex = item.sku || String(idx);
       rows.push({
         kind: 'category',
         id: item.id,
         parentId: product.id,
+        productId: `category:${product.slug}:${skuOrIndex}`,
         sku: item.sku || '',
         name: item.name,
         category: product.name,
         stockQty: Number(item.stockQty) || 0,
         price: parseRand(item.price),
+        weight: Number(item.shippingWeight ?? item.weight) || 0,
         listed: item.listed !== false,
       });
-    }
+    });
   }
 
   return rows;

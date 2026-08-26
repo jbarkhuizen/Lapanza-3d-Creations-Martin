@@ -175,11 +175,8 @@ export async function sendNewsletterCampaignEmail(subject, bodyText, bodyHtml, t
 
 const DESIGN_REQUEST_STATUS_LABELS = {
   new: 'received',
-  in_review: 'under review',
-  quoted: 'quoted',
-  accepted: 'accepted',
-  rejected: 'declined',
-  completed: 'completed',
+  in_progress: 'in progress',
+  finalized: 'finalized',
 };
 
 export async function sendDesignRequestStatusEmail(request, newStatus) {

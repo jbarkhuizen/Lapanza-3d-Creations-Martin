@@ -37,6 +37,33 @@ test('listInventory defaults every row to listed on the products page', async (t
   assert.ok(rows.every((r) => r.listed === true));
 });
 
+// The New Order admin form's product picker (admin/admin.js) selects a
+// catalog item purely by this productId -- it must resolve through
+// resolveProductSnapshot (orders.js) exactly like a real cart line would.
+test('listInventory rows carry the same productId scheme resolveProductSnapshot expects, plus shipping weight', async (t) => {
+  await withTempCwd(t);
+  const { createFilament, addColour } = await import(`./filaments.js?t=${Date.now()}`);
+  const { upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+  const { listInventory } = await import(`./inventory.js?t=${Date.now()}`);
+  const { resolveProductSnapshot } = await import(`./orders.js?t=${Date.now()}`);
+
+  const f = createFilament({ name: 'PLA', slug: 'pla' });
+  addColour(f.id, { name: 'White', sku: 'SKU-1', stockQty: 5, weightG: 1000, priceRand: 299 });
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', items: [{ id: 'i1', name: 'Dino', sku: 'SKU-2', stockQty: 3, price: 'R150', weight: 200 }] });
+
+  const rows = listInventory();
+  const filamentRow = rows.find((r) => r.kind === 'filament');
+  const categoryRow = rows.find((r) => r.kind === 'category');
+
+  assert.strictEqual(filamentRow.productId, 'filament:pla:SKU-1');
+  assert.strictEqual(filamentRow.weight, 1000);
+  assert.strictEqual(resolveProductSnapshot(filamentRow.productId).name, 'PLA — White');
+
+  assert.strictEqual(categoryRow.productId, 'category:toys:SKU-2');
+  assert.strictEqual(categoryRow.weight, 200);
+  assert.strictEqual(resolveProductSnapshot(categoryRow.productId).name, 'Dino');
+});
+
 test('bulkUpdateInventory can pull a filament colour off the products page and back on', async (t) => {
   await withTempCwd(t);
   const { createFilament, addColour } = await import(`./filaments.js?t=${Date.now()}`);

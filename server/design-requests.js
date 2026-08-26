@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 
-const VALID_STATUSES = ['new', 'in_review', 'quoted', 'accepted', 'rejected', 'completed'];
+const VALID_STATUSES = ['new', 'in_progress', 'finalized'];
 
 function rowToDesignRequest(row) {
   if (!row) return null;
@@ -19,6 +19,7 @@ function rowToDesignRequest(row) {
     referenceFileOriginalName: row.reference_file_original_name,
     status: row.status,
     adminNotes: row.admin_notes,
+    finalizedAt: row.finalized_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -68,11 +69,19 @@ export function updateDesignRequest(id, data, db = getDb()) {
   if (!existing) return null;
   const status = data.status !== undefined ? data.status : existing.status;
   if (!VALID_STATUSES.includes(status)) throw new Error(`Status must be one of: ${VALID_STATUSES.join(', ')}`);
+  // Same auto-stamp-on-completion shape as todos.js's actualFixDate: only
+  // set the moment status first becomes 'finalized', never overwritten by a
+  // later save (re-saving an already-finalized request keeps its original
+  // finalized date), and cleared back to null if the status is ever moved
+  // off finalized again (re-opening a request shouldn't keep a stale date).
+  let finalizedAt = data.finalizedAt !== undefined ? data.finalizedAt : existing.finalizedAt;
+  if (status === 'finalized' && !finalizedAt) finalizedAt = new Date().toISOString();
+  else if (status !== 'finalized') finalizedAt = null;
   db.prepare(
     `UPDATE design_requests SET name = @name, phone = @phone, description = @description, budget_note = @budget_note,
       reference_image_path = @reference_image_path, reference_image_original_name = @reference_image_original_name,
       reference_file_path = @reference_file_path, reference_file_original_name = @reference_file_original_name,
-      status = @status, admin_notes = @admin_notes, updated_at = @updated_at WHERE id = @id`,
+      status = @status, admin_notes = @admin_notes, finalized_at = @finalized_at, updated_at = @updated_at WHERE id = @id`,
   ).run({
     id,
     name: data.name ?? existing.name,
@@ -85,6 +94,7 @@ export function updateDesignRequest(id, data, db = getDb()) {
     reference_file_original_name: data.referenceFileOriginalName ?? existing.referenceFileOriginalName,
     status,
     admin_notes: data.adminNotes ?? existing.adminNotes,
+    finalized_at: finalizedAt,
     updated_at: new Date().toISOString(),
   });
   return getDesignRequest(id, db);

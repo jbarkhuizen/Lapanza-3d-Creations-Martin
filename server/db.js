@@ -468,6 +468,8 @@ export function ensureSchema(db) {
   ensureListingColumns(db);
   ensureUploadOriginalNameColumns(db);
   ensureTodoColumns(db);
+  ensureDesignRequestStatusColumns(db);
+  ensureShippingCategoryColumn(db);
   seedTodoItems(db);
   backfillAnalyticsTotals(db);
 }
@@ -711,6 +713,46 @@ function ensureTodoColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(todo_items)', 'priority')) {
     db.exec("ALTER TABLE todo_items ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'");
   }
+}
+
+// Design requests simplified from a 6-stage quote/accept funnel (new/
+// in_review/quoted/accepted/rejected/completed) down to New/In Progress/
+// Finalized -- mirrors the Backlog/In Progress/Done shape todo_items
+// already uses, including the same auto-stamped completion date
+// (finalized_at, same pattern as todo_items.actual_fix_date). Existing rows
+// keep their meaning under the coarser 3-stage model rather than losing
+// data: anything mid-funnel (in_review/quoted/accepted) becomes in_progress,
+// anything closed out either way (rejected/completed) becomes finalized,
+// backfilling finalized_at to updated_at since the real finalize moment
+// wasn't tracked before this column existed. Runs on every boot but the
+// remap only ever touches rows still holding an old status value, so it's
+// a no-op once every row has migrated.
+function ensureDesignRequestStatusColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(design_requests)', 'finalized_at')) {
+    db.exec('ALTER TABLE design_requests ADD COLUMN finalized_at TEXT');
+  }
+  db.exec("UPDATE design_requests SET status = 'in_progress' WHERE status IN ('in_review', 'quoted', 'accepted')");
+  db.exec(
+    "UPDATE design_requests SET status = 'finalized', finalized_at = COALESCE(finalized_at, updated_at) WHERE status IN ('rejected', 'completed')",
+  );
+}
+
+// Fixed shipping_options rows had no category field -- checkout.html and
+// admin.js's New Order form both split "PUDO Locker" vs "Local Delivery" by
+// testing the option's free-text name for the word "local" (see
+// checkout-entry.js's FIXED_BUCKETS). Backfilling category from that exact
+// same heuristic preserves current site behaviour with no admin re-entry
+// required, while giving the admin a real field to organise by going
+// forward -- auto_weight brackets (the courier weight tiers) all become
+// "Courier". Only backfills rows still uncategorised, so re-running on
+// every boot never clobbers a category an admin has since set explicitly.
+function ensureShippingCategoryColumn(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(shipping_options)', 'category')) {
+    db.exec("ALTER TABLE shipping_options ADD COLUMN category TEXT NOT NULL DEFAULT ''");
+  }
+  db.exec("UPDATE shipping_options SET category = 'Courier' WHERE category = '' AND option_type = 'auto_weight'");
+  db.exec("UPDATE shipping_options SET category = 'Local Delivery' WHERE category = '' AND option_type = 'fixed' AND name LIKE '%local%'");
+  db.exec("UPDATE shipping_options SET category = 'PUDO Locker' WHERE category = '' AND option_type = 'fixed'");
 }
 
 // Runs once, only while todo_items is still empty -- guards against

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
-import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, cancelOrderByClient, resolveProductSnapshot } from './orders.js';
+import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot } from './orders.js';
 import { createShippingOption } from './shipping.js';
 
 function colourStock(filamentId, sku, db) {
@@ -389,5 +389,92 @@ test('createManualOrder reserves stock immediately regardless of alreadyPaid', (
 
   assert.strictEqual(order.status, 'pending_payment');
   assert.strictEqual(colourStock(filament.id, colour.sku, db), 2);
+  db.close();
+});
+
+test('listOrders attaches each order\'s client name/email/clientCode -- the Invoice History "client name missing" bug', () => {
+  const db = openDb(':memory:');
+  const order = createManualOrder(
+    { client: { name: 'Jane Doe', email: 'jane@example.com', phone: '0123456789' }, items: [{ description: 'Custom part', quantity: 1, unitPrice: 100 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+
+  const withoutQuery = listOrders({}, db);
+  assert.strictEqual(withoutQuery.find((o) => o.id === order.id).client.name, 'Jane Doe');
+
+  const withQuery = listOrders({ q: 'jane' }, db);
+  assert.strictEqual(withQuery.length, 1);
+  assert.strictEqual(withQuery[0].client.email, 'jane@example.com');
+  db.close();
+});
+
+test('updateOrderStatus keeps payment_status in lockstep: paid/shipped/completed mark it paid, pending_payment marks it pending, cancelled leaves it alone', () => {
+  const db = openDb(':memory:');
+  const order = createManualOrder(
+    { client: { email: 'sync@example.com' }, items: [{ description: 'Item', quantity: 1, unitPrice: 100 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(order.paymentStatus, 'pending');
+
+  const paid = updateOrderStatus(order.id, 'paid', db);
+  assert.strictEqual(paid.paymentStatus, 'paid');
+
+  const shipped = updateOrderStatus(order.id, 'shipped', db);
+  assert.strictEqual(shipped.paymentStatus, 'paid');
+
+  const backToPending = updateOrderStatus(order.id, 'pending_payment', db);
+  assert.strictEqual(backToPending.paymentStatus, 'pending');
+
+  const paidAgain = updateOrderStatus(order.id, 'paid', db);
+  assert.strictEqual(paidAgain.paymentStatus, 'paid');
+  const cancelled = updateOrderStatus(order.id, 'cancelled', db);
+  assert.strictEqual(cancelled.paymentStatus, 'paid'); // untouched by the cancel transition
+  db.close();
+});
+
+test('deleteOrder removes the order, its items and transactions, and restores stock only when it was still reserved', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(filament.id, { name: 'Gold', sku: 'PLA-GOLD-1KG', priceRand: 299, weightG: 1000, stockQty: 5 }, db);
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 2 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3); // 5 - 2 reserved
+
+  assert.strictEqual(deleteOrder(order.id, db), true);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5); // reserved stock restored
+  assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM orders WHERE id = ?').get(order.id).c, 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM order_items WHERE order_id = ?').get(order.id).c, 0);
+  db.close();
+});
+
+test('deleteOrder does not double-restore stock for an order that was already shipped/completed or cancelled', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(filament.id, { name: 'Gold', sku: 'PLA-GOLD-1KG', priceRand: 299, weightG: 1000, stockQty: 5 }, db);
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    { client: { name: 'C', email: 'c2@example.com', phone: '0123456789' }, items: [{ productId, quantity: 2 }], paymentMethod: 'manual_eft' },
+    db,
+  );
+  updateOrderStatus(order.id, 'shipped', db);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3); // still reserved-and-gone, unaffected by the shipped transition
+
+  deleteOrder(order.id, db);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3); // NOT restored -- the stock already physically left
+  db.close();
+});
+
+test('deleteOrder returns false for a missing id', () => {
+  const db = openDb(':memory:');
+  assert.strictEqual(deleteOrder('does-not-exist', db), false);
   db.close();
 });

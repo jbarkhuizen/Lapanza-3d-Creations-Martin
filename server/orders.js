@@ -143,18 +143,27 @@ export function getOrder(id, db = getDb()) {
   };
 }
 
+// Bug: the admin Invoice History / Orders list never showed a client name --
+// this only ever fetched the clients map for the `q` search filter, never
+// attached it to the returned rows themselves, so `order.client` was always
+// undefined here (unlike getOrder(), which does attach it via a real join).
+// Always building the map now, regardless of whether `q` is present, fixes
+// that at the one shared source every list consumer reads from.
 export function listOrders({ status, q } = {}, db = getDb()) {
   let rows = db.prepare('SELECT * FROM orders ORDER BY created_at DESC').all().map(rowToOrder);
   if (status) rows = rows.filter((o) => o.status === status);
+  const clients = new Map(db.prepare('SELECT id, name, email, client_code FROM clients').all().map((c) => [c.id, c]));
   if (q) {
     const needle = String(q).toLowerCase();
-    const clients = new Map(db.prepare('SELECT id, name, email, client_code FROM clients').all().map((c) => [c.id, c]));
     rows = rows.filter((o) => {
       const c = clients.get(o.clientId);
       return [o.id, c?.name, c?.email, c?.client_code].filter(Boolean).some((v) => v.toLowerCase().includes(needle));
     });
   }
-  return rows;
+  return rows.map((o) => {
+    const c = clients.get(o.clientId);
+    return { ...o, client: c ? { name: c.name, email: c.email, clientCode: c.client_code } : null };
+  });
 }
 
 // D.5/D.6: creates the client (or attaches to an existing one) and the
@@ -287,10 +296,11 @@ export function createOrder(
 // decrementStockForOrder so every order -- online or manual -- gets a real
 // invoice number and the same stock-decrement behavior once paid.
 export function createManualOrder(
-  { client: clientData, clientId, items, shippingOptionId, shippingPrice: manualShippingPrice, discountPct, paymentMethod, alreadyPaid },
+  { client: clientData, clientId, items, shippingMethod, shippingOptionId, shippingPrice: manualShippingPrice, discountPct, paymentMethod, alreadyPaid },
   db = getDb(),
 ) {
   if (!ALLOWED_PAYMENT_METHODS.includes(paymentMethod)) throw new Error('Invalid payment method');
+  if (shippingMethod != null && !ALLOWED_SHIPPING_METHODS.includes(shippingMethod)) throw new Error('Invalid shipping method');
   if (!Array.isArray(items) || items.length === 0) throw new Error('Order must have at least one item');
 
   const resolved = items.map((line) => {
@@ -314,13 +324,25 @@ export function createManualOrder(
   const subtotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const totalWeight = resolved.reduce((sum, i) => sum + i.weight * i.quantity, 0);
 
+  // Defaults preserve the old (pre-shippingMethod) behavior for any caller
+  // that doesn't send one: a shippingOptionId implied 'fixed', nothing at
+  // all implied 'courier'. A caller that does send shippingMethod (the New
+  // Order UI, matching checkout's own vocabulary) gets the real method
+  // stored, and own_courier/collect are always free -- same as online
+  // checkout, regardless of any shippingOptionId/manual price also sent.
+  const resolvedShippingMethod = shippingMethod || (shippingOptionId ? 'fixed' : 'courier');
   let shippingOption = null;
   let shippingPrice = 0;
-  if (shippingOptionId) {
+  if (resolvedShippingMethod === 'own_courier' || resolvedShippingMethod === 'collect') {
+    shippingOption = null;
+    shippingPrice = 0;
+  } else if (shippingOptionId) {
     shippingOption = getShippingOption(shippingOptionId, db);
     if (!shippingOption) throw new Error('Shipping option not found');
     shippingPrice = shippingOption.price;
   } else if (manualShippingPrice != null) {
+    // Admin override -- e.g. courier picked but no matching weight bracket,
+    // or a one-off delivery price agreed with the customer.
     shippingPrice = Math.max(0, Math.round(Number(manualShippingPrice) || 0));
   }
 
@@ -342,7 +364,7 @@ export function createManualOrder(
          shipping_method, total, total_weight, payment_method, payment_status, tracking_number, created_at, updated_at)
        VALUES
         (@id, @invoice_number, @client_id, @status, @subtotal, @discount_pct, @discount_amount, @shipping_option_id, @shipping_price,
-         'fixed', @total, @total_weight, @payment_method, @payment_status, '', @created_at, @updated_at)`,
+         @shipping_method, @total, @total_weight, @payment_method, @payment_status, '', @created_at, @updated_at)`,
     ).run({
       id: orderId,
       invoice_number: invoiceNumber,
@@ -353,6 +375,7 @@ export function createManualOrder(
       discount_amount: discountAmount,
       shipping_option_id: shippingOption?.id || null,
       shipping_price: shippingPrice,
+      shipping_method: resolvedShippingMethod,
       total,
       total_weight: totalWeight,
       payment_method: paymentMethod,
@@ -562,10 +585,49 @@ export function updateOrderStatus(id, status, db = getDb()) {
     if (status === 'cancelled' && existing.status !== 'cancelled') {
       restoreStockForOrder(getOrder(id, db), db);
     }
-    db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, new Date().toISOString(), id);
+    // Keep payment_status in lockstep with the workflow status for manual
+    // admin transitions (Invoice History's "Pending / Payment received"
+    // picker sets status through this same function) -- paid/shipped/
+    // completed all imply payment has been received; pending_payment
+    // implies it hasn't. 'cancelled' deliberately leaves payment_status
+    // untouched: a cancelled order might have been paid or unpaid already,
+    // and cancelling shouldn't assert either way.
+    const now = new Date().toISOString();
+    if (status === 'paid' || status === 'shipped' || status === 'completed') {
+      db.prepare('UPDATE orders SET status = ?, payment_status = ?, updated_at = ? WHERE id = ?').run(status, 'paid', now, id);
+    } else if (status === 'pending_payment') {
+      db.prepare('UPDATE orders SET status = ?, payment_status = ?, updated_at = ? WHERE id = ?').run(status, 'pending', now, id);
+    } else {
+      db.prepare('UPDATE orders SET status = ?, updated_at = ? WHERE id = ?').run(status, now, id);
+    }
     return getOrder(id, db);
   })();
   return order;
+}
+
+// Invoice History's "delete" action -- unlike cancellation (which keeps the
+// row as a permanent record, per every other status transition in this
+// file), this genuinely removes it. Only 'pending_payment' and 'paid'
+// orders still have stock reserved against them (reserveStockForOrder ran
+// at creation and nothing has released it yet) -- 'shipped'/'completed'
+// stock has already physically left, and a 'cancelled' order already had
+// its stock restored by whichever cancellation path got it there, so
+// restoring again here would overcount. No confirmation/undo at this layer
+// -- that's the caller's (admin.js) job, same as every other destructive
+// action in this codebase.
+export function deleteOrder(id, db = getDb()) {
+  const order = getOrder(id, db);
+  if (!order) return false;
+  const tx = db.transaction(() => {
+    if (order.status === 'pending_payment' || order.status === 'paid') {
+      restoreStockForOrder(order, db);
+    }
+    db.prepare('DELETE FROM order_items WHERE order_id = ?').run(id);
+    db.prepare('DELETE FROM payment_transactions WHERE order_id = ?').run(id);
+    db.prepare('DELETE FROM orders WHERE id = ?').run(id);
+  });
+  tx();
+  return true;
 }
 
 export function updateOrderTracking(id, trackingNumber, db = getDb()) {

@@ -11,6 +11,7 @@ function rowToOption(row) {
     maxWeight: row.max_weight,
     price: row.price,
     active: Boolean(row.active),
+    category: row.category,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -74,8 +75,8 @@ export function createShippingOption(data, db = getDb()) {
   const id = randomUUID();
   const now = new Date().toISOString();
   db.prepare(
-    `INSERT INTO shipping_options (id, name, option_type, min_weight, max_weight, price, active, created_at, updated_at)
-     VALUES (@id, @name, @option_type, @min_weight, @max_weight, @price, @active, @created_at, @updated_at)`,
+    `INSERT INTO shipping_options (id, name, option_type, min_weight, max_weight, price, active, category, created_at, updated_at)
+     VALUES (@id, @name, @option_type, @min_weight, @max_weight, @price, @active, @category, @created_at, @updated_at)`,
   ).run({
     id,
     name: data.name || 'Shipping option',
@@ -84,6 +85,7 @@ export function createShippingOption(data, db = getDb()) {
     max_weight: candidate.maxWeight,
     price: Number(data.price) || 0,
     active: candidate.active ? 1 : 0,
+    category: data.category || '',
     created_at: now,
     updated_at: now,
   });
@@ -103,7 +105,7 @@ export function updateShippingOption(id, data, db = getDb()) {
   }
   db.prepare(
     `UPDATE shipping_options SET name = @name, option_type = @option_type, min_weight = @min_weight, max_weight = @max_weight,
-      price = @price, active = @active, updated_at = @updated_at WHERE id = @id`,
+      price = @price, active = @active, category = @category, updated_at = @updated_at WHERE id = @id`,
   ).run({
     id,
     name: data.name ?? existing.name,
@@ -112,6 +114,7 @@ export function updateShippingOption(id, data, db = getDb()) {
     max_weight: candidate.maxWeight,
     price: data.price != null ? Number(data.price) : existing.price,
     active: candidate.active ? 1 : 0,
+    category: data.category ?? existing.category,
     updated_at: new Date().toISOString(),
   });
   return getShippingOption(id, db);

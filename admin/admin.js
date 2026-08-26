@@ -844,9 +844,13 @@ function renderFilamentSections(p) {
                   : `<div class="swatch-preview" style="background:${escapeAttr(c.hex || guessHex(c.name))}"></div>`}
                 ${c._isNew
                   ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'
-                  : `<input type="file" accept="image/jpeg,image/png,image/webp" data-colour-image="${c.id}" style="max-width:200px" />`}
+                  : `<button class="btn small" data-action="trigger-colour-image" data-trigger-colour-image="${c.id}" type="button">Choose File</button>
+                     <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-colour-image="${c.id}" />`}
               </div>
               <button class="btn small btn-danger" data-remove-colour type="button">Remove</button>
+            </div>
+            <div class="row-card-actions" style="justify-content:flex-end">
+              <button class="btn small btn-primary" data-save-colour type="button">Save roll</button>
             </div>
             <div class="grid-3">
               <label class="field"><span>Colour name</span><input data-colour="name" value="${escapeAttr(c.name)}" /></label>
@@ -907,7 +911,8 @@ function renderCategorySections(p) {
                   : '<span class="muted" style="font-size:0.78rem">No photo</span>'}
                 ${item._isNew
                   ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'
-                  : `<input type="file" accept="image/jpeg,image/png,image/webp" data-item-image="${item.id}" style="max-width:200px" />`}
+                  : `<button class="btn small" data-action="trigger-item-image" data-trigger-item-image="${item.id}" type="button">Choose File</button>
+                     <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-item-image="${item.id}" />`}
               </div>
               ${item.imageUrl && !item._isNew ? `<button class="btn small btn-danger" data-remove-item-image="${item.id}" type="button">Remove photo</button>` : ''}
             </div>
@@ -1055,6 +1060,23 @@ function bindEditorEvents() {
       }
       p.colours.splice(idx, 1);
       renderEditor();
+    });
+  });
+  $$('[data-trigger-colour-image]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $(`[data-colour-image="${btn.dataset.triggerColourImage}"]`)?.click();
+    });
+  });
+  $$('[data-trigger-item-image]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      $(`[data-item-image="${btn.dataset.triggerItemImage}"]`)?.click();
+    });
+  });
+  $$('[data-save-colour]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      syncNestedFromDom();
+      const idx = Number(btn.closest('[data-colour-index]').dataset.colourIndex);
+      await saveOneColour(p, idx);
     });
   });
   $$('[data-remove-item]').forEach((btn) => {
@@ -1243,6 +1265,51 @@ async function saveFilament(p) {
   state.draft = { ...filament, kind: 'filament' };
   state.editingId = filamentId;
   renderEditor();
+}
+
+// Saves just one colour ("roll") immediately, without needing to click the
+// top-level "Save product" -- same POST-if-new/PUT-if-existing shape
+// saveFilament's own per-colour loop uses. If the parent filament type
+// itself hasn't been saved yet (p._isNew, e.g. a brand-new filament with
+// colours added before ever clicking Save), that has to happen first since
+// a colour can't attach to a filament id that doesn't exist server-side yet
+// -- transparent to the admin, "Save roll" just works either way.
+async function saveOneColour(p, idx) {
+  const c = p.colours[idx];
+  if (!c) return;
+  try {
+    let filamentId = p.id;
+    if (p._isNew) {
+      const { _isNew, colours, items, ...payload } = p;
+      const res = await api('/api/filaments', { method: 'POST', body: JSON.stringify(payload) });
+      filamentId = res.filament.id;
+      p.id = filamentId;
+      p._isNew = false;
+    }
+    const body = JSON.stringify({
+      name: c.name,
+      hex: c.hex,
+      sku: c.sku,
+      weightG: c.weightG,
+      shippingWeightG: c.shippingWeightG,
+      rollLengthM: c.rollLengthM,
+      priceRand: c.priceRand,
+      stockQty: c.stockQty,
+      notes: c.notes,
+    });
+    if (c._isNew) {
+      await api(`/api/filaments/${filamentId}/colours`, { method: 'POST', body });
+    } else {
+      await api(`/api/filaments/${filamentId}/colours/${c.id}`, { method: 'PUT', body });
+    }
+    toast('Roll saved');
+    const { filament } = await api(`/api/filaments/${filamentId}`);
+    state.draft = { ...filament, kind: 'filament' };
+    state.editingId = filamentId;
+    renderEditor();
+  } catch (ex) {
+    toast(ex.message);
+  }
 }
 
 function syncNestedFromDom() {
@@ -2267,6 +2334,27 @@ async function renderOrders() {
   });
 }
 
+// Lapanza is South Africa-only, so a bare local number (leading 0) is
+// assumed SA and rewritten to the 27 country code wa.me/api.whatsapp.com
+// links require; anything already carrying a country code is left as-is.
+function normalizeZaPhone(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) return `27${digits.slice(1)}`;
+  return digits;
+}
+
+// Click-to-chat, not the Meta Business Cloud API used elsewhere (whatsapp.js)
+// -- that path needs a pre-approved template and is built for bulk
+// marketing sends, not one-off "here's your order" messages. This opens
+// WhatsApp with the message pre-filled for the admin to review and send,
+// same pattern as every other WhatsApp link on the public site.
+function orderWhatsAppMessage(order) {
+  const c = order.client || {};
+  const lines = order.items.map((i) => `${i.quantity} x ${i.productName} — ${formatRand(i.price * i.quantity)}`).join('\n');
+  return `Hi ${c.name || 'there'}, here's your Lapanza 3D order ${order.invoiceNumber || order.id.slice(0, 8)}:\n\n${lines}\n\nTotal: ${formatRand(order.total)}\n\nThanks for your order!`;
+}
+
 async function openOrderDetail(id) {
   setRoute('order-detail');
   await renderOrderDetail(id);
@@ -2313,6 +2401,7 @@ async function renderOrderDetail(id) {
         <p class="muted" style="font-size:0.85rem">
           Confirmation email: ${order.confirmationEmailSentAt ? `sent ${escapeHtml(formatDate(order.confirmationEmailSentAt))}` : 'not sent'}
           &nbsp;·&nbsp; <button class="btn small" id="resend-email" type="button">${order.confirmationEmailSentAt ? 'Resend' : 'Send'} confirmation email</button>
+          &nbsp;·&nbsp; <button class="btn small" id="whatsapp-order" type="button" ${c.phone ? '' : 'disabled title="No phone number on file"'}>Send via WhatsApp</button>
           &nbsp;·&nbsp; <a href="/api/orders/${escapeAttr(order.id)}/packing-slip" target="_blank" rel="noopener">Print packing slip</a>
           &nbsp;·&nbsp; <a href="/api/orders/${escapeAttr(order.id)}/invoice" target="_blank" rel="noopener">Print invoice</a>
           ${order.status !== 'cancelled' ? '&nbsp;·&nbsp; <button class="btn small btn-danger" id="cancel-order" type="button">Cancel order</button>' : ''}
@@ -2333,7 +2422,7 @@ async function renderOrderDetail(id) {
           <tbody>${itemRows}</tbody>
         </table>
         <p style="text-align:right;margin-top:0.5rem">
-          Subtotal: ${formatRand(order.subtotal)} &middot; Shipping (${escapeHtml(SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}): ${formatRand(order.shippingPrice)} &middot;
+          Subtotal: ${formatRand(order.subtotal)} &middot; Shipping (${escapeHtml(order.shippingOption?.name || SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}): ${formatRand(order.shippingPrice)} &middot;
           <strong>Total: ${formatRand(order.total)}</strong> &middot; Weight: ${escapeHtml(String(order.totalWeight))}g
         </p>
       </div>
@@ -2372,6 +2461,13 @@ async function renderOrderDetail(id) {
     } catch (ex) {
       toast(ex.message);
     }
+  });
+
+  $('#whatsapp-order')?.addEventListener('click', () => {
+    const phone = normalizeZaPhone(c.phone);
+    if (!phone) return toast('This client has no phone number on file');
+    const text = encodeURIComponent(orderWhatsAppMessage(order));
+    window.open(`https://api.whatsapp.com/send?phone=${phone}&text=${text}`, '_blank', 'noopener');
   });
 
   $('#cancel-order')?.addEventListener('click', async () => {
@@ -2432,11 +2528,39 @@ function ordersNestedRowHtml(clientId, colspan) {
     </tr>`;
 }
 
+// Nested row shown under a client while merging it into another -- same
+// expand-in-place shape ordersNestedRowHtml uses, just with a client search
+// (reusing New Order's own client-search pattern) instead of an order list.
+function mergeRowHtml(merging, colspan) {
+  const resultsHtml = merging.results
+    .filter((c) => c.id !== merging.sourceId)
+    .map(
+      (c) => `
+        <div class="panel" style="padding:0.5rem 0.75rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem" data-merge-target-id="${escapeAttr(c.id)}">
+          <span>${escapeHtml(c.name || c.email)} <span class="muted">(${escapeHtml(c.email)})</span></span>
+          <button class="btn small btn-danger" data-action="confirm-merge" type="button">Merge into this client</button>
+        </div>`,
+    )
+    .join('');
+  return `
+    <tr class="nested-row" data-merge-row-for="${escapeAttr(merging.sourceId)}">
+      <td colspan="${colspan}">
+        <div class="stack gap-2" style="max-width:500px">
+          <p class="muted" style="margin:0;font-size:0.85rem">Merging <strong>${escapeHtml(merging.sourceLabel)}</strong> into another client moves all their orders and design requests over, then deletes this record. This cannot be undone.</p>
+          <input id="merge-target-q" type="search" placeholder="Search the client to merge into…" value="${escapeAttr(merging.query)}" />
+          <div class="stack gap-1">${resultsHtml}</div>
+          <button class="btn small btn-ghost" data-action="cancel-merge" type="button" style="align-self:flex-start">Cancel</button>
+        </div>
+      </td>
+    </tr>`;
+}
+
 async function renderClients() {
   state.clientQ = state.clientQ || '';
   state.editingClient = state.editingClient || null;
   state.expandedClients = state.expandedClients || new Set();
   state.clientOrders = state.clientOrders || {};
+  state.mergingClient = state.mergingClient || null;
   const { clients } = await api(`/api/clients?${new URLSearchParams({ q: state.clientQ })}`);
 
   const rows = clients
@@ -2449,9 +2573,14 @@ async function renderClients() {
           <td>${escapeHtml(c.name || '—')}</td>
           <td>${escapeHtml(c.email)}</td>
           <td>${escapeHtml(c.phone || '—')}</td>
-          <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small" data-action="merge" type="button">Merge&hellip;</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
         </tr>`;
-      return expanded ? row + ordersNestedRowHtml(c.id, 6) : row;
+      const extra = (expanded ? ordersNestedRowHtml(c.id, 6) : '') + (state.mergingClient?.sourceId === c.id ? mergeRowHtml(state.mergingClient, 6) : '');
+      return row + extra;
     })
     .join('');
 
@@ -2538,7 +2667,49 @@ async function renderClients() {
       }
       await renderClients();
     });
+    tr.querySelector('[data-action="merge"]').addEventListener('click', async () => {
+      const c = clients.find((x) => x.id === tr.dataset.id);
+      state.mergingClient = { sourceId: c.id, sourceLabel: c.name || c.email, query: '', results: [] };
+      await renderClients();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this client? If they have order history, only their login/account is removed (orders are kept) — otherwise the record is deleted entirely.')) return;
+      try {
+        const result = await api(`/api/clients/${tr.dataset.id}`, { method: 'DELETE' });
+        toast(result.deleted ? 'Client deleted' : 'Account removed (order history kept)');
+        await renderClients();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
   });
+
+  if (state.mergingClient) {
+    $('#merge-target-q')?.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      state.mergingClient.query = $('#merge-target-q').value.trim();
+      if (!state.mergingClient.query) { state.mergingClient.results = []; return renderClients(); }
+      const { clients: results } = await api(`/api/clients?${new URLSearchParams({ q: state.mergingClient.query })}`);
+      state.mergingClient.results = results;
+      await renderClients();
+    });
+    $('[data-action="cancel-merge"]')?.addEventListener('click', async () => { state.mergingClient = null; await renderClients(); });
+    $$('[data-merge-target-id]').forEach((row) => {
+      row.querySelector('[data-action="confirm-merge"]').addEventListener('click', async () => {
+        const targetId = row.dataset.mergeTargetId;
+        const target = state.mergingClient.results.find((c) => c.id === targetId);
+        if (!confirm(`Merge "${state.mergingClient.sourceLabel}" into "${target?.name || target?.email}"? This moves over their order history and cannot be undone.`)) return;
+        try {
+          await api(`/api/clients/${state.mergingClient.sourceId}/merge`, { method: 'POST', body: JSON.stringify({ intoClientId: targetId }) });
+          toast('Clients merged');
+          state.mergingClient = null;
+          await renderClients();
+        } catch (ex) {
+          toast(ex.message);
+        }
+      });
+    });
+  }
 
   if (form) {
     $('#cancel-client').addEventListener('click', async () => { state.editingClient = null; await renderClients(); });
@@ -2674,6 +2845,22 @@ async function renderRegisteredUsers() {
 // A view over the same `orders` table as renderOrders() -- there is no
 // separate invoices table (one order = one invoice, always).
 
+// Payment select is deliberately narrower than the full order.status
+// workflow: it only ever moves an order between pending_payment and paid
+// (updateOrderStatus keeps payment_status in lockstep with whichever of
+// those it's given -- see orders.js). An order already shipped/completed
+// shows "Payment received" (payment is implied once past pending) without
+// this control being able to regress it past paid -- the Completed
+// checkbox below is the only thing that can move status further forward.
+function invoicePaymentSelectHtml(o) {
+  if (o.status === 'cancelled') return '<span class="muted">—</span>';
+  const isPending = o.status === 'pending_payment';
+  return `<select class="inv-payment-inline" data-id="${escapeAttr(o.id)}">
+    <option value="pending_payment" ${isPending ? 'selected' : ''}>Pending</option>
+    <option value="paid" ${!isPending ? 'selected' : ''}>Payment received</option>
+  </select>`;
+}
+
 async function renderInvoiceHistory() {
   state.invoiceFilters = state.invoiceFilters || { status: '', q: '' };
   const { orders } = await api(
@@ -2685,11 +2872,16 @@ async function renderInvoiceHistory() {
         <tr data-id="${escapeAttr(o.id)}">
           <td>${escapeHtml(o.invoiceNumber || '—')}</td>
           <td>${escapeHtml(formatDate(o.createdAt))}</td>
-          <td>${escapeHtml(o.client?.name || '')}</td>
+          <td>${escapeHtml(o.client?.name || '—')}</td>
           <td>${formatRand(o.total)}</td>
-          <td>${statusBadge(o.paymentStatus)}</td>
-          <td>${escapeHtml(o.paymentMethod)}</td>
-          <td><a href="/api/orders/${escapeAttr(o.id)}/invoice" target="_blank" rel="noopener">Print</a></td>
+          <td>${statusBadge(o.status)}</td>
+          <td>${invoicePaymentSelectHtml(o)}</td>
+          <td><label class="field checkbox" style="margin:0"><input type="checkbox" class="inv-completed-inline" data-id="${escapeAttr(o.id)}" ${o.status === 'completed' ? 'checked' : ''} ${o.status === 'pending_payment' || o.status === 'cancelled' ? 'disabled' : ''} /></label></td>
+          <td>
+            <a href="/api/orders/${escapeAttr(o.id)}/invoice" target="_blank" rel="noopener">Print</a>
+            ${o.status !== 'cancelled' ? `<button class="btn small" data-action="cancel" type="button">Cancel</button>` : ''}
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
         </tr>`,
     )
     .join('');
@@ -2706,8 +2898,8 @@ async function renderInvoiceHistory() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Invoice</th><th>Date</th><th>Client</th><th>Value</th><th>Status</th><th>Payment</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No invoices yet</div></td></tr>'}</tbody>
+        <thead><tr><th>Invoice</th><th>Date</th><th>Client</th><th>Value</th><th>Status</th><th>Payment</th><th>Completed</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="8"><div class="empty">No invoices yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -2721,13 +2913,74 @@ async function renderInvoiceHistory() {
 
   $$('#view-invoice-history tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', (e) => {
-      if (e.target.tagName === 'A') return;
+      if (e.target.closest('a, button, select, input, label')) return;
       openOrderDetail(tr.dataset.id);
+    });
+    tr.querySelector('[data-action="cancel"]')?.addEventListener('click', async () => {
+      if (!confirm('Cancel this invoice/order? This cannot be undone from here.')) return;
+      try {
+        await api(`/api/orders/${tr.dataset.id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'cancelled' }) });
+        toast('Order cancelled');
+        await renderInvoiceHistory();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this invoice/order permanently? This removes the order and its line items entirely and cannot be undone.')) return;
+      try {
+        await api(`/api/orders/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Order deleted');
+        await renderInvoiceHistory();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  $$('.inv-payment-inline').forEach((select) => {
+    select.addEventListener('change', async () => {
+      try {
+        await api(`/api/orders/${select.dataset.id}/status`, { method: 'PUT', body: JSON.stringify({ status: select.value }) });
+        toast(select.value === 'paid' ? 'Marked as payment received' : 'Marked as pending');
+        await renderInvoiceHistory();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  $$('.inv-completed-inline').forEach((checkbox) => {
+    checkbox.addEventListener('change', async () => {
+      const status = checkbox.checked ? 'completed' : 'paid';
+      try {
+        await api(`/api/orders/${checkbox.dataset.id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+        toast(checkbox.checked ? 'Marked completed (printed & shipped)' : 'Reverted to paid');
+        await renderInvoiceHistory();
+      } catch (ex) {
+        toast(ex.message);
+      }
     });
   });
 }
 
 // ---- New Order (Phase 3, manual/walk-in order entry) ----
+
+function blankNewOrderItem() {
+  return {
+    mode: 'custom', // 'product' (picked from the catalog) or 'custom' (free-text job)
+    productId: '',
+    productLabel: '',
+    productPrice: 0,
+    productWeight: 0,
+    productStock: null,
+    productQuery: '',
+    productMatches: [],
+    description: '',
+    quantity: 1,
+    unitPrice: 0,
+  };
+}
 
 function blankNewOrder() {
   return {
@@ -2736,7 +2989,11 @@ function blankNewOrder() {
     clientResults: [],
     selectedClient: null,
     newClient: { firstName: '', lastName: '', businessName: '', email: '', phone: '' },
-    items: [{ description: '', quantity: 1, unitPrice: 0 }],
+    items: [blankNewOrderItem()],
+    // Mirrors checkout.html's own radio set exactly (fixed_pudo/fixed_local
+    // are a UI-only split of the backend's single 'fixed' method -- see
+    // FIXED_BUCKETS below and checkout-entry.js's identical pattern).
+    shippingMethod: 'fixed_pudo',
     shippingOptionId: '',
     manualShippingPrice: '',
     discountPct: 0,
@@ -2745,19 +3002,112 @@ function blankNewOrder() {
   };
 }
 
+function newOrderItemPrice(item) {
+  return item.mode === 'product' ? Number(item.productPrice) || 0 : Number(item.unitPrice) || 0;
+}
+
+function newOrderWeight(order) {
+  return order.items.reduce((sum, i) => sum + (i.mode === 'product' ? Number(i.productWeight) || 0 : 0) * (Number(i.quantity) || 0), 0);
+}
+
 function newOrderTotals(order, shippingOptions) {
-  const subtotal = order.items.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0);
-  const shippingOption = shippingOptions.find((o) => o.id === order.shippingOptionId);
-  const shippingPrice = shippingOption ? shippingOption.price : (Number(order.manualShippingPrice) || 0);
+  const subtotal = order.items.reduce((sum, i) => sum + (Number(i.quantity) || 0) * newOrderItemPrice(i), 0);
+  let shippingPrice = 0;
+  if (order.shippingMethod !== 'own_courier' && order.shippingMethod !== 'collect') {
+    const shippingOption = shippingOptions.find((o) => o.id === order.shippingOptionId);
+    shippingPrice = shippingOption ? shippingOption.price : (Number(order.manualShippingPrice) || 0);
+  }
   const discountAmount = Math.round(subtotal * ((Number(order.discountPct) || 0) / 100));
   const total = Math.max(0, subtotal - discountAmount + shippingPrice);
   return { subtotal, shippingPrice, discountAmount, total };
 }
 
+// Same category-first, name-fallback split checkout-entry.js's FIXED_BUCKETS
+// uses -- category is now a real admin-set field (see the Shipping Options
+// page), the name check only covers the rare row with no category at all.
+const NEW_ORDER_FIXED_BUCKETS = {
+  fixed_local: (o) => (o.category ? o.category === 'Local Delivery' : /local/i.test(o.name)),
+  fixed_pudo: (o) => (o.category ? o.category !== 'Local Delivery' : !/local/i.test(o.name)),
+};
+
+function newOrderShippingControlHtml(order, shippingOptions, weight) {
+  if (order.shippingMethod === 'own_courier') {
+    return `<p class="muted">No delivery charge — the customer arranges their own courier collection.</p>`;
+  }
+  if (order.shippingMethod === 'collect') {
+    return `<p class="muted">No delivery charge — collect from the store.</p>`;
+  }
+  if (order.shippingMethod === 'fixed_pudo' || order.shippingMethod === 'fixed_local') {
+    const bucketOptions = shippingOptions.filter((o) => o.optionType === 'fixed' && NEW_ORDER_FIXED_BUCKETS[order.shippingMethod](o));
+    const opts = bucketOptions.map((o) => `<option value="${escapeAttr(o.id)}" ${order.shippingOptionId === o.id ? 'selected' : ''}>${escapeHtml(o.name)} — ${formatRand(o.price)}</option>`).join('');
+    return `<label class="field"><span>${order.shippingMethod === 'fixed_local' ? 'Local Delivery option' : 'PUDO Locker option'}</span>
+      <select id="no-shipping-fixed"><option value="">Choose an option…</option>${opts}</select></label>`;
+  }
+  // 'courier' -- same weight-bracket matching as online checkout
+  // (matchShippingForWeight), just computed client-side against the
+  // already-fetched options list rather than a round trip, since the admin
+  // may still want to override the auto-picked bracket.
+  const autoOptions = shippingOptions.filter((o) => o.optionType === 'auto_weight');
+  const opts = autoOptions
+    .map((o) => `<option value="${escapeAttr(o.id)}" ${order.shippingOptionId === o.id ? 'selected' : ''}>${escapeHtml(o.name)} — ${formatRand(o.price)} (${o.minWeight}–${o.maxWeight ?? '∞'}g)</option>`)
+    .join('');
+  return `
+    <p class="muted" style="margin:0 0 0.5rem">Order weight: ${weight}g${order.shippingOptionId ? '' : ' — no bracket auto-matched; pick one below or enter a price manually'}</p>
+    <div class="grid-2">
+      <label class="field"><span>Courier bracket</span><select id="no-shipping-fixed"><option value="">Choose an option…</option>${opts}</select></label>
+      <label class="field"><span>Or manual price (R, used only if no bracket picked)</span><input id="no-shipping-manual" type="number" min="0" step="1" value="${escapeAttr(String(order.manualShippingPrice))}" ${order.shippingOptionId ? 'disabled' : ''} /></label>
+    </div>`;
+}
+
+function newOrderItemRowHtml(item, idx, itemCount) {
+  const productBlock = item.productId
+    ? `<div class="panel" style="padding:0.5rem 0.75rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem">
+         <span>${escapeHtml(item.productLabel)} <span class="muted">(${formatRand(item.productPrice)}${item.productStock != null ? `, ${escapeHtml(String(item.productStock))} in stock` : ''})</span></span>
+         <button class="btn small btn-ghost" data-action="item-clear-product" type="button">Change</button>
+       </div>`
+    : `<input class="ip-product-q" type="search" placeholder="Search product name or SKU, press Enter…" value="${escapeAttr(item.productQuery)}" />
+       <div class="stack gap-1">${item.productMatches
+         .map(
+           (p) => `
+         <div class="panel" style="padding:0.5rem 0.75rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem" data-product-id="${escapeAttr(p.productId)}">
+           <span>${escapeHtml(p.name)} <span class="muted">(${formatRand(p.price)}${p.sku ? ` · ${escapeHtml(p.sku)}` : ''}, ${escapeHtml(String(p.stockQty))} in stock)</span></span>
+           <button class="btn small" data-action="pick-product" type="button">Use</button>
+         </div>`,
+         )
+         .join('')}</div>`;
+
+  return `
+    <div class="panel stack gap-2" data-item-idx="${idx}" style="padding:0.75rem 0.9rem">
+      <div class="row-card-actions">
+        <button class="btn small ${item.mode === 'product' ? 'btn-primary' : ''}" data-action="item-mode-product" type="button">Pick product</button>
+        <button class="btn small ${item.mode === 'custom' ? 'btn-primary' : ''}" data-action="item-mode-custom" type="button">Custom item</button>
+        <button class="btn small btn-danger" data-action="remove-item" type="button" style="margin-left:auto" ${itemCount <= 1 ? 'disabled' : ''}>Remove</button>
+      </div>
+      ${item.mode === 'product' ? productBlock : `<input class="ni-desc" value="${escapeAttr(item.description)}" placeholder="Custom job description" />`}
+      <div class="grid-3">
+        <label class="field"><span>Qty</span><input class="ni-qty" type="number" min="1" step="1" value="${escapeAttr(String(item.quantity))}" /></label>
+        ${
+          item.mode === 'product'
+            ? `<div class="field"><span>Unit price</span><p style="margin:0.4rem 0 0">${formatRand(item.productPrice)} <span class="muted">(catalog price)</span></p></div>`
+            : `<label class="field"><span>Unit price (R)</span><input class="ni-price" type="number" min="0" step="1" value="${escapeAttr(String(item.unitPrice))}" /></label>`
+        }
+        <div class="field"><span>Line total</span><p style="margin:0.4rem 0 0">${formatRand((Number(item.quantity) || 0) * newOrderItemPrice(item))}</p></div>
+      </div>
+    </div>`;
+}
+
 async function renderNewOrder() {
   state.newOrder = state.newOrder || blankNewOrder();
   const order = state.newOrder;
+  // Fetched once and cached -- the picker searches this client-side rather
+  // than hitting the server per keystroke, and it's the same combined
+  // filament+category list Stock Management already uses (listInventory).
+  if (!state.productCatalog) {
+    const { items } = await api('/api/inventory');
+    state.productCatalog = items;
+  }
   const { shippingOptions } = await api('/api/shipping-options?activeOnly=true');
+  const weight = newOrderWeight(order);
   const totals = newOrderTotals(order, shippingOptions);
 
   const clientResultsHtml = order.clientResults
@@ -2770,21 +3120,7 @@ async function renderNewOrder() {
     )
     .join('');
 
-  const itemRows = order.items
-    .map(
-      (item, idx) => `
-        <div class="grid-4" data-item-idx="${idx}" style="align-items:end">
-          <label class="field" style="grid-column:span 2"><span>Description</span><input class="ni-desc" value="${escapeAttr(item.description)}" placeholder="Product or custom job description" /></label>
-          <label class="field"><span>Qty</span><input class="ni-qty" type="number" min="1" step="1" value="${escapeAttr(String(item.quantity))}" /></label>
-          <label class="field"><span>Unit price (R)</span><input class="ni-price" type="number" min="0" step="1" value="${escapeAttr(String(item.unitPrice))}" /></label>
-          <button class="btn small btn-danger" data-action="remove-item" type="button" ${order.items.length <= 1 ? 'disabled' : ''}>Remove</button>
-        </div>`,
-    )
-    .join('');
-
-  const shippingOptionsHtml = shippingOptions
-    .map((o) => `<option value="${escapeAttr(o.id)}" ${order.shippingOptionId === o.id ? 'selected' : ''}>${escapeHtml(o.name)} — ${formatRand(o.price)}</option>`)
-    .join('');
+  const itemRows = order.items.map((item, idx) => newOrderItemRowHtml(item, idx, order.items.length)).join('');
 
   $('#view-new-order').innerHTML = `
     <div class="stack gap-4" style="max-width:900px">
@@ -2803,6 +3139,7 @@ async function renderNewOrder() {
             <input id="no-client-q" type="search" placeholder="Search name, email, client code…" value="${escapeAttr(order.clientQuery)}" />
             <div class="stack gap-2">${clientResultsHtml}</div>`}
         ` : `
+          <p class="muted" style="margin:0">Submitting this creates a real client record (same as checkout) — it appears in Clients and this order shows in their order history.</p>
           <div class="grid-2">
             <label class="field"><span>First name</span><input id="no-new-first" value="${escapeAttr(order.newClient.firstName)}" /></label>
             <label class="field"><span>Surname</span><input id="no-new-last" value="${escapeAttr(order.newClient.lastName)}" /></label>
@@ -2821,17 +3158,16 @@ async function renderNewOrder() {
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Shipping &amp; discount</h3></div>
-        <div class="grid-3">
-          <label class="field"><span>Shipping option</span>
-            <select id="no-shipping-option">
-              <option value="">None / manual</option>
-              ${shippingOptionsHtml}
-            </select>
-          </label>
-          <label class="field"><span>Manual shipping price (R, used if no option picked)</span><input id="no-shipping-manual" type="number" min="0" step="1" value="${escapeAttr(String(order.manualShippingPrice))}" ${order.shippingOptionId ? 'disabled' : ''} /></label>
-          <label class="field"><span>Discount %</span><input id="no-discount" type="number" min="0" max="100" step="0.5" value="${escapeAttr(String(order.discountPct))}" /></label>
+        <div class="section-head"><h3>Shipping</h3></div>
+        <div class="stack gap-2">
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="fixed_pudo" ${order.shippingMethod === 'fixed_pudo' ? 'checked' : ''} /><span>PUDO Locker</span></label>
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="courier" ${order.shippingMethod === 'courier' ? 'checked' : ''} /><span>Our shipping (courier)</span></label>
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="own_courier" ${order.shippingMethod === 'own_courier' ? 'checked' : ''} /><span>Customer's own courier</span></label>
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="collect" ${order.shippingMethod === 'collect' ? 'checked' : ''} /><span>Collect from store</span></label>
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="fixed_local" ${order.shippingMethod === 'fixed_local' ? 'checked' : ''} /><span>Local Delivery</span></label>
         </div>
+        ${newOrderShippingControlHtml(order, shippingOptions, weight)}
+        <label class="field" style="max-width:220px"><span>Discount %</span><input id="no-discount" type="number" min="0" max="100" step="0.5" value="${escapeAttr(String(order.discountPct))}" /></label>
       </div>
 
       <div class="panel stack gap-3">
@@ -2880,24 +3216,59 @@ async function renderNewOrder() {
   });
 
   $('#add-item')?.addEventListener('click', async () => {
-    order.items.push({ description: '', quantity: 1, unitPrice: 0 });
+    order.items.push(blankNewOrderItem());
     await renderNewOrder();
   });
   $$('[data-item-idx]').forEach((row) => {
     const idx = Number(row.dataset.itemIdx);
-    row.querySelector('.ni-desc').addEventListener('input', (e) => { order.items[idx].description = e.target.value; });
-    row.querySelector('.ni-qty').addEventListener('input', (e) => { order.items[idx].quantity = e.target.value; });
-    row.querySelector('.ni-price').addEventListener('input', (e) => { order.items[idx].unitPrice = e.target.value; });
+    const item = order.items[idx];
+    row.querySelector('[data-action="item-mode-product"]')?.addEventListener('click', async () => { item.mode = 'product'; await renderNewOrder(); });
+    row.querySelector('[data-action="item-mode-custom"]')?.addEventListener('click', async () => { item.mode = 'custom'; await renderNewOrder(); });
+    row.querySelector('[data-action="item-clear-product"]')?.addEventListener('click', async () => {
+      item.productId = ''; item.productLabel = ''; item.productPrice = 0; item.productWeight = 0; item.productStock = null;
+      item.productQuery = ''; item.productMatches = [];
+      await renderNewOrder();
+    });
+    row.querySelector('.ip-product-q')?.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      item.productQuery = e.target.value.trim();
+      const q = item.productQuery.toLowerCase();
+      item.productMatches = q
+        ? state.productCatalog.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0, 8)
+        : [];
+      await renderNewOrder();
+    });
+    row.querySelectorAll('[data-product-id]').forEach((matchRow) => {
+      matchRow.querySelector('[data-action="pick-product"]').addEventListener('click', async () => {
+        const p = item.productMatches.find((m) => m.productId === matchRow.dataset.productId);
+        if (!p) return;
+        item.productId = p.productId;
+        item.productLabel = p.name;
+        item.productPrice = p.price;
+        item.productWeight = p.weight || 0;
+        item.productStock = p.stockQty;
+        item.productMatches = [];
+        await renderNewOrder();
+      });
+    });
+    row.querySelector('.ni-desc')?.addEventListener('input', (e) => { item.description = e.target.value; });
+    row.querySelector('.ni-qty')?.addEventListener('input', (e) => { item.quantity = e.target.value; });
+    row.querySelector('.ni-price')?.addEventListener('input', (e) => { item.unitPrice = e.target.value; });
     row.querySelector('[data-action="remove-item"]')?.addEventListener('click', async () => {
       order.items.splice(idx, 1);
       await renderNewOrder();
     });
   });
 
-  $('#no-shipping-option')?.addEventListener('change', async () => {
-    order.shippingOptionId = $('#no-shipping-option').value;
-    await renderNewOrder();
+  $$('[name="no-shipping-method"]').forEach((radio) => {
+    radio.addEventListener('change', async () => {
+      order.shippingMethod = radio.value;
+      order.shippingOptionId = '';
+      order.manualShippingPrice = '';
+      await renderNewOrder();
+    });
   });
+  $('#no-shipping-fixed')?.addEventListener('change', async (e) => { order.shippingOptionId = e.target.value; await renderNewOrder(); });
   $('#no-shipping-manual')?.addEventListener('input', (e) => { order.manualShippingPrice = e.target.value; });
   $('#no-discount')?.addEventListener('input', (e) => { order.discountPct = e.target.value; });
   $('#no-payment-method')?.addEventListener('change', (e) => { order.paymentMethod = e.target.value; });
@@ -2905,12 +3276,20 @@ async function renderNewOrder() {
 
   $('#create-order').addEventListener('click', async () => {
     const items = order.items
-      .filter((i) => i.description.trim())
-      .map((i) => ({ description: i.description, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0 }));
+      .filter((i) => (i.mode === 'product' ? Boolean(i.productId) : i.description.trim()))
+      .map((i) =>
+        i.mode === 'product'
+          ? { productId: i.productId, quantity: Number(i.quantity) || 1 }
+          : { description: i.description, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0 },
+      );
     if (!items.length) return toast('Add at least one line item');
 
+    // 'fixed_pudo'/'fixed_local' are this form's own UI split (like
+    // checkout's) of the single backend 'fixed' shippingMethod.
+    const backendShippingMethod = order.shippingMethod.startsWith('fixed') ? 'fixed' : order.shippingMethod;
     const payload = {
       items,
+      shippingMethod: backendShippingMethod,
       shippingOptionId: order.shippingOptionId || null,
       shippingPrice: order.shippingOptionId ? null : (Number(order.manualShippingPrice) || 0),
       discountPct: Number(order.discountPct) || 0,
@@ -3124,8 +3503,14 @@ async function renderPrintJobs() {
         </div>
 
         <div class="grid-2">
-          <label class="field"><span>Model file (optional) — STL/3MF/OBJ/gcode/zip/PDF</span><input type="file" id="pj-model-file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" /></label>
-          <label class="field"><span>Reference photo (optional)</span><input type="file" id="pj-model-image" accept="image/jpeg,image/png,image/webp" /></label>
+          <div class="field"><span>Model file (optional) — STL/3MF/OBJ/gcode/zip/PDF</span>
+            <label class="btn small" for="pj-model-file">Choose File</label>
+            <input type="file" class="hidden" id="pj-model-file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" />
+          </div>
+          <div class="field"><span>Reference photo (optional)</span>
+            <label class="btn small" for="pj-model-image">Choose File</label>
+            <input type="file" class="hidden" id="pj-model-image" accept="image/jpeg,image/png,image/webp" />
+          </div>
         </div>
 
         ${previewHtml}
@@ -3776,29 +4161,52 @@ async function renderWhatsAppCampaigns() {
 // ---- Shipping options (C) ----
 
 function blankShippingOption() {
-  return { id: null, name: '', optionType: 'fixed', minWeight: 0, maxWeight: '', price: 0, active: true };
+  return { id: null, name: '', optionType: 'fixed', minWeight: 0, maxWeight: '', price: 0, active: true, category: '' };
+}
+
+// Groups the flat option list under a subheading row per category --
+// PUDO Locker/Local Delivery/Courier are backfilled automatically (see
+// ensureShippingCategoryColumn in db.js), anything else is whatever the
+// admin has since typed. Uncategorised options (a fresh "+ Shipping
+// option" that hasn't been saved with one yet) get their own bucket rather
+// than being hidden or crashing the group.
+function shippingRowsGroupedByCategory(shippingOptions) {
+  const groups = new Map();
+  shippingOptions.forEach((o) => {
+    const key = o.category || 'Uncategorised';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o);
+  });
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+function shippingOptionRowHtml(o) {
+  return `
+    <tr data-id="${escapeAttr(o.id)}">
+      <td>${escapeHtml(o.name)}</td>
+      <td>${o.optionType === 'fixed' ? '<span class="badge">flat rate</span>' : `${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}`}</td>
+      <td>${formatRand(o.price)}</td>
+      <td>${o.active ? '<span class="badge published">active</span>' : '<span class="badge draft">inactive</span>'}</td>
+      <td>
+        <button class="btn small" data-action="edit" type="button">Edit</button>
+        <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+      </td>
+    </tr>`;
 }
 
 async function renderShipping() {
   state.editingShipping = state.editingShipping || null;
   const { shippingOptions } = await api('/api/shipping-options');
 
-  const rows = shippingOptions
+  const rows = shippingRowsGroupedByCategory(shippingOptions)
     .map(
-      (o) => `
-        <tr data-id="${escapeAttr(o.id)}">
-          <td>${escapeHtml(o.name)}</td>
-          <td>${o.optionType === 'fixed' ? '<span class="badge">flat rate</span>' : `${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}`}</td>
-          <td>${formatRand(o.price)}</td>
-          <td>${o.active ? '<span class="badge published">active</span>' : '<span class="badge draft">inactive</span>'}</td>
-          <td>
-            <button class="btn small" data-action="edit" type="button">Edit</button>
-            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
-          </td>
-        </tr>`,
+      ([category, options]) =>
+        `<tr class="row-group-header"><td colspan="5"><strong>${escapeHtml(category)}</strong> <span class="muted">(${escapeHtml(String(options.length))})</span></td></tr>` +
+        options.map(shippingOptionRowHtml).join(''),
     )
     .join('');
 
+  const categorySuggestions = [...new Set(shippingOptions.map((o) => o.category).filter(Boolean))];
   const form = state.editingShipping;
   const isFixed = form?.optionType !== 'auto_weight';
   $('#view-shipping').innerHTML = `
@@ -3810,6 +4218,9 @@ async function renderShipping() {
       <div class="panel stack gap-3" style="max-width:600px">
         <div class="section-head"><h3>${form.id ? 'Edit shipping option' : 'New shipping option'}</h3></div>
         <label class="field"><span>Name</span><input id="sf-name" value="${escapeAttr(form.name)}" placeholder="e.g. PUDO Locker to Locker (Small)" /></label>
+        <label class="field"><span>Category</span><input id="sf-category" list="sf-category-list" value="${escapeAttr(form.category || '')}" placeholder="e.g. PUDO Locker, Local Delivery, Courier" />
+          <datalist id="sf-category-list">${categorySuggestions.map((c) => `<option value="${escapeAttr(c)}"></option>`).join('')}</datalist>
+        </label>
         <label class="field"><span>Type</span>
           <select id="sf-type">
             <option value="fixed" ${isFixed ? 'selected' : ''}>Flat rate — customer/admin picks by name (PUDO, local delivery)</option>
@@ -3864,6 +4275,7 @@ async function renderShipping() {
       const optionType = $('#sf-type').value;
       const payload = {
         name: $('#sf-name').value,
+        category: $('#sf-category').value.trim(),
         optionType,
         minWeight: optionType === 'fixed' ? 0 : Number($('#sf-min').value) || 0,
         maxWeight: optionType === 'fixed' ? null : ($('#sf-max').value === '' ? null : Number($('#sf-max').value)),
@@ -4060,16 +4472,18 @@ async function renderResources() {
         <label class="field checkbox"><input id="rf-active" type="checkbox" ${form.active ? 'checked' : ''} /><span>Visible in public gallery</span></label>
         ${form.id ? `
           <div class="grid-2">
-            <label class="field">
+            <div class="field">
               <span>Cover image ${form.imagePath ? '(replace)' : ''}</span>
-              <input type="file" accept="image/jpeg,image/png,image/webp" id="rf-image-upload" />
+              <label class="btn small" for="rf-image-upload">Choose File</label>
+              <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" id="rf-image-upload" />
               ${form.imagePath ? `<img src="${escapeAttr(form.imagePath)}" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:4px;margin-top:0.5rem" />` : ''}
-            </label>
-            <label class="field">
+            </div>
+            <div class="field">
               <span>Downloadable file ${form.filePath ? '(replace)' : ''}</span>
-              <input type="file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" id="rf-file-upload" />
+              <label class="btn small" for="rf-file-upload">Choose File</label>
+              <input type="file" class="hidden" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" id="rf-file-upload" />
               ${form.filePath ? `<p class="muted" style="font-size:0.8rem;margin-top:0.5rem">Current: ${escapeHtml(form.fileOriginalName || form.filePath.split('/').pop())}</p>` : ''}
-            </label>
+            </div>
           </div>` : '<p class="muted" style="font-size:0.85rem">Save the resource first to enable image/file upload.</p>'}
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-resource" type="button">Save</button>
@@ -4150,15 +4564,17 @@ async function renderResources() {
 
 // ---- Custom 3D design requests (Phase 2) ----
 
-const DESIGN_REQUEST_STATUSES = ['new', 'in_review', 'quoted', 'accepted', 'rejected', 'completed'];
+const DESIGN_REQUEST_STATUSES = ['new', 'in_progress', 'finalized'];
 const DESIGN_REQUEST_STATUS_LABEL = {
   new: 'New',
-  in_review: 'In review',
-  quoted: 'Quoted',
-  accepted: 'Accepted',
-  rejected: 'Rejected',
-  completed: 'Completed',
+  in_progress: 'In progress',
+  finalized: 'Finalized',
 };
+
+function designRequestStatusSelectHtml(id, status) {
+  const opts = DESIGN_REQUEST_STATUSES.map((s) => `<option value="${s}" ${status === s ? 'selected' : ''}>${DESIGN_REQUEST_STATUS_LABEL[s]}</option>`).join('');
+  return `<select class="dr-status-inline" data-id="${escapeAttr(id)}">${opts}</select>`;
+}
 
 async function renderDesignRequests() {
   state.editingDesignRequest = state.editingDesignRequest || null;
@@ -4170,7 +4586,7 @@ async function renderDesignRequests() {
         <tr data-id="${escapeAttr(r.id)}">
           <td>${escapeHtml(r.name || '—')}</td>
           <td>${escapeHtml(r.email)}</td>
-          <td><span class="badge">${escapeHtml(DESIGN_REQUEST_STATUS_LABEL[r.status] || r.status)}</span></td>
+          <td>${designRequestStatusSelectHtml(r.id, r.status)}</td>
           <td>${escapeHtml(formatDate(r.createdAt))}</td>
           <td>
             <button class="btn small" data-action="edit" type="button">View</button>
@@ -4200,6 +4616,7 @@ async function renderDesignRequests() {
           ${form.referenceFilePath ? `<a class="btn small" href="${escapeAttr(form.referenceFilePath)}" download="${escapeAttr(form.referenceFileOriginalName || form.referenceFilePath.split('/').pop())}" target="_blank" rel="noopener">${escapeHtml(form.referenceFileOriginalName || 'Reference file')}</a>` : ''}
         </div>
         <label class="field"><span>Status</span><select id="dr-status">${statusOptions}</select></label>
+        ${form.finalizedAt ? `<p class="muted" style="font-size:0.85rem">Finalized ${escapeHtml(formatDate(form.finalizedAt))}</p>` : ''}
         <label class="field"><span>Admin notes</span><textarea id="dr-notes">${escapeHtml(form.adminNotes || '')}</textarea></label>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-design-request" type="button">Save</button>
@@ -4224,6 +4641,22 @@ async function renderDesignRequests() {
       try {
         await api(`/api/design-requests/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
+        await renderDesignRequests();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  // Inline status update, no need to open "View" first -- fires from every
+  // row's own select in the table, independent of whether the detail panel
+  // (form) is currently open for a different (or the same) request.
+  $$('.dr-status-inline').forEach((select) => {
+    select.addEventListener('change', async () => {
+      try {
+        const { designRequest } = await api(`/api/design-requests/${select.dataset.id}`, { method: 'PATCH', body: JSON.stringify({ status: select.value }) });
+        toast('Status updated — client notified');
+        if (state.editingDesignRequest?.id === designRequest.id) state.editingDesignRequest = designRequest;
         await renderDesignRequests();
       } catch (ex) {
         toast(ex.message);

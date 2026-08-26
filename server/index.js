@@ -54,6 +54,7 @@ import {
   manuallyVerifyClient,
   regenerateVerificationToken,
   deleteOrRevokeClient,
+  mergeClients,
 } from './clients.js';
 import {
   listShippingOptions,
@@ -74,6 +75,7 @@ import {
   markConfirmationEmailSent,
   recordPaymentTransaction,
   cancelOrderByClient,
+  deleteOrder,
 } from './orders.js';
 import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
 import {
@@ -1179,6 +1181,19 @@ app.delete('/api/clients/:id', requireAuth, (req, res) => {
   res.json(result);
 });
 
+// Folds a duplicate client record into another -- every order and design
+// request the source (:id) ever placed moves to the target (intoClientId),
+// then the source is deleted outright (see mergeClients in clients.js for
+// why this never needs the revoke-only fallback deleteOrRevokeClient has).
+app.post('/api/clients/:id/merge', requireAuth, (req, res) => {
+  try {
+    const client = mergeClients(req.params.id, (req.body || {}).intoClientId);
+    res.json({ client });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ---- Shipping options (C) ----
 
 app.get('/api/shipping-options', requireAuth, (req, res) => {
@@ -1230,7 +1245,7 @@ app.get('/api/shipping-match', (req, res) => {
 // as /api/shipping-match above.
 app.get('/api/shipping-options/public/fixed', (_req, res) => {
   const options = listShippingOptions({ activeOnly: true, optionType: 'fixed' });
-  res.json({ shippingOptions: options.map((o) => ({ id: o.id, name: o.name, price: o.price })) });
+  res.json({ shippingOptions: options.map((o) => ({ id: o.id, name: o.name, price: o.price, category: o.category })) });
 });
 
 // ---- Inventory / Stock Management ----
@@ -1688,6 +1703,17 @@ app.put('/api/orders/:id/tracking', requireAuth, (req, res) => {
   if (!order) return res.status(404).json({ error: 'Order not found' });
   recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.id}: tracking number set to "${order.trackingNumber}"` });
   res.json({ order });
+});
+
+// Invoice History's delete action -- a genuine hard delete, unlike cancel
+// (see deleteOrder in orders.js for why restoring stock is conditional on
+// status). No route currently allows removing an order at all otherwise.
+app.delete('/api/orders/:id', requireAuth, (req, res) => {
+  const existing = getOrder(req.params.id);
+  const ok = deleteOrder(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Order not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted order ${existing?.invoiceNumber || req.params.id}` });
+  res.json({ ok: true });
 });
 
 // F.4/H.2: (re)send is the same helper for both the automatic send at

@@ -161,3 +161,25 @@ test('updateColour with non-numeric input does not throw and preserves existing 
   assert.strictEqual(updated.colours[0].rollLengthM, null);
   db.close();
 });
+
+test('updateColour clearing SKU to blank falls back to a colourId-derived SKU instead of colliding with another blank-SKU colour', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColours = addColour(f.id, { name: 'White', sku: 'SKU-1' }, db);
+  addColour(f.id, { name: 'Black', sku: 'SKU-2' }, db);
+  const whiteId = withColours.colours[0].id;
+
+  // Clearing the first colour's SKU must not persist '' -- sku is UNIQUE
+  // NOT NULL, so a second colour later clearing its own SKU would otherwise
+  // collide with this one and surface as a confusing "duplicate SKU" error.
+  const afterClear = updateColour(f.id, whiteId, { sku: '' }, db);
+  const whiteAfter = afterClear.colours.find((c) => c.id === whiteId);
+  assert.notStrictEqual(whiteAfter.sku, '');
+  assert.ok(whiteAfter.sku);
+
+  // Clearing the second colour's SKU must succeed too, not throw a UNIQUE
+  // constraint violation against the first colour's now-generated fallback.
+  const blackId = afterClear.colours.find((c) => c.name === 'Black').id;
+  assert.doesNotThrow(() => updateColour(f.id, blackId, { sku: '' }, db));
+  db.close();
+});
