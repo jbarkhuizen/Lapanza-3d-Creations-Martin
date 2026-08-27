@@ -159,17 +159,51 @@ export function updateClient(id, data, db = getDb()) {
   return getClient(id, db);
 }
 
-// Checkout entry point (B.3): matches an existing client by email
-// (case-insensitive) and reuses it, or creates a new one -- both inside one
-// transaction so the code-generation SELECT MAX + INSERT in insertClient
-// can't race with a concurrent checkout picking the same next client_code.
+// Fields worth comparing to decide whether a matched client record is
+// actually stale -- deliberately excludes name (that's the match key
+// itself in the by-name path) and marketing-consent fields (those have
+// their own opt-in semantics, not a "did the customer's info change" one).
+const RECONCILE_FIELDS = ['email', 'businessName', 'phone', 'street', 'suburb', 'city', 'province', 'postalCode'];
+
+function clientDataDiffers(existing, data) {
+  return RECONCILE_FIELDS.some((key) => {
+    if (data[key] === undefined) return false;
+    return String(data[key] || '').trim().toLowerCase() !== String(existing[key] || '').trim().toLowerCase();
+  });
+}
+
+// Checkout entry point (B.3): matches an existing client and reuses it (an
+// exact email match first -- the strongest signal, since email is also the
+// account login -- and only when that fails, an exact first+last name
+// match against a *single* existing client, so two different customers who
+// happen to share a name are never silently merged), or creates a new one.
+// A match whose other details (phone/address/business name/a changed
+// email under the same name) no longer agree with what's on file gets
+// updated in place, flagged via the transient client._dataUpdated (see
+// orders.js's matching _lowStock convention) so the checkout route can
+// surface a brief "Updating Client Data" notice rather than silently
+// overwriting what's on file. Everything below runs inside one transaction
+// so the code-generation SELECT MAX + INSERT in insertClient can't race
+// with a concurrent checkout picking the same next client_code.
 export function findOrCreateClientForCheckout(data, db = getDb()) {
   const email = String(data.email || '').trim();
   if (!email) throw new Error('Email is required');
   const tx = db.transaction((d) => {
-    const existing = findClientByEmail(email, db);
-    if (existing) return updateClient(existing.id, d, db);
-    return insertClient(db, d);
+    let existing = findClientByEmail(email, db);
+    if (!existing) {
+      const firstName = String(d.firstName || '').trim();
+      const lastName = String(d.lastName || '').trim();
+      if (firstName && lastName) {
+        const nameMatches = db
+          .prepare('SELECT * FROM clients WHERE LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)')
+          .all(firstName, lastName);
+        if (nameMatches.length === 1) existing = rowToClient(nameMatches[0]);
+      }
+    }
+    if (!existing) return insertClient(db, d);
+    const updated = clientDataDiffers(existing, d) ? updateClient(existing.id, d, db) : existing;
+    updated._dataUpdated = updated !== existing;
+    return updated;
   });
   return tx(data);
 }

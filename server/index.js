@@ -38,6 +38,7 @@ import {
 } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { formatRand } from './money.js';
+import { renderInvoiceHtml } from './invoice.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
 import {
   listClients,
@@ -80,6 +81,7 @@ import {
 import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
 import {
   sendOrderConfirmationEmail,
+  sendInvoiceEmail,
   sendLowStockAlert,
   sendClientVerificationEmail,
   sendClientPasswordResetEmail,
@@ -889,76 +891,76 @@ app.get('/api/filaments/:id', requireAuth, (req, res) => {
   res.json({ filament });
 });
 
-app.post('/api/filaments', requireAuth, (req, res) => {
+app.post('/api/filaments', requireAuth, async (req, res) => {
   try {
     const filament = createFilament(req.body || {});
-    syncPublicJson(getDb());
+    const publishWarning = await publishCatalog();
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created filament type "${filament.name}"` });
-    res.status(201).json({ filament });
+    res.status(201).json({ filament, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
   }
 });
 
-app.put('/api/filaments/:id', requireAuth, (req, res) => {
+app.put('/api/filaments/:id', requireAuth, async (req, res) => {
   try {
     const filament = updateFilament(req.params.id, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Filament not found' });
-    syncPublicJson(getDb());
+    const publishWarning = await publishCatalog();
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated filament type "${filament.name}"` });
-    res.json({ filament });
+    res.json({ filament, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
   }
 });
 
-app.delete('/api/filaments/:id', requireAuth, (req, res) => {
+app.delete('/api/filaments/:id', requireAuth, async (req, res) => {
   const existing = getFilament(req.params.id);
   const ok = deleteFilament(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Filament not found' });
-  syncPublicJson(getDb());
+  const publishWarning = await publishCatalog();
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted filament type "${existing?.name || req.params.id}"` });
-  res.json({ ok: true });
+  res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
 });
 
-app.post('/api/filaments/:id/colours', requireAuth, (req, res) => {
+app.post('/api/filaments/:id/colours', requireAuth, async (req, res) => {
   try {
     const filament = addColour(req.params.id, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Filament not found' });
-    syncPublicJson(getDb());
+    const publishWarning = await publishCatalog();
     const added = filament.colours[filament.colours.length - 1];
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added colour "${added?.name}" to "${filament.name}"` });
-    res.status(201).json({ filament });
+    res.status(201).json({ filament, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
   }
 });
 
-app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) => {
+app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, async (req, res) => {
   try {
     const filament = updateColour(req.params.filamentId, req.params.colourId, req.body || {});
     if (!filament) return res.status(404).json({ error: 'Colour not found' });
-    syncPublicJson(getDb());
+    const publishWarning = await publishCatalog();
     const colour = filament.colours.find((c) => c.id === req.params.colourId);
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated colour "${colour?.name}" on "${filament.name}"` });
-    res.json({ filament });
+    res.json({ filament, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
   }
 });
 
-app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, (req, res) => {
+app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, async (req, res) => {
   const existing = getFilament(req.params.filamentId);
   const colour = existing?.colours.find((c) => c.id === req.params.colourId);
   const ok = deleteColour(req.params.filamentId, req.params.colourId);
   if (!ok) return res.status(404).json({ error: 'Colour not found' });
-  syncPublicJson(getDb());
+  const publishWarning = await publishCatalog();
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted colour "${colour?.name || req.params.colourId}" from "${existing?.name || req.params.filamentId}"` });
-  res.json({ ok: true });
+  res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
 });
 
 app.post(
@@ -975,13 +977,13 @@ app.post(
     next();
   },
   uploadFilamentImage.single('image'),
-  (req, res) => {
+  async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
     const imagePath = `/uploads/filaments/${req.file.filename}`;
     const filament = setColourImage(req.params.filamentId, req.params.colourId, imagePath);
     if (!filament) return res.status(404).json({ error: 'Colour not found' });
-    syncPublicJson(getDb());
-    res.json({ filament });
+    const publishWarning = await publishCatalog();
+    res.json({ filament, ...(publishWarning ? { publishWarning } : {}) });
   },
   // Multer errors (e.g. exceeding uploads.js's 5MB limit) are passed to
   // next(err) by the multer middleware above, not thrown, so without this
@@ -1130,6 +1132,56 @@ app.post(
     next(err);
   },
 );
+
+// Per-item save/remove for category products (GWM/Landrover/Toys/Homeware/
+// Phones etc), mirroring the filament colour endpoints above: lets the
+// admin's "Save item" / "Remove" buttons on a single row persist
+// immediately instead of only ever being able to save via the whole-product
+// PUT (which previously meant a stray edit to one item, or the "Fits
+// models" checkboxes GWM parts use for their model filter, only actually
+// reached the DB and the published site once the admin remembered to also
+// click the separate top-level "Save product" button).
+app.post('/api/products/:productId/items', requireAuth, async (req, res) => {
+  const product = getProduct(req.params.productId);
+  if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
+  product.items = product.items || [];
+  const item = normalizeItem({ ...(req.body || {}), id: undefined, imageUrl: '' }, product.items.length);
+  product.items.push(item);
+  upsertProduct(product);
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added item "${item.name}" to "${product.name}"` });
+  res.status(201).json({ product, item, ...(publishWarning ? { publishWarning } : {}) });
+});
+
+app.put('/api/products/:productId/items/:itemId', requireAuth, async (req, res) => {
+  const product = getProduct(req.params.productId);
+  if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
+  const idx = (product.items || []).findIndex((i) => i.id === req.params.itemId);
+  if (idx === -1) return res.status(404).json({ error: 'Item not found' });
+  const existing = product.items[idx];
+  // imageUrl is deliberately never accepted from the body here -- same as
+  // the whole-product PUT, it's only ever set by the dedicated
+  // upload/remove-photo routes above.
+  const merged = normalizeItem({ ...existing, ...(req.body || {}), id: existing.id, imageUrl: existing.imageUrl }, idx);
+  product.items[idx] = merged;
+  upsertProduct(product);
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated item "${merged.name}" on "${product.name}"` });
+  res.json({ product, item: merged, ...(publishWarning ? { publishWarning } : {}) });
+});
+
+app.delete('/api/products/:productId/items/:itemId', requireAuth, async (req, res) => {
+  const product = getProduct(req.params.productId);
+  if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
+  const item = (product.items || []).find((i) => i.id === req.params.itemId);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (item.imageUrl && item.imageUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.imageUrl);
+  product.items = product.items.filter((i) => i.id !== req.params.itemId);
+  upsertProduct(product);
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed item "${item.name}" from "${product.name}"` });
+  res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
+});
 
 app.delete('/api/products/:productId/items/:itemId/image', requireAuth, async (req, res) => {
   const product = getProduct(req.params.productId);
@@ -1685,13 +1737,23 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     const order = createManualOrder(req.body || {});
     const lowStock = order._lowStock;
     delete order._lowStock;
+    const clientDataUpdated = Boolean(order._clientDataUpdated);
+    delete order._clientDataUpdated;
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created manual order ${order.id} (${formatRand(order.total)})` });
-    res.status(201).json({ order });
+    res.status(201).json({ order, clientDataUpdated });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
     try {
       await sendNewOrderNotificationEmail(order);
     } catch (err) {
       logEmailFailure('New order owner-notification email', err, req);
+    }
+    // "Already paid" (walk-in/WhatsApp sale settled on the spot) creates the
+    // order already in 'paid' status -- send the paid-in-full invoice
+    // straight away rather than an unpaid one that would be inaccurate.
+    try {
+      await sendInvoiceEmail(order, { paid: order.status === 'paid' });
+    } catch (err) {
+      logEmailFailure(`Order ${order.id} invoice email`, err, req);
     }
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -1784,7 +1846,21 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     });
     const lowStock = order._lowStock;
     delete order._lowStock;
+    const clientDataUpdated = Boolean(order._clientDataUpdated);
+    delete order._clientDataUpdated;
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
+
+    // The invoice itself (unlike the "your order is confirmed" email below)
+    // is never a lie to send immediately -- it's a bill for what's owed,
+    // true whether or not Payfast has cleared yet -- so it goes out for
+    // every payment method as soon as the order exists. A second, distinct
+    // "paid in full" invoice follows later for Payfast once the ITN webhook
+    // actually confirms payment (see markOrderPaid's call site below).
+    try {
+      await sendInvoiceEmail(order);
+    } catch (err) {
+      logEmailFailure(`Order ${order.id} invoice email`, err, req);
+    }
 
     // For Payfast (card/EFT), the order isn't actually paid yet at this
     // point -- it's just been created as pending_payment and the customer
@@ -1815,7 +1891,7 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     }
 
     if (body.paymentMethod === 'manual_eft' || body.paymentMethod === 'cash_on_collection') {
-      return res.status(201).json({ order, emailSent, redirect: null });
+      return res.status(201).json({ order, emailSent, redirect: null, clientDataUpdated });
     }
 
     const requestOrigin = `${req.protocol}://${req.get('host')}`;
@@ -1827,7 +1903,7 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     // static site.
     const apiUrl = process.env.API_URL || requestOrigin;
     const payfast = buildPayfastRedirect({ order, siteUrl, apiUrl, paymentMethod: body.paymentMethod });
-    res.status(201).json({ order, emailSent, redirect: payfast });
+    res.status(201).json({ order, emailSent, redirect: payfast, clientDataUpdated });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -1884,6 +1960,11 @@ app.post(
           markConfirmationEmailSent(order.id);
         } catch (err) {
           logEmailFailure(`Order ${order.id} confirmation email (Payfast ITN)`, err, req);
+        }
+        try {
+          await sendInvoiceEmail(order, { paid: true });
+        } catch (err) {
+          logEmailFailure(`Order ${order.id} invoice email (Payfast ITN, paid in full)`, err, req);
         }
       }
     }
@@ -2245,78 +2326,6 @@ const SHIPPING_METHOD_LABELS = {
   fixed: 'Shipping',
 };
 
-// Phase 3: formal numbered invoice -- same "print-friendly HTML, no PDF
-// dependency" approach as renderPackingSlipHtml above, laid out to match
-// the business's existing spreadsheet invoice (header, bill-to, line items,
-// subtotal/shipping/discount/total, bank details).
-function renderInvoiceHtml(order, settings) {
-  const rows = order.items
-    .map(
-      (i, idx) =>
-        `<tr><td>${idx + 1}</td><td>${escapeHtml(i.productName)}</td><td style="text-align:right">${i.quantity}</td><td style="text-align:right">${formatRand(i.price)}</td><td style="text-align:right">${formatRand(i.price * i.quantity)}</td></tr>`,
-    )
-    .join('');
-  const addr = order.client
-    ? [order.client.street, order.client.suburb, order.client.city, order.client.province, order.client.postalCode, order.client.country]
-        .filter(Boolean)
-        .join(', ')
-    : '';
-  const createdDate = order.createdAt ? new Date(order.createdAt) : new Date();
-  const dueDate = new Date(createdDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const discountRow = order.discountAmount
-    ? `<tr><td colspan="4" style="text-align:right">Discount${order.discountPct ? ` (${order.discountPct}%)` : ''}</td><td style="text-align:right">-${formatRand(order.discountAmount)}</td></tr>`
-    : '';
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Invoice ${escapeHtml(order.invoiceNumber || order.id)}</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; color: #1a1612; }
-  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-  table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
-  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
-  .muted { color: #666; font-size: 0.9rem; }
-  .totals td { font-weight: 600; }
-  .header-flex { display: flex; justify-content: space-between; align-items: flex-start; }
-  @media print { button { display: none; } }
-</style></head>
-<body>
-  <button onclick="window.print()">Print</button>
-  <div class="header-flex">
-    <div>
-      <h1>${escapeHtml(settings.siteName || 'Lapanza')}</h1>
-      <p class="muted">${escapeHtml(settings.address || '')}<br>${escapeHtml(settings.phoneDisplay || '')}<br>${escapeHtml(settings.email || '')}</p>
-    </div>
-    <div style="text-align:right">
-      <h1>INVOICE</h1>
-      <p class="muted">Invoice No: ${escapeHtml(order.invoiceNumber || '—')}<br>
-      Invoice Date: ${escapeHtml(createdDate.toLocaleDateString())}<br>
-      Due Date: ${escapeHtml(dueDate.toLocaleDateString())}</p>
-    </div>
-  </div>
-  <p><strong>BILL TO</strong><br>
-  ${escapeHtml(order.client?.name || '')}${order.client?.businessName ? ` (${escapeHtml(order.client.businessName)})` : ''}<br>
-  ${escapeHtml(order.client?.email || '')}<br>
-  ${escapeHtml(addr)}<br>
-  ${escapeHtml(order.client?.phone || '')}</p>
-  <table>
-    <thead><tr><th>#</th><th>Product</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Amount</th></tr></thead>
-    <tbody>${rows}</tbody>
-    <tfoot>
-      <tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${formatRand(order.subtotal)}</td></tr>
-      ${discountRow}
-      <tr><td colspan="4" style="text-align:right">Shipping</td><td style="text-align:right">${formatRand(order.shippingPrice)}</td></tr>
-      <tr class="totals"><td colspan="4" style="text-align:right">TOTAL DUE</td><td style="text-align:right">${formatRand(order.total)}</td></tr>
-    </tfoot>
-  </table>
-  <p><strong>PAYMENT DETAILS</strong><br>
-  Bank: ${escapeHtml(settings.bankName || '')}<br>
-  Account Name: ${escapeHtml(settings.bankAccountName || '')}<br>
-  Account No: ${escapeHtml(settings.bankAccountNumber || '')}<br>
-  Branch Code: ${escapeHtml(settings.bankBranchCode || '')}<br>
-  Reference: ${escapeHtml(order.invoiceNumber || order.id)}</p>
-  <p class="muted">Thank you for your support.</p>
-</body></html>`;
-}
-
 function slugify(value) {
   return (
     String(value || '')
@@ -2327,9 +2336,12 @@ function slugify(value) {
   );
 }
 
-function normalizeItems(list) {
-  if (!Array.isArray(list)) return [];
-  return list.map((item, i) => ({
+// Single-item shape, shared by the bulk normalizeItems() below and the
+// per-item POST/PUT routes (so "Save item" on one GWM/Landrover/Toys/etc
+// row produces byte-identical output to what the old full-array
+// "Save product" always did -- no separate, driftable validation path).
+function normalizeItem(item, i) {
+  return {
     id: item.id || randomUUID(),
     name: item.name || `Item ${i + 1}`,
     details: item.details || '',
@@ -2368,7 +2380,12 @@ function normalizeItems(list) {
     // filter/pass this through; it was just never settable from the admin UI.
     listed: item.listed !== false,
     sortOrder: item.sortOrder ?? i,
-  }));
+  };
+}
+
+function normalizeItems(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((item, i) => normalizeItem(item, i));
 }
 
 function runGenerate() {

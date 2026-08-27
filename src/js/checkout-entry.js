@@ -379,13 +379,32 @@ async function init() {
     };
   }
 
+  function collectMissingFields() {
+    const missing = [];
+    form.querySelectorAll('[required]').forEach((input) => {
+      const ok = input.type === 'email' ? input.checkValidity() : String(input.value || '').trim() !== '';
+      if (ok) return;
+      const label = input.closest('label')?.querySelector('span')?.textContent?.replace(/\s*\*\s*$/, '').trim() || input.name;
+      missing.push(label);
+    });
+    return missing;
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const errorEl = document.getElementById('checkout-error');
+    const infoEl = document.getElementById('checkout-info');
     errorEl.classList.add('hidden');
+    infoEl.classList.add('hidden');
     if (!shippingReady) return;
 
-    if (!form.reportValidity()) return;
+    const missing = collectMissingFields();
+    if (missing.length) {
+      errorEl.textContent = `Please complete the following before placing your order: ${missing.join(', ')}.`;
+      errorEl.classList.remove('hidden');
+      form.reportValidity();
+      return;
+    }
     const client = buildClientPayload();
     const data = new FormData(form);
     const paymentMethod = data.get('paymentMethod');
@@ -398,7 +417,7 @@ async function init() {
       // single backend 'fixed' shipping method (see FIXED_BUCKETS below) --
       // the server only knows about 'fixed' plus a shippingOptionId.
       const backendShippingMethod = shippingMethod.startsWith('fixed') ? 'fixed' : shippingMethod;
-      const { order, redirect } = await api('/api/checkout', {
+      const { order, redirect, clientDataUpdated } = await api('/api/checkout', {
         method: 'POST',
         body: JSON.stringify({
           client,
@@ -408,6 +427,15 @@ async function init() {
           paymentMethod,
         }),
       });
+
+      // The client record matched an existing one (by email, or by name when
+      // the details submitted here no longer match what's on file) and got
+      // updated -- brief, non-blocking heads-up before moving on.
+      if (clientDataUpdated) {
+        infoEl.textContent = 'Updating Client Data…';
+        infoEl.classList.remove('hidden');
+        await new Promise((resolve) => setTimeout(resolve, 1200));
+      }
 
       if (paymentMethod === 'manual_eft' || paymentMethod === 'cash_on_collection') {
         clearCart();

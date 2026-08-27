@@ -961,6 +961,7 @@ function renderCategorySections(p) {
           <div class="row-card" data-item-index="${i}">
             <div class="row-card-actions">
               <strong>#${i + 1} ${escapeHtml(item.name || 'Untitled')}</strong>
+              <button class="btn small btn-primary" data-save-item type="button">Save item</button>
               <button class="btn small btn-danger" data-remove-item type="button">Remove</button>
             </div>
             <div class="row-card-actions">
@@ -1142,10 +1143,34 @@ function bindEditorEvents() {
       await saveOneColour(p, idx);
     });
   });
-  $$('[data-remove-item]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+  $$('[data-save-item]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
       syncNestedFromDom();
       const idx = Number(btn.closest('[data-item-index]').dataset.itemIndex);
+      await saveOneItem(p, idx);
+    });
+  });
+  $$('[data-remove-item]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      syncNestedFromDom();
+      const idx = Number(btn.closest('[data-item-index]').dataset.itemIndex);
+      const item = p.items[idx];
+      if (!item) return;
+      // Same reasoning as data-remove-colour: an already-saved item needs
+      // its own immediate DELETE (it isn't part of the bulk product
+      // payload's expectations any more now that items have their own
+      // save/delete endpoints); an item added via "+ Item" but never saved
+      // (_isNew) only exists client-side, so just drop it locally.
+      if (!item._isNew) {
+        if (!confirm(`Remove item “${item.name || 'Untitled'}”? This cannot be undone.`)) return;
+        try {
+          await api(`/api/products/${p.id}/items/${item.id}`, { method: 'DELETE' });
+          toast('Item removed');
+        } catch (ex) {
+          toast(ex.message);
+          return;
+        }
+      }
       p.items.splice(idx, 1);
       renderEditor();
     });
@@ -1363,15 +1388,66 @@ async function saveOneColour(p, idx) {
       stockQty: c.stockQty,
       notes: c.notes,
     });
+    let saveRes;
     if (c._isNew) {
-      await api(`/api/filaments/${filamentId}/colours`, { method: 'POST', body });
+      saveRes = await api(`/api/filaments/${filamentId}/colours`, { method: 'POST', body });
     } else {
-      await api(`/api/filaments/${filamentId}/colours/${c.id}`, { method: 'PUT', body });
+      saveRes = await api(`/api/filaments/${filamentId}/colours/${c.id}`, { method: 'PUT', body });
     }
-    toast('Roll saved');
+    toast(saveRes.publishWarning || 'Roll saved and published live');
     const { filament } = await api(`/api/filaments/${filamentId}`);
     state.draft = { ...filament, kind: 'filament' };
     state.editingId = filamentId;
+    renderEditor();
+  } catch (ex) {
+    toast(ex.message);
+  }
+}
+
+// Saves just one catalog item immediately, without needing the top-level
+// "Save product" -- same shape as saveOneColour above (POST if new, PUT if
+// existing). Applies to every category page's items (Toys/Homeware/Phones/
+// GWM/Landrover), so e.g. ticking a GWM item's "Fits models" boxes and
+// clicking "Save item" is enough on its own to reach the DB and republish.
+async function saveOneItem(p, idx) {
+  const item = p.items?.[idx];
+  if (!item) return;
+  try {
+    let productId = p.id;
+    if (p._isNew) {
+      const { _isNew, colours, items, ...payload } = p;
+      const res = await api('/api/products', { method: 'POST', body: JSON.stringify(payload) });
+      productId = res.product.id;
+      p.id = productId;
+      p._isNew = false;
+    }
+    const body = JSON.stringify({
+      name: item.name,
+      details: item.details,
+      material: item.material,
+      size: item.size,
+      finish: item.finish,
+      price: item.price,
+      sku: item.sku,
+      creator: item.creator,
+      models: item.models,
+      sourceUrl: item.sourceUrl,
+      weight: item.weight,
+      shippingWeight: item.shippingWeight,
+      stockQty: item.stockQty,
+      available: item.available,
+      listed: item.listed,
+    });
+    let saveRes;
+    if (item._isNew) {
+      saveRes = await api(`/api/products/${productId}/items`, { method: 'POST', body });
+    } else {
+      saveRes = await api(`/api/products/${productId}/items/${item.id}`, { method: 'PUT', body });
+    }
+    toast(saveRes.publishWarning || 'Item saved and published live');
+    const { product } = await api(`/api/products/${productId}`);
+    state.draft = { ...product, kind: 'category' };
+    state.editingId = productId;
     renderEditor();
   } catch (ex) {
     toast(ex.message);
@@ -3516,9 +3592,14 @@ async function renderNewOrder() {
         </div>
         ${order.clientMode === 'search' ? `
           ${order.selectedClient ? `
-            <div class="panel" style="padding:0.6rem 0.9rem;display:flex;justify-content:space-between;align-items:center">
-              <span><strong>${escapeHtml(order.selectedClient.name || order.selectedClient.email)}</strong> — ${escapeHtml(order.selectedClient.email)}${order.selectedClient.discountPct ? ` <span class="muted">(${escapeHtml(String(order.selectedClient.discountPct))}% discount)</span>` : ''}</span>
-              <button class="btn small btn-ghost" data-action="clear-client" type="button">Change</button>
+            <div class="panel" style="padding:0.6rem 0.9rem">
+              <div class="row-card-actions">
+                <strong>${escapeHtml(order.selectedClient.name || order.selectedClient.email)}${order.selectedClient.businessName ? ` (${escapeHtml(order.selectedClient.businessName)})` : ''}${order.selectedClient.discountPct ? ` <span class="muted">— ${escapeHtml(String(order.selectedClient.discountPct))}% discount</span>` : ''}</strong>
+                <button class="btn small btn-ghost" data-action="clear-client" type="button">Change</button>
+              </div>
+              <p class="muted" style="margin:0.4rem 0 0">${escapeHtml(order.selectedClient.email || '')}</p>
+              <p class="muted" style="margin:0.2rem 0 0">${escapeHtml(order.selectedClient.phone || 'No phone on file')}</p>
+              <p class="muted" style="margin:0.2rem 0 0">${escapeHtml([order.selectedClient.street, order.selectedClient.suburb, order.selectedClient.city, order.selectedClient.province, order.selectedClient.postalCode].filter(Boolean).join(', ') || 'No shipping address on file')}</p>
             </div>` : `
             <input id="no-client-q" type="search" placeholder="Search name, email, client code…" value="${escapeAttr(order.clientQuery)}" />
             <div class="stack gap-2">${clientResultsHtml}</div>`}
@@ -3695,8 +3776,8 @@ async function renderNewOrder() {
     }
 
     try {
-      const { order: created } = await api('/api/orders', { method: 'POST', body: JSON.stringify(payload) });
-      toast(`Order created — ${created.invoiceNumber}`);
+      const { order: created, clientDataUpdated } = await api('/api/orders', { method: 'POST', body: JSON.stringify(payload) });
+      toast(clientDataUpdated ? 'Updating Client Data…' : `Order created — ${created.invoiceNumber}`);
       state.newOrder = blankNewOrder();
       openOrderDetail(created.id);
     } catch (ex) {

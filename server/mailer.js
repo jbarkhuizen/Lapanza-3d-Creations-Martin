@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { getSettings } from './settings.js';
 import { formatRand } from './money.js';
+import { renderInvoiceHtml } from './invoice.js';
 
 const FROM_ADDRESS = process.env.GMAIL_USER || 'lapanzaonline@gmail.com';
 
@@ -76,6 +77,26 @@ export async function sendOrderConfirmationEmail(order) {
     to: order.client.email,
     subject: `Lapanza 3D — Order confirmation ${order.id.slice(0, 8)}`,
     text: buildOrderEmailBody(order),
+  });
+}
+
+// Sends the real numbered invoice (server/invoice.js's renderInvoiceHtml,
+// the same template the admin's "Print invoice" route uses) as the email
+// body -- called once at order placement (any payment method, `paid:
+// false`) and again with `paid: true` once Payfast's ITN confirms COMPLETE,
+// so the customer gets a proper invoice up front and a distinct "paid in
+// full" one once money has actually moved, rather than just the plain-text
+// order-confirmation email above.
+export async function sendInvoiceEmail(order, { paid = false } = {}) {
+  if (!order.client?.email) throw new Error('Order has no client email');
+  const subject = paid
+    ? `Lapanza 3D — Payment received, Invoice ${order.invoiceNumber || order.id.slice(0, 8)} (Paid in Full)`
+    : `Lapanza 3D — Invoice ${order.invoiceNumber || order.id.slice(0, 8)}`;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: order.client.email,
+    subject,
+    html: renderInvoiceHtml(order, getSettings(), { paid }),
   });
 }
 

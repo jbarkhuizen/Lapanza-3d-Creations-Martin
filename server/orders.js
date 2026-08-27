@@ -235,8 +235,10 @@ export function createOrder(
   const shippingPrice = shippingOption?.price || 0;
   const total = subtotal + shippingPrice;
 
+  let clientDataUpdated = false;
   const tx = db.transaction(() => {
     const client = findOrCreateClientForCheckout(clientData, db);
+    clientDataUpdated = Boolean(client._dataUpdated);
     const orderId = randomUUID();
     const invoiceNumber = nextInvoiceNumber(db);
     const now = new Date().toISOString();
@@ -283,6 +285,7 @@ export function createOrder(
   const { orderId, lowStock } = tx();
   const order = getOrder(orderId, db);
   order._lowStock = lowStock;
+  order._clientDataUpdated = clientDataUpdated;
   return order;
 }
 
@@ -350,9 +353,11 @@ export function createManualOrder(
   const discountAmount = Math.round(subtotal * (discountPctClamped / 100));
   const total = Math.max(0, subtotal - discountAmount + shippingPrice);
 
+  let clientDataUpdated = false;
   const tx = db.transaction(() => {
     const client = clientId ? getClient(clientId, db) : findOrCreateClientForCheckout(clientData, db);
     if (!client) throw new Error('Client not found');
+    clientDataUpdated = Boolean(client._dataUpdated);
     const orderId = randomUUID();
     const invoiceNumber = nextInvoiceNumber(db);
     const now = new Date().toISOString();
@@ -409,6 +414,7 @@ export function createManualOrder(
   const { orderId, lowStock } = tx();
   const order = getOrder(orderId, db);
   order._lowStock = lowStock;
+  order._clientDataUpdated = clientDataUpdated;
   return order;
 }
 
