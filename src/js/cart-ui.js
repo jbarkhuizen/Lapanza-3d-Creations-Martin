@@ -16,7 +16,7 @@ function lineItemHtml(item) {
   const name = escapeHtml(item.name);
   const image = escapeHtml(item.image);
   const img = item.image
-    ? `<img src="${image}" alt="${name}" class="w-16 h-16 object-cover rounded-sm border border-charcoal/10 shrink-0" loading="lazy">`
+    ? `<img src="${image}" alt="${name}" class="w-16 h-16 object-cover rounded-sm border border-charcoal/10 shrink-0" loading="lazy" onerror="this.style.display='none'">`
     : `<div class="w-16 h-16 rounded-sm border border-charcoal/10 bg-gradient-to-br from-linen to-cream shrink-0"></div>`;
   return `
     <li class="flex gap-3 py-4 border-b border-charcoal/10" data-cart-line data-product-id="${escapeHtml(item.productId)}">

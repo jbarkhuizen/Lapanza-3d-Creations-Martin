@@ -231,6 +231,29 @@ function addToCartButton({ productId, name, price, image, weight, extraClass = '
             data-image="${escapeAttr(image || '')}">Add to Cart</button>`;
 }
 
+// Found 2026-08-27: 106 of 107 filament colours in the live DB carry an
+// `imageUrl` pointing at a file that was never actually uploaded (a bulk
+// catalog import on 2026-08-17 seeded the expected filename as metadata
+// without the binary ever landing in public/uploads/filaments -- confirmed
+// missing on both the VPS and local dev, not a deletion). Truthiness alone
+// was enough to render a broken <img> instead of the "Photo coming soon"
+// placeholder that already exists for a colour with no imageUrl at all --
+// this closes that gap by checking the file is actually there before
+// trusting the reference, so a stale/broken path degrades the same way a
+// genuinely absent one always has.
+function imageFileExists(url) {
+  if (!url) return false;
+  // Category items can still carry a plain external URL from before the
+  // upload feature existed -- only a local /uploads/... path is ours to
+  // verify; trust an http(s) URL as-is (no network call at build time).
+  if (/^https?:\/\//i.test(url)) return true;
+  try {
+    return fs.existsSync(path.join(root, 'public', url));
+  } catch {
+    return false;
+  }
+}
+
 function stockMessage(stockQty) {
   const qty = Number(stockQty) || 0;
   if (qty <= 0) return { label: 'Out of stock', className: 'text-terracotta font-semibold' };
@@ -246,7 +269,7 @@ function colourCards(colours, filament) {
       const stock = stockMessage(c.stockQty);
       return `<div class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
                   ${
-                    c.imageUrl
+                    imageFileExists(c.imageUrl)
                       ? `<img src="${c.imageUrl}" alt="${c.name}" class="w-full aspect-square object-cover rounded-sm mb-3" loading="lazy">`
                       : `<div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>`
                   }
@@ -286,7 +309,7 @@ function catalogueItems(label, items, categorySlug) {
   return list
     .map((item, i) => {
       const meta = [item.material, item.size, item.finish].filter(Boolean).join(' · ');
-      const img = item.imageUrl
+      const img = imageFileExists(item.imageUrl)
         ? `<img src="${item.imageUrl}" alt="${item.name}" class="w-full h-full object-cover" loading="lazy">`
         : `<span class="text-espresso/35 text-xs uppercase tracking-[0.2em]">Photo coming soon</span>`;
       const name = item.name || `${label} piece`;

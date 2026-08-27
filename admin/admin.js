@@ -849,7 +849,7 @@ function renderFilamentSections(p) {
             <div class="row-card-actions">
               <div class="flex items-center gap-3">
                 ${c.imagePath
-                  ? `<img src="${escapeAttr(c.imagePath)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" />`
+                  ? `<img src="${escapeAttr(c.imagePath)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" onerror="this.style.display='none'" />`
                   : `<div class="swatch-preview" style="background:${escapeAttr(c.hex || guessHex(c.name))}"></div>`}
                 ${c._isNew
                   ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'
@@ -916,7 +916,7 @@ function renderCategorySections(p) {
             <div class="row-card-actions">
               <div class="flex items-center gap-3">
                 ${item.imageUrl
-                  ? `<img src="${escapeAttr(item.imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" />`
+                  ? `<img src="${escapeAttr(item.imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" onerror="this.style.display='none'" />`
                   : '<span class="muted" style="font-size:0.78rem">No photo</span>'}
                 ${item._isNew
                   ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'

@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
@@ -9,10 +8,12 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
-test('generate-pages renders an <img> for a colour with imageUrl, placeholder text otherwise', () => {
+test('generate-pages renders an <img> for a colour whose imageUrl file actually exists, "Photo coming soon" for one with no imageUrl at all', () => {
   const filamentsPath = path.join(root, 'src', 'data', 'filaments.json');
   const backup = fs.readFileSync(filamentsPath, 'utf8');
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'genpages-test-'));
+  const fixtureImagePath = path.join(root, 'public', 'uploads', 'filaments', 'genpages-test-fixture.jpg');
+  fs.mkdirSync(path.dirname(fixtureImagePath), { recursive: true });
+  fs.writeFileSync(fixtureImagePath, 'fake-jpeg-bytes');
 
   try {
     fs.writeFileSync(
@@ -24,7 +25,7 @@ test('generate-pages renders an <img> for a colour with imageUrl, placeholder te
           description: 'A test filament',
           specs: [],
           colours: [
-            { name: 'With Photo', sku: 'SKU-1', price: 'R299', imageUrl: '/uploads/filaments/white.jpg' },
+            { name: 'With Photo', sku: 'SKU-1', price: 'R299', imageUrl: '/uploads/filaments/genpages-test-fixture.jpg' },
             { name: 'No Photo', sku: 'SKU-2', price: 'R299' },
           ],
         },
@@ -34,12 +35,70 @@ test('generate-pages renders an <img> for a colour with imageUrl, placeholder te
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
 
     const html = fs.readFileSync(path.join(root, 'filament', 'test-pla.html'), 'utf8');
-    assert.match(html, /<img src="\/uploads\/filaments\/white\.jpg"/);
+    assert.match(html, /<img src="\/uploads\/filaments\/genpages-test-fixture\.jpg"/);
+    assert.match(html, /Photo coming soon/);
+  } finally {
+    fs.writeFileSync(filamentsPath, backup);
+    fs.rmSync(fixtureImagePath, { force: true });
+    fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+  }
+});
+
+test('generate-pages falls back to "Photo coming soon" when imageUrl is set but the file does not exist on disk', () => {
+  // Regression test for a real production bug (2026-08-27): 106 of 107
+  // filament colours had an imageUrl pointing at a file that was never
+  // actually uploaded (seeded as metadata by a bulk catalog import,
+  // without the binary). Truthiness of imageUrl alone used to be enough to
+  // render a broken <img> instead of ever falling back to this placeholder.
+  const filamentsPath = path.join(root, 'src', 'data', 'filaments.json');
+  const backup = fs.readFileSync(filamentsPath, 'utf8');
+
+  try {
+    fs.writeFileSync(
+      filamentsPath,
+      JSON.stringify([
+        {
+          slug: 'test-pla',
+          name: 'Test PLA',
+          description: 'A test filament',
+          specs: [],
+          colours: [{ name: 'Ghost Photo', sku: 'SKU-1', price: 'R299', imageUrl: '/uploads/filaments/does-not-exist-on-disk.jpg' }],
+        },
+      ]),
+    );
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    const html = fs.readFileSync(path.join(root, 'filament', 'test-pla.html'), 'utf8');
+    assert.doesNotMatch(html, /<img src="\/uploads\/filaments\/does-not-exist-on-disk\.jpg"/);
     assert.match(html, /Photo coming soon/);
   } finally {
     fs.writeFileSync(filamentsPath, backup);
     fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('generate-pages trusts an external http(s) imageUrl on a category item without checking the local filesystem', () => {
+  const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
+  const backup = fs.readFileSync(categoriesPath, 'utf8');
+
+  try {
+    const categories = JSON.parse(backup);
+    categories.toys = {
+      name: 'Toys',
+      description: 'Test',
+      crumbs: 'Home / Toys',
+      items: [{ name: 'External Photo Item', imageUrl: 'https://example.com/photo.jpg', price: 'R100', available: true, listed: true }],
+    };
+    fs.writeFileSync(categoriesPath, JSON.stringify(categories));
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    const html = fs.readFileSync(path.join(root, 'toys.html'), 'utf8');
+    assert.match(html, /<img src="https:\/\/example\.com\/photo\.jpg"/);
+  } finally {
+    fs.writeFileSync(categoriesPath, backup);
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
   }
 });
 
