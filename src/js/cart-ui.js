@@ -54,6 +54,7 @@ export function mountCartUI() {
       </div>
       <ul id="cart-lines" class="flex-1 overflow-y-auto px-6"></ul>
       <p id="cart-empty" class="hidden px-6 py-10 text-center text-sm text-espresso/50">Your cart is empty.</p>
+      <p id="cart-delivery-note" class="px-6 pt-4 text-xs text-espresso/55 leading-relaxed">Ready-stock filament dispatches in 1-2 business days; custom prints need 3-5 business days production. Nationwide via PUDO, or Local Delivery in Centurion.</p>
       <div class="px-6 py-5 border-t border-charcoal/10">
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-semibold uppercase tracking-wide">Total</span>
@@ -76,6 +77,7 @@ export function mountCartUI() {
   const drawer = document.getElementById('cart-drawer');
   const linesEl = document.getElementById('cart-lines');
   const emptyEl = document.getElementById('cart-empty');
+  const deliveryNoteEl = document.getElementById('cart-delivery-note');
   const totalEl = document.getElementById('cart-total');
   const toast = document.getElementById('cart-toast');
 
@@ -84,6 +86,24 @@ export function mountCartUI() {
 
   gsap.set(drawer, { xPercent: 100 });
 
+  // SITE-010: static copy already baked into the drawer markup above
+  // matches the real business defaults, so the drawer never shows a
+  // blank/loading state -- this just overwrites it if the admin-editable
+  // values have since changed. Same fetch-and-fall-back-silently pattern
+  // as hydrateHomeTiles() in site.js.
+  (async () => {
+    try {
+      const res = await fetch('/site-settings.json', { cache: 'no-store' });
+      if (!res.ok) return;
+      const settings = await res.json();
+      const dispatch = settings.filamentDispatchDays || '1-2';
+      const leadTime = settings.printLeadTimeDays || '3-5';
+      deliveryNoteEl.textContent = `Ready-stock filament dispatches in ${dispatch} business days; custom prints need ${leadTime} business days production. Nationwide via PUDO, or Local Delivery in Centurion.`;
+    } catch {
+      /* keep the static copy already in the HTML */
+    }
+  })();
+
   function render() {
     const items = getCart();
     const count = getCartCount();
@@ -91,6 +111,7 @@ export function mountCartUI() {
     badge.classList.toggle('hidden', count === 0);
     linesEl.innerHTML = items.map(lineItemHtml).join('');
     emptyEl.classList.toggle('hidden', items.length > 0);
+    deliveryNoteEl.classList.toggle('hidden', items.length === 0);
     totalEl.textContent = formatPrice(getCartTotal());
   }
 

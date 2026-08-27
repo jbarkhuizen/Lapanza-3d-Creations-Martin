@@ -1887,6 +1887,8 @@ app.put('/api/settings', requireAuth, (req, res) => {
     'orderNotificationEmail',
     // SITE-027
     'lowStockThreshold',
+    // SITE-010
+    'printLeadTimeDays', 'filamentDispatchDays',
   ];
   const patch = {};
   for (const key of allowed) {

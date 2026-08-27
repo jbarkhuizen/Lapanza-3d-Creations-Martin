@@ -75,6 +75,13 @@ export const DEFAULT_SETTINGS = {
   // Distinct from LOW_STOCK_ALERT_EMAIL's owner-notification threshold
   // (hardcoded at <=1 in orders.js) -- this one is customer-facing copy.
   lowStockThreshold: 3,
+
+  // SITE-010: real figures from the business owner (2026-08-27), not
+  // invented -- shown on filament/category pages (generate-pages.mjs) and
+  // in the cart (cart-ui.js, via /site-settings.json). Free-text strings
+  // ("3-5", not a number) since these are ranges, not exact day counts.
+  printLeadTimeDays: '3-5',
+  filamentDispatchDays: '1-2',
 };
 
 export function findFont(id) {

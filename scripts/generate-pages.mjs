@@ -19,12 +19,34 @@ const categories = JSON.parse(fs.readFileSync(path.join(root, 'src/data/categori
 // settings.json yet (or the unit test below, which never writes one)
 // still generates valid pages.
 let LOW_STOCK_THRESHOLD = 3;
+// SITE-010: same reasoning as the threshold above -- real figures from the
+// business owner, admin-editable, read from the synced JSON since this
+// script has no DB access. Defaults here must match settings-defaults.js.
+let PRINT_LEAD_TIME_DAYS = '3-5';
+let FILAMENT_DISPATCH_DAYS = '1-2';
 try {
   const settings = JSON.parse(fs.readFileSync(path.join(root, 'src/data/settings.json'), 'utf8'));
   const configured = Number(settings.lowStockThreshold);
   if (Number.isFinite(configured) && configured > 0) LOW_STOCK_THRESHOLD = configured;
+  if (settings.printLeadTimeDays) PRINT_LEAD_TIME_DAYS = settings.printLeadTimeDays;
+  if (settings.filamentDispatchDays) FILAMENT_DISPATCH_DAYS = settings.filamentDispatchDays;
 } catch {
-  /* settings.json not synced yet -- use the default above */
+  /* settings.json not synced yet -- use the defaults above */
+}
+
+// SITE-010: distinguishes ready-stock filament (real stockQty, dispatches
+// fast) from made-to-order printed products (toys/homeware/phones/car
+// parts -- no stock concept, always printed on demand) so shoppers don't
+// expect filament-speed turnaround on a custom print, or vice versa.
+function deliveryNote(kind) {
+  const dispatch =
+    kind === 'filament'
+      ? `Ready stock — dispatched within ${FILAMENT_DISPATCH_DAYS} business days of payment.`
+      : `Made to order — please allow ${PRINT_LEAD_TIME_DAYS} business days for production before dispatch.`;
+  return `<div class="flex items-start gap-2.5 rounded-sm border border-charcoal/10 bg-linen/60 p-4 text-sm text-espresso/70 mb-8">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="shrink-0 mt-0.5"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    <span>${dispatch} PUDO Locker ships nationwide across South Africa; Local Delivery covers the Centurion area — see Shipping Options at checkout for exact zones and pricing.</span>
+  </div>`;
 }
 
 const SITE = {
@@ -371,6 +393,7 @@ ${shellStart({ depth: 1 })}
            class="text-[0.65rem] font-bold uppercase tracking-[0.18em] border-2 border-charcoal rounded-full px-4 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">Order / enquire</a>
       </div>
       <p class="text-espresso/75 leading-relaxed max-w-2xl mb-12 text-lg">${f.description}</p>
+      ${deliveryNote('filament')}
       ${specsBlock(f.specs)}
       ${colours}
       <div class="mt-14 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth: 1 })}</div>
@@ -403,7 +426,8 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
   const body =
     kind === 'story'
       ? null
-      : `<div class="grid grid-cols-2 md:grid-cols-3 gap-5">${catalogueItems(name, items, slug)}</div>
+      : `${deliveryNote('made-to-order')}
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-5">${catalogueItems(name, items, slug)}</div>
       <div class="mt-14 p-7 md:p-8 bg-linen border-2 border-charcoal/10 rounded-sm brutal">
         <p class="eyebrow mb-3">Custom request</p>
         <p class="font-serif text-2xl mb-3 tracking-tight">Need something specific?</p>

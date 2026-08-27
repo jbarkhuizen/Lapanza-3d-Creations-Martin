@@ -2147,9 +2147,14 @@ async function renderSettings() {
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Storefront stock messaging</h3></div>
+        <div class="section-head"><h3>Storefront stock &amp; delivery messaging</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
         <label class="field" style="max-width:220px"><span>Low-stock threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
+        <div class="grid-2">
+          <label class="field"><span>Ready-stock filament dispatch (business days)</span><input data-setting="filamentDispatchDays" value="${escapeAttr(s.filamentDispatchDays || '')}" /></label>
+          <label class="field"><span>Custom-print production lead time (business days)</span><input data-setting="printLeadTimeDays" value="${escapeAttr(s.printLeadTimeDays || '')}" /></label>
+        </div>
       </div>
 
       <div class="panel stack gap-3">
