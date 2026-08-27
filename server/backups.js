@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { getDb } from './db.js';
-import { backupsDir } from './paths.js';
+import { backupsDir, uploadsDir } from './paths.js';
 
 function ensureBackupsDir() {
   const dir = backupsDir();
@@ -98,10 +98,41 @@ export function pruneOldBackups(keep = 30) {
 // index.js's process.loadEnvFile('.env') call runs (imports execute before
 // the rest of that file's top-level code). Same reason mailer.js/payfast.js
 // read their env vars lazily inside functions instead of module constants.
-export function syncOffsite({ remote = process.env.BACKUP_RCLONE_REMOTE, dir = backupsDir(), run = execFileSync } = {}) {
+// Appends an "uploads" subfolder onto whatever the DB backups remote is --
+// same rclone remote/config, just a sibling destination, so there's no
+// separate BACKUP_RCLONE_REMOTE-style env var to configure for this.
+function uploadsRemoteFor(remote) {
+  return remote.endsWith('/') || remote.endsWith(':') ? `${remote}uploads` : `${remote}/uploads`;
+}
+
+// closes backlog #132: public/uploads/ (filament colour photos, category
+// item photos, design-request/print-job/3D-resource uploads) is real,
+// manually-created business content with no local rotation of its own --
+// unlike data/backups/ above, there was previously NO copy of it anywhere
+// but this one disk. Discovered the hard way on 2026-08-27 when an AI
+// assistant's own `git stash -u` + drop destroyed 106 filament colour
+// photos, recoverable only by luck (a dangling git object that hadn't
+// been garbage-collected yet, not any actual backup).
+//
+// Deliberately `copy`, never `sync`, and deliberately a SEPARATE try/catch
+// from the DB sync above: `sync` makes the destination exactly match the
+// source, including deletions -- for the DB backups dir that's correct
+// (mirrors pruneOldBackups' own deliberate deletions), but for uploads it
+// would silently propagate an accidental local deletion (this exact
+// incident) to the offsite copy too, defeating the entire point. `copy`
+// only ever adds/updates, so a file removed locally stays safe offsite
+// until someone explicitly removes it there as well. A failure here must
+// never be reported as "the backup failed" when the DB sync above (what
+// every existing caller already depends on) already succeeded.
+export function syncOffsite({ remote = process.env.BACKUP_RCLONE_REMOTE, dir = backupsDir(), uploads = uploadsDir(), run = execFileSync } = {}) {
   if (!remote) {
     throw new Error('BACKUP_RCLONE_REMOTE is not set — off-server backup sync is disabled. See docs/DEPLOY.md.');
   }
   run('rclone', ['sync', dir, remote]);
+  try {
+    run('rclone', ['copy', uploads, uploadsRemoteFor(remote)]);
+  } catch (err) {
+    console.error('Offsite uploads copy failed (DB backup sync above still succeeded):', err.message);
+  }
   return true;
 }

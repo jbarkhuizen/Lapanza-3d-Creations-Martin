@@ -176,6 +176,21 @@ after it's created and pruned locally -- no further action needed. If the
 VPS is ever lost, the backups are sitting in that Drive folder, not on the
 dead disk.
 
+**`public/uploads/` (filament colour photos, category item photos, design-
+request/print-job/3D-resource uploads) rides along on the same sync,
+automatically** -- to a sibling `uploads` folder under the same remote, no
+separate setup. This closes a real gap found the hard way on 2026-08-27:
+uploads are genuine, manually-created business content with no rotation of
+their own, and had never been backed up anywhere before -- only the SQLite
+DB was. Deliberately uses `rclone copy` (add/update only) rather than
+`sync` for this one: `sync` makes the destination match the source
+exactly, including deletions, which for the DB backups directory is
+correct (mirrors `pruneOldBackups()`'s own deliberate pruning) but for
+uploads would silently propagate an accidental local deletion to the
+offsite copy too -- exactly the failure mode this exists to prevent. A
+file removed locally therefore stays safe offsite until someone explicitly
+deletes it there as well.
+
 ## 10. Restoring from a backup
 
 Backups (§9, `data/backups/*.db`) had never actually been restored before

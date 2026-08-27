@@ -108,29 +108,59 @@ test('syncOffsite throws a clear error when no remote is configured', () => {
   assert.throws(() => syncOffsite({ remote: undefined }), /BACKUP_RCLONE_REMOTE is not set/);
 });
 
-test('syncOffsite shells out to rclone sync with the backups dir and configured remote', async () => {
+test('syncOffsite shells out to rclone sync with the backups dir and configured remote, then rclone copy for uploads', async () => {
   await withTempBackupsDir(async (dir) => {
     const calls = [];
-    const result = syncOffsite({ remote: 'gdrive:', dir, run: (cmd, args) => calls.push({ cmd, args }) });
+    const result = syncOffsite({ remote: 'gdrive:', dir, uploads: '/tmp/uploads', run: (cmd, args) => calls.push({ cmd, args }) });
     assert.strictEqual(result, true);
-    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls.length, 2);
     assert.strictEqual(calls[0].cmd, 'rclone');
     assert.deepStrictEqual(calls[0].args, ['sync', dir, 'gdrive:']);
+    assert.strictEqual(calls[1].cmd, 'rclone');
+    assert.deepStrictEqual(calls[1].args, ['copy', '/tmp/uploads', 'gdrive:uploads']);
   });
 });
 
-test('syncOffsite propagates a failure from the underlying rclone call', async () => {
+test('syncOffsite appends "uploads" onto a remote that already has a trailing path segment', async () => {
   await withTempBackupsDir(async (dir) => {
+    const calls = [];
+    syncOffsite({ remote: 'gdrive:backups', dir, uploads: '/tmp/uploads', run: (cmd, args) => calls.push({ cmd, args }) });
+    assert.deepStrictEqual(calls[1].args, ['copy', '/tmp/uploads', 'gdrive:backups/uploads']);
+  });
+});
+
+test('syncOffsite propagates a failure from the underlying rclone sync call (uploads copy never attempted)', async () => {
+  await withTempBackupsDir(async (dir) => {
+    const calls = [];
     assert.throws(
       () =>
         syncOffsite({
           remote: 'gdrive:',
           dir,
-          run: () => {
+          run: (cmd, args) => {
+            calls.push(args);
             throw new Error('rclone: didn\'t find section in config file');
           },
         }),
       /didn't find section/,
     );
+    assert.strictEqual(calls.length, 1, 'the DB sync call, and only that one, should have been attempted');
+  });
+});
+
+test('syncOffsite does not propagate a failure from the uploads copy -- the DB backup sync already succeeded', async () => {
+  await withTempBackupsDir(async (dir) => {
+    const calls = [];
+    const result = syncOffsite({
+      remote: 'gdrive:',
+      dir,
+      uploads: '/tmp/uploads',
+      run: (cmd, args) => {
+        calls.push(args);
+        if (args[0] === 'copy') throw new Error('rclone: uploads copy failed');
+      },
+    });
+    assert.strictEqual(result, true, 'a failed uploads copy must not make the whole call throw');
+    assert.strictEqual(calls.length, 2, 'both the sync and the copy should still have been attempted');
   });
 });
