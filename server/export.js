@@ -45,6 +45,7 @@ function resolveFeaturedProducts(refs, filaments, categories) {
           productId: r.productId,
           name: `${filament.name} — ${colour.name}`,
           price: colour.price,
+          image: colour.imageUrl || '',
           href: `${filamentPagePath(slug)}#${itemAnchorId(colour.sku, colour.name)}`,
         };
       }
@@ -58,6 +59,7 @@ function resolveFeaturedProducts(refs, filaments, categories) {
           productId: r.productId,
           name: item.name,
           price: formatItemPrice(item.price),
+          image: item.imageUrl || '',
           href: `${categoryPagePath(slug)}#${itemAnchorId(item.sku, item.name)}`,
         };
       }

@@ -115,7 +115,7 @@ test('syncPublicJson resolves featuredProducts (filament + category) fresh from 
     paths.catalogJsonPath,
     JSON.stringify({
       products: [
-        { kind: 'category', slug: 'toys', name: 'Toys', items: [{ id: 'i1', sku: 'UNO', name: 'Uno Box', price: '150' }] },
+        { kind: 'category', slug: 'toys', name: 'Toys', items: [{ id: 'i1', sku: 'UNO', name: 'Uno Box', price: '150', imageUrl: '/uploads/category-items/uno.jpg' }] },
       ],
     }),
   );
@@ -139,10 +139,12 @@ test('syncPublicJson resolves featuredProducts (filament + category) fresh from 
   assert.strictEqual(filamentEntry.name, 'PLA — White');
   assert.strictEqual(filamentEntry.price, 'R 299.00');
   assert.strictEqual(filamentEntry.href, `filament/${f.slug}.html#item-sku-1`);
+  assert.strictEqual(filamentEntry.image, ''); // no photo uploaded for this colour -- empty string, not undefined
   const categoryEntry = settings.featuredProducts.find((p) => p.productId.startsWith('category:'));
   assert.strictEqual(categoryEntry.name, 'Uno Box');
   assert.strictEqual(categoryEntry.price, 'R 150.00');
   assert.strictEqual(categoryEntry.href, 'toys.html#item-uno');
+  assert.strictEqual(categoryEntry.image, '/uploads/category-items/uno.jpg');
 
   Object.values(paths).forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
   db.close();

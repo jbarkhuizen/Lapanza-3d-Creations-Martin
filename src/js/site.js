@@ -34,15 +34,57 @@ async function hydrateHomeTiles() {
   }
 }
 
-/** Homepage "Featured" section -- settings.featuredProducts arrives already
- *  resolved (name/price/href) by server/export.js's syncPublicJson(), fresh
- *  on every publish, so this is pure rendering, no lookup of its own. Built
- *  with DOM methods rather than innerHTML since product names come from
- *  admin-picked catalog data, not hand-authored copy. */
+/** Hero "Featured" products -- 2 flanking the hero text on each side
+ *  (desktop) / two rows below it (mobile). settings.featuredProducts
+ *  arrives already resolved (name/price/image/href) by server/export.js's
+ *  syncPublicJson(), fresh on every publish, so this is pure rendering, no
+ *  lookup of its own. Built with DOM methods rather than innerHTML since
+ *  product names come from admin-picked catalog data, not hand-authored
+ *  copy. */
+function featuredProductCard(item) {
+  const link = document.createElement('a');
+  link.href = item.href;
+  link.className =
+    'featured-product group flex items-center gap-3 md:flex-col md:items-stretch md:text-center bg-cream/85 backdrop-blur-sm border-2 border-charcoal/15 rounded-sm p-2.5 hover:border-terracotta transition-colors w-full';
+
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'w-14 h-14 md:w-full md:aspect-square shrink-0 rounded-sm overflow-hidden bg-linen flex items-center justify-center';
+  if (item.image) {
+    const img = document.createElement('img');
+    img.src = item.image;
+    img.alt = item.name;
+    img.loading = 'lazy';
+    img.className = 'w-full h-full object-cover';
+    // A stale reference (item deleted/replaced since the photo was set)
+    // shouldn't show a broken-image icon -- same onerror fallback pattern
+    // used for cart line items and admin thumbnails elsewhere on the site.
+    img.onerror = () => {
+      img.remove();
+      imgWrap.textContent = '';
+    };
+    imgWrap.appendChild(img);
+  }
+
+  const text = document.createElement('div');
+  text.className = 'min-w-0 text-left md:text-center';
+
+  const name = document.createElement('p');
+  name.className = 'text-xs md:text-sm font-medium leading-tight truncate md:whitespace-normal md:line-clamp-2 group-hover:text-terracotta transition-colors';
+  name.textContent = item.name;
+
+  const price = document.createElement('p');
+  price.className = 'text-terracotta font-semibold text-xs md:text-sm';
+  price.textContent = item.price;
+
+  text.append(name, price);
+  link.append(imgWrap, text);
+  return link;
+}
+
 async function hydrateFeaturedProducts() {
-  const container = document.getElementById('featured-products');
-  const section = document.getElementById('featured-products-section');
-  if (!container || !section) return;
+  const left = document.getElementById('featured-products-left');
+  const right = document.getElementById('featured-products-right');
+  if (!left || !right) return;
   try {
     const res = await fetch('/site-settings.json', { cache: 'no-store' });
     if (!res.ok) return;
@@ -50,26 +92,17 @@ async function hydrateFeaturedProducts() {
     const items = Array.isArray(settings.featuredProducts) ? settings.featuredProducts : [];
     if (!items.length) return;
 
-    items.forEach((item) => {
-      const link = document.createElement('a');
-      link.href = item.href;
-      link.className = 'featured-product group block border border-charcoal/10 rounded-sm p-4 hover:border-terracotta transition-colors';
+    // Split evenly across the two flanking columns -- first half left,
+    // second half right, whatever the count (not hardcoded to 4), so 5 or 6
+    // picks still degrade sensibly instead of piling onto one side.
+    const mid = Math.ceil(items.length / 2);
+    items.slice(0, mid).forEach((item) => left.appendChild(featuredProductCard(item)));
+    items.slice(mid).forEach((item) => right.appendChild(featuredProductCard(item)));
 
-      const name = document.createElement('p');
-      name.className = 'font-medium mb-1 tracking-tight group-hover:text-terracotta transition-colors';
-      name.textContent = item.name;
-
-      const price = document.createElement('p');
-      price.className = 'text-terracotta font-semibold';
-      price.textContent = item.price;
-
-      link.append(name, price);
-      container.appendChild(link);
-    });
-
-    section.classList.remove('hidden');
+    left.classList.remove('hidden');
+    right.classList.remove('hidden');
   } catch {
-    /* section stays hidden -- no partial/broken state shown */
+    /* columns stay hidden -- no partial/broken state shown */
   }
 }
 
