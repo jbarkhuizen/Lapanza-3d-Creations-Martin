@@ -294,6 +294,21 @@ code {
 }
 .release-commit summary { cursor: pointer; }
 .release-commit .muted { margin: 0.5rem 0 0; }
+.stock-section > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-soft);
+  list-style: none;
+}
+.stock-section > summary::-webkit-details-marker { display: none; }
+.stock-section > summary::before { content: '▸ '; }
+.stock-section[open] > summary::before { content: '▾ '; }
+.stock-section > summary .muted { font-weight: 400; }
+.stock-section-parent { padding-left: 0; }
+.stock-section-parent > .stock-section { margin: 0.6rem 0 0 1.25rem; }
 .documentation-list { display: grid; gap: 0.75rem; }
 .documentation-card {
   display: flex; justify-content: space-between; gap: 1rem; align-items: center;

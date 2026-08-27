@@ -4574,31 +4574,42 @@ async function renderShipping() {
 
 // ---- Stock management (unified bulk-edit grid) ----
 
-async function renderStock() {
-  state.stockQ = state.stockQ || '';
-  state.stockEdits = state.stockEdits || {}; // id -> { stockQty?, price? }
-  const { items } = await api('/api/inventory');
-  state.stockItems = items;
+// Fixed section order for the grouped view -- Car Parts is a UI grouping
+// only (no inventory row's own `category` is ever literally "Car Parts";
+// GWM/Landrover items carry their own product name as category, same as
+// Toys/Phones/Homeware do), so it nests two child sections instead of
+// matching directly. Anything whose category doesn't match any of these
+// (a future new catalog category, added without an admin.js update) falls
+// into a trailing "Other" catch-all appended at render time rather than
+// silently vanishing from the page.
+const STOCK_GROUP_DEFS = [
+  { key: 'filament', label: 'Filament', match: (cat) => cat === 'Filament' },
+  { key: 'toys', label: 'Toys', match: (cat) => cat === 'Toys' },
+  { key: 'phones', label: 'Phones', match: (cat) => cat === 'Phones' },
+  { key: 'homeware', label: 'Homeware', match: (cat) => cat === 'Homeware' },
+  {
+    key: 'car-parts',
+    label: 'Car Parts',
+    children: [
+      { key: 'car-parts-gwm', label: 'GWM', match: (cat) => cat === 'GWM' },
+      { key: 'car-parts-landrover', label: 'Landrover', match: (cat) => cat === 'Landrover' },
+    ],
+  },
+];
 
-  const needle = state.stockQ.trim().toLowerCase();
-  const filtered = needle
-    ? items.filter((i) => [i.sku, i.name, i.category].filter(Boolean).some((v) => v.toLowerCase().includes(needle)))
-    : items;
-
-  const rows = filtered
-    .map((item) => {
-      const edit = state.stockEdits[item.id] || {};
-      const stockVal = edit.stockQty ?? item.stockQty;
-      const priceVal = edit.price ?? item.price;
-      const listedVal = edit.listed ?? item.listed !== false;
-      const dirty = edit.stockQty !== undefined || edit.price !== undefined || edit.listed !== undefined;
-      // Phase 3: spool-level fields only exist for filament rows -- read-only
-      // here, written only by logging a print job (see renderPrintJobs()).
-      const spoolCell = item.kind === 'filament'
-        ? `${escapeHtml(item.remainingG != null ? item.remainingG.toFixed(0) : '—')}g / ${escapeHtml(item.percentLeft != null ? Math.round(item.percentLeft * 100) : '—')}%`
-        : '—';
-      const radioName = `listed-${escapeAttr(item.id)}`;
-      return `
+function stockRowHtml(item) {
+  const edit = state.stockEdits[item.id] || {};
+  const stockVal = edit.stockQty ?? item.stockQty;
+  const priceVal = edit.price ?? item.price;
+  const listedVal = edit.listed ?? item.listed !== false;
+  const dirty = edit.stockQty !== undefined || edit.price !== undefined || edit.listed !== undefined;
+  // Phase 3: spool-level fields only exist for filament rows -- read-only
+  // here, written only by logging a print job (see renderPrintJobs()).
+  const spoolCell = item.kind === 'filament'
+    ? `${escapeHtml(item.remainingG != null ? item.remainingG.toFixed(0) : '—')}g / ${escapeHtml(item.percentLeft != null ? Math.round(item.percentLeft * 100) : '—')}%`
+    : '—';
+  const radioName = `listed-${escapeAttr(item.id)}`;
+  return `
         <tr data-id="${escapeAttr(item.id)}" class="${dirty ? 'row-dirty' : ''}">
           <td><code>${escapeHtml(item.sku || '—')}</code></td>
           <td>${escapeHtml(item.name)}</td>
@@ -4612,23 +4623,104 @@ async function renderStock() {
           </td>
           <td class="muted" data-status style="font-size:0.8rem">${dirty ? 'Edited' : ''}</td>
         </tr>`;
-    })
-    .join('');
+}
+
+const STOCK_TABLE_HEAD = '<thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th>Remaining (filament)</th><th>Products page</th><th></th></tr></thead>';
+
+// Renders one leaf section (a real <details> with its own mini-table).
+// `forceOpen` wins over the remembered collapse state -- used while
+// searching so a match is never hidden behind a section the admin had
+// manually collapsed earlier.
+function stockSectionHtml(key, label, items, forceOpen) {
+  const open = forceOpen || !state.stockCollapsed.has(key);
+  const rows = items.map(stockRowHtml).join('');
+  // data-initial-open: some browsers fire a spurious 'toggle' event the
+  // moment a freshly-inserted `<details open>` is parsed (no user action
+  // involved) -- the toggle listener below uses this to tell that apart
+  // from a real click and avoid corrupting the remembered collapse state.
+  return `
+    <details class="stock-section" data-group="${escapeAttr(key)}" data-initial-open="${open}" ${open ? 'open' : ''}>
+      <summary>${escapeHtml(label)} <span class="muted">(${items.length})</span></summary>
+      <div class="panel table-wrap">
+        <table class="catalog">
+          ${STOCK_TABLE_HEAD}
+          <tbody>${rows || '<tr><td colspan="8"><div class="empty">No items</div></td></tr>'}</tbody>
+        </table>
+      </div>
+    </details>`;
+}
+
+async function renderStock() {
+  state.stockQ = state.stockQ || '';
+  state.stockEdits = state.stockEdits || {}; // id -> { stockQty?, price? }
+  state.stockCollapsed = state.stockCollapsed || new Set(); // group keys currently collapsed -- survives re-render (e.g. after Save)
+  const { items } = await api('/api/inventory');
+  state.stockItems = items;
+
+  const needle = state.stockQ.trim().toLowerCase();
+  const searching = needle.length > 0;
+  const filtered = searching
+    ? items.filter((i) => [i.sku, i.name, i.category].filter(Boolean).some((v) => v.toLowerCase().includes(needle)))
+    : items;
+
+  const claimed = new Set();
+  const sectionsHtml = STOCK_GROUP_DEFS.map((def) => {
+    if (def.children) {
+      const childrenHtml = def.children
+        .map((child) => {
+          const childItems = filtered.filter((i) => child.match(i.category));
+          childItems.forEach((i) => claimed.add(i.id));
+          if (searching && !childItems.length) return '';
+          return stockSectionHtml(child.key, child.label, childItems, searching);
+        })
+        .join('');
+      const totalCount = def.children.reduce((n, child) => n + filtered.filter((i) => child.match(i.category)).length, 0);
+      if (searching && !totalCount) return '';
+      const open = searching || !state.stockCollapsed.has(def.key);
+      return `
+    <details class="stock-section stock-section-parent" data-group="${escapeAttr(def.key)}" data-initial-open="${open}" ${open ? 'open' : ''}>
+      <summary>${escapeHtml(def.label)} <span class="muted">(${totalCount})</span></summary>
+      ${childrenHtml}
+    </details>`;
+    }
+    const groupItems = filtered.filter((i) => def.match(i.category));
+    groupItems.forEach((i) => claimed.add(i.id));
+    if (searching && !groupItems.length) return '';
+    return stockSectionHtml(def.key, def.label, groupItems, searching);
+  }).join('');
+
+  // Anything not claimed by a known category (e.g. a future new catalog
+  // category) still shows up here instead of silently disappearing.
+  const otherItems = filtered.filter((i) => !claimed.has(i.id));
+  const otherHtml = otherItems.length || !searching ? stockSectionHtml('other', 'Other', otherItems, searching) : '';
 
   const dirtyCount = Object.keys(state.stockEdits).length;
 
-  $('#view-stock').innerHTML = `
+  const stockView = $('#view-stock');
+  stockView.innerHTML = `
     <div class="toolbar">
       <input id="stock-q" type="search" placeholder="Search SKU, name, category…" value="${escapeAttr(state.stockQ)}" />
       <span class="muted">${escapeHtml(String(filtered.length))} items</span>
       <button class="btn btn-primary" id="save-stock" type="button" ${dirtyCount ? '' : 'disabled'}>Save Changes${dirtyCount ? ` (${escapeHtml(String(dirtyCount))})` : ''}</button>
     </div>
-    <div class="panel table-wrap">
-      <table class="catalog">
-        <thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th>Remaining (filament)</th><th>Products page</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="8"><div class="empty">No inventory items</div></td></tr>'}</tbody>
-      </table>
-    </div>`;
+    <div class="stack gap-3">${sectionsHtml}${otherHtml}</div>`;
+
+  $$('#view-stock details.stock-section').forEach((el) => {
+    el.addEventListener('toggle', () => {
+      // Swallow the one spurious initial fire some browsers emit for a
+      // freshly-parsed `<details open>` -- el.open still matches whatever
+      // this render set it to, so it can't be a real click yet. Clearing
+      // the marker means a genuine toggle right after is never mistaken
+      // for another spurious one.
+      if (el.dataset.initialOpen === String(el.open)) {
+        delete el.dataset.initialOpen;
+        return;
+      }
+      const key = el.dataset.group;
+      if (el.open) state.stockCollapsed.delete(key);
+      else state.stockCollapsed.add(key);
+    });
+  });
 
   $('#stock-q').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
