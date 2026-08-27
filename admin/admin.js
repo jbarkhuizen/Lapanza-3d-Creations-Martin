@@ -8,6 +8,15 @@ const state = {
   products: [],
   filters: { q: '', kind: '', status: '' },
   todoFilters: { q: '', category: '', status: '', plannedFixDate: '' },
+  // key 'status' is the default (not a plain field) so In Progress/Backlog
+  // land on top via TODO_STATUS_RANK rather than alphabetically -- see
+  // sortTodos(). Survives re-renders the same way todoFilters does.
+  todoSort: { key: 'status', dir: 'asc' },
+  // Which row IDs have their Description cell expanded -- a plain Set, not
+  // per-row DOM state, so it survives the full re-render that every other
+  // todo action (status change, sort click, filter change) already
+  // triggers via renderTodos().
+  todoExpandedIds: new Set(),
   editingId: null,
   draft: null,
   dashboard: null,
@@ -1725,6 +1734,39 @@ const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
 const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix'];
 const TODO_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 
+// Default view: active work (In Progress, Backlog) on top, resolved/rejected
+// work at the bottom -- plain alphabetical would scatter these ("Backlog"
+// before "Claude Fix" before "Done" before "In Progress" before "Won't
+// Fix"), burying In Progress under everything else.
+const TODO_STATUS_RANK = { 'In Progress': 0, Backlog: 1, 'Claude Fix': 2, Done: 3, "Won't Fix": 4 };
+// Same problem, same fix -- alphabetical gives Critical, High, Low, Medium.
+const TODO_PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+
+function sortTodos(todos) {
+  const { key, dir } = state.todoSort;
+  const mul = dir === 'desc' ? -1 : 1;
+  const sorted = [...todos].sort((a, b) => {
+    let cmp;
+    if (key === 'status') cmp = (TODO_STATUS_RANK[a.status] ?? 99) - (TODO_STATUS_RANK[b.status] ?? 99);
+    else if (key === 'priority') cmp = (TODO_PRIORITY_RANK[a.priority] ?? 99) - (TODO_PRIORITY_RANK[b.priority] ?? 99);
+    else if (key === 'dateAdded' || key === 'plannedFixDate' || key === 'actualFixDate') {
+      // Nulls (no date set yet) sort last regardless of direction -- an
+      // empty Planned/Actual Fix Date isn't meaningfully "earliest".
+      const av = a[key] ? new Date(a[key]).getTime() : null;
+      const bv = b[key] ? new Date(b[key]).getTime() : null;
+      if (av === null && bv === null) cmp = 0;
+      else if (av === null) return 1;
+      else if (bv === null) return -1;
+      else cmp = av - bv;
+    } else {
+      cmp = String(a[key] || '').localeCompare(String(b[key] || ''));
+    }
+    if (cmp === 0) cmp = (TODO_STATUS_RANK[a.status] ?? 99) - (TODO_STATUS_RANK[b.status] ?? 99);
+    return cmp * mul;
+  });
+  return sorted;
+}
+
 function blankTodo() {
   return { id: null, category: 'Feature', priority: 'Medium', name: '', description: '', status: 'Backlog', plannedFixDate: '', actualFixDate: '' };
 }
@@ -1759,24 +1801,31 @@ function todoPriorityBadge(priority) {
 async function renderTodos() {
   state.editingTodo = state.editingTodo || null;
   const { todos } = await api('/api/todos');
-  const filteredTodos = filterTodos(todos);
+  const filteredTodos = sortTodos(filterTodos(todos));
+
+  const sortHeader = (key, label) => {
+    const active = state.todoSort.key === key;
+    const arrow = active ? (state.todoSort.dir === 'desc' ? '▼' : '▲') : '';
+    return `<th data-sort="${escapeAttr(key)}" class="${active ? 'sort-active' : ''}">${escapeHtml(label)}${arrow ? ` <span class="sort-arrow">${arrow}</span>` : ''}</th>`;
+  };
 
   const rows = filteredTodos
-    .map(
-      (t) => `
-        <tr data-id="${escapeAttr(t.id)}">
-          <td style="width: 50px; text-align: center;">${escapeHtml(String(t.number))}</td>
-          <td style="width: 100px;">${escapeHtml(t.category)}</td>
-          <td style="width: 110px;">${escapeHtml(formatDate(t.dateAdded))}</td>
+    .map((t) => {
+      const expanded = state.todoExpandedIds.has(t.id);
+      return `
+        <tr data-id="${escapeAttr(t.id)}" class="${expanded ? 'desc-expanded' : ''}">
+          <td style="width: 40px; text-align: center;">${escapeHtml(String(t.number))}</td>
+          <td style="width: 90px;">${escapeHtml(t.category)}</td>
+          <td style="width: 95px;">${escapeHtml(formatDate(t.dateAdded))}</td>
           <td>${escapeHtml(t.name)}</td>
-          <td style="max-width: 320px;">${escapeHtml(t.description || '—')}</td>
-          <td style="width: 90px;">${todoPriorityBadge(t.priority)}</td>
-          <td style="width: 130px;">${t.plannedFixDate ? escapeHtml(formatDate(t.plannedFixDate)) : '—'}</td>
-          <td style="width: 150px;"><input class="todo-inline-control todo-inline-date" data-action="actual-fix-date" type="date" aria-label="Actual Fix Date for ${escapeAttr(t.name)}" value="${escapeAttr(toDateInputValue(t.actualFixDate))}" /></td>
-          <td style="width: 150px;"><select class="todo-inline-control" data-action="status" aria-label="Status for ${escapeAttr(t.name)}">${TODO_STATUSES.map((status) => `<option value="${escapeAttr(status)}" ${t.status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}</select></td>
+          <td class="todo-desc-cell" data-action="toggle-desc" title="Click to ${expanded ? 'collapse' : 'expand'}"><span class="todo-desc-text">${escapeHtml(t.description || '—')}</span></td>
+          <td style="width: 80px;">${todoPriorityBadge(t.priority)}</td>
+          <td style="width: 115px;">${t.plannedFixDate ? escapeHtml(formatDate(t.plannedFixDate)) : '—'}</td>
+          <td style="width: 140px;"><input class="todo-inline-control todo-inline-date" data-action="actual-fix-date" type="date" aria-label="Actual Fix Date for ${escapeAttr(t.name)}" value="${escapeAttr(toDateInputValue(t.actualFixDate))}" /></td>
+          <td style="width: 130px;"><select class="todo-inline-control" data-action="status" aria-label="Status for ${escapeAttr(t.name)}">${TODO_STATUSES.map((status) => `<option value="${escapeAttr(status)}" ${t.status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}</select></td>
           <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
-        </tr>`,
-    )
+        </tr>`;
+    })
     .join('');
 
   const form = state.editingTodo;
@@ -1831,9 +1880,20 @@ async function renderTodos() {
           <button class="btn btn-ghost" id="cancel-todo" type="button">Cancel</button>
         </div>
       </div>` : ''}
-    <div class="panel table-wrap">
-      <table class="catalog">
-        <thead><tr><th>No</th><th>Category</th><th>Date Added</th><th>Name</th><th>Description</th><th>Priority</th><th>Planned Fix Date</th><th>Actual Fix Date</th><th>Status</th><th></th></tr></thead>
+    <div class="panel table-wrap todo-table-wrap">
+      <table class="catalog todo-table">
+        <thead><tr>
+          <th>No</th>
+          ${sortHeader('category', 'Category')}
+          ${sortHeader('dateAdded', 'Date Added')}
+          <th>Name</th>
+          <th>Description</th>
+          ${sortHeader('priority', 'Priority')}
+          ${sortHeader('plannedFixDate', 'Planned Fix Date')}
+          ${sortHeader('actualFixDate', 'Actual Fix Date')}
+          ${sortHeader('status', 'Status')}
+          <th></th>
+        </tr></thead>
         <tbody>${rows || '<tr><td colspan="10"><div class="empty">No items match your filters</div></td></tr>'}</tbody>
       </table>
     </div>`;
@@ -1866,6 +1926,32 @@ async function renderTodos() {
       toast(ex.message);
     }
   };
+
+  $$('#view-todos th[data-sort]').forEach((th) => {
+    th.addEventListener('click', async () => {
+      const key = th.dataset.sort;
+      if (state.todoSort.key === key) state.todoSort.dir = state.todoSort.dir === 'asc' ? 'desc' : 'asc';
+      else state.todoSort = { key, dir: 'asc' };
+      await renderTodos();
+    });
+  });
+
+  // Toggles a class directly rather than going through renderTodos() --
+  // expanding a description is a pure display change, not data that needs
+  // saving, so it shouldn't cost a full table re-render (loses scroll
+  // position) or an API round-trip. state.todoExpandedIds is still updated
+  // so the expanded set survives whatever OTHER action does trigger a
+  // re-render (a status change, a sort click, etc).
+  $$('#view-todos [data-action="toggle-desc"]').forEach((cell) => {
+    cell.addEventListener('click', () => {
+      const tr = cell.closest('tr');
+      const id = tr.dataset.id;
+      const nowExpanded = tr.classList.toggle('desc-expanded');
+      if (nowExpanded) state.todoExpandedIds.add(id);
+      else state.todoExpandedIds.delete(id);
+      cell.title = `Click to ${nowExpanded ? 'collapse' : 'expand'}`;
+    });
+  });
 
   $$('#view-todos [data-action="status"]').forEach((select) => {
     select.addEventListener('change', () => saveInlineTodo(select.closest('tr').dataset.id, { status: select.value }));
