@@ -67,10 +67,24 @@ function phpUrlEncode(value) {
 // order is correct per current guidance), PHP-urlencoded, joined with '&',
 // passphrase appended last (sandbox mode with an empty passphrase omits it
 // entirely rather than sending an empty &passphrase= pair).
-function buildSignature(orderedPairs, passphrase) {
+//
+// `skipEmpty` defaults true for the OUTBOUND redirect (buildPayfastRedirect
+// below) -- correct there because WE decide which fields to send, and we
+// simply don't send ones with no value (e.g. an unset name_last). It must
+// be `false` for INBOUND ITN verification: Payfast's own reference PHP
+// implementation builds its param string from every posted key except
+// `signature`, unconditionally -- `$pfParamString .= $key.'='.urlencode($val).'&'`
+// runs even when $val is '', contributing a bare `key=` to the string, not
+// omitting it. Confirmed 2026-08-27 against Payfast's published sample
+// code after the passphrase itself was ruled out as the cause of a real
+// signature-verification failure (order 691b035e) -- an ITN's optional
+// fields (custom_str1-5 etc) are commonly sent blank, and filtering them
+// out here silently produced a different string, and therefore a
+// different hash, than the one Payfast itself sent.
+function buildSignature(orderedPairs, passphrase, { skipEmpty = true } = {}) {
   const parts = orderedPairs
-    .filter(([, v]) => v !== undefined && v !== null && v !== '')
-    .map(([k, v]) => `${k}=${phpUrlEncode(v)}`);
+    .filter(([, v]) => !skipEmpty || (v !== undefined && v !== null && v !== ''))
+    .map(([k, v]) => `${k}=${phpUrlEncode(v ?? '')}`);
   if (passphrase) parts.push(`passphrase=${phpUrlEncode(passphrase)}`);
   const paramString = parts.join('&');
   return crypto.createHash('md5').update(paramString).digest('hex');
@@ -164,7 +178,7 @@ export async function verifyItn(rawBody, parsedBody, expectedAmount, sourceIp) {
   // preserves insertion order, i.e. the order Payfast sent them in) --
   // re-sorting would break the signature check.
   const orderedPairs = Object.entries(fields);
-  const expectedSignature = buildSignature(orderedPairs, config.passphrase);
+  const expectedSignature = buildSignature(orderedPairs, config.passphrase, { skipEmpty: false });
   const signatureValid = expectedSignature === signature;
 
   const urls = PAYFAST_URLS[config.mode];

@@ -83,6 +83,26 @@ test('verifyItn: signature check passes for a correctly-signed payload and rejec
   assert.strictEqual(tamperedResult.valid, false);
 });
 
+test('verifyItn: a blank optional field (e.g. an unset custom_str) is still included in the signature check, not dropped', async () => {
+  // Regression test for a real production bug: Payfast's own reference PHP
+  // implementation builds the signature string from every posted field
+  // except `signature`, unconditionally -- including ones with an empty
+  // value, which still contribute a bare `key=` to the string rather than
+  // being omitted. buildSignature() used to filter those out for BOTH the
+  // outbound redirect and inbound ITN paths; correct for the former (we
+  // choose what to send), wrong for the latter (Payfast decides what it
+  // sends us, and does include blanks). custom_str1-5 are commonly sent
+  // blank on a real ITN when unused.
+  const fields = { m_payment_id: 'order-1', pf_payment_id: '999', payment_status: 'COMPLETE', amount_gross: '379.00', custom_str1: '', custom_str2: '' };
+  const payload = { ...fields, signature: signFields(fields) };
+  // Not asserting on result.valid here -- it also requires serverConfirmed,
+  // a real network round-trip to Payfast's own /validate endpoint that a
+  // fabricated test payload/order id can never genuinely pass. signatureValid
+  // is the one deterministic, network-independent piece this test can prove.
+  const result = await verifyItn(new URLSearchParams(payload).toString(), payload, 379, '127.0.0.1');
+  assert.strictEqual(result.signatureValid, true);
+});
+
 test('verifyItn: amount mismatch is rejected even with a valid signature', async () => {
   const fields = { m_payment_id: 'order-1', payment_status: 'COMPLETE', amount_gross: '1.00' };
   const payload = { ...fields, signature: signFields(fields) };
