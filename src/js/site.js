@@ -4,6 +4,7 @@ import { enhanceColourCards } from './swatches.js';
 import { initAppearance, toggleTheme, applyTheme } from './appearance.js';
 import { mountCartUI } from './cart-ui.js';
 import { trackVisit } from './analytics.js';
+import { mountCarPartsFilter } from './car-parts-filter.js';
 
 window.toggleDrawer = toggleDrawer;
 
@@ -71,6 +72,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   mountWhatsAppFab();
   mountCartUI();
   enhanceColourCards();
+  mountCarPartsFilter();
   syncYear();
   hydrateHomeTiles();
   trackVisit();

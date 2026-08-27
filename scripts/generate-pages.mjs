@@ -301,6 +301,32 @@ function specsBlock(specs) {
   return `<div class="mb-12"><h2 class="font-serif text-xl mb-4 tracking-tight">Specifications</h2><div class="spec-panel max-w-md">${rows}</div></div>`;
 }
 
+// GWM/Landrover only. Model checkboxes come from the DISTINCT models
+// actually present across this page's own (listed) items -- not the full
+// admin-managed carPartModels list -- so a checkbox is never shown for a
+// model with zero matching parts on this particular page, and the filter
+// self-maintains as items/models change without needing a rebuild-time
+// dependency on Settings beyond what's already baked into each item.
+function partFilterBar(items) {
+  const list = (Array.isArray(items) ? items : []).filter((item) => item.listed !== false);
+  const models = [...new Set(list.flatMap((item) => item.models || []))].sort();
+  const checkboxes = models
+    .map(
+      (m) => `
+        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
+          <input type="checkbox" value="${escapeAttr(m)}" data-model-filter class="rounded border-charcoal/30" />
+          ${m}
+        </label>`,
+    )
+    .join('');
+  return `
+      <div id="part-filter-bar" class="mb-8 p-5 bg-linen border-2 border-charcoal/10 rounded-sm">
+        <input type="search" id="part-search" placeholder="Search parts by name, description or designer…"
+               class="w-full mb-4 px-4 py-2.5 border-2 border-charcoal/15 rounded-sm bg-cream text-sm focus:outline-none focus:border-terracotta" />
+        ${models.length ? `<div class="flex flex-wrap gap-x-4 gap-y-2">${checkboxes}</div>` : ''}
+      </div>`;
+}
+
 function catalogueItems(label, items, categorySlug) {
   const all = Array.isArray(items) ? items : [];
   const list = all.filter((item) => item.listed !== false);
@@ -323,7 +349,13 @@ function catalogueItems(label, items, categorySlug) {
       // to a build-time index so the productId is still stable across a
       // regen as long as item order doesn't change.
       const canAddToCart = item.price && item.available !== false;
-      return `<article class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors">
+      // Read by src/js/car-parts-filter.js -- only meaningful on GWM/Landrover
+      // pages (the only ones with a search/model filter bar rendered), but
+      // harmless to include everywhere: cheap, and keeps this function from
+      // needing to special-case categorySlug.
+      const searchIndex = [item.name, item.details, item.creator].filter(Boolean).join(' ').toLowerCase();
+      const modelList = (item.models || []).join('|');
+      return `<article class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors" data-search="${escapeAttr(searchIndex)}" data-models="${escapeAttr(modelList)}">
               <div class="aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden">
                 ${img}
               </div>
@@ -456,7 +488,9 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
     kind === 'story'
       ? null
       : `${deliveryNote('made-to-order')}
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-5">${catalogueItems(name, items, slug)}</div>
+      ${isCarParts ? partFilterBar(items) : ''}
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-5 catalogue-grid">${catalogueItems(name, items, slug)}</div>
+      ${isCarParts ? `<p id="part-filter-empty" class="hidden text-espresso/50 text-sm py-10 text-center">No parts match your search/filter.</p>` : ''}
       <div class="mt-14 p-7 md:p-8 bg-linen border-2 border-charcoal/10 rounded-sm brutal">
         <p class="eyebrow mb-3">Custom request</p>
         <p class="font-serif text-2xl mb-3 tracking-tight">Need something specific?</p>
