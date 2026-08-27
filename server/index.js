@@ -1894,6 +1894,11 @@ app.put('/api/settings', requireAuth, (req, res) => {
     // so every save of it was silently discarded. Fixed here as part of
     // upgrading it to the same {id,name,active} shape as the two new ones.
     'inHouseFilamentBrands', 'todoCategories', 'todoPriorities',
+    // Same class of bug caught here on first real add-flow test
+    // (2026-08-27): these were added to settings.js's LIST_SETTING_KEYS
+    // (read side) and the admin UI, but not here -- every save silently
+    // discarded, identical to the inHouseFilamentBrands bug above.
+    'carPartModelsLandrover', 'carPartModelsGwm',
   ];
   const patch = {};
   for (const key of allowed) {
@@ -1923,7 +1928,7 @@ app.put('/api/settings', requireAuth, (req, res) => {
   // `.active`. Entries with no usable name are dropped outright (unlike
   // homeTiles' blank-default placeholders) since a nameless list item has
   // nothing to show in a picker.
-  for (const key of ['inHouseFilamentBrands', 'todoCategories', 'todoPriorities']) {
+  for (const key of ['inHouseFilamentBrands', 'todoCategories', 'todoPriorities', 'carPartModelsLandrover', 'carPartModelsGwm']) {
     if (!Array.isArray(patch[key])) {
       delete patch[key];
       continue;
@@ -2271,9 +2276,10 @@ function normalizeItems(list) {
     imageUrl: item.imageUrl || '',
     // Car-parts only (GWM/Landrover) -- who designed the printable part, and
     // which vehicle model(s) it fits. Stored as plain name strings (not ids
-    // into settings.carPartModels), same convention as
-    // in_house_filament.brand/todo_items.category: renaming a list entry
-    // later must not retroactively change what's already saved on an item.
+    // into settings.carPartModelsLandrover/carPartModelsGwm), same
+    // convention as in_house_filament.brand/todo_items.category: renaming a
+    // list entry later must not retroactively change what's already saved
+    // on an item.
     creator: item.creator || '',
     models: Array.isArray(item.models) ? item.models.filter(Boolean) : [],
     // Admin-only reference back to the original design's source page --

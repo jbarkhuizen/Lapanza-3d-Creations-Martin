@@ -9,7 +9,7 @@ import { DEFAULT_SETTINGS } from './settings-defaults.js';
 // an install last touched this setting, and a fresh string typed into the
 // old textarea shape (if anything ever sends one again) degrades safely
 // too instead of crashing.
-const LIST_SETTING_KEYS = ['inHouseFilamentBrands', 'todoCategories', 'todoPriorities', 'carPartModels'];
+const LIST_SETTING_KEYS = ['inHouseFilamentBrands', 'todoCategories', 'todoPriorities', 'carPartModelsLandrover', 'carPartModelsGwm'];
 
 function normalizeListSetting(value) {
   if (!Array.isArray(value)) return value;

@@ -900,8 +900,12 @@ function renderFilamentSections(p) {
 // and which vehicle model(s) it fits. A retired (active:false) model still
 // renders here if the item already has it checked -- same rule as every
 // other configurable list, see settings-defaults.js's LIST_SETTING_KEYS note.
-function carPartItemFields(item) {
-  const configured = state.settings?.carPartModels || [];
+function carPartItemFields(item, categorySlug) {
+  // Separate lists per brand -- GWM (P300/P500/Tank 300/Tank 500/P-Series)
+  // and Land Rover's naming don't overlap, and a shared list risked tagging
+  // a part with the wrong brand's model (see settings-defaults.js).
+  const listKey = categorySlug === 'gwm' ? 'carPartModelsGwm' : 'carPartModelsLandrover';
+  const configured = state.settings?.[listKey] || [];
   const selected = new Set(item.models || []);
   const models = [
     ...configured,
@@ -997,7 +1001,7 @@ function renderCategorySections(p) {
                 <span>Available</span>
               </label>
             </div>
-            ${p.parent === 'car-parts' ? carPartItemFields(item) : ''}
+            ${p.parent === 'car-parts' ? carPartItemFields(item, p.slug) : ''}
           </div>
         `).join('') || '<div class="empty">No catalog items yet</div>'}
       </div>
@@ -2425,7 +2429,8 @@ async function renderSettings() {
 ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
       ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
       ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
-      ${configurableListPanel('carPartModels', 'Car part models', s.carPartModels, 'Vehicle models a GWM or Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
+      ${configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
+      ${configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
 
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Print Job Costing rates</h3></div>

@@ -82,12 +82,14 @@ export const DEFAULT_SETTINGS = {
     { id: 'build-volume', name: 'Build Volume', active: true },
     { id: 'creality', name: 'Creality', active: true },
   ],
-  // Vehicle models a car-parts item (GWM/Landrover) can be tagged as fitting
-  // -- multi-select, an item stores the matching name strings directly (see
-  // server/index.js normalizeItems). Seeded from the Land Rover models
-  // recovered from lr3dparts.com during the initial 194-part import
-  // (2026-08-27); GWM models get added here once real GWM parts exist.
-  carPartModels: [
+  // Vehicle models a car-parts item can be tagged as fitting -- multi-select,
+  // an item stores the matching name strings directly (see server/index.js
+  // normalizeItems). Split one list per brand (2026-08-27) rather than one
+  // shared list -- GWM (P300/P500/Tank 300/Tank 500/P-Series) and Land
+  // Rover's naming don't overlap and a shared list risked tagging a part
+  // with the wrong brand's model. `admin.js`'s carPartItemFields() picks
+  // the list by the item's own category slug.
+  carPartModelsLandrover: [
     { id: 'defender-200-tdi', name: 'Defender 200 Tdi', active: true },
     { id: 'defender-300-tdi', name: 'Defender 300 Tdi', active: true },
     { id: 'defender-td5', name: 'Defender Td5', active: true },
@@ -108,6 +110,13 @@ export const DEFAULT_SETTINGS = {
     { id: 'series-2', name: 'Series 2', active: true },
     { id: 'series-2a', name: 'Series 2A', active: true },
     { id: 'series-3', name: 'Series 3', active: true },
+  ],
+  carPartModelsGwm: [
+    { id: 'p300', name: 'P300', active: true },
+    { id: 'p500', name: 'P500', active: true },
+    { id: 'tank-300', name: 'Tank 300', active: true },
+    { id: 'tank-500', name: 'Tank 500', active: true },
+    { id: 'p-series', name: 'P-Series', active: true },
   ],
   todoCategories: [
     { id: 'bug', name: 'Bug', active: true },

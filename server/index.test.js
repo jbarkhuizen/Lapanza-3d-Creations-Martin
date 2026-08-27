@@ -597,6 +597,28 @@ test('PUT /api/settings persists inHouseFilamentBrands -- previously allowlist-m
   assert.deepStrictEqual(getRes.body.settings.inHouseFilamentBrands, [{ id: 'sunlu', name: 'SunLu', active: true }]);
 });
 
+test('PUT /api/settings persists carPartModelsLandrover/carPartModelsGwm -- same allowlist-missing bug, caught during the add-flow browser test that added them', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({
+      carPartModelsLandrover: [{ id: 'defender-200-tdi', name: 'Defender 200 Tdi', active: true }],
+      carPartModelsGwm: [{ id: 'p300', name: 'P300', active: true }],
+    });
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(res.body.settings.carPartModelsLandrover, [{ id: 'defender-200-tdi', name: 'Defender 200 Tdi', active: true }]);
+  assert.deepStrictEqual(res.body.settings.carPartModelsGwm, [{ id: 'p300', name: 'P300', active: true }]);
+
+  const getRes = await request(app).get('/api/settings').set('Cookie', cookie);
+  assert.deepStrictEqual(getRes.body.settings.carPartModelsGwm, [{ id: 'p300', name: 'P300', active: true }]);
+});
+
 test('PUT /api/settings sanitizes a configurable list: malformed entries dropped, active defaults true, missing id backfilled', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
