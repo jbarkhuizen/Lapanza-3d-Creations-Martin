@@ -309,21 +309,22 @@ function specsBlock(specs) {
 // dependency on Settings beyond what's already baked into each item.
 function partFilterBar(items) {
   const list = (Array.isArray(items) ? items : []).filter((item) => item.listed !== false);
-  const models = [...new Set(list.flatMap((item) => item.models || []))].sort();
-  const checkboxes = models
-    .map(
-      (m) => `
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="${escapeAttr(m)}" data-model-filter class="rounded border-charcoal/30" />
-          ${m}
-        </label>`,
-    )
-    .join('');
+  // Count per model (not just list the distinct names) so each dropdown
+  // option can show how many parts fit it, e.g. "P300 (4)" -- single-select,
+  // not multi: in practice a car-parts item here fits one specific model,
+  // and a dropdown reads cleaner than a checkbox list of one.
+  const counts = new Map();
+  list.forEach((item) => (item.models || []).forEach((m) => counts.set(m, (counts.get(m) || 0) + 1)));
+  const models = [...counts.keys()].sort();
+  const options = models.map((m) => `<option value="${escapeAttr(m)}">${escapeAttr(m)} (${counts.get(m)})</option>`).join('');
   return `
       <div id="part-filter-bar" class="mb-8 p-5 bg-linen border-2 border-charcoal/10 rounded-sm">
         <input type="search" id="part-search" placeholder="Search parts by name, description or designer…"
                class="w-full mb-4 px-4 py-2.5 border-2 border-charcoal/15 rounded-sm bg-cream text-sm focus:outline-none focus:border-terracotta" />
-        ${models.length ? `<div class="flex flex-wrap gap-x-4 gap-y-2">${checkboxes}</div>` : ''}
+        ${models.length ? `<select id="part-model-filter" class="px-4 py-2.5 border-2 border-charcoal/15 rounded-sm bg-cream text-sm focus:outline-none focus:border-terracotta">
+          <option value="">All models</option>
+          ${options}
+        </select>` : ''}
       </div>`;
 }
 

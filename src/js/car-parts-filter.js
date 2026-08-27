@@ -8,20 +8,20 @@ export function mountCarPartsFilter() {
   if (!bar) return;
 
   const searchInput = document.getElementById('part-search');
-  const modelCheckboxes = [...bar.querySelectorAll('[data-model-filter]')];
+  const modelSelect = document.getElementById('part-model-filter');
   const cards = [...document.querySelectorAll('.catalogue-grid [data-search]')];
   const emptyMessage = document.getElementById('part-filter-empty');
 
   function apply() {
     const query = (searchInput?.value || '').trim().toLowerCase();
-    const checkedModels = modelCheckboxes.filter((cb) => cb.checked).map((cb) => cb.value);
+    const selectedModel = modelSelect?.value || '';
 
     let visibleCount = 0;
     cards.forEach((card) => {
       const matchesSearch = !query || card.dataset.search.includes(query);
       const cardModels = card.dataset.models ? card.dataset.models.split('|') : [];
-      const matchesModels = !checkedModels.length || checkedModels.some((m) => cardModels.includes(m));
-      const visible = matchesSearch && matchesModels;
+      const matchesModel = !selectedModel || cardModels.includes(selectedModel);
+      const visible = matchesSearch && matchesModel;
       card.classList.toggle('hidden', !visible);
       if (visible) visibleCount += 1;
     });
@@ -30,5 +30,5 @@ export function mountCarPartsFilter() {
   }
 
   searchInput?.addEventListener('input', apply);
-  modelCheckboxes.forEach((cb) => cb.addEventListener('change', apply));
+  modelSelect?.addEventListener('change', apply);
 }

@@ -61,87 +61,10 @@
       <div id="part-filter-bar" class="mb-8 p-5 bg-linen border-2 border-charcoal/10 rounded-sm">
         <input type="search" id="part-search" placeholder="Search parts by name, description or designer…"
                class="w-full mb-4 px-4 py-2.5 border-2 border-charcoal/15 rounded-sm bg-cream text-sm focus:outline-none focus:border-terracotta" />
-        <div class="flex flex-wrap gap-x-4 gap-y-2">
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Defender 200 Tdi" data-model-filter class="rounded border-charcoal/30" />
-          Defender 200 Tdi
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Defender 300 Tdi" data-model-filter class="rounded border-charcoal/30" />
-          Defender 300 Tdi
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Defender L663" data-model-filter class="rounded border-charcoal/30" />
-          Defender L663
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Defender Puma" data-model-filter class="rounded border-charcoal/30" />
-          Defender Puma
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Defender Td5" data-model-filter class="rounded border-charcoal/30" />
-          Defender Td5
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Discovery 1" data-model-filter class="rounded border-charcoal/30" />
-          Discovery 1
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Discovery 2" data-model-filter class="rounded border-charcoal/30" />
-          Discovery 2
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Discovery 3" data-model-filter class="rounded border-charcoal/30" />
-          Discovery 3
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Discovery 4" data-model-filter class="rounded border-charcoal/30" />
-          Discovery 4
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Freelander 1" data-model-filter class="rounded border-charcoal/30" />
-          Freelander 1
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Freelander 2" data-model-filter class="rounded border-charcoal/30" />
-          Freelander 2
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Range Rover Classic" data-model-filter class="rounded border-charcoal/30" />
-          Range Rover Classic
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Range Rover L322" data-model-filter class="rounded border-charcoal/30" />
-          Range Rover L322
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Range Rover L405" data-model-filter class="rounded border-charcoal/30" />
-          Range Rover L405
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Range Rover P38" data-model-filter class="rounded border-charcoal/30" />
-          Range Rover P38
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Range Rover Sport L320" data-model-filter class="rounded border-charcoal/30" />
-          Range Rover Sport L320
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Series 1" data-model-filter class="rounded border-charcoal/30" />
-          Series 1
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Series 2" data-model-filter class="rounded border-charcoal/30" />
-          Series 2
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Series 2A" data-model-filter class="rounded border-charcoal/30" />
-          Series 2A
-        </label>
-        <label class="inline-flex items-center gap-1.5 text-sm text-espresso/70 cursor-pointer">
-          <input type="checkbox" value="Series 3" data-model-filter class="rounded border-charcoal/30" />
-          Series 3
-        </label></div>
+        <select id="part-model-filter" class="px-4 py-2.5 border-2 border-charcoal/15 rounded-sm bg-cream text-sm focus:outline-none focus:border-terracotta">
+          <option value="">All models</option>
+          <option value="Defender 200 Tdi">Defender 200 Tdi (36)</option><option value="Defender 300 Tdi">Defender 300 Tdi (41)</option><option value="Defender L663">Defender L663 (2)</option><option value="Defender Puma">Defender Puma (36)</option><option value="Defender Td5">Defender Td5 (44)</option><option value="Discovery 1">Discovery 1 (21)</option><option value="Discovery 2">Discovery 2 (9)</option><option value="Discovery 3">Discovery 3 (38)</option><option value="Discovery 4">Discovery 4 (13)</option><option value="Freelander 1">Freelander 1 (9)</option><option value="Freelander 2">Freelander 2 (9)</option><option value="Range Rover Classic">Range Rover Classic (12)</option><option value="Range Rover L322">Range Rover L322 (12)</option><option value="Range Rover L405">Range Rover L405 (1)</option><option value="Range Rover P38">Range Rover P38 (8)</option><option value="Range Rover Sport L320">Range Rover Sport L320 (11)</option><option value="Series 1">Series 1 (9)</option><option value="Series 2">Series 2 (14)</option><option value="Series 2A">Series 2A (15)</option><option value="Series 3">Series 3 (20)</option>
+        </select>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-3 gap-5 catalogue-grid"><article class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors" data-search="door card clip free 3d-printable replacement for land rover oem part number mxc1800. download the stl, preview in 3d, print at home. defender door card clip louis roesch" data-models="Defender 200 Tdi|Defender 300 Tdi|Defender Td5|Defender Puma">
               <div class="aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden">
