@@ -130,16 +130,7 @@
   }
 
   .highlight {
-    background: linear-gradient(transparent 62%, var(--color-lime) 62%);
-    padding: 0 0.08em;
-    box-decoration-break: clone;
-    -webkit-box-decoration-break: clone;
-  }
-
-  /* Dark mode: white type on a soft warm block that sits in the palette */
-  [data-theme="dark"] .highlight {
-    color: #ffffff;
-    background: linear-gradient(transparent 62%, #3d322c 62%);
+    color: var(--color-terracotta);
   }
 
   .eyebrow {

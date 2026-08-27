@@ -35,6 +35,7 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
   </button>
 </div>
 <a href="${p}story.html" class="side-link ${isActive('story.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10 mt-6">Our Story</a>
+<a href="${p}get-in-touch.html" class="side-link ${isActive('get-in-touch.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Get in Touch</a>
 <details class="rot-open border-t border-charcoal/10 py-2" data-nav-key="Filament" ${filamentOpen ? 'open' : ''}>
   <summary class="flex items-center justify-between uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors py-1.5 font-semibold"><span>Filament</span><span class="chev transition-transform duration-200 text-terracotta">&#8250;</span></summary>
   <div class="pl-3 mt-1 space-y-0.5 border-l border-charcoal/10">

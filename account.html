@@ -50,12 +50,12 @@
         <!-- Logged out: register + login -->
         <div id="account-guest" class="hidden">
           <p class="eyebrow mb-3">My Account</p>
-          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Register or log in</h1>
+          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Register or Log In</h1>
           <p class="text-espresso/75 leading-relaxed max-w-xl mb-12 text-lg">Track your orders and check out faster next time.</p>
 
           <div class="grid md:grid-cols-2 gap-10">
             <div>
-              <h2 class="font-serif text-xl mb-4 tracking-tight">Log in</h2>
+              <h2 class="font-serif text-xl mb-4 tracking-tight">Log In</h2>
               <form id="login-form" class="space-y-4" novalidate>
                 <label class="block text-sm">
                   <span class="block mb-1.5 text-espresso/70">Email</span>
@@ -72,11 +72,11 @@
             </div>
 
             <div>
-              <h2 class="font-serif text-xl mb-4 tracking-tight">Create an account</h2>
+              <h2 class="font-serif text-xl mb-4 tracking-tight">Create an Account</h2>
               <form id="register-form" class="space-y-4" novalidate>
                 <div class="grid grid-cols-2 gap-3">
                   <label class="block text-sm">
-                    <span class="block mb-1.5 text-espresso/70">First name</span>
+                    <span class="block mb-1.5 text-espresso/70">First Name</span>
                     <input name="firstName" type="text" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
                   </label>
                   <label class="block text-sm">
@@ -89,7 +89,7 @@
                   <input name="email" type="email" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
                 </label>
                 <label class="block text-sm">
-                  <span class="block mb-1.5 text-espresso/70">Password (8+ characters)</span>
+                  <span class="block mb-1.5 text-espresso/70">Password (8+ Characters)</span>
                   <input name="password" type="password" required minlength="8" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
                 </label>
                 <button type="submit" class="w-full text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-5 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Create account</button>
@@ -102,7 +102,7 @@
         <!-- Logged out: forgot-password request -->
         <div id="account-forgot" class="hidden">
           <p class="eyebrow mb-3">My Account</p>
-          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Reset your password</h1>
+          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Reset Your Password</h1>
           <p class="text-espresso/75 leading-relaxed max-w-xl mb-10 text-lg">Enter your email and we'll send you a link to set a new password.</p>
           <form id="forgot-form" class="space-y-4 max-w-sm" novalidate>
             <label class="block text-sm">
@@ -118,14 +118,14 @@
         <!-- Reached via emailed reset link (?reset_token=...): set new password -->
         <div id="account-reset" class="hidden">
           <p class="eyebrow mb-3">My Account</p>
-          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Set a new password</h1>
+          <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Set a New Password</h1>
           <form id="reset-form" class="space-y-4 max-w-sm" novalidate>
             <label class="block text-sm">
-              <span class="block mb-1.5 text-espresso/70">New password (8+ characters)</span>
+              <span class="block mb-1.5 text-espresso/70">New Password (8+ Characters)</span>
               <input name="password" type="password" required minlength="8" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
             </label>
             <label class="block text-sm">
-              <span class="block mb-1.5 text-espresso/70">Confirm password</span>
+              <span class="block mb-1.5 text-espresso/70">Confirm Password</span>
               <input name="confirmPassword" type="password" required minlength="8" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
             </label>
             <button type="submit" class="w-full text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-5 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Set new password</button>
@@ -138,11 +138,11 @@
           <div class="flex flex-wrap items-end justify-between gap-4 mb-4">
             <div>
               <p class="eyebrow mb-3">My Account</p>
-              <h1 id="account-welcome" class="font-serif text-4xl md:text-5xl tracking-[-0.03em]">Welcome back</h1>
+              <h1 id="account-welcome" class="font-serif text-4xl md:text-5xl tracking-[-0.03em]">Welcome Back</h1>
             </div>
             <button type="button" id="logout-btn" class="text-xs font-semibold uppercase tracking-[0.15em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Log out</button>
           </div>
-          <h2 class="font-serif text-xl mb-4 mt-10 tracking-tight">Your orders</h2>
+          <h2 class="font-serif text-xl mb-4 mt-10 tracking-tight">Your Orders</h2>
           <div class="border border-charcoal/10 rounded-sm overflow-hidden">
             <table class="w-full text-sm">
               <thead class="bg-linen text-left">

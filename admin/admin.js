@@ -547,7 +547,7 @@ async function renderAnalytics() {
     </div>
 
     <div class="panel table-wrap">
-      <div class="section-head"><h3>Active registered clients</h3></div>
+      <div class="section-head"><h3>Active Registered Clients</h3></div>
       <table class="catalog">
         <thead><tr><th>Name</th><th>Email</th><th>Page</th><th>Last seen</th></tr></thead>
         <tbody id="analytics-active-clients-body"></tbody>
@@ -556,14 +556,14 @@ async function renderAnalytics() {
 
     <div class="grid-2" style="align-items:start; margin-top:1.5rem;">
       <div class="panel table-wrap">
-        <div class="section-head"><h3>Last 30 days</h3></div>
+        <div class="section-head"><h3>Last 30 Days</h3></div>
         <table class="catalog">
           <thead><tr><th>Day</th><th>Visits</th><th>Unique visitors</th></tr></thead>
           <tbody>${dailyRows || '<tr><td colspan="3"><div class="empty">No visits recorded yet</div></td></tr>'}</tbody>
         </table>
       </div>
       <div class="panel table-wrap">
-        <div class="section-head"><h3>Top pages (all time)</h3></div>
+        <div class="section-head"><h3>Top Pages (All Time)</h3></div>
         <table class="catalog">
           <thead><tr><th>Page</th><th>Visits</th></tr></thead>
           <tbody>${topPageRows || '<tr><td colspan="2"><div class="empty">No visits recorded yet</div></td></tr>'}</tbody>
@@ -596,7 +596,7 @@ async function renderDashboard() {
         <p class="muted">Catalog last updated ${formatDate(data.updatedAt)}. Use <strong>Publish to site</strong> to regenerate public pages from this catalog.</p>
       </div>
       <div class="panel">
-        <div class="section-head"><h3>Recently edited</h3></div>
+        <div class="section-head"><h3>Recently Edited</h3></div>
         <div class="recent-list">
           ${data.recent.map((p) => `
             <div class="recent-item" data-id="${p.id}" data-kind="${p.kind}">
@@ -760,7 +760,7 @@ function renderEditor() {
       <div class="stack gap-4">
         <div class="panel stack gap-3">
           <div class="section-head">
-            <h3>Core details</h3>
+            <h3>Core Details</h3>
             <span class="badge ${p.kind}">${p.kind}</span>
           </div>
           <div class="grid-2">
@@ -775,10 +775,10 @@ function renderEditor() {
                 <option value="draft" ${p.status === 'draft' ? 'selected' : ''}>Draft</option>
               </select>
             </label>
-            <label class="field"><span>Sort order</span><input data-field="sortOrder" type="number" value="${p.sortOrder ?? 0}" /></label>
+            <label class="field"><span>Sort Order</span><input data-field="sortOrder" type="number" value="${p.sortOrder ?? 0}" /></label>
             <label class="field checkbox" style="margin-top:1.5rem">
               <input data-field="featured" type="checkbox" ${p.featured ? 'checked' : ''} />
-              <span>Featured on homepage cues</span>
+              <span>Featured on Homepage Cues</span>
             </label>
           </div>
         </div>
@@ -787,9 +787,9 @@ function renderEditor() {
 
         <div class="panel stack gap-3">
           <div class="section-head"><h3>SEO</h3></div>
-          <label class="field"><span>SEO title</span><input data-field="seoTitle" value="${escapeAttr(p.seoTitle || '')}" /></label>
-          <label class="field"><span>SEO description</span><textarea data-field="seoDescription">${escapeHtml(p.seoDescription || '')}</textarea></label>
-          <label class="field"><span>Internal notes (admin only)</span><textarea data-field="internalNotes">${escapeHtml(p.internalNotes || '')}</textarea></label>
+          <label class="field"><span>SEO Title</span><input data-field="seoTitle" value="${escapeAttr(p.seoTitle || '')}" /></label>
+          <label class="field"><span>SEO Description</span><textarea data-field="seoDescription">${escapeHtml(p.seoDescription || '')}</textarea></label>
+          <label class="field"><span>Internal Notes (Admin Only)</span><textarea data-field="internalNotes">${escapeHtml(p.internalNotes || '')}</textarea></label>
         </div>
       </div>
 
@@ -800,7 +800,7 @@ function renderEditor() {
           ${p._isNew ? '' : '<button class="btn btn-danger" id="delete-product" type="button">Delete</button>'}
         </div>
         <div class="panel">
-          <div class="section-head"><h3>Field map</h3></div>
+          <div class="section-head"><h3>Field Map</h3></div>
           <p class="muted" style="margin-top:0;font-size:0.88rem;line-height:1.5">
             These fields power the public site pages:
             ${isFilament
@@ -811,7 +811,7 @@ function renderEditor() {
             <div><span>ID</span><span>${p.id.slice(0, 8)}…</span></div>
             <div><span>Created</span><span>${formatDate(p.createdAt)}</span></div>
             <div><span>Updated</span><span>${formatDate(p.updatedAt)}</span></div>
-            <div><span>Colours / items</span><span>${isFilament ? (p.colours?.length || 0) : (p.items?.length || 0)}</span></div>
+            <div><span>Colours / Items</span><span>${isFilament ? (p.colours?.length || 0) : (p.items?.length || 0)}</span></div>
           </div>
         </div>
       </div>
@@ -847,11 +847,11 @@ function renderFilamentSections(p) {
 
     <div class="panel">
       <div class="section-head">
-        <h3>Colours & pricing</h3>
+        <h3>Colours & Pricing</h3>
         <button class="btn small" id="add-colour" type="button">+ Colour</button>
       </div>
       <label class="field" style="margin-bottom:0.85rem">
-        <span>Colour note (shown under swatches)</span>
+        <span>Colour Note (Shown Under Swatches)</span>
         <textarea data-field="colourNote">${escapeHtml(p.colourNote || '')}</textarea>
       </label>
       <div id="colours-list">
@@ -863,7 +863,7 @@ function renderFilamentSections(p) {
                   ? `<img src="${escapeAttr(c.imagePath)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" onerror="this.style.display='none'" />`
                   : `<div class="swatch-preview" style="background:${escapeAttr(c.hex || guessHex(c.name))}"></div>`}
                 ${c._isNew
-                  ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'
+                  ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
                   : `<button class="btn small" data-action="trigger-colour-image" data-trigger-colour-image="${c.id}" type="button">Choose File</button>
                      <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-colour-image="${c.id}" />`}
               </div>
@@ -873,20 +873,20 @@ function renderFilamentSections(p) {
               <button class="btn small btn-primary" data-save-colour type="button">Save roll</button>
             </div>
             <div class="grid-3">
-              <label class="field"><span>Colour name</span><input data-colour="name" value="${escapeAttr(c.name)}" /></label>
+              <label class="field"><span>Colour Name</span><input data-colour="name" value="${escapeAttr(c.name)}" /></label>
               <label class="field"><span>SKU</span><input data-colour="sku" value="${escapeAttr(c.sku)}" /></label>
-              <label class="field"><span>Hex override</span><input data-colour="hex" value="${escapeAttr(c.hex || '')}" placeholder="#c24b28" /></label>
+              <label class="field"><span>Hex Override</span><input data-colour="hex" value="${escapeAttr(c.hex || '')}" placeholder="#c24b28" /></label>
             </div>
             <div class="grid-2">
-              <label class="field"><span>Filament weight (g)</span><input data-colour="weightG" type="number" min="0" step="1" value="${c.weightG ?? 0}" /></label>
-              <label class="field"><span>Shipping weight (g)</span><input data-colour="shippingWeightG" type="number" min="0" step="1" value="${c.shippingWeightG ?? c.weightG ?? 0}" /></label>
+              <label class="field"><span>Filament Weight (g)</span><input data-colour="weightG" type="number" min="0" step="1" value="${c.weightG ?? 0}" /></label>
+              <label class="field"><span>Shipping Weight (g)</span><input data-colour="shippingWeightG" type="number" min="0" step="1" value="${c.shippingWeightG ?? c.weightG ?? 0}" /></label>
             </div>
             <div class="grid-2">
-              <label class="field"><span>Roll length (m, optional)</span><input data-colour="rollLengthM" type="number" min="0" step="0.1" value="${c.rollLengthM ?? ''}" /></label>
-              <label class="field"><span>Price per roll (R)</span><input data-colour="priceRand" type="number" min="0" step="1" value="${c.priceRand ?? 0}" /></label>
+              <label class="field"><span>Roll Length (m, Optional)</span><input data-colour="rollLengthM" type="number" min="0" step="0.1" value="${c.rollLengthM ?? ''}" /></label>
+              <label class="field"><span>Price per Roll (R)</span><input data-colour="priceRand" type="number" min="0" step="1" value="${c.priceRand ?? 0}" /></label>
             </div>
             <div class="grid-2">
-              <label class="field"><span>Stock quantity</span><input data-colour="stockQty" type="number" min="0" step="1" value="${c.stockQty ?? 0}" /></label>
+              <label class="field"><span>Stock Quantity</span><input data-colour="stockQty" type="number" min="0" step="1" value="${c.stockQty ?? 0}" /></label>
               <label class="field"><span>Notes</span><input data-colour="notes" value="${escapeAttr(c.notes || '')}" /></label>
             </div>
           </div>
@@ -913,11 +913,11 @@ function carPartItemFields(item, categorySlug) {
   ];
   return `
     <div class="grid-2">
-      <label class="field"><span>Creator (design credit)</span><input data-item="creator" value="${escapeAttr(item.creator || '')}" placeholder="e.g. Jonny Long" /></label>
-      <label class="field"><span>Source link (admin only)</span><input data-item="sourceUrl" value="${escapeAttr(item.sourceUrl || '')}" placeholder="https://..." /></label>
+      <label class="field"><span>Creator (Design Credit)</span><input data-item="creator" value="${escapeAttr(item.creator || '')}" placeholder="e.g. Jonny Long" /></label>
+      <label class="field"><span>Source Link (Admin Only)</span><input data-item="sourceUrl" value="${escapeAttr(item.sourceUrl || '')}" placeholder="https://..." /></label>
     </div>
     <div class="field">
-      <span>Fits models</span>
+      <span>Fits Models</span>
       <div class="model-checkbox-list" style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.35rem">
         ${models.length
           ? models
@@ -938,10 +938,10 @@ function carPartItemFields(item, categorySlug) {
 function renderCategorySections(p) {
   return `
     <div class="panel stack gap-3">
-      <div class="section-head"><h3>Category page</h3></div>
+      <div class="section-head"><h3>Category Page</h3></div>
       <div class="grid-2">
         <label class="field"><span>Breadcrumbs</span><input data-field="crumbs" value="${escapeAttr(p.crumbs || '')}" placeholder="Home / Toys" /></label>
-        <label class="field"><span>Parent group</span>
+        <label class="field"><span>Parent Group</span>
           <select data-field="parent">
             <option value="" ${!p.parent ? 'selected' : ''}>None (top-level)</option>
             <option value="car-parts" ${p.parent === 'car-parts' ? 'selected' : ''}>car-parts</option>
@@ -952,7 +952,7 @@ function renderCategorySections(p) {
 
     <div class="panel">
       <div class="section-head">
-        <h3>Catalog items</h3>
+        <h3>Catalog Items</h3>
         <button class="btn small" id="add-item" type="button">+ Item</button>
       </div>
       <p class="muted" style="margin-top:0;font-size:0.85rem">Printed products shown on Toys / Homeware / Phones / Car Parts pages.</p>
@@ -967,16 +967,16 @@ function renderCategorySections(p) {
               <div class="flex items-center gap-3">
                 ${item.imageUrl
                   ? `<img src="${escapeAttr(item.imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" onerror="this.style.display='none'" />`
-                  : '<span class="muted" style="font-size:0.78rem">No photo</span>'}
+                  : '<span class="muted" style="font-size:0.78rem">No Photo</span>'}
                 ${item._isNew
-                  ? '<span class="muted" style="font-size:0.78rem">Save to enable photo upload</span>'
+                  ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
                   : `<button class="btn small" data-action="trigger-item-image" data-trigger-item-image="${item.id}" type="button">Choose File</button>
                      <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-item-image="${item.id}" />`}
               </div>
               ${item.imageUrl && !item._isNew ? `<button class="btn small btn-danger" data-remove-item-image="${item.id}" type="button">Remove photo</button>` : ''}
             </div>
             <div class="grid-2">
-              <label class="field"><span>Item name</span><input data-item="name" value="${escapeAttr(item.name || '')}" /></label>
+              <label class="field"><span>Item Name</span><input data-item="name" value="${escapeAttr(item.name || '')}" /></label>
               <label class="field"><span>SKU</span><input data-item="sku" value="${escapeAttr(item.sku || '')}" /></label>
             </div>
             <label class="field"><span>Details</span><textarea data-item="details">${escapeHtml(item.details || '')}</textarea></label>
@@ -988,13 +988,13 @@ function renderCategorySections(p) {
             <div class="grid-3">
               <label class="field"><span>Price</span><input data-item="price" value="${escapeAttr(item.price || '')}" placeholder="450 (or POA)" /></label>
               <label class="field"><span>Weight (g)</span><input data-item="weight" type="number" min="0" step="1" value="${item.weight ?? 0}" /></label>
-              <label class="field"><span>Shipping weight (g)</span><input data-item="shippingWeight" type="number" min="0" step="1" value="${item.shippingWeight ?? item.weight ?? 0}" /></label>
+              <label class="field"><span>Shipping Weight (g)</span><input data-item="shippingWeight" type="number" min="0" step="1" value="${item.shippingWeight ?? item.weight ?? 0}" /></label>
             </div>
             <div class="grid-3">
-              <label class="field"><span>Stock quantity</span><input data-item="stockQty" type="number" min="0" step="1" value="${item.stockQty ?? 0}" /></label>
+              <label class="field"><span>Stock Quantity</span><input data-item="stockQty" type="number" min="0" step="1" value="${item.stockQty ?? 0}" /></label>
               <label class="field checkbox" style="margin-top:1.5rem">
                 <input data-item="listed" type="checkbox" ${item.listed !== false ? 'checked' : ''} />
-                <span>Visible on site</span>
+                <span>Visible on Site</span>
               </label>
               <label class="field checkbox" style="margin-top:1.5rem">
                 <input data-item="available" type="checkbox" ${item.available !== false ? 'checked' : ''} />
@@ -1255,12 +1255,12 @@ function bindEditorEvents() {
         const { _isNew, ...payload } = p;
         const res = await api('/api/products', { method: 'POST', body: JSON.stringify(payload) });
         state.draft = res.product;
-        toast('Product created');
+        toast(res.publishWarning || 'Product created and published live');
         renderEditor();
       } else {
         const res = await api(`/api/products/${p.id}`, { method: 'PUT', body: JSON.stringify(p) });
         state.draft = res.product;
-        toast('Product saved');
+        toast(res.publishWarning || 'Product saved and published live');
         renderEditor();
       }
     } catch (ex) {
@@ -1597,7 +1597,7 @@ async function renderVersionDetail(id) {
       </div>
       ${releaseDetails ? `
         <div>
-          <h4>Release notes</h4>
+          <h4>Release Notes</h4>
           <pre class="release-notes">${escapeHtml(releaseDetails.releaseNotes || 'No commit notes were recorded for this release.')}</pre>
         </div>
         <div>
@@ -1624,7 +1624,7 @@ async function renderDocumentation() {
   $('#view-documentation').innerHTML = `
     <div class="panel stack gap-3">
       <div class="section-head">
-        <div><h3>System documentation</h3><p class="muted">Current documents stored with this application. Open any document in a new tab.</p></div>
+        <div><h3>System Documentation</h3><p class="muted">Current documents stored with this application. Open any document in a new tab.</p></div>
       </div>
       <div class="documentation-list">
         ${documents.map((document) => `
@@ -1637,7 +1637,7 @@ async function renderDocumentation() {
 }
 
 function testStatusBadge(status) {
-  if (!status) return '<span class="muted">Not run</span>';
+  if (!status) return '<span class="muted">Not Run</span>';
   return `<span class="badge test-${escapeAttr(status)}">${escapeHtml(status)}</span>`;
 }
 
@@ -1654,7 +1654,7 @@ async function renderTestCases() {
   $('#view-test-cases').innerHTML = `
     <div class="stack gap-3">
       <div class="panel stack gap-3">
-        <div class="section-head"><div><h3>Automated test runner</h3><p class="muted">Runs only checked-in Node test cases from this application. Test execution is restricted to the catalog below.</p></div></div>
+        <div class="section-head"><div><h3>Automated Test Runner</h3><p class="muted">Runs only checked-in Node test cases from this application. Test execution is restricted to the catalog below.</p></div></div>
         <div class="test-run-controls">
           <button class="btn btn-primary" id="run-all-tests" type="button" ${activeRun ? 'disabled' : ''}>Run all test cases</button>
           <select id="test-suite-select" ${activeRun ? 'disabled' : ''}><option value="">Run a test suite…</option>${suites.map((file) => `<option value="${escapeAttr(file)}">${escapeHtml(file)}</option>`).join('')}</select>
@@ -1664,14 +1664,14 @@ async function renderTestCases() {
         <div id="test-run-status" class="test-run-status">${testRunSummary(runs[0])}</div>
       </div>
       <div class="panel table-wrap">
-        <div class="section-head"><div><h3>Test cases</h3><p class="muted">${escapeHtml(String(cases.length))} discovered test case(s). Select individual cases, a suite, or the complete suite.</p></div></div>
+        <div class="section-head"><div><h3>Test Cases</h3><p class="muted">${escapeHtml(String(cases.length))} discovered test case(s). Select individual cases, a suite, or the complete suite.</p></div></div>
         <table class="catalog">
           <thead><tr><th><input id="select-all-test-cases" type="checkbox" aria-label="Select all test cases" /></th><th>Test case</th><th>Suite</th><th>Last result</th></tr></thead>
           <tbody>${cases.map((item) => `<tr><td><input class="test-case-select" type="checkbox" value="${escapeAttr(item.id)}" aria-label="Select ${escapeAttr(item.name)}" /></td><td>${escapeHtml(item.name)}</td><td><code>${escapeHtml(item.file)}</code></td><td>${testStatusBadge(item.lastStatus)} ${item.lastRunAt ? `<span class="muted">${escapeHtml(formatDate(item.lastRunAt))}</span>` : ''}</td></tr>`).join('')}</tbody>
         </table>
       </div>
       <div class="panel stack gap-2">
-        <div class="section-head"><h3>Recent runs</h3></div>
+        <div class="section-head"><h3>Recent Runs</h3></div>
         ${runs.map((run) => `<button class="test-run-history" type="button" data-run-id="${escapeAttr(run.id)}">${testRunSummary(run)} <span class="muted">${escapeHtml(formatDate(run.started_at))}</span></button>`).join('') || '<div class="empty">No test runs have been recorded.</div>'}
         <pre id="test-run-output" class="test-output hidden"></pre>
       </div>
@@ -1748,31 +1748,31 @@ async function renderSiteOverview() {
   $('#view-site-overview').innerHTML = `
     <div class="stack gap-3">
       <div class="panel stack gap-3">
-        <div class="section-head"><div><h3>VPS operations overview</h3><p class="muted">Read-only inventory for capacity planning, operations review, and future decisions. File contents are never exposed.</p></div></div>
+        <div class="section-head"><div><h3>VPS Operations Overview</h3><p class="muted">Read-only inventory for capacity planning, operations review, and future decisions. File contents are never exposed.</p></div></div>
         <div class="site-overview-grid">
           <div class="overview-stat"><span>Hostname</span><strong>${escapeHtml(overview.system.hostname)}</strong></div>
-          <div class="overview-stat"><span>Operating system</span><strong>${escapeHtml(overview.system.platform)}</strong></div>
+          <div class="overview-stat"><span>Operating System</span><strong>${escapeHtml(overview.system.platform)}</strong></div>
           <div class="overview-stat"><span>Uptime</span><strong>${escapeHtml(formatUptime(overview.system.uptimeSeconds))}</strong></div>
           <div class="overview-stat"><span>Runtime</span><strong>${escapeHtml(`${overview.system.nodeVersion} · ${overview.system.cpuCount} CPU`)}</strong></div>
-          <div class="overview-stat"><span>Memory free</span><strong>${escapeHtml(formatBytes(overview.system.memoryFreeBytes))} / ${escapeHtml(formatBytes(overview.system.memoryTotalBytes))}</strong></div>
-          <div class="overview-stat"><span>Backups retained</span><strong>${escapeHtml(String(overview.application.backupCount))}</strong></div>
-          <div class="overview-stat"><span>Current release</span><strong>${overview.application.latestRelease ? `V${escapeHtml(overview.application.latestRelease.versionLabel)}` : 'Unavailable'}</strong></div>
+          <div class="overview-stat"><span>Memory Free</span><strong>${escapeHtml(formatBytes(overview.system.memoryFreeBytes))} / ${escapeHtml(formatBytes(overview.system.memoryTotalBytes))}</strong></div>
+          <div class="overview-stat"><span>Backups Retained</span><strong>${escapeHtml(String(overview.application.backupCount))}</strong></div>
+          <div class="overview-stat"><span>Current Release</span><strong>${overview.application.latestRelease ? `V${escapeHtml(overview.application.latestRelease.versionLabel)}` : 'Unavailable'}</strong></div>
         </div>
         <div>
-          <div class="section-head"><h4>Filesystem capacity</h4><strong>${escapeHtml(formatBytes(overview.disk.usedBytes))} used of ${escapeHtml(formatBytes(overview.disk.totalBytes))} (${escapeHtml(String(diskPercent))}%)</strong></div>
+          <div class="section-head"><h4>Filesystem Capacity</h4><strong>${escapeHtml(formatBytes(overview.disk.usedBytes))} used of ${escapeHtml(formatBytes(overview.disk.totalBytes))} (${escapeHtml(String(diskPercent))}%)</strong></div>
           <div class="capacity-bar"><span style="width: ${Math.min(100, diskPercent)}%"></span></div>
           <p class="muted">${escapeHtml(formatBytes(overview.disk.freeBytes))} free on <code>${escapeHtml(overview.disk.filesystemRoot)}</code></p>
         </div>
       </div>
-      ${overview.application.latestRelease ? `<div class="panel"><div class="section-head"><div><h3>Latest deployed release</h3><p class="muted">${escapeHtml(formatDate(overview.application.latestRelease.deployedAt))}</p></div><strong>V${escapeHtml(overview.application.latestRelease.versionLabel)}</strong></div><p style="margin:0">${escapeHtml(overview.application.latestRelease.description)}</p></div>` : ''}
+      ${overview.application.latestRelease ? `<div class="panel"><div class="section-head"><div><h3>Latest Deployed Release</h3><p class="muted">${escapeHtml(formatDate(overview.application.latestRelease.deployedAt))}</p></div><strong>V${escapeHtml(overview.application.latestRelease.versionLabel)}</strong></div><p style="margin:0">${escapeHtml(overview.application.latestRelease.description)}</p></div>` : ''}
       <div class="panel table-wrap">
-        <div class="section-head"><div><h3>Application storage</h3><p class="muted">Key persistent and operational paths.</p></div></div>
+        <div class="section-head"><div><h3>Application Storage</h3><p class="muted">Key persistent and operational paths.</p></div></div>
         <table class="catalog"><thead><tr><th>Area</th><th>Path</th><th>Size</th><th>Modified</th></tr></thead>
           <tbody>${overview.application.paths.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td><code>${escapeHtml(item.path)}</code></td><td>${item.sizeBytes == null ? 'Unavailable' : escapeHtml(formatBytes(item.sizeBytes))}</td><td>${escapeHtml(formatDate(item.modifiedAt))}</td></tr>`).join('')}</tbody>
         </table>
       </div>
       <div class="panel">
-        <div class="section-head"><div><h3>Complete filesystem inventory</h3><p class="muted">Browse directories to review names, types, dates, and allocated sizes. Virtual kernel paths (${escapeHtml(overview.virtualPaths.join(', '))}) are intentionally not traversed.</p></div></div>
+        <div class="section-head"><div><h3>Complete Filesystem Inventory</h3><p class="muted">Browse directories to review names, types, dates, and allocated sizes. Virtual kernel paths (${escapeHtml(overview.virtualPaths.join(', '))}) are intentionally not traversed.</p></div></div>
         <div id="directory-inventory">${renderDirectoryInventory(overview.rootDirectory)}</div>
       </div>
     </div>`;
@@ -2312,7 +2312,7 @@ function featuredProductsPanel(items) {
   const activeCount = list.filter((e) => e.active !== false).length;
   return `
     <div class="panel stack gap-3" id="featured-products-panel">
-      <div class="section-head"><h3>Featured products (homepage)</h3></div>
+      <div class="section-head"><h3>Featured Products (Homepage)</h3></div>
       <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Pick 4–6 products to feature on the homepage. Name and price are pulled live from the catalog on every publish, so a price change here never goes stale on the homepage.</p>
       <input type="text" id="featured-search-input" placeholder="Search products by name or SKU… (Enter to search)" value="${escapeAttr(search.query)}" />
       ${matchesHtml ? `<div class="config-list">${matchesHtml}</div>` : ''}
@@ -2417,19 +2417,19 @@ async function renderSettings() {
         </p>
         <label class="field checkbox">
           <input data-setting="useUniversalFont" type="checkbox" ${s.useUniversalFont ? 'checked' : ''} />
-          <span>Use a universal font across the whole site</span>
+          <span>Use a Universal Font Across the Whole Site</span>
         </label>
         <label class="field" id="universal-font-field">
-          <span>Universal font</span>
+          <span>Universal Font</span>
           <select data-setting="universalFont">${fontOptions}</select>
         </label>
         <div class="grid-2" id="split-font-fields">
           <label class="field">
-            <span>Body / UI font</span>
+            <span>Body / UI Font</span>
             <select data-setting="fontSans">${fontOptions}</select>
           </label>
           <label class="field">
-            <span>Display / heading font</span>
+            <span>Display / Heading Font</span>
             <select data-setting="fontSerif">${fontOptions}</select>
           </label>
         </div>
@@ -2442,7 +2442,7 @@ async function renderSettings() {
           Visitors can toggle light/dark on the website. This sets the default before they choose.
         </p>
         <label class="field">
-          <span>Default theme</span>
+          <span>Default Theme</span>
           <select data-setting="defaultTheme">
             <option value="system" ${s.defaultTheme === 'system' ? 'selected' : ''}>Match visitor system</option>
             <option value="light" ${s.defaultTheme === 'light' ? 'selected' : ''}>Light</option>
@@ -2452,7 +2452,7 @@ async function renderSettings() {
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Homepage tiles</h3></div>
+        <div class="section-head"><h3>Homepage Tiles</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
           The 3 "Shop the range" cards on the homepage. Colours, links and layout stay fixed — only the copy below is editable.
         </p>
@@ -2460,7 +2460,7 @@ async function renderSettings() {
         <div class="stack gap-2" style="padding:0.75rem 0;border-top:1px dashed var(--line)">
           <strong style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted)">Tile ${i + 1}</strong>
           <div class="grid-2">
-            <label class="field"><span>Eyebrow label</span><input data-tile-index="${i}" data-tile-field="eyebrow" value="${escapeAttr(t.eyebrow || '')}" /></label>
+            <label class="field"><span>Eyebrow Label</span><input data-tile-index="${i}" data-tile-field="eyebrow" value="${escapeAttr(t.eyebrow || '')}" /></label>
             <label class="field"><span>Title</span><input data-tile-index="${i}" data-tile-field="title" value="${escapeAttr(t.title || '')}" /></label>
           </div>
           <label class="field"><span>Description</span><input data-tile-index="${i}" data-tile-field="description" value="${escapeAttr(t.description || '')}" /></label>
@@ -2468,7 +2468,7 @@ async function renderSettings() {
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Admin accounts</h3></div>
+        <div class="section-head"><h3>Admin Accounts</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
           Everyone listed here has full access to this admin portal.
         </p>
@@ -2485,57 +2485,57 @@ async function renderSettings() {
           </div>`).join('')}
         </div>
         <div class="grid-2">
-          <label class="field"><span>New admin username</span><input id="new-admin-username" type="text" /></label>
-          <label class="field"><span>New admin password</span><input id="new-admin-password" type="password" placeholder="8+ characters" /></label>
+          <label class="field"><span>New Admin Username</span><input id="new-admin-username" type="text" /></label>
+          <label class="field"><span>New Admin Password</span><input id="new-admin-password" type="password" placeholder="8+ characters" /></label>
         </div>
         <div><button class="btn" id="add-admin" type="button">Add admin</button></div>
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Public site contact</h3></div>
+        <div class="section-head"><h3>Public Site Contact</h3></div>
         <div class="grid-2">
-          <label class="field"><span>Site name</span><input data-setting="siteName" value="${escapeAttr(s.siteName || '')}" /></label>
+          <label class="field"><span>Site Name</span><input data-setting="siteName" value="${escapeAttr(s.siteName || '')}" /></label>
           <label class="field"><span>Tagline</span><input data-setting="tagline" value="${escapeAttr(s.tagline || '')}" /></label>
         </div>
         <div class="grid-2">
-          <label class="field"><span>Phone display</span><input data-setting="phoneDisplay" value="${escapeAttr(s.phoneDisplay || '')}" /></label>
-          <label class="field"><span>Phone tel link</span><input data-setting="phoneTel" value="${escapeAttr(s.phoneTel || '')}" /></label>
+          <label class="field"><span>Phone Display</span><input data-setting="phoneDisplay" value="${escapeAttr(s.phoneDisplay || '')}" /></label>
+          <label class="field"><span>Phone Tel Link</span><input data-setting="phoneTel" value="${escapeAttr(s.phoneTel || '')}" /></label>
         </div>
         <label class="field"><span>Email</span><input data-setting="email" value="${escapeAttr(s.email || '')}" /></label>
         <label class="field"><span>Address</span><input data-setting="address" value="${escapeAttr(s.address || '')}" /></label>
         <label class="field"><span>Hours</span><input data-setting="hours" value="${escapeAttr(s.hours || '')}" /></label>
-        <label class="field"><span>WhatsApp link</span><input data-setting="whatsapp" value="${escapeAttr(s.whatsapp || '')}" /></label>
+        <label class="field"><span>WhatsApp Link</span><input data-setting="whatsapp" value="${escapeAttr(s.whatsapp || '')}" /></label>
         <div class="grid-2">
           <label class="field"><span>Facebook</span><input data-setting="facebook" value="${escapeAttr(s.facebook || '')}" /></label>
           <label class="field"><span>Instagram</span><input data-setting="instagram" value="${escapeAttr(s.instagram || '')}" /></label>
         </div>
-        <label class="field"><span>Change admin password</span><input data-setting="adminPassword" type="password" placeholder="Leave blank to keep current" /></label>
+        <label class="field"><span>Change Admin Password</span><input data-setting="adminPassword" type="password" placeholder="Leave blank to keep current" /></label>
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Storefront stock &amp; delivery messaging</h3></div>
+        <div class="section-head"><h3>Storefront Stock &amp; Delivery Messaging</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
-        <label class="field" style="max-width:220px"><span>Low-stock threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
+        <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
         <div class="grid-2">
-          <label class="field"><span>Ready-stock filament dispatch (business days)</span><input data-setting="filamentDispatchDays" value="${escapeAttr(s.filamentDispatchDays || '')}" /></label>
-          <label class="field"><span>Custom-print production lead time (business days)</span><input data-setting="printLeadTimeDays" value="${escapeAttr(s.printLeadTimeDays || '')}" /></label>
+          <label class="field"><span>Ready-stock Filament Dispatch (Business Days)</span><input data-setting="filamentDispatchDays" value="${escapeAttr(s.filamentDispatchDays || '')}" /></label>
+          <label class="field"><span>Custom-print Production Lead Time (Business Days)</span><input data-setting="printLeadTimeDays" value="${escapeAttr(s.printLeadTimeDays || '')}" /></label>
         </div>
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Invoicing &amp; bank details</h3></div>
+        <div class="section-head"><h3>Invoicing &amp; Bank Details</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on every printable invoice (Invoice History → Print).</p>
         <div class="grid-2">
-          <label class="field"><span>Bank name</span><input data-setting="bankName" value="${escapeAttr(s.bankName || '')}" /></label>
-          <label class="field"><span>Account name</span><input data-setting="bankAccountName" value="${escapeAttr(s.bankAccountName || '')}" /></label>
+          <label class="field"><span>Bank Name</span><input data-setting="bankName" value="${escapeAttr(s.bankName || '')}" /></label>
+          <label class="field"><span>Account Name</span><input data-setting="bankAccountName" value="${escapeAttr(s.bankAccountName || '')}" /></label>
         </div>
         <div class="grid-2">
-          <label class="field"><span>Account number</span><input data-setting="bankAccountNumber" value="${escapeAttr(s.bankAccountNumber || '')}" /></label>
-          <label class="field"><span>Branch code</span><input data-setting="bankBranchCode" value="${escapeAttr(s.bankBranchCode || '')}" /></label>
+          <label class="field"><span>Account Number</span><input data-setting="bankAccountNumber" value="${escapeAttr(s.bankAccountNumber || '')}" /></label>
+          <label class="field"><span>Branch Code</span><input data-setting="bankBranchCode" value="${escapeAttr(s.bankBranchCode || '')}" /></label>
         </div>
-        <label class="field" style="max-width:220px"><span>Next invoice number seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
-        <label class="field" style="max-width:320px"><span>Order &amp; design-request notification email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
+        <label class="field" style="max-width:220px"><span>Next Invoice Number Seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
+        <label class="field" style="max-width:320px"><span>Order &amp; Design-request Notification Email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
       </div>
 ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
       ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
@@ -2545,19 +2545,19 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
       ${featuredProductsPanel(s.featuredProducts)}
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Print Job Costing rates</h3></div>
+        <div class="section-head"><h3>Print Job Costing Rates</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Drives the internal-only cost calculator (Print Job Costing) — never affects storefront prices. Markup/Running costs are fractions (0.25 = 25%).</p>
         <div class="grid-3">
-          <label class="field"><span>Markup (fraction)</span><input data-setting="markupPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.markupPct ?? 0))}" /></label>
-          <label class="field"><span>Running costs (fraction)</span><input data-setting="runningCostsPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.runningCostsPct ?? 0))}" /></label>
-          <label class="field"><span>Electricity rate (R/kWh)</span><input data-setting="electricityRate" type="number" min="0" step="0.01" value="${escapeAttr(String(s.electricityRate ?? 0))}" /></label>
+          <label class="field"><span>Markup (Fraction)</span><input data-setting="markupPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.markupPct ?? 0))}" /></label>
+          <label class="field"><span>Running Costs (Fraction)</span><input data-setting="runningCostsPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.runningCostsPct ?? 0))}" /></label>
+          <label class="field"><span>Electricity Rate (R/kWh)</span><input data-setting="electricityRate" type="number" min="0" step="0.01" value="${escapeAttr(String(s.electricityRate ?? 0))}" /></label>
         </div>
         <div class="grid-3">
-          <label class="field"><span>Printer power draw (kWh/hr)</span><input data-setting="printerPowerDraw" type="number" min="0" step="0.01" value="${escapeAttr(String(s.printerPowerDraw ?? 0))}" /></label>
-          <label class="field"><span>Design rate (R/hr)</span><input data-setting="designRate" type="number" min="0" step="1" value="${escapeAttr(String(s.designRate ?? 0))}" /></label>
-          <label class="field"><span>Setup rate (R/hr)</span><input data-setting="setupRate" type="number" min="0" step="1" value="${escapeAttr(String(s.setupRate ?? 0))}" /></label>
+          <label class="field"><span>Printer Power Draw (kWh/hr)</span><input data-setting="printerPowerDraw" type="number" min="0" step="0.01" value="${escapeAttr(String(s.printerPowerDraw ?? 0))}" /></label>
+          <label class="field"><span>Design Rate (R/hr)</span><input data-setting="designRate" type="number" min="0" step="1" value="${escapeAttr(String(s.designRate ?? 0))}" /></label>
+          <label class="field"><span>Setup Rate (R/hr)</span><input data-setting="setupRate" type="number" min="0" step="1" value="${escapeAttr(String(s.setupRate ?? 0))}" /></label>
         </div>
-        <label class="field" style="max-width:220px"><span>Post-processing rate (R/hr)</span><input data-setting="postProcessingRate" type="number" min="0" step="1" value="${escapeAttr(String(s.postProcessingRate ?? 0))}" /></label>
+        <label class="field" style="max-width:220px"><span>Post-processing Rate (R/hr)</span><input data-setting="postProcessingRate" type="number" min="0" step="1" value="${escapeAttr(String(s.postProcessingRate ?? 0))}" /></label>
         <div>
           <button class="btn btn-primary" id="save-settings" type="button">Save settings</button>
         </div>
@@ -2779,7 +2779,7 @@ async function renderOrderDetail(id) {
               ${order.status === 'cancelled' ? '<option value="cancelled" selected>Cancelled</option>' : ''}
             </select>
           </label>
-          <label class="field"><span>Tracking number</span><input id="order-tracking" value="${escapeAttr(order.trackingNumber || '')}" /></label>
+          <label class="field"><span>Tracking Number</span><input id="order-tracking" value="${escapeAttr(order.trackingNumber || '')}" /></label>
           <div class="field"><span>&nbsp;</span><button class="btn btn-primary" id="save-order" type="button">Save</button></div>
         </div>
         <p class="muted" style="font-size:0.85rem">
@@ -2812,7 +2812,7 @@ async function renderOrderDetail(id) {
       </div>
 
       <div class="panel table-wrap">
-        <div class="section-head"><h3>Payment transactions</h3></div>
+        <div class="section-head"><h3>Payment Transactions</h3></div>
         <table class="catalog">
           <thead><tr><th>Gateway</th><th>Reference</th><th>Status</th><th>Recorded</th></tr></thead>
           <tbody>${txRows}</tbody>
@@ -2888,7 +2888,7 @@ function ordersNestedRowHtml(clientId, colspan) {
     return `<tr class="nested-row" data-nested-for="${escapeAttr(clientId)}"><td colspan="${colspan}">Loading orders…</td></tr>`;
   }
   if (!orders.length) {
-    return `<tr class="nested-row" data-nested-for="${escapeAttr(clientId)}"><td colspan="${colspan}"><span class="muted">No orders yet</span></td></tr>`;
+    return `<tr class="nested-row" data-nested-for="${escapeAttr(clientId)}"><td colspan="${colspan}"><span class="muted">No Orders Yet</span></td></tr>`;
   }
   const orderRows = orders
     .map((o) => {
@@ -2980,11 +2980,11 @@ async function renderClients() {
         <button class="btn btn-ghost small" id="back-to-clients" type="button" style="align-self:flex-start">&larr; Back to Clients</button>
         <div class="section-head"><h3>${form.id ? `Edit client (${escapeHtml(form.clientCode || '')})` : 'New client'}</h3></div>
         <div class="grid-2">
-          <label class="field"><span>First name</span><input id="cf-first-name" value="${escapeAttr(form.firstName || '')}" /></label>
+          <label class="field"><span>First Name</span><input id="cf-first-name" value="${escapeAttr(form.firstName || '')}" /></label>
           <label class="field"><span>Surname</span><input id="cf-last-name" value="${escapeAttr(form.lastName || '')}" /></label>
         </div>
         <div class="grid-2">
-          <label class="field"><span>Business name (optional)</span><input id="cf-business-name" value="${escapeAttr(form.businessName || '')}" /></label>
+          <label class="field"><span>Business Name (Optional)</span><input id="cf-business-name" value="${escapeAttr(form.businessName || '')}" /></label>
           <label class="field"><span>Email *</span><input id="cf-email" type="email" required value="${escapeAttr(form.email)}" /></label>
         </div>
         <div class="grid-2">
@@ -2997,16 +2997,16 @@ async function renderClients() {
           <label class="field"><span>City</span><input id="cf-city" value="${escapeAttr(form.city)}" /></label>
           <label class="field"><span>Province</span><input id="cf-province" value="${escapeAttr(form.province)}" /></label>
         </div>
-        <label class="field" style="max-width:200px"><span>Postal code</span><input id="cf-postal" value="${escapeAttr(form.postalCode)}" /></label>
+        <label class="field" style="max-width:200px"><span>Postal Code</span><input id="cf-postal" value="${escapeAttr(form.postalCode)}" /></label>
         <div class="grid-3">
           <label class="field"><span>Discount %</span><input id="cf-discount-pct" type="number" min="0" max="100" step="0.5" value="${escapeAttr(String(form.discountPct ?? 0))}" /></label>
-          <label class="field"><span>Discount note</span><input id="cf-discount-note" value="${escapeAttr(form.discountNote || '')}" placeholder="e.g. Family, Supplier" /></label>
-          <label class="field"><span>Lead source</span><input id="cf-source" value="${escapeAttr(form.source || '')}" placeholder="e.g. Website, Facebook, WA Group" /></label>
+          <label class="field"><span>Discount Note</span><input id="cf-discount-note" value="${escapeAttr(form.discountNote || '')}" placeholder="e.g. Family, Supplier" /></label>
+          <label class="field"><span>Lead Source</span><input id="cf-source" value="${escapeAttr(form.source || '')}" placeholder="e.g. Website, Facebook, WA Group" /></label>
         </div>
         <p class="muted" style="font-size:0.8rem">Discount only applies on manually-created orders (New Order) — never automatically at online checkout.</p>
         <div class="grid-2">
-          <label class="field checkbox"><input id="cf-email-marketing-opt-in" type="checkbox" ${form.emailMarketingOptIn ? 'checked' : ''} /><span>Email marketing consent recorded</span></label>
-          <label class="field"><span>Consent source</span><input id="cf-email-marketing-source" value="${escapeAttr(form.emailMarketingConsentSource || '')}" placeholder="e.g. Written consent, website signup" ${form.emailMarketingOptIn ? '' : 'disabled'} /></label>
+          <label class="field checkbox"><input id="cf-email-marketing-opt-in" type="checkbox" ${form.emailMarketingOptIn ? 'checked' : ''} /><span>Email Marketing Consent Recorded</span></label>
+          <label class="field"><span>Consent Source</span><input id="cf-email-marketing-source" value="${escapeAttr(form.emailMarketingConsentSource || '')}" placeholder="e.g. Written consent, website signup" ${form.emailMarketingOptIn ? '' : 'disabled'} /></label>
         </div>
         <p class="muted" style="font-size:0.8rem">Only clients with explicit email-marketing consent can be selected for a newsletter. WhatsApp consent is separate.</p>
         <div class="row-card-actions">
@@ -3155,7 +3155,7 @@ async function renderRegisteredUsers() {
           <td><button class="btn-expand" data-action="toggle-orders" type="button" aria-expanded="${expanded}" aria-label="Toggle orders">${expanded ? '▾' : '▸'}</button></td>
           <td>${escapeHtml(c.name || '—')}</td>
           <td>${escapeHtml(c.email)}</td>
-          <td>${c.emailVerified ? '<span class="badge published">verified</span>' : '<span class="badge draft">unverified</span>'}</td>
+          <td>${c.emailVerified ? '<span class="badge published">Verified</span>' : '<span class="badge draft">Unverified</span>'}</td>
           <td>${escapeHtml(formatDate(c.createdAt))}</td>
           <td>${c.lastLoginAt ? escapeHtml(formatDate(c.lastLoginAt)) : '<span class="muted">Never</span>'}</td>
           <td>
@@ -3438,8 +3438,8 @@ function newOrderShippingControlHtml(order, shippingOptions, weight) {
   return `
     <p class="muted" style="margin:0 0 0.5rem">Order weight: ${weight}g${order.shippingOptionId ? '' : ' — no bracket auto-matched; pick one below or enter a price manually'}</p>
     <div class="grid-2">
-      <label class="field"><span>Courier bracket</span><select id="no-shipping-fixed"><option value="">Choose an option…</option>${opts}</select></label>
-      <label class="field"><span>Or manual price (R, used only if no bracket picked)</span><input id="no-shipping-manual" type="number" min="0" step="1" value="${escapeAttr(String(order.manualShippingPrice))}" ${order.shippingOptionId ? 'disabled' : ''} /></label>
+      <label class="field"><span>Courier Bracket</span><select id="no-shipping-fixed"><option value="">Choose an option…</option>${opts}</select></label>
+      <label class="field"><span>Or Manual Price (R, Used Only If No Bracket Picked)</span><input id="no-shipping-manual" type="number" min="0" step="1" value="${escapeAttr(String(order.manualShippingPrice))}" ${order.shippingOptionId ? 'disabled' : ''} /></label>
     </div>`;
 }
 
@@ -3472,10 +3472,10 @@ function newOrderItemRowHtml(item, idx, itemCount) {
         <label class="field"><span>Qty</span><input class="ni-qty" type="number" min="1" step="1" value="${escapeAttr(String(item.quantity))}" /></label>
         ${
           item.mode === 'product'
-            ? `<div class="field"><span>Unit price</span><p style="margin:0.4rem 0 0">${formatRand(item.productPrice)} <span class="muted">(catalog price)</span></p></div>`
-            : `<label class="field"><span>Unit price (R)</span><input class="ni-price" type="number" min="0" step="1" value="${escapeAttr(String(item.unitPrice))}" /></label>`
+            ? `<div class="field"><span>Unit Price</span><p style="margin:0.4rem 0 0">${formatRand(item.productPrice)} <span class="muted">(Catalog Price)</span></p></div>`
+            : `<label class="field"><span>Unit Price (R)</span><input class="ni-price" type="number" min="0" step="1" value="${escapeAttr(String(item.unitPrice))}" /></label>`
         }
-        <div class="field"><span>Line total</span><p style="margin:0.4rem 0 0">${formatRand((Number(item.quantity) || 0) * newOrderItemPrice(item))}</p></div>
+        <div class="field"><span>Line Total</span><p style="margin:0.4rem 0 0">${formatRand((Number(item.quantity) || 0) * newOrderItemPrice(item))}</p></div>
       </div>
     </div>`;
 }
@@ -3525,11 +3525,11 @@ async function renderNewOrder() {
         ` : `
           <p class="muted" style="margin:0">Submitting this creates a real client record (same as checkout) — it appears in Clients and this order shows in their order history.</p>
           <div class="grid-2">
-            <label class="field"><span>First name</span><input id="no-new-first" value="${escapeAttr(order.newClient.firstName)}" /></label>
+            <label class="field"><span>First Name</span><input id="no-new-first" value="${escapeAttr(order.newClient.firstName)}" /></label>
             <label class="field"><span>Surname</span><input id="no-new-last" value="${escapeAttr(order.newClient.lastName)}" /></label>
           </div>
           <div class="grid-2">
-            <label class="field"><span>Business name (optional)</span><input id="no-new-business" value="${escapeAttr(order.newClient.businessName)}" /></label>
+            <label class="field"><span>Business Name (Optional)</span><input id="no-new-business" value="${escapeAttr(order.newClient.businessName)}" /></label>
             <label class="field"><span>Email *</span><input id="no-new-email" type="email" value="${escapeAttr(order.newClient.email)}" /></label>
           </div>
           <label class="field"><span>Phone</span><input id="no-new-phone" value="${escapeAttr(order.newClient.phone)}" /></label>
@@ -3537,7 +3537,7 @@ async function renderNewOrder() {
       </div>
 
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Line items</h3><button class="btn small" id="add-item" type="button">+ Add line</button></div>
+        <div class="section-head"><h3>Line Items</h3><button class="btn small" id="add-item" type="button">+ Add line</button></div>
         <div class="stack gap-2">${itemRows}</div>
       </div>
 
@@ -3545,9 +3545,9 @@ async function renderNewOrder() {
         <div class="section-head"><h3>Shipping</h3></div>
         <div class="stack gap-2">
           <label class="field checkbox"><input type="radio" name="no-shipping-method" value="fixed_pudo" ${order.shippingMethod === 'fixed_pudo' ? 'checked' : ''} /><span>PUDO Locker</span></label>
-          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="courier" ${order.shippingMethod === 'courier' ? 'checked' : ''} /><span>Our shipping (courier)</span></label>
-          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="own_courier" ${order.shippingMethod === 'own_courier' ? 'checked' : ''} /><span>Customer's own courier</span></label>
-          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="collect" ${order.shippingMethod === 'collect' ? 'checked' : ''} /><span>Collect from store</span></label>
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="courier" ${order.shippingMethod === 'courier' ? 'checked' : ''} /><span>Our Shipping (Courier)</span></label>
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="own_courier" ${order.shippingMethod === 'own_courier' ? 'checked' : ''} /><span>Customer's Own Courier</span></label>
+          <label class="field checkbox"><input type="radio" name="no-shipping-method" value="collect" ${order.shippingMethod === 'collect' ? 'checked' : ''} /><span>Collect from Store</span></label>
           <label class="field checkbox"><input type="radio" name="no-shipping-method" value="fixed_local" ${order.shippingMethod === 'fixed_local' ? 'checked' : ''} /><span>Local Delivery</span></label>
         </div>
         ${newOrderShippingControlHtml(order, shippingOptions, weight)}
@@ -3557,7 +3557,7 @@ async function renderNewOrder() {
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Payment</h3></div>
         <div class="grid-3">
-          <label class="field"><span>Payment method</span>
+          <label class="field"><span>Payment Method</span>
             <select id="no-payment-method">
               <option value="manual_eft" ${order.paymentMethod === 'manual_eft' ? 'selected' : ''}>Manual EFT</option>
               <option value="cash_on_collection" ${order.paymentMethod === 'cash_on_collection' ? 'selected' : ''}>Cash</option>
@@ -3565,7 +3565,7 @@ async function renderNewOrder() {
               <option value="payfast_eft" ${order.paymentMethod === 'payfast_eft' ? 'selected' : ''}>Payfast (Instant EFT)</option>
             </select>
           </label>
-          <label class="field checkbox" style="align-self:end"><input id="no-already-paid" type="checkbox" ${order.alreadyPaid ? 'checked' : ''} /><span>Already paid</span></label>
+          <label class="field checkbox" style="align-self:end"><input id="no-already-paid" type="checkbox" ${order.alreadyPaid ? 'checked' : ''} /><span>Already Paid</span></label>
         </div>
       </div>
 
@@ -3776,7 +3776,7 @@ async function renderPrintJobs() {
     : '');
   const previewHtml = preview ? `
       <div class="panel stack gap-2" style="background:var(--panel-2, transparent)">
-        <div class="section-head"><h3>Validation result</h3></div>
+        <div class="section-head"><h3>Validation Result</h3></div>
         <p>Filament cost: ${formatRand(preview.filamentCost)} · Power: ${formatRand(preview.powerCost)} · Labour: ${formatRand(preview.labourCost)} · Running: ${formatRand(preview.runningCost)}</p>
         <p><strong>Total cost: ${formatRand(preview.totalCost)} — Markup: ${formatRand(preview.markupAmount)} — Selling price: ${formatRand(preview.sellingPrice)}</strong></p>
         ${stockWarningsHtml(preview.stockWarnings)}
@@ -3801,14 +3801,14 @@ async function renderPrintJobs() {
               <div>
                 ${j.referenceFilePath
                   ? `<a href="${escapeAttr(j.referenceFilePath)}" download="${escapeAttr(j.referenceFileOriginalName || basename(j.referenceFilePath))}" class="text-terracotta" style="text-decoration:underline">${escapeHtml(j.referenceFileOriginalName || basename(j.referenceFilePath))}</a>`
-                  : '<span class="muted">No file</span>'}
+                  : '<span class="muted">No File</span>'}
                 <button class="btn small" data-action="upload-file" type="button">${j.referenceFilePath ? 'Replace' : '+ Add file'}</button>
                 <input type="file" class="hidden" data-role="file-input" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" />
               </div>
               <div>
                 ${j.referenceImagePath
                   ? `<a href="${escapeAttr(j.referenceImagePath)}" target="_blank" rel="noopener" class="text-terracotta" style="text-decoration:underline">${escapeHtml(j.referenceImageOriginalName || basename(j.referenceImagePath))}</a>`
-                  : '<span class="muted">No photo</span>'}
+                  : '<span class="muted">No Photo</span>'}
                 <button class="btn small" data-action="upload-image" type="button">${j.referenceImagePath ? 'Replace' : '+ Add photo'}</button>
                 <input type="file" class="hidden" data-role="image-input" accept="image/jpeg,image/png,image/webp" />
               </div>
@@ -3842,7 +3842,7 @@ async function renderPrintJobs() {
             ${listingCategories.map((c) => `<option value="${escapeAttr(c.slug)}">${escapeHtml(c.name)}</option>`).join('')}
           </select>
         </label>`}
-      <label class="field"><span>Stock quantity</span><input id="lst-stock" type="number" min="0" step="1" value="${listing.listingItemId ? escapeAttr(String(state.listingItemSnapshot?.stockQty ?? 0)) : '1'}" /></label>
+      <label class="field"><span>Stock Quantity</span><input id="lst-stock" type="number" min="0" step="1" value="${listing.listingItemId ? escapeAttr(String(state.listingItemSnapshot?.stockQty ?? 0)) : '1'}" /></label>
       <p class="muted" style="font-size:0.8rem">Sells at the Final Selling Price (${formatRand(listing.finalSellingPrice ?? 0)}) set above -- change that first if it needs updating, then Save here to push it into the listing too.</p>
       <div class="row-card-actions">
         <button class="btn btn-primary" id="save-listing" type="button">${listing.listingItemId ? 'Update' : 'List for sale'}</button>
@@ -3853,14 +3853,14 @@ async function renderPrintJobs() {
   $('#view-print-jobs').innerHTML = `
     <div class="stack gap-4">
       <div class="panel stack gap-3" style="max-width:900px">
-        <div class="section-head"><h3>Log a print job</h3></div>
-        <label class="field"><span>Item / file name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
+        <div class="section-head"><h3>Log a Print Job</h3></div>
+        <label class="field"><span>Item / File Name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
 
         <div class="stack gap-2">${slotRows}</div>
         <p class="muted" style="font-size:0.85rem">Totals: <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
 
         <div class="grid-4">
-          <label class="field"><span>Print time</span>
+          <label class="field"><span>Print Time</span>
             <div class="grid-2" style="gap:0.4rem">
               <input id="pj-time-h" type="number" min="0" step="1" placeholder="Hours" value="${escapeAttr(String(draft.printTimeHours))}" />
               <input id="pj-time-m" type="number" min="0" max="59" step="1" placeholder="Minutes" value="${escapeAttr(String(draft.printTimeMins))}" />
@@ -3871,14 +3871,14 @@ async function renderPrintJobs() {
           <label class="field"><span>Post-processing (hrs)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
         </div>
         <div class="grid-3">
-          <label class="field"><span>Markup override (fraction, blank = Settings default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
+          <label class="field"><span>Markup Override (Fraction, Blank = Settings Default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
           <label class="field"><span>Status</span>
             <select id="pj-status">
               <option value="Printed" ${draft.status === 'Printed' ? 'selected' : ''}>Printed</option>
               <option value="Estimate" ${draft.status === 'Estimate' ? 'selected' : ''}>Estimate</option>
             </select>
           </label>
-          <label class="field"><span>Final selling price (blank = Minimum Selling Price)</span>
+          <label class="field"><span>Final Selling Price (Blank = Minimum Selling Price)</span>
             <div style="display:flex;align-items:center;gap:0.4rem">
               <span class="muted">R</span>
               <input id="pj-final-price" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.finalSellingPrice))}" placeholder="${preview ? escapeAttr(String(preview.sellingPrice)) : '0.00'}" style="flex:1" />
@@ -3887,11 +3887,11 @@ async function renderPrintJobs() {
         </div>
 
         <div class="grid-2">
-          <div class="field"><span>Model file (optional) — STL/3MF/OBJ/gcode/zip/PDF</span>
+          <div class="field"><span>Model File (Optional) — STL/3MF/OBJ/gcode/zip/PDF</span>
             <label class="btn small" for="pj-model-file">Choose File</label>
             <input type="file" class="hidden" id="pj-model-file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" />
           </div>
-          <div class="field"><span>Reference photo (optional)</span>
+          <div class="field"><span>Reference Photo (Optional)</span>
             <label class="btn small" for="pj-model-image">Choose File</label>
             <input type="file" class="hidden" id="pj-model-image" accept="image/jpeg,image/png,image/webp" />
           </div>
@@ -4158,14 +4158,14 @@ async function renderInHouseFilament() {
         <div class="section-head"><h3>${form.id ? 'Edit filament' : 'New filament'}</h3></div>
         <div class="grid-2">
           <label class="field"><span>Brand</span><select id="ihf-brand"><option value="">Select brand…</option>${activeBrandNames.map((brand) => `<option value="${escapeAttr(brand)}" ${form.brand === brand ? 'selected' : ''}>${escapeHtml(brand)}</option>`).join('')}</select></label>
-          <label class="field"><span>Filament type</span><input id="ihf-type" value="${escapeAttr(form.filamentType)}" placeholder="PLA" /></label>
-          <label class="field"><span>Color name</span><input id="ihf-color" value="${escapeAttr(form.colorName)}" placeholder="Black" /></label>
+          <label class="field"><span>Filament Type</span><input id="ihf-type" value="${escapeAttr(form.filamentType)}" placeholder="PLA" /></label>
+          <label class="field"><span>Color Name</span><input id="ihf-color" value="${escapeAttr(form.colorName)}" placeholder="Black" /></label>
         </div>
         <div class="grid-4">
-          <label class="field"><span>Rolls available</span><input id="ihf-rolls" type="number" min="0" step="1" value="${escapeAttr(String(form.rollsAvailable))}" /></label>
-          <label class="field"><span>Weight per roll (g)</span><input id="ihf-weight" type="number" min="0" step="1" value="${escapeAttr(String(form.weightG))}" /></label>
-          <label class="field"><span>Length per roll (m)</span><input id="ihf-length" type="number" min="0" step="1" value="${escapeAttr(String(form.rollLengthM))}" /></label>
-          <label class="field"><span>Cost per roll (R)</span><input id="ihf-cost" type="number" min="0" step="1" value="${escapeAttr(String(form.costPerRollRand))}" /></label>
+          <label class="field"><span>Rolls Available</span><input id="ihf-rolls" type="number" min="0" step="1" value="${escapeAttr(String(form.rollsAvailable))}" /></label>
+          <label class="field"><span>Weight per Roll (g)</span><input id="ihf-weight" type="number" min="0" step="1" value="${escapeAttr(String(form.weightG))}" /></label>
+          <label class="field"><span>Length per Roll (m)</span><input id="ihf-length" type="number" min="0" step="1" value="${escapeAttr(String(form.rollLengthM))}" /></label>
+          <label class="field"><span>Cost per Roll (R)</span><input id="ihf-cost" type="number" min="0" step="1" value="${escapeAttr(String(form.costPerRollRand))}" /></label>
         </div>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-in-house-filament" type="button">Save</button>
@@ -4273,14 +4273,14 @@ async function renderPurchases() {
         <label class="field"><span>Supplier</span><input id="pu-supplier" value="${escapeAttr(form.supplier)}" /></label>
         <label class="field"><span>Goods</span><input id="pu-goods" value="${escapeAttr(form.goods)}" /></label>
         <div class="grid-3">
-          <label class="field"><span>Total value (R)</span><input id="pu-value" type="number" min="0" step="1" value="${escapeAttr(String(form.totalValue))}" /></label>
+          <label class="field"><span>Total Value (R)</span><input id="pu-value" type="number" min="0" step="1" value="${escapeAttr(String(form.totalValue))}" /></label>
           <label class="field"><span>Status</span>
             <select id="pu-status">
               <option value="outstanding" ${form.status === 'outstanding' ? 'selected' : ''}>Outstanding</option>
               <option value="paid" ${form.status === 'paid' ? 'selected' : ''}>Paid</option>
             </select>
           </label>
-          <label class="field"><span>Payment type</span><input id="pu-payment-type" value="${escapeAttr(form.paymentType)}" placeholder="e.g. Card, EFT" /></label>
+          <label class="field"><span>Payment Type</span><input id="pu-payment-type" value="${escapeAttr(form.paymentType)}" placeholder="e.g. Card, EFT" /></label>
         </div>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-purchase" type="button">Save</button>
@@ -4375,23 +4375,23 @@ async function renderNewsletterCampaigns() {
   $('#view-newsletter').innerHTML = `
     <div class="newsletter-analytics panel">
       <div><span>Campaigns</span><strong>${escapeHtml(String(analytics.campaignCount))}</strong></div>
-      <div><span>Saved audience</span><strong>${escapeHtml(String(analytics.audienceCount))}</strong></div>
-      <div><span>Accepted by mail server</span><strong>${escapeHtml(String(analytics.acceptedCount))}</strong></div>
+      <div><span>Saved Audience</span><strong>${escapeHtml(String(analytics.audienceCount))}</strong></div>
+      <div><span>Accepted by Mail Server</span><strong>${escapeHtml(String(analytics.acceptedCount))}</strong></div>
       <div><span>Failed</span><strong>${escapeHtml(String(analytics.failedCount))}</strong></div>
-      <div><span>Acceptance rate</span><strong>${analytics.acceptanceRate === null ? '—' : `${escapeHtml(String(analytics.acceptanceRate))}%`}</strong></div>
+      <div><span>Acceptance Rate</span><strong>${analytics.acceptanceRate === null ? '—' : `${escapeHtml(String(analytics.acceptanceRate))}%`}</strong></div>
       <p class="muted newsletter-analytics-note">Acceptance confirms Gmail accepted the message for delivery; it does not confirm opens, clicks, or inbox placement.</p>
       ${analytics.bySource.length ? `<div class="newsletter-source-summary">${analytics.bySource.map((source) => `<span>${escapeHtml(source.sourceType)}: ${escapeHtml(String(source.acceptedCount))}/${escapeHtml(String(source.audienceCount))} accepted</span>`).join('')}</div>` : ''}
     </div>
     <div class="panel stack gap-3">
-      <div class="section-head"><div><h3>Compose newsletter</h3><p class="muted">Select only recipients with confirmed newsletter consent or recorded client email-marketing consent.</p></div></div>
+      <div class="section-head"><div><h3>Compose Newsletter</h3><p class="muted">Select only recipients with confirmed newsletter consent or recorded client email-marketing consent.</p></div></div>
       <label class="field"><span>Subject</span><input id="nc-subject" value="${escapeAttr(state.newsletterSubject || '')}" /></label>
-      <div class="grid-3"><label class="field"><span>Use template</span><select id="nc-template"><option value="">Choose a saved template…</option>${templates.map((template) => `<option value="${escapeAttr(template.id)}">${escapeHtml(template.name)}</option>`).join('')}</select></label><label class="field"><span>Upload image</span><input id="nc-image-upload" type="file" accept="image/jpeg,image/png,image/webp" /></label><label class="field"><span>Import HTML template</span><input id="nc-template-upload" type="file" accept=".html,.htm,text/html" /></label></div>
+      <div class="grid-3"><label class="field"><span>Use Template</span><select id="nc-template"><option value="">Choose a saved template…</option>${templates.map((template) => `<option value="${escapeAttr(template.id)}">${escapeHtml(template.name)}</option>`).join('')}</select></label><label class="field"><span>Upload Image</span><input id="nc-image-upload" type="file" accept="image/jpeg,image/png,image/webp" /></label><label class="field"><span>Import HTML Template</span><input id="nc-template-upload" type="file" accept=".html,.htm,text/html" /></label></div>
       <div class="newsletter-assets">${assets.map((asset) => `<button class="newsletter-asset" type="button" data-asset-url="${escapeAttr(asset.url)}" data-asset-alt="${escapeAttr(asset.altText)}"><img src="${escapeAttr(asset.url)}" alt="${escapeAttr(asset.altText)}" /></button>`).join('')}</div>
       <div id="newsletter-block-editor" class="stack gap-2">${blockEditor}</div>
       <div class="row-card-actions"><button class="btn small" id="nc-add-block" type="button">+ Content block</button><button class="btn small" id="nc-save-template" type="button">Save as template</button><button class="btn small" id="nc-preview" type="button">Preview</button></div>
       <iframe id="nc-preview-frame" class="newsletter-preview hidden" title="Newsletter preview"></iframe>
       <div class="newsletter-recipient-picker">
-        <div class="section-head"><strong>Eligible recipients (${escapeHtml(String(recipients.length))})</strong><label class="field checkbox"><input id="nc-select-all" type="checkbox" /><span>Select all</span></label></div>
+        <div class="section-head"><strong>Eligible recipients (${escapeHtml(String(recipients.length))})</strong><label class="field checkbox"><input id="nc-select-all" type="checkbox" /><span>Select All</span></label></div>
         <div class="newsletter-recipient-list">${recipients.map((recipient) => `<label class="newsletter-recipient"><input class="nc-recipient" type="checkbox" value="${escapeAttr(recipient.key)}" /><span><strong>${escapeHtml(recipient.name || recipient.email)}</strong><small>${escapeHtml(recipient.email)} · ${escapeHtml(recipient.sourceType)}</small></span></label>`).join('') || '<p class="muted">No eligible recipients. Record client email-marketing consent or wait for a subscriber to confirm.</p>'}</div>
       </div>
       <div class="row-card-actions">
@@ -4496,11 +4496,11 @@ async function renderWhatsAppCampaigns() {
   $('#view-whatsapp-updates').innerHTML = `
     <div class="panel stack gap-3" style="max-width:600px">
       <div class="section-head">
-        <h3>Compose WhatsApp update</h3>
-        ${configured ? '' : '<span class="badge draft">Not configured</span>'}
+        <h3>Compose WhatsApp Update</h3>
+        ${configured ? '' : '<span class="badge draft">Not Configured</span>'}
       </div>
       ${configured ? '' : '<p class="muted">Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID in .env to enable sending -- see .env.example.</p>'}
-      <label class="field"><span>Template name (Meta-approved)</span><input id="wc-template" /></label>
+      <label class="field"><span>Template Name (Meta-approved)</span><input id="wc-template" /></label>
       <div class="grid-4">
         <label class="field"><span>{{1}}</span><input id="wc-param-1" /></label>
         <label class="field"><span>{{2}}</span><input id="wc-param-2" /></label>
@@ -4579,9 +4579,9 @@ function shippingOptionRowHtml(o) {
   return `
     <tr data-id="${escapeAttr(o.id)}">
       <td>${escapeHtml(o.name)}</td>
-      <td>${o.optionType === 'fixed' ? '<span class="badge">flat rate</span>' : `${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}`}</td>
+      <td>${o.optionType === 'fixed' ? '<span class="badge">Flat Rate</span>' : `${escapeHtml(String(o.minWeight))}g – ${o.maxWeight == null ? '∞' : `${escapeHtml(String(o.maxWeight))}g`}`}</td>
       <td>${formatRand(o.price)}</td>
-      <td>${o.active ? '<span class="badge published">active</span>' : '<span class="badge draft">inactive</span>'}</td>
+      <td>${o.active ? '<span class="badge published">Active</span>' : '<span class="badge draft">Inactive</span>'}</td>
       <td>
         <button class="btn small" data-action="edit" type="button">Edit</button>
         <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
@@ -4623,8 +4623,8 @@ async function renderShipping() {
           </select>
         </label>
         <div class="grid-3" id="sf-weight-fields" style="${isFixed ? 'display:none' : ''}">
-          <label class="field"><span>Min weight (g)</span><input id="sf-min" type="number" min="0" step="1" value="${escapeAttr(String(form.minWeight))}" /></label>
-          <label class="field"><span>Max weight (g, blank = no limit)</span><input id="sf-max" type="number" min="0" step="1" value="${escapeAttr(String(form.maxWeight ?? ''))}" /></label>
+          <label class="field"><span>Min Weight (g)</span><input id="sf-min" type="number" min="0" step="1" value="${escapeAttr(String(form.minWeight))}" /></label>
+          <label class="field"><span>Max Weight (g, Blank = No Limit)</span><input id="sf-max" type="number" min="0" step="1" value="${escapeAttr(String(form.maxWeight ?? ''))}" /></label>
           <label class="field"><span>Price (R)</span><input id="sf-price-weight" type="number" min="0" step="1" value="${escapeAttr(String(form.price))}" /></label>
         </div>
         <label class="field" id="sf-price-fixed-field" style="${isFixed ? '' : 'display:none'}"><span>Price (R)</span><input id="sf-price-fixed" type="number" min="0" step="1" value="${escapeAttr(String(form.price))}" /></label>
@@ -4931,7 +4931,7 @@ async function renderResources() {
           <td>${escapeHtml(r.title)}</td>
           <td>${escapeHtml(r.filamentType || '—')}</td>
           <td>${escapeHtml(r.dimensions || '—')}</td>
-          <td>${r.active ? '<span class="badge published">active</span>' : '<span class="badge draft">hidden</span>'}</td>
+          <td>${r.active ? '<span class="badge published">Active</span>' : '<span class="badge draft">Hidden</span>'}</td>
           <td>
             <button class="btn small" data-action="edit" type="button">Edit</button>
             <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
@@ -4952,11 +4952,11 @@ async function renderResources() {
         <label class="field"><span>Title</span><input id="rf-title" value="${escapeAttr(form.title)}" /></label>
         <label class="field"><span>Description</span><textarea id="rf-description">${escapeHtml(form.description || '')}</textarea></label>
         <div class="grid-3">
-          <label class="field"><span>Print settings</span><input id="rf-print-settings" value="${escapeAttr(form.printSettings || '')}" placeholder="0.2mm layer, 20% infill" /></label>
-          <label class="field"><span>Filament type</span><input id="rf-filament-type" value="${escapeAttr(form.filamentType || '')}" placeholder="PLA" /></label>
+          <label class="field"><span>Print Settings</span><input id="rf-print-settings" value="${escapeAttr(form.printSettings || '')}" placeholder="0.2mm layer, 20% infill" /></label>
+          <label class="field"><span>Filament Type</span><input id="rf-filament-type" value="${escapeAttr(form.filamentType || '')}" placeholder="PLA" /></label>
           <label class="field"><span>Dimensions</span><input id="rf-dimensions" value="${escapeAttr(form.dimensions || '')}" placeholder="120 x 80 x 40mm" /></label>
         </div>
-        <label class="field checkbox"><input id="rf-active" type="checkbox" ${form.active ? 'checked' : ''} /><span>Visible in public gallery</span></label>
+        <label class="field checkbox"><input id="rf-active" type="checkbox" ${form.active ? 'checked' : ''} /><span>Visible in Public Gallery</span></label>
         ${form.id ? `
           <div class="grid-2">
             <div class="field">
@@ -5104,7 +5104,7 @@ async function renderDesignRequests() {
         </div>
         <label class="field"><span>Status</span><select id="dr-status">${statusOptions}</select></label>
         ${form.finalizedAt ? `<p class="muted" style="font-size:0.85rem">Finalized ${escapeHtml(formatDate(form.finalizedAt))}</p>` : ''}
-        <label class="field"><span>Admin notes</span><textarea id="dr-notes">${escapeHtml(form.adminNotes || '')}</textarea></label>
+        <label class="field"><span>Admin Notes</span><textarea id="dr-notes">${escapeHtml(form.adminNotes || '')}</textarea></label>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-design-request" type="button">Save</button>
           <button class="btn btn-ghost" id="cancel-design-request" type="button">Close</button>

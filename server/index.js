@@ -1024,7 +1024,28 @@ app.get('/api/products/:id', requireAuth, (req, res) => {
   res.json({ product });
 });
 
-app.post('/api/products', requireAuth, (req, res) => {
+// Every route below that mutates a category product (create/update/delete,
+// item photo upload/delete) must publish the same way /api/settings does --
+// syncPublicJson() alone only refreshes public/*.json; nginx serves dist/,
+// which vite build produces, and generate-pages.mjs is what actually bakes
+// GWM/Landrover items (e.g. the model-filter dropdown, whose options are
+// only emitted for models present in the *generated* HTML) into the static
+// pages. Without this, a catalog save looked live in the admin but the
+// public page stayed stale until someone ran "Publish to site" or a code
+// deploy. Non-fatal: the save itself already succeeded above, so a publish
+// hiccup here is surfaced as a warning, not a failed save.
+async function publishCatalog() {
+  syncPublicJson(getDb());
+  try {
+    await runGenerate();
+    await runBuild();
+    return undefined;
+  } catch (err) {
+    return `Saved, but publishing to the live site failed: ${err.message}. Try "Publish to site" from the dashboard.`;
+  }
+}
+
+app.post('/api/products', requireAuth, async (req, res) => {
   const body = req.body || {};
   const product = {
     id: randomUUID(),
@@ -1037,12 +1058,12 @@ app.post('/api/products', requireAuth, (req, res) => {
     items: normalizeItems(body.items),
   };
   upsertProduct(product);
-  syncPublicJson(getDb());
+  const publishWarning = await publishCatalog();
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created category product "${product.name}"` });
-  res.status(201).json({ product });
+  res.status(201).json({ product, ...(publishWarning ? { publishWarning } : {}) });
 });
 
-app.put('/api/products/:id', requireAuth, (req, res) => {
+app.put('/api/products/:id', requireAuth, async (req, res) => {
   const existing = getProduct(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Product not found' });
   const body = req.body || {};
@@ -1070,25 +1091,25 @@ app.put('/api/products/:id', requireAuth, (req, res) => {
     internalNotes: body.internalNotes ?? existing.internalNotes,
   };
   upsertProduct(product);
-  syncPublicJson(getDb());
+  const publishWarning = await publishCatalog();
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated category product "${product.name}"` });
-  res.json({ product });
+  res.json({ product, ...(publishWarning ? { publishWarning } : {}) });
 });
 
-app.delete('/api/products/:id', requireAuth, (req, res) => {
+app.delete('/api/products/:id', requireAuth, async (req, res) => {
   const existing = getProduct(req.params.id);
   const ok = deleteProduct(req.params.id);
   if (!ok) return res.status(404).json({ error: 'Product not found' });
-  syncPublicJson(getDb());
+  const publishWarning = await publishCatalog();
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted category product "${existing?.name || req.params.id}"` });
-  res.json({ ok: true });
+  res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
 });
 
 app.post(
   '/api/products/:productId/items/:itemId/image',
   requireAuth,
   uploadCategoryItemImage.single('image'),
-  (req, res, next) => {
+  async (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
     const product = getProduct(req.params.productId);
     if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
@@ -1100,9 +1121,9 @@ app.post(
     if (item.imageUrl && item.imageUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.imageUrl);
     item.imageUrl = `/uploads/category-items/${req.file.filename}`;
     upsertProduct(product);
-    syncPublicJson(getDb());
+    const publishWarning = await publishCatalog();
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated photo for "${item.name}" on "${product.name}"` });
-    res.json({ product });
+    res.json({ product, ...(publishWarning ? { publishWarning } : {}) });
   },
   (err, _req, res, next) => {
     if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
@@ -1110,7 +1131,7 @@ app.post(
   },
 );
 
-app.delete('/api/products/:productId/items/:itemId/image', requireAuth, (req, res) => {
+app.delete('/api/products/:productId/items/:itemId/image', requireAuth, async (req, res) => {
   const product = getProduct(req.params.productId);
   if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
   const item = (product.items || []).find((i) => i.id === req.params.itemId);
@@ -1118,9 +1139,9 @@ app.delete('/api/products/:productId/items/:itemId/image', requireAuth, (req, re
   if (item.imageUrl && item.imageUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.imageUrl);
   item.imageUrl = '';
   upsertProduct(product);
-  syncPublicJson(getDb());
+  const publishWarning = await publishCatalog();
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed photo for "${item.name}" on "${product.name}"` });
-  res.json({ product });
+  res.json({ product, ...(publishWarning ? { publishWarning } : {}) });
 });
 
 // ---- Clients (B) ----
