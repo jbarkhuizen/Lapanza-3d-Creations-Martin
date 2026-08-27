@@ -63,7 +63,7 @@ export function startAutoBackupJob(intervalMs = BACKUP_INTERVAL_MS, keep = BACKU
     // configured on a fresh box, remote quota) must never be reported as
     // "the backup failed" -- the local backup above already succeeded.
     try {
-      syncOffsite();
+      await syncOffsite();
       console.log('Auto-backup: synced to offsite remote');
     } catch (err) {
       console.error('Offsite backup sync failed (local backup still succeeded):', err.message);

@@ -1997,9 +1997,9 @@ app.get('/api/backups/:filename/download', requireAuth, (req, res) => {
 // lets an admin confirm the rclone remote is actually configured/working
 // right after setting it up, without waiting up to 24h for the next
 // automatic run.
-app.post('/api/backups/sync-offsite', requireAuth, (_req, res) => {
+app.post('/api/backups/sync-offsite', requireAuth, async (_req, res) => {
   try {
-    syncOffsite();
+    await syncOffsite();
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });

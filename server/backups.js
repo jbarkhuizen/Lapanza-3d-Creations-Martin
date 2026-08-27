@@ -1,8 +1,21 @@
 import fs from 'fs';
 import path from 'path';
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import { getDb } from './db.js';
 import { backupsDir, uploadsDir } from './paths.js';
+
+// execFile (async), not execFileSync -- syncOffsite now makes two rclone
+// calls instead of one (DB backups, then uploads), and uploads is real
+// photo content that can take much longer to transfer than the tiny
+// incremental DB backup diff the first call moves. Synchronous meant this
+// blocked Node's entire single-threaded event loop for the whole
+// duration -- every other request to the admin backend (site included,
+// since it's the same process) queued behind it. Found this the hard way
+// immediately after shipping the uploads-copy addition: the admin API
+// went unresponsive for the better part of a minute during the very next
+// scheduled sync.
+const execFileAsync = promisify(execFile);
 
 function ensureBackupsDir() {
   const dir = backupsDir();
@@ -124,13 +137,13 @@ function uploadsRemoteFor(remote) {
 // until someone explicitly removes it there as well. A failure here must
 // never be reported as "the backup failed" when the DB sync above (what
 // every existing caller already depends on) already succeeded.
-export function syncOffsite({ remote = process.env.BACKUP_RCLONE_REMOTE, dir = backupsDir(), uploads = uploadsDir(), run = execFileSync } = {}) {
+export async function syncOffsite({ remote = process.env.BACKUP_RCLONE_REMOTE, dir = backupsDir(), uploads = uploadsDir(), run = execFileAsync } = {}) {
   if (!remote) {
     throw new Error('BACKUP_RCLONE_REMOTE is not set — off-server backup sync is disabled. See docs/DEPLOY.md.');
   }
-  run('rclone', ['sync', dir, remote]);
+  await run('rclone', ['sync', dir, remote]);
   try {
-    run('rclone', ['copy', uploads, uploadsRemoteFor(remote)]);
+    await run('rclone', ['copy', uploads, uploadsRemoteFor(remote)]);
   } catch (err) {
     console.error('Offsite uploads copy failed (DB backup sync above still succeeded):', err.message);
   }

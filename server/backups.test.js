@@ -104,14 +104,14 @@ test('pruneOldBackups is a no-op when there are fewer backups than the keep coun
   });
 });
 
-test('syncOffsite throws a clear error when no remote is configured', () => {
-  assert.throws(() => syncOffsite({ remote: undefined }), /BACKUP_RCLONE_REMOTE is not set/);
+test('syncOffsite rejects with a clear error when no remote is configured', async () => {
+  await assert.rejects(() => syncOffsite({ remote: undefined }), /BACKUP_RCLONE_REMOTE is not set/);
 });
 
 test('syncOffsite shells out to rclone sync with the backups dir and configured remote, then rclone copy for uploads', async () => {
   await withTempBackupsDir(async (dir) => {
     const calls = [];
-    const result = syncOffsite({ remote: 'gdrive:', dir, uploads: '/tmp/uploads', run: (cmd, args) => calls.push({ cmd, args }) });
+    const result = await syncOffsite({ remote: 'gdrive:', dir, uploads: '/tmp/uploads', run: (cmd, args) => calls.push({ cmd, args }) });
     assert.strictEqual(result, true);
     assert.strictEqual(calls.length, 2);
     assert.strictEqual(calls[0].cmd, 'rclone');
@@ -124,15 +124,33 @@ test('syncOffsite shells out to rclone sync with the backups dir and configured 
 test('syncOffsite appends "uploads" onto a remote that already has a trailing path segment', async () => {
   await withTempBackupsDir(async (dir) => {
     const calls = [];
-    syncOffsite({ remote: 'gdrive:backups', dir, uploads: '/tmp/uploads', run: (cmd, args) => calls.push({ cmd, args }) });
+    await syncOffsite({ remote: 'gdrive:backups', dir, uploads: '/tmp/uploads', run: (cmd, args) => calls.push({ cmd, args }) });
     assert.deepStrictEqual(calls[1].args, ['copy', '/tmp/uploads', 'gdrive:backups/uploads']);
+  });
+});
+
+test('syncOffsite does not block the event loop -- a slow rclone call runs concurrently with other async work', async () => {
+  // Regression test: the original implementation used execFileSync, which
+  // blocks Node's entire single-threaded event loop for the call's full
+  // duration -- with uploads added alongside the DB sync, a real sync took
+  // over 5 minutes in production and made the whole admin backend (site
+  // included, same process) unresponsive the entire time. Proves the fix:
+  // a slow `run` (via setTimeout, not blocking) still lets an unrelated
+  // async tick happen concurrently while syncOffsite is awaiting it.
+  await withTempBackupsDir(async (dir) => {
+    let otherWorkRan = false;
+    const slowRun = () => new Promise((resolve) => setTimeout(resolve, 20));
+    const syncPromise = syncOffsite({ remote: 'gdrive:', dir, uploads: '/tmp/uploads', run: slowRun });
+    await new Promise((resolve) => setTimeout(() => { otherWorkRan = true; resolve(); }, 0));
+    assert.strictEqual(otherWorkRan, true, 'other async work must be able to run while syncOffsite is in flight');
+    await syncPromise;
   });
 });
 
 test('syncOffsite propagates a failure from the underlying rclone sync call (uploads copy never attempted)', async () => {
   await withTempBackupsDir(async (dir) => {
     const calls = [];
-    assert.throws(
+    await assert.rejects(
       () =>
         syncOffsite({
           remote: 'gdrive:',
@@ -151,7 +169,7 @@ test('syncOffsite propagates a failure from the underlying rclone sync call (upl
 test('syncOffsite does not propagate a failure from the uploads copy -- the DB backup sync already succeeded', async () => {
   await withTempBackupsDir(async (dir) => {
     const calls = [];
-    const result = syncOffsite({
+    const result = await syncOffsite({
       remote: 'gdrive:',
       dir,
       uploads: '/tmp/uploads',
