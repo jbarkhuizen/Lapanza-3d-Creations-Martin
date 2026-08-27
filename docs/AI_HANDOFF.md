@@ -67,7 +67,7 @@ These are real incidents from this project's build/deploy history — documented
 
 | Item | State |
 |---|---|
-| Payfast | `PAYFAST_MODE=live`, real Merchant ID/Key/Passphrase entered directly on the server by the business owner (never pasted into chat/AI tooling) — **but the one real ITN on record failed signature verification** (order stuck at `pending_payment` despite Payfast confirming `COMPLETE`). Backlog #6/#45 reopened — see the gotcha below and SYSTEM_DOCUMENTATION.md §2/§15. Do not treat live payments as verified until this is resolved |
+| Payfast | `PAYFAST_MODE=live` (confirmed directly by the owner 2026-08-27 — #6 closed, stale), real Merchant ID/Key/Passphrase entered directly on the server (never pasted into chat/AI tooling) — **but the one real ITN on record failed signature verification** (order stuck at `pending_payment` despite Payfast confirming `COMPLETE`). Backlog #45 still open — see the gotcha below and SYSTEM_DOCUMENTATION.md §2/§15. Do not treat live payments as verified until this is resolved |
 | WhatsApp campaigns | Not configured (`WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` unset) — requires the business owner to complete Meta Business Account + template approval first; sends fail cleanly with "not configured" until then |
 | Gmail SMTP | Configured and working (order confirmations, verification emails, notifications) |
 | SSL | Live, Let's Encrypt via certbot, auto-renewing |
