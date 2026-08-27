@@ -2244,8 +2244,8 @@ function configurableListPanel(key, label, items, helpText = '') {
 function wireConfigurableListPanels() {
   const saveList = async (key, items) => {
     try {
-      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ [key]: items }) });
-      toast('Saved');
+      const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ [key]: items }) });
+      toast(res.publishWarning || 'Saved');
       await renderSettings();
     } catch (ex) {
       toast(ex.message);
@@ -2327,8 +2327,8 @@ function wireFeaturedProductsPanel() {
 
   const saveFeatured = async (items) => {
     try {
-      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ featuredProducts: items }) });
-      toast('Saved');
+      const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ featuredProducts: items }) });
+      toast(res.publishWarning || 'Saved');
       state.featuredSearch = { query: '', matches: [] };
       await renderSettings();
     } catch (ex) {
@@ -2598,12 +2598,17 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
       tiles[i][input.dataset.tileField] = input.value;
     });
     if (tiles.length) patch.homeTiles = tiles;
+    const saveBtn = $('#save-settings');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving & publishing…';
     try {
-      await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
-      toast('Settings saved — refresh the public site to see fonts/theme defaults');
+      const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
+      toast(res.publishWarning || 'Settings saved and published live');
       await renderSettings();
     } catch (ex) {
       toast(ex.message);
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save settings';
     }
   });
 

@@ -1873,7 +1873,7 @@ app.get('/api/settings', requireAuth, (_req, res) => {
   res.json({ settings: publicSettings(getSettings()), fonts: FONT_OPTIONS });
 });
 
-app.put('/api/settings', requireAuth, (req, res) => {
+app.put('/api/settings', requireAuth, async (req, res) => {
   const body = req.body || {};
   const allowed = [
     'siteName', 'tagline', 'phoneDisplay', 'phoneTel', 'email', 'address', 'hours', 'whatsapp',
@@ -1972,7 +1972,26 @@ app.put('/api/settings', requireAuth, (req, res) => {
   if (changedKeys.length) {
     recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Settings updated: ${changedKeys.join(', ')}` });
   }
-  res.json({ settings: publicSettings(settings) });
+  // Same reasoning as runBuild()'s own comment: syncPublicJson() alone only
+  // refreshes public/site-settings.json -- nginx serves dist/, which is only
+  // ever produced by `vite build`, and several settings (lowStockThreshold,
+  // printLeadTimeDays/filamentDispatchDays) are also baked into the
+  // generated HTML itself by generate-pages.mjs, not just read at runtime.
+  // Without this, a settings save (e.g. featuredProducts, homeTiles) looked
+  // saved in the admin but silently never appeared on the live site until
+  // someone happened to click "Publish to site" or a code deploy ran the
+  // build anyway -- caught for real 2026-08-27 when featured products
+  // didn't show up live after being saved. Non-fatal: the setting is
+  // already persisted in the DB above regardless of whether this succeeds,
+  // so a publish hiccup here is surfaced as a warning, not a failed save.
+  let publishWarning;
+  try {
+    await runGenerate();
+    await runBuild();
+  } catch (err) {
+    publishWarning = `Saved, but publishing to the live site failed: ${err.message}. Try "Publish to site" from the dashboard.`;
+  }
+  res.json({ settings: publicSettings(settings), ...(publishWarning ? { publishWarning } : {}) });
 });
 
 app.post('/api/publish', requireAuth, async (_req, res) => {
