@@ -713,6 +713,15 @@ function ensureTodoColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(todo_items)', 'priority')) {
     db.exec("ALTER TABLE todo_items ADD COLUMN priority TEXT NOT NULL DEFAULT 'Medium'");
   }
+  // NULL on every pre-existing row (2026-08-27) -- no honest way to backfill
+  // who logged an item that predates this column, so the admin UI shows
+  // "—" for those rather than guessing. New rows get it from POST
+  // /api/todos: req.body.createdBy if explicitly supplied (Claude passes
+  // 'Claude' when creating one on the owner's behalf), else req.adminUsername.
+  if (!hasColumn(db, 'PRAGMA table_info(todo_items)', 'created_by')) {
+    const alterSql = 'ALTER TABLE todo_items ADD COLUMN created_by TEXT';
+    db.exec(alterSql);
+  }
 }
 
 // Design requests simplified from a 6-stage quote/accept funnel (new/

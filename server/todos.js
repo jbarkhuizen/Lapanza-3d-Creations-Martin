@@ -20,6 +20,7 @@ function rowToTodo(row) {
     dateAdded: row.date_added,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    createdBy: row.created_by,
   };
 }
 
@@ -48,8 +49,8 @@ export function createTodo(data, db = getDb()) {
   const id = randomUUID();
   const now = new Date().toISOString();
   db.prepare(
-    `INSERT INTO todo_items (id, number, category, priority, name, description, status, planned_fix_date, actual_fix_date, date_added, created_at, updated_at)
-     VALUES (@id, @number, @category, @priority, @name, @description, @status, @planned_fix_date, @actual_fix_date, @date_added, @created_at, @updated_at)`,
+    `INSERT INTO todo_items (id, number, category, priority, name, description, status, planned_fix_date, actual_fix_date, date_added, created_at, updated_at, created_by)
+     VALUES (@id, @number, @category, @priority, @name, @description, @status, @planned_fix_date, @actual_fix_date, @date_added, @created_at, @updated_at, @created_by)`,
   ).run({
     id,
     number: nextNumber(db),
@@ -63,6 +64,7 @@ export function createTodo(data, db = getDb()) {
     date_added: data.dateAdded || now,
     created_at: now,
     updated_at: now,
+    created_by: data.createdBy || null,
   });
   return getTodo(id, db);
 }

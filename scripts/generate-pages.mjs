@@ -6,6 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { parsePrice, formatItemPrice } from '../server/money.js';
+import { itemAnchorId } from '../server/item-anchor.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const filaments = JSON.parse(fs.readFileSync(path.join(root, 'src/data/filaments.json'), 'utf8'));
@@ -267,7 +268,7 @@ function colourCards(colours, filament) {
     .filter((c) => c.listed !== false)
     .map((c) => {
       const stock = stockMessage(c.stockQty);
-      return `<div class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
+      return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
                   ${
                     imageFileExists(c.imageUrl)
                       ? `<img src="${c.imageUrl}" alt="${c.name}" class="w-full aspect-square object-cover rounded-sm mb-3" loading="lazy">`
@@ -356,7 +357,7 @@ function catalogueItems(label, items, categorySlug) {
       // needing to special-case categorySlug.
       const searchIndex = [item.name, item.details, item.creator].filter(Boolean).join(' ').toLowerCase();
       const modelList = (item.models || []).join('|');
-      return `<article class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors" data-search="${escapeAttr(searchIndex)}" data-models="${escapeAttr(modelList)}">
+      return `<article id="${itemAnchorId(item.sku, item.name || i)}" class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors" data-search="${escapeAttr(searchIndex)}" data-models="${escapeAttr(modelList)}">
               <div class="aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden">
                 ${img}
               </div>

@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { listFilaments } from './filaments.js';
 import { getSettings, publicSettings } from './settings.js';
-import { formatRand } from './money.js';
+import { formatRand, formatItemPrice } from './money.js';
+import { itemAnchorId, categoryPagePath, filamentPagePath } from './item-anchor.js';
 
 function defaultPaths() {
   const root = process.cwd();
@@ -19,6 +20,50 @@ export function readCategoryProducts(catalogJsonPath = defaultPaths().catalogJso
   if (!fs.existsSync(catalogJsonPath)) return [];
   const catalog = JSON.parse(fs.readFileSync(catalogJsonPath, 'utf8'));
   return (catalog.products || []).filter((p) => p.kind === 'category');
+}
+
+// A featured-product entry only stores a productId (settings.featuredProducts,
+// same scheme the cart already uses -- see src/js/cart.js), never a
+// name/price/link -- resolved fresh here on every publish so it can never go
+// stale. A productId that no longer matches anything (item deleted, SKU
+// changed) is dropped rather than breaking the homepage. The category-item
+// SKU-or-index fallback must match catalogueItems() in
+// scripts/generate-pages.mjs exactly (listed items only, in the same order)
+// or the resolved href lands on the wrong anchor.
+function resolveFeaturedProducts(refs, filaments, categories) {
+  if (!Array.isArray(refs)) return [];
+  return refs
+    .filter((r) => r.active !== false)
+    .map((r) => {
+      const parts = String(r.productId || '').split(':');
+      if (parts[0] === 'filament' && parts.length === 3) {
+        const [, slug, sku] = parts;
+        const filament = filaments.find((f) => f.slug === slug);
+        const colour = filament?.colours.find((c) => c.sku === sku);
+        if (!filament || !colour) return null;
+        return {
+          productId: r.productId,
+          name: `${filament.name} — ${colour.name}`,
+          price: colour.price,
+          href: `${filamentPagePath(slug)}#${itemAnchorId(colour.sku, colour.name)}`,
+        };
+      }
+      if (parts[0] === 'category' && parts.length === 3) {
+        const [, slug, skuOrIndex] = parts;
+        const category = categories[slug];
+        const listedItems = (category?.items || []).filter((it) => it.listed !== false);
+        const item = listedItems.find((it, i) => (it.sku || String(i)) === skuOrIndex);
+        if (!category || !item) return null;
+        return {
+          productId: r.productId,
+          name: item.name,
+          price: formatItemPrice(item.price),
+          href: `${categoryPagePath(slug)}#${itemAnchorId(item.sku, item.name)}`,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
 }
 
 export function syncPublicJson(db, paths = defaultPaths()) {
@@ -76,6 +121,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
     });
 
   const settings = publicSettings(getSettings(db));
+  settings.featuredProducts = resolveFeaturedProducts(settings.featuredProducts, filaments, categories);
 
   fs.writeFileSync(paths.filamentsSrc, JSON.stringify(filaments, null, 2));
   fs.writeFileSync(paths.categoriesSrc, JSON.stringify(categories, null, 2));

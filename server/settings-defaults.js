@@ -39,6 +39,16 @@ export const DEFAULT_SETTINGS = {
     { eyebrow: 'GWM · Landrover', title: 'Car Parts', description: 'Custom and replacement 3D printed parts for your vehicle.' },
     { eyebrow: 'Toys · Home · Phones', title: 'Everything Else', description: 'Toys, homeware and phone accessories, printed to order.' },
   ],
+  // Admin picks existing products by productId (same "filament:{slug}:{sku}"
+  // / "category:{slug}:{sku}" scheme the cart already uses, see
+  // src/js/cart.js) -- NOT typed name/price/link, so a featured item can
+  // never go stale: server/export.js's syncPublicJson() re-resolves each one
+  // against current catalog data (name, price, a link straight to that
+  // item's anchor on its category/filament page) on every publish, same
+  // freshness guarantee as everything else on the storefront. A productId
+  // that no longer resolves (item deleted) is dropped silently rather than
+  // breaking the homepage.
+  featuredProducts: [],
 
   // Phase 3: bank details for the printable invoice (server/index.js's
   // renderInvoiceHtml) -- from the business's own real Absa account.

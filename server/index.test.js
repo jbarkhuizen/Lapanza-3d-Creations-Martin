@@ -619,6 +619,49 @@ test('PUT /api/settings persists carPartModelsLandrover/carPartModelsGwm -- same
   assert.deepStrictEqual(getRes.body.settings.carPartModelsGwm, [{ id: 'p300', name: 'P300', active: true }]);
 });
 
+test('PUT /api/settings persists featuredProducts, including sanitizing malformed entries', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({
+      featuredProducts: [
+        { productId: 'category:toys:UNO', active: true },
+        { productId: '' }, // dropped -- no productId to feature
+        null, // dropped -- not even an object
+      ],
+    });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.settings.featuredProducts.length, 1);
+  assert.strictEqual(res.body.settings.featuredProducts[0].productId, 'category:toys:UNO');
+  assert.strictEqual(res.body.settings.featuredProducts[0].active, true);
+  assert.ok(res.body.settings.featuredProducts[0].id);
+
+  const getRes = await request(app).get('/api/settings').set('Cookie', cookie);
+  assert.strictEqual(getRes.body.settings.featuredProducts.length, 1);
+});
+
+test('POST /api/todos defaults createdBy to the logged-in admin, but an explicit createdBy (Claude) wins', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const humanRes = await request(app).post('/api/todos').set('Cookie', cookie).send({ name: 'Typed by the owner' });
+  assert.strictEqual(humanRes.status, 201);
+  assert.strictEqual(humanRes.body.todo.createdBy, 'johan');
+
+  const claudeRes = await request(app).post('/api/todos').set('Cookie', cookie).send({ name: 'Logged by Claude', createdBy: 'Claude' });
+  assert.strictEqual(claudeRes.status, 201);
+  assert.strictEqual(claudeRes.body.todo.createdBy, 'Claude');
+});
+
 test('PUT /api/settings sanitizes a configurable list: malformed entries dropped, active defaults true, missing id backfilled', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

@@ -1921,6 +1921,7 @@ async function renderTodos() {
           <td style="width: 115px;">${t.plannedFixDate ? escapeHtml(formatDate(t.plannedFixDate)) : '—'}</td>
           <td style="width: 140px;"><input class="todo-inline-control todo-inline-date" data-action="actual-fix-date" type="date" aria-label="Actual Fix Date for ${escapeAttr(t.name)}" value="${escapeAttr(toDateInputValue(t.actualFixDate))}" /></td>
           <td style="width: 130px;"><select class="todo-inline-control" data-action="status" aria-label="Status for ${escapeAttr(t.name)}">${TODO_STATUSES.map((status) => `<option value="${escapeAttr(status)}" ${t.status === status ? 'selected' : ''}>${escapeHtml(status)}</option>`).join('')}</select></td>
+          <td class="muted" style="width: 90px;">${escapeHtml(t.createdBy || '—')}</td>
           <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
         </tr>`;
     })
@@ -1990,6 +1991,7 @@ async function renderTodos() {
           ${sortHeader('plannedFixDate', 'Planned Fix Date')}
           ${sortHeader('actualFixDate', 'Actual Fix Date')}
           ${sortHeader('status', 'Status')}
+          <th>Logged by</th>
           <th></th>
         </tr></thead>
         <tbody>${rows || '<tr><td colspan="10"><div class="empty">No items match your filters</div></td></tr>'}</tbody>
@@ -2274,9 +2276,118 @@ function wireConfigurableListPanels() {
   });
 }
 
+// Unlike the {id,name,active} lists above, an entry here stores a
+// productId (same scheme the cart uses -- filament:{slug}:{sku} /
+// category:{slug}:{sku}), not a typed name -- server/export.js resolves the
+// real name/price fresh on every publish, so this admin view resolves the
+// same way against state.productCatalog (the /api/inventory list New Order
+// already loads) purely for display, never persisting the resolved values.
+function featuredProductsPanel(items) {
+  const list = items || [];
+  const search = state.featuredSearch || { query: '', matches: [] };
+  const matchesHtml = search.matches
+    .map(
+      (p) => `
+        <div class="row-card-actions" data-product-id="${escapeAttr(p.productId)}">
+          <span>${escapeHtml(p.name)} <span class="muted">${escapeHtml(p.sku || '')}</span> — ${escapeHtml(formatRand(p.price))}</span>
+          <button class="btn small" data-action="add-featured" type="button">+ Add</button>
+        </div>`,
+    )
+    .join('');
+  const rows = list
+    .map((entry) => {
+      const product = state.productCatalog.find((p) => p.productId === entry.productId);
+      const label = product ? `${product.name} — ${formatRand(product.price)}` : `⚠ Product no longer exists (${entry.productId})`;
+      return `
+        <div class="config-list-row" data-item-id="${escapeAttr(entry.id)}">
+          <label class="field checkbox config-list-active" title="${entry.active ? 'Active — click to retire' : 'Inactive — click to reactivate'}">
+            <input type="checkbox" data-action="toggle-featured-active" ${entry.active ? 'checked' : ''} />
+          </label>
+          <span class="config-list-name">${escapeHtml(label)}</span>
+          ${entry.active ? '' : '<span class="badge draft">Inactive</span>'}
+          <button class="btn small btn-danger" data-action="remove-featured" type="button">Remove</button>
+        </div>`;
+    })
+    .join('');
+  const activeCount = list.filter((e) => e.active !== false).length;
+  return `
+    <div class="panel stack gap-3" id="featured-products-panel">
+      <div class="section-head"><h3>Featured products (homepage)</h3></div>
+      <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Pick 4–6 products to feature on the homepage. Name and price are pulled live from the catalog on every publish, so a price change here never goes stale on the homepage.</p>
+      <input type="text" id="featured-search-input" placeholder="Search products by name or SKU… (Enter to search)" value="${escapeAttr(search.query)}" />
+      ${matchesHtml ? `<div class="config-list">${matchesHtml}</div>` : ''}
+      <div class="config-list">${rows || '<p class="muted" style="margin:0">No featured products yet.</p>'}</div>
+      <p class="muted" style="margin:0;font-size:0.8rem">${escapeHtml(String(activeCount))} active${activeCount < 4 || activeCount > 6 ? ' — aim for 4–6' : ''}</p>
+    </div>`;
+}
+
+function wireFeaturedProductsPanel() {
+  const panel = $('#featured-products-panel');
+  if (!panel) return;
+
+  const saveFeatured = async (items) => {
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ featuredProducts: items }) });
+      toast('Saved');
+      state.featuredSearch = { query: '', matches: [] };
+      await renderSettings();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  };
+
+  const searchInput = $('#featured-search-input');
+  searchInput?.addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    const q = searchInput.value.trim();
+    state.featuredSearch = {
+      query: q,
+      matches: q ? state.productCatalog.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [],
+    };
+    await renderSettings();
+  });
+
+  panel.querySelectorAll('[data-action="add-featured"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const productId = btn.closest('[data-product-id]').dataset.productId;
+      const existing = state.settings.featuredProducts || [];
+      if (existing.some((e) => e.productId === productId)) {
+        toast('Already featured');
+        return;
+      }
+      saveFeatured([...existing, { id: uid(), productId, active: true }]);
+    });
+  });
+
+  panel.querySelectorAll('[data-action="toggle-featured-active"]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const id = cb.closest('[data-item-id]').dataset.itemId;
+      const items = (state.settings.featuredProducts || []).map((e) => (e.id === id ? { ...e, active: cb.checked } : e));
+      saveFeatured(items);
+    });
+  });
+
+  panel.querySelectorAll('[data-action="remove-featured"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const id = btn.closest('[data-item-id]').dataset.itemId;
+      const items = (state.settings.featuredProducts || []).filter((e) => e.id !== id);
+      saveFeatured(items);
+    });
+  });
+}
+
 async function renderSettings() {
   const data = await api('/api/settings');
   state.settings = data.settings;
+  // Same combined filament+category list New Order's product picker and
+  // Stock Management already use (listInventory) -- reused here so the
+  // Featured Products picker below can search/resolve without a separate
+  // endpoint. Cached on state, same as New Order does.
+  if (!state.productCatalog) {
+    const { items } = await api('/api/inventory');
+    state.productCatalog = items;
+  }
+  state.featuredSearch = state.featuredSearch || { query: '', matches: [] };
   const fonts = (data.fonts && data.fonts.length ? data.fonts : [
     { id: 'dm-sans', label: 'DM Sans' },
     { id: 'fraunces', label: 'Fraunces' },
@@ -2431,6 +2542,7 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
       ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
       ${configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
       ${configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
+      ${featuredProductsPanel(s.featuredProducts)}
 
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Print Job Costing rates</h3></div>
@@ -2470,6 +2582,7 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
   $('[data-setting="useUniversalFont"]')?.addEventListener('change', syncFontModeUI);
   syncFontModeUI();
   wireConfigurableListPanels();
+  wireFeaturedProductsPanel();
 
   $('#save-settings').addEventListener('click', async () => {
     const patch = {};

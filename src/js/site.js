@@ -34,6 +34,45 @@ async function hydrateHomeTiles() {
   }
 }
 
+/** Homepage "Featured" section -- settings.featuredProducts arrives already
+ *  resolved (name/price/href) by server/export.js's syncPublicJson(), fresh
+ *  on every publish, so this is pure rendering, no lookup of its own. Built
+ *  with DOM methods rather than innerHTML since product names come from
+ *  admin-picked catalog data, not hand-authored copy. */
+async function hydrateFeaturedProducts() {
+  const container = document.getElementById('featured-products');
+  const section = document.getElementById('featured-products-section');
+  if (!container || !section) return;
+  try {
+    const res = await fetch('/site-settings.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const settings = await res.json();
+    const items = Array.isArray(settings.featuredProducts) ? settings.featuredProducts : [];
+    if (!items.length) return;
+
+    items.forEach((item) => {
+      const link = document.createElement('a');
+      link.href = item.href;
+      link.className = 'featured-product group block border border-charcoal/10 rounded-sm p-4 hover:border-terracotta transition-colors';
+
+      const name = document.createElement('p');
+      name.className = 'font-medium mb-1 tracking-tight group-hover:text-terracotta transition-colors';
+      name.textContent = item.name;
+
+      const price = document.createElement('p');
+      price.className = 'text-terracotta font-semibold';
+      price.textContent = item.price;
+
+      link.append(name, price);
+      container.appendChild(link);
+    });
+
+    section.classList.remove('hidden');
+  } catch {
+    /* section stays hidden -- no partial/broken state shown */
+  }
+}
+
 function wireThemeButtons() {
   document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
     if (btn.dataset.bound) return;
@@ -75,5 +114,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   mountCarPartsFilter();
   syncYear();
   hydrateHomeTiles();
+  hydrateFeaturedProducts();
   trackVisit();
 });

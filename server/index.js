@@ -1899,6 +1899,11 @@ app.put('/api/settings', requireAuth, (req, res) => {
     // (read side) and the admin UI, but not here -- every save silently
     // discarded, identical to the inHouseFilamentBrands bug above.
     'carPartModelsLandrover', 'carPartModelsGwm',
+    // Homepage featured products -- {id,productId,active}[], resolved to
+    // display data by syncPublicJson() below, NOT the {id,name,active}
+    // configurable-list shape, so it gets its own guard further down
+    // rather than reusing the loop those four share.
+    'featuredProducts',
   ];
   const patch = {};
   for (const key of allowed) {
@@ -1941,6 +1946,22 @@ app.put('/api/settings', requireAuth, (req, res) => {
         active: entry.active !== false,
       }))
       .filter((entry) => entry.name);
+  }
+  // Same shape-guard reasoning as the configurable lists above, but its own
+  // block: a featured-product entry has no `name` field to require (the
+  // display name is resolved from productId at publish time, see
+  // syncPublicJson()) -- what it must have is a non-empty productId string.
+  if (Array.isArray(patch.featuredProducts)) {
+    patch.featuredProducts = patch.featuredProducts
+      .map((entry) => (entry && typeof entry === 'object' ? entry : {}))
+      .map((entry, i) => ({
+        id: String(entry.id || '').trim() || `featured-${i}-${Date.now()}`,
+        productId: String(entry.productId || '').trim(),
+        active: entry.active !== false,
+      }))
+      .filter((entry) => entry.productId);
+  } else {
+    delete patch.featuredProducts;
   }
   const settings = updateSettings(patch);
   syncPublicJson(getDb());
@@ -2105,7 +2126,11 @@ app.get('/api/todos', requireAuth, (_req, res) => {
 
 app.post('/api/todos', requireAuth, (req, res) => {
   try {
-    const todo = createTodo(req.body || {});
+    // Explicit createdBy in the body wins (Claude passes 'Claude' when
+    // logging one on the owner's behalf through this same authenticated
+    // route -- see server/todos.js's note); otherwise it's whichever admin
+    // is actually logged in, same as every other admin-attributed write.
+    const todo = createTodo({ ...req.body, createdBy: req.body?.createdBy || req.adminUsername });
     res.status(201).json({ todo });
   } catch (err) {
     res.status(400).json({ error: err.message });

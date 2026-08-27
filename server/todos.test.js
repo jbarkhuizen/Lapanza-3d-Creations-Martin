@@ -20,6 +20,15 @@ test('createTodo requires a name', () => {
   db.close();
 });
 
+test('createTodo defaults createdBy to null when not supplied, and stores it when supplied', () => {
+  const db = openDb(':memory:');
+  const withoutCreator = createTodo({ name: 'Something' }, db);
+  assert.strictEqual(withoutCreator.createdBy, null);
+  const withCreator = createTodo({ name: 'Something else', createdBy: 'Claude' }, db);
+  assert.strictEqual(withCreator.createdBy, 'Claude');
+  db.close();
+});
+
 test('createTodo defaults invalid category, priority, and status rather than rejecting the request', () => {
   const db = openDb(':memory:');
   const todo = createTodo({ name: 'Something', category: 'Nonsense', priority: 'Nonsense', status: 'Nonsense' }, db);
