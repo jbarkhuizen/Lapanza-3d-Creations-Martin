@@ -508,6 +508,41 @@ test('category product items support photo upload/remove and a "listed" visibili
   assert.strictEqual(removeRes.body.product.items.find((i) => i.id === itemId).imageUrl, '');
 });
 
+test('category product items support creator/models (car-parts only) and keep sourceUrl out of the public export', async (t) => {
+  const { app, tmpRoot, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app)
+    .post('/api/products')
+    .set('Cookie', cookie)
+    .send({
+      name: 'Landrover',
+      parent: 'car-parts',
+      items: [{
+        name: 'Door Card Clip',
+        sku: 'Part0009',
+        creator: 'Louis Roesch',
+        models: ['Defender 200 Tdi', 'Defender 300 Tdi'],
+        sourceUrl: 'https://lr3dparts.com/parts/door-card-clip',
+      }],
+    });
+  const product = created.body.product;
+  assert.strictEqual(product.items[0].creator, 'Louis Roesch');
+  assert.deepStrictEqual(product.items[0].models, ['Defender 200 Tdi', 'Defender 300 Tdi']);
+  assert.strictEqual(product.items[0].sourceUrl, 'https://lr3dparts.com/parts/door-card-clip');
+
+  const categoriesSrc = JSON.parse(fs.readFileSync(path.join(tmpRoot, 'src', 'data', 'categories.json'), 'utf8'));
+  const syncedItem = categoriesSrc['landrover'].items.find((i) => i.sku === 'Part0009');
+  assert.strictEqual(syncedItem.creator, 'Louis Roesch');
+  assert.deepStrictEqual(syncedItem.models, ['Defender 200 Tdi', 'Defender 300 Tdi']);
+  // Admin-only reference back to the design's source page -- never shipped
+  // to the customer-facing categories.json export.
+  assert.strictEqual(syncedItem.sourceUrl, undefined);
+});
+
 test('PUT /api/settings with a non-array homeTiles is rejected/ignored instead of 500ing', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

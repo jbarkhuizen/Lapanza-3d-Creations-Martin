@@ -309,6 +309,11 @@ function catalogueItems(label, items, categorySlug) {
   return list
     .map((item, i) => {
       const meta = [item.material, item.size, item.finish].filter(Boolean).join(' · ');
+      // Car-parts only (GWM/Landrover) -- absent on every other category's
+      // items, so this line simply never renders for them.
+      const fitment = [item.creator ? `Design: ${item.creator}` : '', item.models?.length ? `Fits: ${item.models.join(', ')}` : '']
+        .filter(Boolean)
+        .join(' · ');
       const img = imageFileExists(item.imageUrl)
         ? `<img src="${item.imageUrl}" alt="${item.name}" class="w-full h-full object-cover" loading="lazy">`
         : `<span class="text-espresso/35 text-xs uppercase tracking-[0.2em]">Photo coming soon</span>`;
@@ -326,6 +331,7 @@ function catalogueItems(label, items, categorySlug) {
                 <h3 class="font-serif text-lg mb-1">${name}</h3>
                 <p class="text-espresso/60 text-sm mb-2">${item.details || 'Custom printed to order.'}</p>
                 ${meta ? `<p class="text-espresso/45 text-xs mb-2">${meta}</p>` : ''}
+                ${fitment ? `<p class="text-espresso/45 text-xs mb-2">${fitment}</p>` : ''}
                 ${item.price ? `<p class="text-terracotta font-semibold mb-3">${formatItemPrice(item.price)}</p>` : ''}
                 <a href="${SITE.whatsapp}" class="text-sm font-semibold text-terracotta hover:underline" target="_blank" rel="noopener noreferrer">Enquire</a>
                 ${

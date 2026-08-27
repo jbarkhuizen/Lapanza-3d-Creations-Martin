@@ -40,102 +40,112 @@
       {
         "name": "White",
         "sku": "SA-F-PLA-A01-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
-        "stockQty": 10,
-        "imageUrl": "/uploads/filaments/sa-f-pla-a01-100175pg-3b38dee9.png"
+        "stockQty": 15,
+        "imageUrl": "/uploads/filaments/sa-f-pla-a01-100175pg-3b38dee9.png",
+        "listed": true
       },
       {
         "name": "Black",
         "sku": "SA-F-PLA-A02-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
-        "stockQty": 5,
-        "imageUrl": "/uploads/filaments/sa-f-pla-a02-100175pg-489cde31.png"
+        "stockQty": 7,
+        "imageUrl": "/uploads/filaments/sa-f-pla-a02-100175pg-489cde31.png",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-PLA-A03-100175PG",
-        "price": "R225",
+        "price": "R 225.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
-        "stockQty": 1,
-        "imageUrl": ""
+        "stockQty": 2,
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Clear (Natural)",
         "sku": "SA-F-PLA-A17-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-PLA-A04-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Red",
         "sku": "SA-F-PLA-A05-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Yellow",
         "sku": "SA-F-PLA-A06-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Green",
         "sku": "SA-F-PLA-A07-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Orange",
         "sku": "SA-F-PLA-A08-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Purple",
         "sku": "SA-F-PLA-A11-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 1000,
         "shippingWeightG": 1200,
         "rollLengthM": 333,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -180,92 +190,101 @@
       {
         "name": "Cool White",
         "sku": "SA-F-PLAHYP-A0135-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Black",
         "sku": "SA-F-PLAHYP-A02-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-PLAHYP-A03-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Dark Grey",
         "sku": "SA-F-PLAHYP-B0301-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Light Grey",
         "sku": "SA-F-PLAHYP-B0302-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Red",
         "sku": "SA-F-PLAHYP-A05-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-PLAHYP-A04-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Yellow",
         "sku": "SA-F-PLAHYP-A06-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Orange",
         "sku": "SA-F-PLAHYP-A08-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -300,72 +319,79 @@
       {
         "name": "Gold",
         "sku": "SA-F-PLAHYP-C20-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Copper",
         "sku": "SA-F-PLAHYP-C0032-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Platinum",
         "sku": "SA-F-PLAHYP-C59-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-PLAHYP-C01-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Graphite",
         "sku": "SA-F-PLAHYP-C60-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Velvet Pink",
         "sku": "SA-F-PLAHYP-C1044-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Electric Blue",
         "sku": "SA-F-PLAHYP-C0444-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -379,72 +405,79 @@
       {
         "name": "Crystal Glass (Very Clear)",
         "sku": "SA-F-PLAPRE-B#08-075175PG",
-        "price": "R349",
+        "price": "R 349.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Galaxy Black",
         "sku": "SA-F-PLAPRE-B0227-075175PG",
-        "price": "R349",
+        "price": "R 349.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Glitter Red",
         "sku": "SA-F-PLAPRE-A05-075175PG",
-        "price": "R349",
+        "price": "R 349.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Glitter Purple",
         "sku": "SA-F-PLAPRE-A11-075175PG",
-        "price": "R349",
+        "price": "R 349.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Glitter Green",
         "sku": "SA-F-PLAPRE-A07-075175PG",
-        "price": "R349",
+        "price": "R 349.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Glitter Blue",
         "sku": "SA-F-PLAPRE-A04-075175PG",
-        "price": "R349",
+        "price": "R 349.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Glitter Black",
         "sku": "SA-F-PLAPRE-A02-075175PG",
-        "price": "R349",
+        "price": "R 349.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -489,102 +522,112 @@
       {
         "name": "Gloss Black",
         "sku": "SA-F-PLAPLUS-C0226-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Gloss White",
         "sku": "SA-F-PLAPLUS-C0126-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Gunmetal",
         "sku": "SA-F-PLAPLUS-B#13-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Gloss Grey",
         "sku": "SA-F-PLAPLUS-C03-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Steel Blue",
         "sku": "SA-F-PLAPLUS-C0434-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Chrome Silver",
         "sku": "SA-F-PLAPLUS-H21-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Chrome Blue",
         "sku": "SA-F-PLAPLUS-H04-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Pearl White",
         "sku": "SA-F-PLAPLUS-B0105-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Sky Blue",
         "sku": "SA-F-PLAPLUS-C0403-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Royal Blue",
         "sku": "SA-F-PLAPLUS-C0436-100175PG",
-        "price": "R329",
+        "price": "R 329.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -598,22 +641,24 @@
       {
         "name": "Black",
         "sku": "SA-F-PLAECO-A02-100175PG",
-        "price": "R269",
+        "price": "R 269.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-PLAECO-A01-100175PG",
-        "price": "R269",
+        "price": "R 269.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -697,102 +742,112 @@
       {
         "name": "Black",
         "sku": "SA-F-PETGSP-A02-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-PETGSP-A04-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-PETGSP-A03-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-PETGSP-A01-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Clear",
         "sku": "SA-F-PETGSP-A17-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Fire Engine Red",
         "sku": "SA-F-PETGSP-B0518-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Green",
         "sku": "SA-F-PETGSP-A07-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Orange",
         "sku": "SA-F-PETGSP-A08-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Silver",
         "sku": "SA-F-PETGSP-A21-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Sky Blue",
         "sku": "SA-F-PETGSP-B0403-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -837,22 +892,24 @@
       {
         "name": "Black (500g)",
         "sku": "SA-F-PETGSP-K02-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Black (1kg)",
         "sku": "SA-F-PETGSP-K02-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -866,12 +923,13 @@
       {
         "name": "Black",
         "sku": "SA-F-PETGECO-A02-100175PG",
-        "price": "R249",
+        "price": "R 249.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -911,102 +969,112 @@
       {
         "name": "White",
         "sku": "SA-F-ABSPRE-A01-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Black",
         "sku": "SA-F-ABSPRE-A02-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Cool White",
         "sku": "SA-F-ABSPRE-A26-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Silver",
         "sku": "SA-F-ABSPRE-A21-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-ABSPRE-A03-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Red",
         "sku": "SA-F-ABSPRE-A05-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-ABSPRE-A04-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Orange",
         "sku": "SA-F-ABSPRE-A08-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Green",
         "sku": "SA-F-ABSPRE-A07-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Natural/Ivory",
         "sku": "SA-F-ABSPRE-A14-100175PG",
-        "price": "R275",
+        "price": "R 275.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1020,32 +1088,35 @@
       {
         "name": "White",
         "sku": "SA-F-ABSECO-A01-100175PG",
-        "price": "R249",
+        "price": "R 249.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Black",
         "sku": "SA-F-ABSECO-A02-100175PG",
-        "price": "R249",
+        "price": "R 249.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-ABSECO-A03-100175PG",
-        "price": "R249",
+        "price": "R 249.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1059,22 +1130,24 @@
       {
         "name": "Black",
         "sku": "SA-F-ASA-A02-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Ivory White",
         "sku": "SA-F-ASA-A0142-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1119,102 +1192,112 @@
       {
         "name": "Hyper Black",
         "sku": "SA-F-SBSHYP-A02-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-SBS-A01-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Dark Grey",
         "sku": "SA-F-SBS-B0301-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-SBS-A03-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Black",
         "sku": "SA-F-SBS-A02-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Silver",
         "sku": "SA-F-SBS-A21-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Red",
         "sku": "SA-F-SBS-A05-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-SBS-A04-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Orange",
         "sku": "SA-F-SBS-A08-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Yellow",
         "sku": "SA-F-SBS-A06-100175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1228,82 +1311,90 @@
       {
         "name": "Black (500g)",
         "sku": "SA-F-TPU95A-A02-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Black (1kg)",
         "sku": "SA-F-TPU95A-A02-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-TPU95A-A01-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Clear",
         "sku": "SA-F-TPU95A-A17-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-TPU95A-A03-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-TPU95A-A04-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Red",
         "sku": "SA-F-TPU95A-A05-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Lunar Yellow",
         "sku": "SA-F-TPU95A-D06-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1317,22 +1408,24 @@
       {
         "name": "Black (500g)",
         "sku": "SA-F-TPU98A-A02-050175PG",
-        "price": "R299",
+        "price": "R 299.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Black (1kg)",
         "sku": "SA-F-TPU98A-A02-100175PG",
-        "price": "R449",
+        "price": "R 449.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1377,52 +1470,57 @@
       {
         "name": "Black",
         "sku": "SA-F-CPEPRO-A02-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-CPEPRO-A01-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-CPEPRO-A03-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Ruby Red",
         "sku": "SA-F-CPEPRO-A05-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-CPEPRO-A04-100175PG",
-        "price": "R399",
+        "price": "R 399.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1467,62 +1565,68 @@
       {
         "name": "Black",
         "sku": "SA-F-CPEPRO+-A02-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-CPEPRO+-A01-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-CPEPRO+-A03-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Ruby Red",
         "sku": "SA-F-CPEPRO+-A05-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-CPEPRO+-A04-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Natural",
         "sku": "SA-F-CPEPRO+-A14-100175PG",
-        "price": "R499",
+        "price": "R 499.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1567,52 +1671,57 @@
       {
         "name": "Black",
         "sku": "SA-F-CPEHT-A02-100175PG",
-        "price": "R549",
+        "price": "R 549.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "White",
         "sku": "SA-F-CPEHT-A01-100175PG",
-        "price": "R549",
+        "price": "R 549.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Grey",
         "sku": "SA-F-CPEHT-A03-100175PG",
-        "price": "R549",
+        "price": "R 549.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Ruby Red",
         "sku": "SA-F-CPEHT-A05-100175PG",
-        "price": "R549",
+        "price": "R 549.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       },
       {
         "name": "Blue",
         "sku": "SA-F-CPEHT-A04-100175PG",
-        "price": "R549",
+        "price": "R 549.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   },
@@ -1626,12 +1735,13 @@
       {
         "name": "Opal (2.5kg)",
         "sku": "SA-F-SIGNLT-A#-250175PG",
-        "price": "R999",
+        "price": "R 999.00",
         "weightG": 0,
         "shippingWeightG": 0,
         "rollLengthM": null,
         "stockQty": 1,
-        "imageUrl": ""
+        "imageUrl": "",
+        "listed": true
       }
     ]
   }

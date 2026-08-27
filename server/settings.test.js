@@ -67,3 +67,12 @@ test('getSettings falls back to the seeded defaults for todoCategories/todoPrior
   );
   db.close();
 });
+
+test('getSettings falls back to the seeded defaults for carPartModels when unset, and normalizes {id,name,active} shape', () => {
+  const db = openDb(':memory:');
+  const settings = getSettings(db);
+  assert.ok(settings.carPartModels.length > 0);
+  assert.ok(settings.carPartModels.every((m) => typeof m.id === 'string' && typeof m.name === 'string' && typeof m.active === 'boolean'));
+  assert.ok(settings.carPartModels.some((m) => m.name === 'Defender 200 Tdi'));
+  db.close();
+});

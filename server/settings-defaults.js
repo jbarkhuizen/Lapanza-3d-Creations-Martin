@@ -82,6 +82,33 @@ export const DEFAULT_SETTINGS = {
     { id: 'build-volume', name: 'Build Volume', active: true },
     { id: 'creality', name: 'Creality', active: true },
   ],
+  // Vehicle models a car-parts item (GWM/Landrover) can be tagged as fitting
+  // -- multi-select, an item stores the matching name strings directly (see
+  // server/index.js normalizeItems). Seeded from the Land Rover models
+  // recovered from lr3dparts.com during the initial 194-part import
+  // (2026-08-27); GWM models get added here once real GWM parts exist.
+  carPartModels: [
+    { id: 'defender-200-tdi', name: 'Defender 200 Tdi', active: true },
+    { id: 'defender-300-tdi', name: 'Defender 300 Tdi', active: true },
+    { id: 'defender-td5', name: 'Defender Td5', active: true },
+    { id: 'defender-puma', name: 'Defender Puma', active: true },
+    { id: 'defender-l663', name: 'Defender L663', active: true },
+    { id: 'discovery-1', name: 'Discovery 1', active: true },
+    { id: 'discovery-2', name: 'Discovery 2', active: true },
+    { id: 'discovery-3', name: 'Discovery 3', active: true },
+    { id: 'discovery-4', name: 'Discovery 4', active: true },
+    { id: 'freelander-1', name: 'Freelander 1', active: true },
+    { id: 'freelander-2', name: 'Freelander 2', active: true },
+    { id: 'range-rover-classic', name: 'Range Rover Classic', active: true },
+    { id: 'range-rover-p38', name: 'Range Rover P38', active: true },
+    { id: 'range-rover-l322', name: 'Range Rover L322', active: true },
+    { id: 'range-rover-l405', name: 'Range Rover L405', active: true },
+    { id: 'range-rover-sport-l320', name: 'Range Rover Sport L320', active: true },
+    { id: 'series-1', name: 'Series 1', active: true },
+    { id: 'series-2', name: 'Series 2', active: true },
+    { id: 'series-2a', name: 'Series 2A', active: true },
+    { id: 'series-3', name: 'Series 3', active: true },
+  ],
   todoCategories: [
     { id: 'bug', name: 'Bug', active: true },
     { id: 'feature', name: 'Feature', active: true },

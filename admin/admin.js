@@ -719,7 +719,17 @@ function blankProduct(kind) {
   };
 }
 
+// Car-parts items need settings.carPartModels for their Model checkboxes,
+// but state.settings otherwise only loads when the Settings tab is visited
+// -- fetch it lazily here so it's ready however the editor was reached.
+async function ensureSettingsLoaded() {
+  if (state.settings) return;
+  const data = await api('/api/settings');
+  state.settings = data.settings;
+}
+
 async function openNew(kind) {
+  await ensureSettingsLoaded();
   state.draft = blankProduct(kind);
   state.editingId = state.draft.id;
   setRoute('editor', { id: state.draft.id });
@@ -727,6 +737,7 @@ async function openNew(kind) {
 }
 
 async function openEditor(id, kind) {
+  await ensureSettingsLoaded();
   if (kind === 'filament') {
     const { filament } = await api(`/api/filaments/${id}`);
     state.draft = { ...structuredClone(filament), kind: 'filament' };
@@ -794,7 +805,7 @@ function renderEditor() {
             These fields power the public site pages:
             ${isFilament
               ? '<strong>name, slug, description, specs[], colours[{name,sku,weightG,rollLengthM,priceRand,stockQty,imagePath}], colourNote</strong>.'
-              : '<strong>name, slug, description, crumbs, parent, items[{name,details,material,size,finish,price,sku,imageUrl,listed,available}]</strong>.'}
+              : '<strong>name, slug, description, crumbs, parent, items[{name,details,material,size,finish,price,sku,imageUrl,listed,available,creator,models[],sourceUrl}]</strong>. Creator/Model/Source link only apply to car-parts categories (GWM/Landrover).'}
           </p>
           <div class="meta-list" style="margin-top:1rem">
             <div><span>ID</span><span>${p.id.slice(0, 8)}…</span></div>
@@ -885,6 +896,41 @@ function renderFilamentSections(p) {
   `;
 }
 
+// Car-parts-only fields (GWM/Landrover) on a catalog item: who designed it
+// and which vehicle model(s) it fits. A retired (active:false) model still
+// renders here if the item already has it checked -- same rule as every
+// other configurable list, see settings-defaults.js's LIST_SETTING_KEYS note.
+function carPartItemFields(item) {
+  const configured = state.settings?.carPartModels || [];
+  const selected = new Set(item.models || []);
+  const models = [
+    ...configured,
+    ...[...selected].filter((name) => !configured.some((m) => m.name === name)).map((name) => ({ id: name, name, active: true })),
+  ];
+  return `
+    <div class="grid-2">
+      <label class="field"><span>Creator (design credit)</span><input data-item="creator" value="${escapeAttr(item.creator || '')}" placeholder="e.g. Jonny Long" /></label>
+      <label class="field"><span>Source link (admin only)</span><input data-item="sourceUrl" value="${escapeAttr(item.sourceUrl || '')}" placeholder="https://..." /></label>
+    </div>
+    <div class="field">
+      <span>Fits models</span>
+      <div class="model-checkbox-list" style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.35rem">
+        ${models.length
+          ? models
+              .map(
+                (m) => `
+          <label class="field checkbox" style="margin:0">
+            <input type="checkbox" data-item-model="${escapeAttr(m.name)}" ${selected.has(m.name) ? 'checked' : ''} />
+            <span>${escapeHtml(m.name)}${m.active ? '' : ' (retired)'}</span>
+          </label>`,
+              )
+              .join('')
+          : '<span class="muted" style="font-size:0.85rem">No models configured yet — add some in Settings.</span>'}
+      </div>
+    </div>
+  `;
+}
+
 function renderCategorySections(p) {
   return `
     <div class="panel stack gap-3">
@@ -951,6 +997,7 @@ function renderCategorySections(p) {
                 <span>Available</span>
               </label>
             </div>
+            ${p.parent === 'car-parts' ? carPartItemFields(item) : ''}
           </div>
         `).join('') || '<div class="empty">No catalog items yet</div>'}
       </div>
@@ -1031,6 +1078,9 @@ function bindEditorEvents() {
       stockQty: 0,
       available: true,
       listed: true,
+      creator: '',
+      models: [],
+      sourceUrl: '',
       sortOrder: p.items.length,
       _isNew: true, // not yet persisted -- photo upload needs a real item id from the server first
     });
@@ -1108,6 +1158,9 @@ function bindEditorEvents() {
   $$('[data-item]').forEach((input) => {
     input.addEventListener('input', () => syncNestedFromDom());
     input.addEventListener('change', () => syncNestedFromDom());
+  });
+  $$('[data-item-model]').forEach((cb) => {
+    cb.addEventListener('change', () => syncNestedFromDom());
   });
 
   // Colour photo upload -- fires immediately on file selection (simplest UX,
@@ -1373,6 +1426,13 @@ function syncNestedFromDom() {
       stockQty: Math.max(0, Number($('[data-item="stockQty"]', row)?.value) || 0),
       available: $('[data-item="available"]', row)?.checked !== false,
       listed: $('[data-item="listed"]', row)?.checked !== false,
+      // Only rendered for car-parts items (carPartItemFields) -- absent
+      // elsewhere, so fall back to whatever the item already had.
+      creator: row.querySelector('[data-item="creator"]')?.value ?? (prev.creator || ''),
+      sourceUrl: row.querySelector('[data-item="sourceUrl"]')?.value ?? (prev.sourceUrl || ''),
+      models: $$('[data-item-model]', row).length
+        ? $$('[data-item-model]', row).filter((cb) => cb.checked).map((cb) => cb.dataset.itemModel)
+        : (prev.models || []),
       sortOrder: i,
       _isNew: prev._isNew ?? false,
     };
@@ -2365,6 +2425,7 @@ async function renderSettings() {
 ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
       ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
       ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
+      ${configurableListPanel('carPartModels', 'Car part models', s.carPartModels, 'Vehicle models a GWM or Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
 
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Print Job Costing rates</h3></div>

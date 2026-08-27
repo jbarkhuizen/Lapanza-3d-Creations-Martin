@@ -30,5 +30,189 @@
       "title": "Everything Else",
       "description": "Toys, homeware and phone accessories, printed to order."
     }
-  ]
+  ],
+  "bankName": "Absa",
+  "bankAccountName": "J Barkhuizen",
+  "bankAccountNumber": "404 950 4269",
+  "bankBranchCode": "632005",
+  "invoiceNumberSeed": 10,
+  "markupPct": 0,
+  "electricityRate": 3.85,
+  "printerPowerDraw": 0.15,
+  "runningCostsPct": 0.25,
+  "designRate": 300,
+  "setupRate": 300,
+  "postProcessingRate": 300,
+  "orderNotificationEmail": "lapanzaonline@gmail.com",
+  "inHouseFilamentBrands": [
+    {
+      "id": "sunlu",
+      "name": "SunLu",
+      "active": true
+    },
+    {
+      "id": "sa-filament",
+      "name": "SA Filament",
+      "active": true
+    },
+    {
+      "id": "build-volume",
+      "name": "Build Volume",
+      "active": true
+    },
+    {
+      "id": "creality",
+      "name": "Creality",
+      "active": true
+    }
+  ],
+  "carPartModels": [
+    {
+      "id": "defender-200-tdi",
+      "name": "Defender 200 Tdi",
+      "active": true
+    },
+    {
+      "id": "defender-300-tdi",
+      "name": "Defender 300 Tdi",
+      "active": true
+    },
+    {
+      "id": "defender-td5",
+      "name": "Defender Td5",
+      "active": true
+    },
+    {
+      "id": "defender-puma",
+      "name": "Defender Puma",
+      "active": true
+    },
+    {
+      "id": "defender-l663",
+      "name": "Defender L663",
+      "active": true
+    },
+    {
+      "id": "discovery-1",
+      "name": "Discovery 1",
+      "active": true
+    },
+    {
+      "id": "discovery-2",
+      "name": "Discovery 2",
+      "active": true
+    },
+    {
+      "id": "discovery-3",
+      "name": "Discovery 3",
+      "active": true
+    },
+    {
+      "id": "discovery-4",
+      "name": "Discovery 4",
+      "active": true
+    },
+    {
+      "id": "freelander-1",
+      "name": "Freelander 1",
+      "active": true
+    },
+    {
+      "id": "freelander-2",
+      "name": "Freelander 2",
+      "active": true
+    },
+    {
+      "id": "range-rover-classic",
+      "name": "Range Rover Classic",
+      "active": true
+    },
+    {
+      "id": "range-rover-p38",
+      "name": "Range Rover P38",
+      "active": true
+    },
+    {
+      "id": "range-rover-l322",
+      "name": "Range Rover L322",
+      "active": true
+    },
+    {
+      "id": "range-rover-l405",
+      "name": "Range Rover L405",
+      "active": true
+    },
+    {
+      "id": "range-rover-sport-l320",
+      "name": "Range Rover Sport L320",
+      "active": true
+    },
+    {
+      "id": "series-1",
+      "name": "Series 1",
+      "active": true
+    },
+    {
+      "id": "series-2",
+      "name": "Series 2",
+      "active": true
+    },
+    {
+      "id": "series-2a",
+      "name": "Series 2A",
+      "active": true
+    },
+    {
+      "id": "series-3",
+      "name": "Series 3",
+      "active": true
+    }
+  ],
+  "todoCategories": [
+    {
+      "id": "bug",
+      "name": "Bug",
+      "active": true
+    },
+    {
+      "id": "feature",
+      "name": "Feature",
+      "active": true
+    },
+    {
+      "id": "enhancement",
+      "name": "Enhancement",
+      "active": true
+    },
+    {
+      "id": "tech-debt",
+      "name": "Tech Debt",
+      "active": true
+    }
+  ],
+  "todoPriorities": [
+    {
+      "id": "critical",
+      "name": "Critical",
+      "active": true
+    },
+    {
+      "id": "high",
+      "name": "High",
+      "active": true
+    },
+    {
+      "id": "medium",
+      "name": "Medium",
+      "active": true
+    },
+    {
+      "id": "low",
+      "name": "Low",
+      "active": true
+    }
+  ],
+  "lowStockThreshold": 3,
+  "printLeadTimeDays": "3-5",
+  "filamentDispatchDays": "1-2"
 }

@@ -2,22 +2,25 @@
   "toys": {
     "slug": "toys",
     "name": "Toys",
-    "description": "3D printed toys — add your catalogue here.",
+    "description": "Level up the fun with our collection of 3D-printed toys, games, and storage essentials! From sleek card deck holders and board game organisers to interactive fidgets, display pieces, and playful gadgets, we bring your favourite pastimes to life. Whether you're looking for clever gaming accessories to keep game night organised or unique, durable toys to spark imagination, our creations are built for play, made to last, and designed to bring extra joy to kids and adults alike.",
     "crumbs": "Home / Toys",
     "items": [
       {
-        "name": "Toys piece 1",
-        "details": "Custom printed to order — material, size and finish on request.",
+        "name": "UNO Playing card box",
+        "details": "Keep your UNO cards protected and always ready for the next game.\n\nThis 3D printed card box is designed to fit a standard UNO deck. The secure clips hold the lid firmly closed, so your cards stay safe whether you're at home, travelling or storing them on a shelf.\n\nBuilt to last. Easy to open. Compact enough to take anywhere.",
         "material": "",
         "size": "",
         "finish": "",
-        "price": "",
-        "sku": "",
-        "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
-        "stockQty": 0,
-        "available": true
+        "price": "R100",
+        "sku": "UNO BOX",
+        "imageUrl": "/uploads/category-items/25fa28a659d613bf.jpg",
+        "creator": "",
+        "models": [],
+        "weight": 200,
+        "shippingWeight": 400,
+        "stockQty": 2,
+        "available": true,
+        "listed": true
       },
       {
         "name": "Toys piece 2",
@@ -28,10 +31,13 @@
         "price": "",
         "sku": "",
         "imageUrl": "",
+        "creator": "",
+        "models": [],
         "weight": 0,
         "shippingWeight": 0,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       },
       {
         "name": "Toys piece 3",
@@ -42,10 +48,13 @@
         "price": "",
         "sku": "",
         "imageUrl": "",
+        "creator": "",
+        "models": [],
         "weight": 0,
         "shippingWeight": 0,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       }
     ]
   },
@@ -64,10 +73,13 @@
         "price": "",
         "sku": "",
         "imageUrl": "",
+        "creator": "",
+        "models": [],
         "weight": 0,
         "shippingWeight": 0,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       },
       {
         "name": "Homeware piece 2",
@@ -78,10 +90,13 @@
         "price": "",
         "sku": "",
         "imageUrl": "",
+        "creator": "",
+        "models": [],
         "weight": 0,
         "shippingWeight": 0,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       },
       {
         "name": "Homeware piece 3",
@@ -92,10 +107,13 @@
         "price": "",
         "sku": "",
         "imageUrl": "",
+        "creator": "",
+        "models": [],
         "weight": 0,
         "shippingWeight": 0,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       }
     ]
   },
@@ -106,18 +124,21 @@
     "crumbs": "Home / Phones",
     "items": [
       {
-        "name": "Phones piece 1",
-        "details": "Custom printed to order — material, size and finish on request.",
+        "name": "Test Product",
+        "details": "Test Product",
         "material": "",
         "size": "",
         "finish": "",
-        "price": "",
-        "sku": "",
+        "price": "5",
+        "sku": "SKU-Test",
         "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
-        "stockQty": 0,
-        "available": true
+        "creator": "",
+        "models": [],
+        "weight": 100,
+        "shippingWeight": 150,
+        "stockQty": 21,
+        "available": true,
+        "listed": true
       },
       {
         "name": "Phones piece 2",
@@ -128,10 +149,13 @@
         "price": "",
         "sku": "",
         "imageUrl": "",
+        "creator": "",
+        "models": [],
         "weight": 0,
         "shippingWeight": 0,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       },
       {
         "name": "Phones piece 3",
@@ -142,61 +166,107 @@
         "price": "",
         "sku": "",
         "imageUrl": "",
+        "creator": "",
+        "models": [],
         "weight": 0,
         "shippingWeight": 0,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       }
     ]
   },
   "gwm": {
     "slug": "gwm",
     "name": "GWM",
-    "description": "Custom and replacement 3D printed parts for GWM vehicles.",
+    "description": "Custom and replacement 3D printed parts/accessories for GWM vehicles.",
     "crumbs": "Home / Car Parts / GWM",
     "parent": "car-parts",
     "items": [
       {
-        "name": "GWM piece 1",
-        "details": "Custom printed to order — material, size and finish on request.",
-        "material": "",
+        "name": "GWM Rear Floor Clip-on Cup Holder",
+        "details": "This cup holder clips seamlessly onto the factory centre console on the floor, utilising the existing trim lines for a secure, wiggle-free fit. It features built-in drink storage alongside a dedicated slot to keep a cellphone safe and accessible. No drilling, no permanent modifications, and no flimsy plastic inserts required. Whether you’re tackling rough 4x4 trails or navigating daily school runs, this upgrade ensures your passengers' drinks and phone stay firmly in place.",
+        "material": "PLA",
         "size": "",
-        "finish": "",
-        "price": "",
-        "sku": "",
-        "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
-        "stockQty": 0,
-        "available": true
+        "finish": "Matt",
+        "price": "R350",
+        "sku": "SKU-001",
+        "imageUrl": "/uploads/category-items/92f020a5f1cc55d4.png",
+        "creator": "",
+        "models": [],
+        "weight": 200,
+        "shippingWeight": 300,
+        "stockQty": 3,
+        "available": true,
+        "listed": true
       },
       {
-        "name": "GWM piece 2",
-        "details": "Custom printed to order — material, size and finish on request.",
-        "material": "",
+        "name": "GWM P300 Rear Armrest Slide-in Cup Holder",
+        "details": "This custom-engineered, 3D-printed cup holder drops right into place in seconds. Designed to slide smoothly and snugly into the back-seat centre armrest, giving your passengers a stable, secure place for their favourite drinks. No clips, no screws, and no permanent vehicle modifications required.\n\nWith a built-in storage slot it’s perfect for the rear-seat essentials that always seem to get lost in the footwell, whether that's a cell phone, a charging cable, a pen, or a pack of mints.",
+        "material": "PLA",
         "size": "",
-        "finish": "",
-        "price": "",
-        "sku": "",
-        "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
+        "finish": "Matt",
+        "price": "R450",
+        "sku": "SKU-002",
+        "imageUrl": "/uploads/category-items/2aeed1439d9361e6.jpg",
+        "creator": "",
+        "models": [],
+        "weight": 350,
+        "shippingWeight": 400,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       },
       {
-        "name": "GWM piece 3",
-        "details": "Custom printed to order — material, size and finish on request.",
-        "material": "",
+        "name": "GWM P300 - Front centre console Cup Holder",
+        "details": "This 3D printed raised insert drops straight into your existing cup holder and lifts both cups to a comfortable, reachable height. No modifications. No tools. No drilling.\n\nClean matte black finish that matches your interior.\nEasy to remove and clean.\n",
+        "material": "PLA",
         "size": "",
-        "finish": "",
-        "price": "",
-        "sku": "",
-        "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
-        "stockQty": 0,
-        "available": true
+        "finish": "Matte Black",
+        "price": "R300",
+        "sku": "SKU-003",
+        "imageUrl": "/uploads/category-items/59b923f9f98618ab.jpg",
+        "creator": "",
+        "models": [],
+        "weight": 300,
+        "shippingWeight": 350,
+        "stockQty": 10,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "GWM P300 Fuel Cap Holder - PETROL",
+        "details": "Designed specifically for the GWM P300, this practical accessory keeps your fuel cap clean, protected, and off your vehicle's paintwork during refueling. It also makes life easier for fuel attendants by providing a convenient spot to safely place the cap instead of letting it dangle or searching for somewhere to put it.\n\nThe clearly printed PETROL or DIESEL label, provides an instant visual reminder of the correct fuel type. This helps reduce the risk of costly fuel mix-ups and gives both drivers and attendants extra peace of mind at the pump.",
+        "material": "PLA",
+        "size": "",
+        "finish": "Black",
+        "price": "R75",
+        "sku": "SKU-004-PT",
+        "imageUrl": "/uploads/category-items/785cf4d37cdb403b.png",
+        "creator": "",
+        "models": [],
+        "weight": 50,
+        "shippingWeight": 100,
+        "stockQty": 10,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "GWM P300 Fuel Cap Holder - DIESEL",
+        "details": "Designed specifically for the GWM P300, this practical accessory keeps your fuel cap clean, protected, and off your vehicle's paintwork during refueling. It also makes life easier for fuel attendants by providing a convenient spot to safely place the cap instead of letting it dangle or searching for somewhere to put it.\n\nThe clearly printed PETROL or DIESEL label, provides an instant visual reminder of the correct fuel type. This helps reduce the risk of costly fuel mix-ups and gives both drivers and attendants extra peace of mind at the pump.",
+        "material": "PLA",
+        "size": "",
+        "finish": "Black",
+        "price": "R75",
+        "sku": "SKU-004-DS",
+        "imageUrl": "/uploads/category-items/e117f502d5716070.png",
+        "creator": "",
+        "models": [],
+        "weight": 50,
+        "shippingWeight": 100,
+        "stockQty": 10,
+        "available": true,
+        "listed": true
       }
     ]
   },
@@ -208,46 +278,3856 @@
     "parent": "car-parts",
     "items": [
       {
-        "name": "Landrover piece 1",
-        "details": "Custom printed to order — material, size and finish on request.",
-        "material": "",
+        "name": "Door Card Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number MXC1800. Download the STL, preview in 3D, print at home. Defender door card clip",
+        "material": "ABS, PETG",
         "size": "",
         "finish": "",
-        "price": "",
-        "sku": "",
-        "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
+        "price": "150",
+        "sku": "Part0009",
+        "imageUrl": "/uploads/category-items/5d7952e2fbc77055.png",
+        "creator": "Louis Roesch",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       },
       {
-        "name": "Landrover piece 2",
-        "details": "Custom printed to order — material, size and finish on request.",
-        "material": "",
+        "name": "Door Sill Lock Button",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number JRC1775PMA. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
         "size": "",
         "finish": "",
-        "price": "",
-        "sku": "",
-        "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
+        "price": "150",
+        "sku": "Part0001",
+        "imageUrl": "/uploads/category-items/6961b5e8cd1f9c17.jpeg",
+        "creator": "PorcoMaster",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
       },
       {
-        "name": "Landrover piece 3",
-        "details": "Custom printed to order — material, size and finish on request.",
-        "material": "",
+        "name": "Internal Door Handle",
+        "details": "Land Rover Defender Internal Door Handle",
+        "material": "ABS, PETG",
         "size": "",
         "finish": "",
-        "price": "",
-        "sku": "",
-        "imageUrl": "",
-        "weight": 0,
-        "shippingWeight": 0,
+        "price": "150",
+        "sku": "Part0021",
+        "imageUrl": "/uploads/category-items/3c435b7251c7f24d.png",
+        "creator": "Seven Code",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
         "stockQty": 0,
-        "available": true
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Snow Cowl Heater Intake LHD - RH Wing",
+        "details": "Keep snow, ice, and leaves out of your heater intake with this Snow Cowl.\r\n\r\nThe heater intake cover fits Left Hand Drive Defenders (this goes on the Right H...",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0030",
+        "imageUrl": "/uploads/category-items/63106d806afbf11b.jpeg",
+        "creator": "Roman Schmalz",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Grille - Air Intake - Right Side",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number BTR6188. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0025",
+        "imageUrl": "/uploads/category-items/6b83e60ff6028e19.png",
+        "creator": "Jonny Long",
+        "models": [
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Seatbelt clip",
+        "details": "Holds the seatbelt latch so it does not slide down past the shoulder. Universal to any seatbelt of standard width. (3MF file)",
+        "material": "N/A",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0026",
+        "imageUrl": "/uploads/category-items/c4e6e1cdcfa0a9d8.png",
+        "creator": "Robindawilliams",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma",
+          "Discovery 1",
+          "Discovery 2",
+          "Discovery 3",
+          "Discovery 4",
+          "Range Rover Classic",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Wing Grill",
+        "details": "Defender wing grills, need drilling.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0020",
+        "imageUrl": "/uploads/category-items/be33ad03db0830d2.jpg",
+        "creator": "Merg1234",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Bonnet Hinge Bushing",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number 346849. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0011",
+        "imageUrl": "/uploads/category-items/daaf13180bfba7fd.webp",
+        "creator": "Slavo Harcar",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Back Light Guards",
+        "details": "Simple light guards for Land Rover Defender, just attache them with the original screws.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0029",
+        "imageUrl": "/uploads/category-items/4fc77e4276d1eeb5.jpeg",
+        "creator": "Roman Schmalz",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Door Lock Button Housing",
+        "details": "Free 3D-printable replacement for Land Rover OEM part numbers BRC8965PMA and EJS000011PMA. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0002",
+        "imageUrl": "/uploads/category-items/c0870c740029b23b.jpeg",
+        "creator": "PorcoMaster",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Door Lock Escutcheon",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number MXC4738PMA. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0003",
+        "imageUrl": "/uploads/category-items/1de80cc6a81223d6.jpeg",
+        "creator": "Shadow_964",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Door Card Clip Mount",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number EZM500050REC. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0004",
+        "imageUrl": "/uploads/category-items/9d63eaeb1260d51b.jpg",
+        "creator": "Vicente Gomez",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Door Panel Dowel",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number AFU1926L. Download the STL, preview in 3D, print at home. Land Rover Defender Door Panel Dowel",
+        "material": "ABS, TPU",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0022",
+        "imageUrl": "/uploads/category-items/2e3d853d8a4d92db.png",
+        "creator": "Hendrik Mü",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Window and Heating Switch Bezel",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number BTR3644LNF. Fits Discovery 1, Discovery 2. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0015",
+        "imageUrl": "/uploads/category-items/9bd3c658dd462b6d.jpg",
+        "creator": "Jan Erben",
+        "models": [
+          "Discovery 1",
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Dash mounted Cup holder",
+        "details": "A cup holder that clips to the metal dash of a Series 1-2a.",
+        "material": "N/A",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0027",
+        "imageUrl": "/uploads/category-items/7a177bb928afbf55.jpg",
+        "creator": "Robindawilliams",
+        "models": [
+          "Series 1",
+          "Series 2",
+          "Series 2A"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Seat Lever Knob",
+        "details": "Free 3D-printable replacement for Land Rover OEM part numbers MUC8754 and RNF503. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0005",
+        "imageUrl": "/uploads/category-items/1e15d15c31405362.jpg",
+        "creator": "J. Brex",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Cubby-Box Cup-Holder Extension",
+        "details": "Cubby-box extension with two cup recesses and a central storage pocket.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0192",
+        "imageUrl": "/uploads/category-items/57aa9f1e62592aef.png",
+        "creator": "Jan Dippenaar (Dippa)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Mirror Hinge Bottom Cap",
+        "details": "Land Rover defender mirror hinge bottom cap",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0008",
+        "imageUrl": "/uploads/category-items/b6a01fd31917ea85.jpeg",
+        "creator": "Clemente Gauer",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Ashtray Phone Holder",
+        "details": "Ashtray-slot phone holder for the pre-Puma dashboard.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0186",
+        "imageUrl": "/uploads/category-items/87cc236ed915ff1b.jpg",
+        "creator": "Ned Sparksman (ned_sparkie)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Onboard-Computer Dashboard Housing",
+        "details": "Multi-part dashboard housing, frame, gauge mount, button, adaptor, and support bracket for the BinOwl onboard-computer installation.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0181",
+        "imageUrl": "/uploads/category-items/b216af2dc72489d3.jpg",
+        "creator": "BLAIR YOUNG (Polarblair)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Clip Front Seat Belt Retainer",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number EWH000010. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0031",
+        "imageUrl": "/uploads/category-items/ed0307747ce78935.jpg",
+        "creator": "Jack Burton",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Grille Trip Screw Holders",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number CZA4705L. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0528",
+        "imageUrl": "/uploads/category-items/868b195ffd49ce4d.jpeg",
+        "creator": "JollyGiant",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Gear Knob",
+        "details": "Land Rover Defender LT77 Gear knob",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0024",
+        "imageUrl": "/uploads/category-items/e2e112cc78ea8dd0.png",
+        "creator": "Chris Malyon",
+        "models": [
+          "Defender 300 Tdi",
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Lucas Wiper-Motor Gasket and Insulator Kit",
+        "details": "Six-piece replacement kit redrawn from surviving original plastic and bakelite wiper-motor components. The positive-terminal insulator uses a simplified M3 t...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0197",
+        "imageUrl": "/uploads/category-items/50cc607b3fd2a267.jpg",
+        "creator": "Clement Berard (Bedzplane)",
+        "models": [
+          "Series 1",
+          "Series 2",
+          "Series 2A"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Wheel-Nut Cover",
+        "details": "Push-fit 27 mm wheel-nut cover.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0175",
+        "imageUrl": "/uploads/category-items/1e2bdf63ea396398.jpg",
+        "creator": "Mad Roberts (MadBobUK)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Indicator-or-Sidelight Bulb Socket",
+        "details": "Three-part replacement socket assembly for an indicator or position lamp using a separate single-contact bulb holder. Verify the 33 mm housing fit, wiring, i...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0159",
+        "imageUrl": "/uploads/category-items/82c08f8978e42586.jpg",
+        "creator": "Marc Reus (MarcReus)",
+        "models": [
+          "Series 1",
+          "Series 2",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear Hub-Seal Fitting Tool",
+        "details": "Workshop fitting tool for seating the rear hub seal squarely.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0127",
+        "imageUrl": "/uploads/category-items/a4e8fddba3cd0808.png",
+        "creator": "Matej Škvarč (mathew86)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma",
+          "Discovery 1",
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Bonnet Stay Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number PRC3180. Fits Defender Td5, Defender Puma. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0007",
+        "imageUrl": "/uploads/category-items/a7b35b0b9606fbe8.jpg",
+        "creator": "tanbruk",
+        "models": [
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "(No drill) Removable Marshall Speaker Holder",
+        "details": "Originally built to mount a Bolt&Trim Leather speaker holder for the Marshall speaker. This allows for a temporary/movable mount based originally on a cup ho...",
+        "material": "N/A",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0028",
+        "imageUrl": "/uploads/category-items/8ed5519200192f87.png",
+        "creator": "Robindawilliams",
+        "models": [
+          "Series 1",
+          "Series 2",
+          "Series 2A"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "52mm Hub Nut Socket - 1/2 inch drive + 27mm hex",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DA1118. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG, PLA, Titanium (Ti-5553), Titanium (Ti64), Titanium (Ti6Al4V), Titanium (TiCP)",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part155452",
+        "imageUrl": "/uploads/category-items/2aebd632bbb9cac4.jpg",
+        "creator": "JinPrints",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Discovery 1",
+          "Range Rover Classic",
+          "Series 1",
+          "Series 2",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Door-Hinge Shims",
+        "details": "Door-hinge packing shims in three thicknesses. They also separate dissimilar metals to help reduce electrolytic corrosion",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0199",
+        "imageUrl": "/uploads/category-items/dceb3b8204ad58c2.jpg",
+        "creator": "Sales Artleknock (Artleknock)",
+        "models": [
+          "Series 2",
+          "Series 2A"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Transfer-Box Oil-Seal Tool",
+        "details": "Workshop tool for seating the oil seal in an LT230 transfer box. The creator printed it in PETG with a 2 mm shell and 50% infill.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0191",
+        "imageUrl": "/uploads/category-items/fa1d7cf3a4a79698.jpg",
+        "creator": "paul shax (TRAXA)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Bonnet (Hood) Prop Grommet",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number AYA10004L. Fits Discovery 2. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0019",
+        "imageUrl": "/uploads/category-items/b1aa89fd9e216ba4.jpg",
+        "creator": "Tom Dewing",
+        "models": [
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Horn Button Cover",
+        "details": "Land Rover Discovery 2 horn button cover.",
+        "material": "N/A",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0017",
+        "imageUrl": "/uploads/category-items/7ba26a23eebea291.jpg",
+        "creator": "Jan Erben",
+        "models": [
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Front Bumper Corner",
+        "details": "Simplified, smaller front bumper corner for the full-size Range Rover Classic 200Tdi. Attaches using the original screw. Confirm side and dimensions against ...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0040",
+        "imageUrl": "/uploads/category-items/760a6882bf480132.jpg",
+        "creator": "Dnevon",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Ashtray-or-Coin-Tray Insert",
+        "details": "Three alternative inserts for an ashtray or coin-tray opening: a blank panel, a three-switch panel, and a dual socket panel.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0126",
+        "imageUrl": "/uploads/category-items/e63b751b1b81846f.jpg",
+        "creator": "Jesse Garland (TriPolar)",
+        "models": [
+          "Discovery 1",
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "9.3-Inch CarPlay Screen Bracket",
+        "details": "Dashboard bracket for a 9.3-inch portable CarPlay display. The upper edge tucks beneath the dashboard trim while taped feet support the screen",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part00879",
+        "imageUrl": "/uploads/category-items/73bc31f5abfbff0b.jpg",
+        "creator": "parody1",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Armrest Cap",
+        "details": "Land Rover Discovery 3 armrest cap.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0018",
+        "imageUrl": "/uploads/category-items/e83914ce9b6d1647.jpg",
+        "creator": "Jan Erben",
+        "models": [
+          "Discovery 3",
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Window Switch Bezel",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number BTR3644LNF. Fits Discovery 1, Discovery 2. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0016",
+        "imageUrl": "/uploads/category-items/c20dec821fae9592.png",
+        "creator": "Jan Erben",
+        "models": [
+          "Discovery 1",
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Ashtray Blanking Plate",
+        "details": "Two fit variants of a blanking plate for the 1998 dashboard ashtray opening.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0188",
+        "imageUrl": "/uploads/category-items/bf37d78e0b20a49e.jpg",
+        "creator": "Mad Roberts (MadBobUK)",
+        "models": [
+          "Defender 300 Tdi",
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Washer-Reservoir Cap",
+        "details": "Replacement windscreen-washer reservoir cap with retaining-ring eyelet, spill-reducing internal lips, and a 0.4 mm vent hole.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0185",
+        "imageUrl": "/uploads/category-items/2329dc96e2af7b82.jpeg",
+        "creator": "J. Brex (droemel)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Headlining Fastener Clips",
+        "details": "Two headlining fastener sizes for a 110.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0171",
+        "imageUrl": "/uploads/category-items/2f70e281ac11be06.jpeg",
+        "creator": "Merghani Osman (Merg1234)",
+        "models": [
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Seat-Box Floor Vent",
+        "details": "Air-intake vent that replaces the removable seat-box floor grommet when fitting a diesel night heater. The creator secured it with marine sealant.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0164",
+        "imageUrl": "/uploads/category-items/ecafb9474192c2bd.jpg",
+        "creator": "Mad Roberts (MadBobUK)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Window-Regulator Gear and Roller",
+        "details": "Repair set for later window-regulator motor assemblies, including gear-coupler and roller options. Some versions require drilling and tapping the original st...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0107",
+        "imageUrl": "/uploads/category-items/aa71e9c3c9204822.jpg",
+        "creator": "Clément Bérard (Bedzplane)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear Bumper Lamp Guards",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number VUB500690. Fits Discovery 2. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0033",
+        "imageUrl": "/uploads/category-items/c6c8c519d99d85e7.jpg",
+        "creator": "Alex Proctor",
+        "models": [
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Latch Fuel Filler Door",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number ALR6949. Fits Discovery 2. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0023",
+        "imageUrl": "/uploads/category-items/593c8a88774f39fd.jpg",
+        "creator": "Christopher Nupp",
+        "models": [
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Adapter for Discovery 2 Cruise Control switch",
+        "details": "Adaptor to fit Discovery 2 Cruise Control switch to Defender td5.\r\nQuote from SimonRafferty:\r\n\"It's very easy to add cruise control to any Td5 Land Rover Def...",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0014",
+        "imageUrl": "/uploads/category-items/799acd94f6aea57c.jpg",
+        "creator": "adding a couple of wires to the ECU and connecting them to a switch. (search on line for details)",
+        "models": [
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Front Bumper End Cap Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DZM100080. Fits Defender Puma. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0013",
+        "imageUrl": "/uploads/category-items/4329b4faed189f4f.jpg",
+        "creator": "José Antonio Conde",
+        "models": [
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Brake Pipe Clip",
+        "details": "Clip to hold brake pipes to chassis for Defender TD5. It fits into existing 7mmØ holes in chassis and holds a 5mmØ brake pipe secured by a 4.7mm*1.3mm nylon ...",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0012",
+        "imageUrl": "/uploads/category-items/4a7db18318ada355.jpg",
+        "creator": "a 4.7mm*1.3mm nylon cable tie.",
+        "models": [
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Gauge LED Holders",
+        "details": "Loose- and tight-fit holders for fitting a 5 mm 12-volt LED and panel-mount bezel into a 16 mm Jaeger or Smiths gauge opening. The creator notes that the tig...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0200",
+        "imageUrl": "/uploads/category-items/5de71d7c99142ba2.png",
+        "creator": "eraser",
+        "models": [
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Handbrake Lever Button",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number 552856. Fits Series 2A, Series 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0152",
+        "imageUrl": "/uploads/category-items/bcc9db250bc4c472.jpg",
+        "creator": "sat star (satstar)",
+        "models": [
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Centre-Console Tray",
+        "details": "Two-part centre-console organiser comprising a main tray and removable divider. Use a cabin-temperature-resistant material because PLA may soften in summer h...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0130",
+        "imageUrl": "/uploads/category-items/d94bd303f267ee9e.jpg",
+        "creator": "Christian (LR_TIME)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Tow-Cover Thumbwheel Fastener",
+        "details": "Tool-free half-turn thumbwheel fastener for the rear towing-point cover. Print at 100% infill for strength.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0076",
+        "imageUrl": "/uploads/category-items/9f691b1b64e2461c.jpg",
+        "creator": "Paul Hampton (pghhgp)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear-Seat Latch Repair Clip",
+        "details": "Repair clip for a broken rear-seat latch, supplied with a trim-removal tool. Reuses the original spring",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0066",
+        "imageUrl": "/uploads/category-items/0b88dcd0ca4056f6.jpg",
+        "creator": "James Schnaider (jrs824)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Simple Dash Vent Grille",
+        "details": "Simplified fixed replica of the original Range Rover Classic dashboard vent grille. The source model is based on a full-size Classic and is intended to be gl...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0039",
+        "imageUrl": "/uploads/category-items/65359340c1c3d76b.jpg",
+        "creator": "Dnevon",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Trim Clip for Fuse Box Cover",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number LR013581. Fits Defender Puma. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0010",
+        "imageUrl": "/uploads/category-items/ba1fbdc055d6282f.jpg",
+        "creator": "Andrea Pasqui",
+        "models": [
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Ventilator Control Knob",
+        "details": "Replacement ventilator control knob modelled from the original component.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0196",
+        "imageUrl": "/uploads/category-items/e0c3b61654ef31d6.jpg",
+        "creator": "Joakim Soya (Joakim)",
+        "models": [
+          "Series 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Dashboard Switch Connectors",
+        "details": "Printable male connector bodies and mounting parts for the original dashboard E-switch and hazard-switch positions.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0182",
+        "imageUrl": "/uploads/category-items/8d99293a098364c9.png",
+        "creator": "Eric Nichols (magichat9)",
+        "models": [
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Airbox-Flange Repair",
+        "details": "Replacement flange for repairing or upgrading the Td5 air-filter housing connection.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0174",
+        "imageUrl": "/uploads/category-items/0c2d9c0745ab01b4.png",
+        "creator": "Fabrizio Ricci (fabbo97)",
+        "models": [
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Dashboard Auxiliary-Switch Console",
+        "details": "Console for mounting auxiliary switches or other equipment in the small driver-side dashboard recess. Blank and pre-drilled versions are included for both le...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0163",
+        "imageUrl": "/uploads/category-items/cb2555f04d55883d.jpg",
+        "creator": "John Seccombe (mostdom)",
+        "models": [
+          "Defender L663"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Bulkhead-Vent Control Knob",
+        "details": "Replacement lettered knob for a missing bulkhead-vent control. It is designed to be heat-pressed onto the original mechanism",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0161",
+        "imageUrl": "/uploads/category-items/55315e0c6dfa12cb.jpg",
+        "creator": "Luke Kelly (lakelly)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Headlight Adjuster Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number STC3368. Fits Discovery 1. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0097",
+        "imageUrl": "/uploads/category-items/e45c21ef04b31953.jpg",
+        "creator": "Tristan Scott (trs998)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Front-Cowl Push Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number CYC000010. Fits Range Rover L322. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0090",
+        "imageUrl": "/uploads/category-items/80c089addd7de6ee.jpg",
+        "creator": "Vladislav Trigubovich (Trigubovich)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Quad Lock Phone Mount",
+        "details": "Dashboard phone mount for fitting a Quad Lock interface in the Discovery 3/LR3 cabin. Confirm the mating interface and dashboard fit before final installation.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0086",
+        "imageUrl": "/uploads/category-items/65864592b7c3bdf3.png",
+        "creator": "brandbull",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Dashboard Drinks Holder and Tray",
+        "details": "Dashboard drinks holder for the Range Rover P38, based on genuine Land Rover accessory LRN32685 with printability changes and an added tray for pens and coins.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0047",
+        "imageUrl": "/uploads/category-items/db8f171eda618ef5.jpg",
+        "creator": "dave3dprinter",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Fuel Pipe Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number ESR4687. Fits Defender Td5. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0006",
+        "imageUrl": "/uploads/category-items/774eea736a7eb053.png",
+        "creator": "Guillaume Brouton",
+        "models": [
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Switch-Panel Mount No Holes Required",
+        "details": "It fits in front of the ignition-switch, designed for the eezee power switch panel so it has a mounting surface of 68x115 mm and mirrored version for RHD veh...",
+        "material": "ABS, PETG, PLA",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part1861",
+        "imageUrl": "/uploads/category-items/c834ba875d89ef3d.jpeg",
+        "creator": "JR-customs",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Bulkhead Can Holder",
+        "details": "Bulkhead-mounted holder for a standard 33 cl can, with a recess for an optional 6 mm retaining magnet.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0201",
+        "imageUrl": "/uploads/category-items/2481be158668c32d.jpg",
+        "creator": "Loic Mignon (Loicbzh)",
+        "models": [
+          "Series 1",
+          "Series 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Inspection-Lamp Socket",
+        "details": "Three-piece 12-volt inspection-lamp socket adaptation using standard 4 mm RC bullet connectors, 14 AWG silicone wire, and an M3 x 12 mm fastener.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0198",
+        "imageUrl": "/uploads/category-items/818230557bc51ff5.jpg",
+        "creator": "Clement Berard (Bedzplane)",
+        "models": [
+          "Series 1",
+          "Series 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Hands-Free AdBlue Funnel and Jug",
+        "details": "Stable funnel that sleeves over the 18 mm AdBlue filler tube and rests on the adjacent air intake. It has approximately half-litre capacity, 3 mm debris-filt...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0195",
+        "imageUrl": "/uploads/category-items/e33e51c5418b1c5b.jpg",
+        "creator": "Barry Greig (BarryGreig_4121232)",
+        "models": [
+          "Range Rover L405"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Crankshaft-Seal Installation Tool",
+        "details": "Workshop tool for installing the front crankshaft seal on 2.2- and 2.4-litre Puma engines.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0194",
+        "imageUrl": "/uploads/category-items/4d61f415c5d701ab.png",
+        "creator": "LCM 4x4  (lcm4x4)",
+        "models": [
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Speaker-Grille Cover",
+        "details": "Replacement speaker-grille cover for the 1998 50th Edition, supplied as one complete piece or two halves for smaller printers.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0193",
+        "imageUrl": "/uploads/category-items/ceb21063df98a002.jpg",
+        "creator": "James Gillett (Jimbog)",
+        "models": [
+          "Defender 300 Tdi"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Fuel-Sender Lock-Ring Wrench",
+        "details": "Workshop wrench for removing and tightening the fuel-sender retaining ring.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0190",
+        "imageUrl": "/uploads/category-items/45e7a941ada94bab.jpg",
+        "creator": "Joep Weijers (JoepWeijers)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Sun-Visor Dashcam Mount",
+        "details": "Bracket for mounting a 2016 Elinz FHD dashcam at the passenger sun-visor fixing point, reusing the original visor screw.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0189",
+        "imageUrl": "/uploads/category-items/6e3873df9d04acc5.png",
+        "creator": "Chris Weaver (AtlasCreate)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Wireless-Charging Phone Dock",
+        "details": "Cubby-box dock for a cased Samsung Galaxy S5 and a cylindrical Qi charging puck.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0187",
+        "imageUrl": "/uploads/category-items/61fea8be7a09cf40.jpg",
+        "creator": "Posma Net (posmanet)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Centre-Panel Blanking Plug",
+        "details": "Two replacements for the unused 1998 centre-panel opening: a plain plug and a post-mounted version for a small air freshener.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0184",
+        "imageUrl": "/uploads/category-items/8a2f7fb22ef09e38.png",
+        "creator": "Mad Roberts (MadBobUK)",
+        "models": [
+          "Defender 300 Tdi",
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Throttle-Position-Sensor Adaptor",
+        "details": "Three-piece adaptor set for fitting a 1995 Ford F-150 throttle-position sensor to a 1994 3.9-litre V8 throttle body. The creator specifies PETG for engine-ba...",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0183",
+        "imageUrl": "/uploads/category-items/80132d34aa74cc8d.jpg",
+        "creator": "Anthony Carin (tctesting)",
+        "models": [
+          "Defender 300 Tdi"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Interior Roof-Bar End Cap",
+        "details": "Replacement interior end cap for the roof reinforcement bar.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0180",
+        "imageUrl": "/uploads/category-items/60e3f79ea68b31a8.jpg",
+        "creator": "Mad Roberts (MadBobUK)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Three-Switch Dashboard Panel",
+        "details": "Modular dashboard panel for three rectangular switches, supplied as a one-piece version and a split panel with end cap.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0179",
+        "imageUrl": "/uploads/category-items/bccc15e5352ce2f7.jpg",
+        "creator": "D Young (dby)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Garmin Dashboard Mount",
+        "details": "Dashboard mounting bracket for a Garmin navigation unit in the Puma interior.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0178",
+        "imageUrl": "/uploads/category-items/4b9c27e0c94cc4ab.jpg",
+        "creator": "Mike Tong (BigMrTong)",
+        "models": [
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Dashboard Air-Vent Deflectors",
+        "details": "Two dashboard vent inserts that redirect cabin airflow.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0177",
+        "imageUrl": "/uploads/category-items/53c5ea589a36ea9e.jpg",
+        "creator": "Marcel Beck (mxbstudios)",
+        "models": [
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Portable-Speaker Dashboard Hanger",
+        "details": "Two-part dashboard hanger and extension for an Anker Soundcore Motion Boom portable speaker.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0176",
+        "imageUrl": "/uploads/category-items/6f9aa0afd76d2f85.jpg",
+        "creator": "Mad Roberts (MadBobUK)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "CB-Radio Mount",
+        "details": "Dashboard holder for mounting a compact CB radio in the Puma interior.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0173",
+        "imageUrl": "/uploads/category-items/352e675f03d83e10.jpg",
+        "creator": "Christophe Heylands (HeylandsCH)",
+        "models": [
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Switch-and-Voltmeter Panel",
+        "details": "Three panel variants for combining switches and a voltmeter, designed for the 200 Tdi dashboard.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0172",
+        "imageUrl": "/uploads/category-items/dfc9fe0be3275590.jpg",
+        "creator": "Drix Ment (dmieradel01)",
+        "models": [
+          "Defender 200 Tdi"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "USB-Socket Adaptor Bezel",
+        "details": "Bezel for installing a 30 mm USB charging outlet in the unused position beside the rear-wiper control on the centre console. The USB outlet clamps the bezel ...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0170",
+        "imageUrl": "/uploads/category-items/7ac8e248e81ad930.jpg",
+        "creator": "Simon Rafferty (SimonRafferty)",
+        "models": [
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Side-Window Demister Deflector",
+        "details": "Clip-in dashboard-vent deflector that directs part of the demister airflow towards the side window. The creator positions it over the vent funnel, about 150 ...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0169",
+        "imageUrl": "/uploads/category-items/308980816abfcbdf.jpg",
+        "creator": "Michael Sivertsen (one_humanoid)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear-Tub Chassis Shims",
+        "details": "Eleven thickness variants of the isolating shim fitted between the chassis brackets and rear tub to separate dissimilar metals.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0168",
+        "imageUrl": "",
+        "creator": "Sales Artleknock (Artleknock)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma",
+          "Series 1",
+          "Series 2",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear Sliding-Window Latch",
+        "details": "Replacement latch insert for the truck-cab rear sliding window, designed to reuse the original latch housing.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0166",
+        "imageUrl": "",
+        "creator": "Gavin Bonavia (gavinxewki)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi",
+          "Defender Td5",
+          "Defender Puma"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Double-DIN Stereo Binnacle",
+        "details": "Five-piece double-DIN stereo binnacle for the pre-Td5 dashboard. Assembly uses twelve M4 countersunk bolts and twelve M4 nuts.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0165",
+        "imageUrl": "/uploads/category-items/d994c795cf0e7082.jpg",
+        "creator": "Michael Brooker (mbrooker)",
+        "models": [
+          "Defender 200 Tdi",
+          "Defender 300 Tdi"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Cargo-Ceiling Hook Adapter",
+        "details": "Base-plate adapter for fitting GMC/Chevrolet pickup tie-down anchors to the cargo-area ceiling. Installation uses two 3/8 × 1.5-inch carriage bolts with wash...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0162",
+        "imageUrl": "/uploads/category-items/50d1d76f681aeb3f.jpg",
+        "creator": "Manu (PicoProject)",
+        "models": [
+          "Defender L663"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Heater Airflow-Control Button",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number 395204. Fits Series 2, Series 2A, Series 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0160",
+        "imageUrl": "/uploads/category-items/175ed4eb288cd1f4.png",
+        "creator": "Florian Irnberger (der_papierene)",
+        "models": [
+          "Series 2",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Brake-Reservoir Bleeding Cap",
+        "details": "Temporary reservoir cap for pressure-assisted brake bleeding. Inspect the print, seal, and hose connection carefully and use only low, controlled pressure.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0158",
+        "imageUrl": "/uploads/category-items/32e6437dbb81508f.jpg",
+        "creator": "Marc Reus (MarcReus)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Seat-Belt Storage Hook",
+        "details": "Simple cab hook for retaining a loose seat belt when it is not in use. Confirm the mounting position and belt clearance before drilling or attaching it.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0157",
+        "imageUrl": "/uploads/category-items/8e359971f9259e95.jpg",
+        "creator": "Hans Johansson (PaletoB)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Clutch-Alignment Tool",
+        "details": "Workshop mandrel for centring the clutch plate during assembly. Confirm the spigot and spline diameters against the gearbox input shaft and clutch before use.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0156",
+        "imageUrl": "/uploads/category-items/fcd1de0a9b43ac01.jpg",
+        "creator": "James Dawes (SliCougar)",
+        "models": [
+          "Series 2",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Four-Inch Speaker Enclosures",
+        "details": "Left- and right-hand enclosures for 100 mm speakers up to approximately 48 mm deep. Mirrored and split-file variants are included",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0155",
+        "imageUrl": "/uploads/category-items/942afe4d81f7bdec.jpg",
+        "creator": "Tom G (t0mmm)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Instrument-Cluster Support Bracket",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number 347453. Fits Series 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0154",
+        "imageUrl": "/uploads/category-items/9df6d0176cf15568.jpg",
+        "creator": "sat star (satstar)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Bonnet-Hinge Bush",
+        "details": "Slightly oversized 16 mm bonnet-hinge bush intended to reduce movement and rattling in worn hinge carriers. Print with strong layer bonding and high infill",
+        "material": "ABS, Nylon, PETG, TPU",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0153",
+        "imageUrl": "/uploads/category-items/2f349743461854af.png",
+        "creator": "Joseph Andrews (JLAndrews)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Heater Temperature-Control Button",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number 395205. Fits Series 2, Series 2A, Series 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0151",
+        "imageUrl": "/uploads/category-items/b62f6a2c5ea3eceb.png",
+        "creator": "Florian Irnberger (der_papierene)",
+        "models": [
+          "Series 2",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Universal Dashboard Device Mount",
+        "details": "Modular dashboard base with two M6 attachment points, plus compatible Garmin and Motorola device holders. The base attaches to the vinyl dashboard with autom...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0150",
+        "imageUrl": "/uploads/category-items/997c6c50dbfadb8f.jpg",
+        "creator": "Hans Johansson (PaletoB)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Lower Dashboard Air Vent",
+        "details": "Replacement lower-dashboard air vent in the later flat style.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0149",
+        "imageUrl": "/uploads/category-items/cce90ce3d44aa01f.jpg",
+        "creator": "Atreidae (atreidae)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Lucas Wiper-Switch Control",
+        "details": "Replacement plastic control for the Lucas wash/wipe switch. The sacrificial lower support can be removed after printing",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0148",
+        "imageUrl": "/uploads/category-items/e1c41559b6e9e7d3.jpg",
+        "creator": "Martin Anton (KR3WJuMPeR)",
+        "models": [
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Brake-Shoe Steady-Post Bush",
+        "details": "Replacement bush used with a standard 5/16-inch bolt and locking nut to align the brake shoes. Tap the printed bore to suit the bolt thread and follow the so...",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0147",
+        "imageUrl": "/uploads/category-items/2ca04e46f0870273.jpg",
+        "creator": "Kyle Gordon (kylecgordon)",
+        "models": [
+          "Series 1",
+          "Series 2",
+          "Series 2A",
+          "Series 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Loadspace-Lamp Switch Conversion",
+        "details": "Three-part loadspace-light conversion comprising an installation template, switch panel, and blanking plate. Wiring polarity and switching differ between ear...",
+        "material": "ABS, PETG, TPU",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0146",
+        "imageUrl": "/uploads/category-items/ad917d4d95ce6fe9.png",
+        "creator": "Kevin Guest (Bionicbone)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Seven-Inch Dashboard Tablet Mount",
+        "details": "Deep dashboard-console mount for integrating a seven-inch tablet. Installation requires electrical adaptation and modification of the tablet controls",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0145",
+        "imageUrl": "/uploads/category-items/38eabe7eb516248c.jpg",
+        "creator": "Jose LB (dimar_i3d)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Blower-Motor Removal Tool",
+        "details": "Multi-part workshop tool for removing and installing the cabin blower motor. It requires M5 threaded rod, nuts, bolts, and bonded inserts",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0144",
+        "imageUrl": "/uploads/category-items/e9d3b79986f44cd4.jpeg",
+        "creator": "Ian Hampton (ianhampton)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Glovebox-Damper Bottom Clip",
+        "details": "Bolt-on lower clip and rotating sleeve for repairing the glovebox damper. Install with an M3 × 16 mm fastener, nut, and locking washer, and orient the clip f...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0142",
+        "imageUrl": "/uploads/category-items/bbe5663aa25adb72.png",
+        "creator": "the source.ABS",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Tailgate-Lock Actuator Gear",
+        "details": "Replacement internal gear set for a failed tailgate-lock actuator. Three printable variants are included",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0141",
+        "imageUrl": "/uploads/category-items/214e1a778f4f8b2f.jpg",
+        "creator": "Сергей Исаев (serega23)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Fuel-Cap Seal Support Ring",
+        "details": "Support ring fitted beneath the fuel-cap thread seal to improve compression and help prevent evaporative-system leaks.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0140",
+        "imageUrl": "/uploads/category-items/ec6199eb9293d655.png",
+        "creator": "Juan Jimenez (flybd5)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Windscreen-Washer Reservoir Cap",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number LR002266. Fits Freelander 2. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0139",
+        "imageUrl": "/uploads/category-items/7b86d22762dbf957.jpg",
+        "creator": "Kirk Davis (FreeBSD_Geek)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Glovebox-Damper Repair Clip",
+        "details": "Two-piece overlay repair for a broken glovebox-damper attachment. The body clips over the damaged damper and a half-ring lock provides additional retention.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0138",
+        "imageUrl": "/uploads/category-items/120638184838d44b.jpg",
+        "creator": "Sergei Merekin (Steff_3d)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Coin Holder",
+        "details": "Two-piece coin organiser for the centre-console area, comprising a main holder and lid.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0137",
+        "imageUrl": "/uploads/category-items/36dea27bace44964.jpg",
+        "creator": "Wesley Straetemans (Wesley125)",
+        "models": [
+          "Freelander 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Fuel-Door Actuator Plunger",
+        "details": "Replacement plunger for a broken fuel-filler-door actuator.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0136",
+        "imageUrl": "/uploads/category-items/ff813d59d722f4a8.png",
+        "creator": "Pelphry17",
+        "models": [
+          "Discovery 3",
+          "Discovery 4",
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Tow-Hitch Cover Quarter-Turn Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DYR500010. Fits Range Rover Sport L320. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0135",
+        "imageUrl": "/uploads/category-items/93d591e7501375ca.png",
+        "creator": "Pelphry17",
+        "models": [
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Key-Fob Button Overlay",
+        "details": "Flexible replacement overlay for worn key-fob buttons. Two versions are included: a partial overlay and a full button-hole overlay. Print in a flexible mater...",
+        "material": "TPU",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0134",
+        "imageUrl": "/uploads/category-items/385c375a3d2faa7c.jpg",
+        "creator": "Pelphry17",
+        "models": [
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Loadspace-Cover Locating Pin",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number EPN000020PUY. Fits Range Rover L322. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0133",
+        "imageUrl": "/uploads/category-items/6fc399229f0d5a3e.png",
+        "creator": "Anton (adenis)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Roof-Rail End Piece",
+        "details": "Replacement end piece for a longitudinal roof rail.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0132",
+        "imageUrl": "/uploads/category-items/edd1f416224c35c4.jpg",
+        "creator": "Tom Vidar Johannessen (tomvjoha)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Roof-Rack Mounting-Hole Cap",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DBD500020PVJ. Fits Discovery 3, Discovery 4. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0131",
+        "imageUrl": "/uploads/category-items/e8ec11f29b88d11d.png",
+        "creator": "Aboshi San (Aboshi)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Towbar-Cover Screw Retainer",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DYF500010. Fits Discovery 3, Discovery 4. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0129",
+        "imageUrl": "/uploads/category-items/78acab3782589ae1.jpg",
+        "creator": "Tom Schaack (Phreeze)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Suspension-Height Measuring Wheel Centre",
+        "details": "Wheel-centre reference tool that holds a tape measure at the true hub centre during suspension-height calibration.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0128",
+        "imageUrl": "/uploads/category-items/13ba8272198c71b9.png",
+        "creator": "Richard Hoolahan (LMEC)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear Loadspace-Cover Brackets",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number MXC7709. Fits Discovery 1. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0125",
+        "imageUrl": "/uploads/category-items/1a7f909dcd22eeef.jpg",
+        "creator": "Gavin Boulton (GRay_111111)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Loadspace Carpet Retaining Clips",
+        "details": "Two-piece fixing for securing the loadspace carpet.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0124",
+        "imageUrl": "/uploads/category-items/053e0f524fdbb00d.jpg",
+        "creator": "Pascal Lafon (Madlulla)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Passenger Grab-Handle End Cap",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number EGF10007LUM. Fits Freelander 1. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0123",
+        "imageUrl": "/uploads/category-items/163cdc55a636add8.jpg",
+        "creator": "Dirk Ganzinga (d1rk058)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "VCU Support-Bearing Installation Sleeve",
+        "details": "Press sleeve for fitting a support bearing onto the viscous-coupling unit while loading the bearing inner race.",
+        "material": "ABS, Nylon",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0122",
+        "imageUrl": "/uploads/category-items/fb8d255432a29c59.png",
+        "creator": "badair",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear-View-Mirror Dashcam Mount",
+        "details": "Four-part clamp mount for attaching a Salora CDC100-style dashcam to the interior mirror. Short and tall ball-arm options are included, together with the mir...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0121",
+        "imageUrl": "/uploads/category-items/919671e8ffcc88cb.jpg",
+        "creator": "Dirk Ganzinga (d1rk058)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear-Camera Number-Plate-Light Mount",
+        "details": "No-drill rear-camera holder that replaces one number-plate-light position. Confirm camera dimensions, cable routing, and local lighting requirements before i...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0120",
+        "imageUrl": "/uploads/category-items/4b7a3a851e1d075e.png",
+        "creator": "Ozgur Atak (Ozguratak)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "TD4 Gear-Linkage Bushing",
+        "details": "Replacement bushing for the manual gear linkage above the gearbox, intended to reduce excess movement during gear selection. Use a durable, wear-resistant ma...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0119",
+        "imageUrl": "/uploads/category-items/1630fcb73aaab32a.png",
+        "creator": "Charlot Mizzi (Primal512)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Carpet Retaining Clip",
+        "details": "Replacement threaded carpet retainer.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0118",
+        "imageUrl": "/uploads/category-items/db50f75a28277fa4.png",
+        "creator": "Ambako Farcvania (ambako)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Window-Regulator Motor Gear",
+        "details": "Replacement driven gear for a window-regulator motor mechanism.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0117",
+        "imageUrl": "/uploads/category-items/0ec740e054f88fea.jpg",
+        "creator": "Charlot Mizzi (Primal512)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Locking Wheel-Nut Cover",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number ANR6094L. Fits Freelander 1. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0116",
+        "imageUrl": "/uploads/category-items/5ec0457b6ee00234.jpg",
+        "creator": "Lee Blake (Leeb65)",
+        "models": [
+          "Freelander 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Double-DIN Stereo Installation Kit",
+        "details": "Four-part fascia, side-bracket, and brace set for installing an aftermarket double-DIN stereo in the 2008 dashboard.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0115",
+        "imageUrl": "/uploads/category-items/5c483a540e283c35.jpg",
+        "creator": "andre palomo (creatingMars)",
+        "models": [
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Fuel-Burning Heater Air Intake",
+        "details": "Replacement air intake for a Webasto Thermo Top V fuel-burning heater when the original retaining legs have broken. Print with the legs downward and supports...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0114",
+        "imageUrl": "/uploads/category-items/a1b643c0aed1b015.jpg",
+        "creator": "Lee Jones (trucktech)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4",
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Tow-Hitch Cover Retaining Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DYR500010. Fits Range Rover Sport L320. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0113",
+        "imageUrl": "/uploads/category-items/002a3b8c4332dc09.jpg",
+        "creator": "Jamison Hodges (jamisonhodges)",
+        "models": [
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Phone Cradle",
+        "details": "Dashboard cradle sized for an iPhone X and designed around the 2012 cabin layout.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0112",
+        "imageUrl": "/uploads/category-items/fef0ee7e1c719abf.png",
+        "creator": "james cooke (Gagdetfreak)",
+        "models": [
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Dual 52 mm Roof-Gauge Pod",
+        "details": "Angled roof-console pod for two 52 mm gauges. Installation requires trimming part of the original mating flange and securing the pod with small countersunk s...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0111",
+        "imageUrl": "/uploads/category-items/460fbbe557cf7941.png",
+        "creator": "Clarkrp1027",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Dashboard Blank Button",
+        "details": "Replacement blanking button for an unused dashboard switch position. Two model variants are included",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0109",
+        "imageUrl": "/uploads/category-items/514bf6554718b043.jpeg",
+        "creator": "Ricardo Reis (ricardoareiss)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Sun-Visor Retaining Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number EGP100340LUM. Fits Discovery 1. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0108",
+        "imageUrl": "/uploads/category-items/ca712aa74a2c83ea.png",
+        "creator": "now not (Cream_Soda_Guy)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Clock-or-Tray Replacement Panel",
+        "details": "Multi-part dashboard tray replacement with interchangeable faces for USB, a brake-controller dial, or three Carling-style switches. Glue the selected face to...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0106",
+        "imageUrl": "/uploads/category-items/3fcc3b448e9e4661.jpg",
+        "creator": "Dan Sng (disco_dan)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Centre-Console Cup Holder",
+        "details": "Two-part centre-console cup holder with an enlarged approximately 75 mm internal diameter and no phone pocket. Designed from a related holder and explicitly ...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0105",
+        "imageUrl": "/uploads/category-items/91c076eec76b64d3.png",
+        "creator": "Michal Kaminski (Bryl)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Double-DIN Stereo Surround",
+        "details": "Dashboard surround for fitting a protruding double-DIN navigation head unit without cutting the original dash trim. PETG is recommended because PLA can defor...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0104",
+        "imageUrl": "/uploads/category-items/a22f630699b56bb8.jpg",
+        "creator": "Dan Sng (disco_dan)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear Ashtray Replacement Power Panel",
+        "details": "Replacement for the rear ashtray that accepts a standard cigarette-lighter or USB power socket. Use a cabin-temperature-resistant material and verify socket ...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0103",
+        "imageUrl": "/uploads/category-items/e7e5ef89435b96ff.jpg",
+        "creator": "Dan Sng (disco_dan)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Parcel-Shelf Eyelet Repair",
+        "details": "Bolt-on repair pieces for parcel-shelf eyelets that have torn through. Requires trimming the shelf and two M3 x 7 mm fasteners",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0102",
+        "imageUrl": "/uploads/category-items/55f9d0ac97c85581.jpg",
+        "creator": "Mark Kirkbride (HowZedBra)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Left Power-Seat Switch Cover",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number AWR2211. Fits Discovery 1. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0101",
+        "imageUrl": "/uploads/category-items/09a336cc8e3262e8.jpg",
+        "creator": "wolf gang (wolfgang_90)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Parcel-Shelf Bracket",
+        "details": "Reinforced replacement bracket for a broken rear parcel shelf. Compare side and mounting geometry with the original before printing.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0100",
+        "imageUrl": "/uploads/category-items/c82950340a07524c.png",
+        "creator": "Marcus de Chamuel (Eloysius)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Three-Door Window-Switch Panel Cover",
+        "details": "Replacement cover for the window-switch panel on three-door vehicles. Confirm switch layout and panel dimensions before printing.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0099",
+        "imageUrl": "/uploads/category-items/91dd35d0e2de3aa7.jpg",
+        "creator": "Yannick del Castillo (YCH)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Door-Card Trim Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number MWC9134. Fits Discovery 1. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0098",
+        "imageUrl": "/uploads/category-items/477024d0438a220e.jpg",
+        "creator": "Tristan Scott (trs998)",
+        "models": [
+          "Discovery 1"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Detachable-Towbar Receiver Plug",
+        "details": "Protective bung for a factory Westfalia detachable-towbar receiver, intended to keep dirt and moisture out when the hitch is removed. Check receiver dimensio...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0096",
+        "imageUrl": "/uploads/category-items/f89f45e858e74c71.png",
+        "creator": "Philip Clements (philclemo)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Air-Vent Inner Bar",
+        "details": "Replacement internal bar for a broken cabin heater and air-conditioning vent grille. Confirm vent position and dimensions against the original before printing.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0095",
+        "imageUrl": "/uploads/category-items/b662ed078bdac648.png",
+        "creator": "Safak Zor (szorali)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Coin-Tray Phone Holder",
+        "details": "Phone holder designed to sit in the front coin tray, sized around an iPhone 11 in an Apple case. Confirm phone and tray dimensions before printing and use a ...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0094",
+        "imageUrl": "/uploads/category-items/fa06b863542c7fb9.jpg",
+        "creator": "Hayden Gaukroger (Hayden0)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Nexus 9 Dashboard Mount",
+        "details": "Two-part holder and lid for mounting a Nexus 9 tablet in a 2002–2012 dashboard installation, suitable for an Android Auto client or other tablet-based interf...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0093",
+        "imageUrl": "/uploads/category-items/c1691a2b66617e78.png",
+        "creator": "Paul Berry (Deicist)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Wiper-Arm Wind-Deflector Clip",
+        "details": "Replacement retaining clip for the plastic wind deflector mounted beneath each front wiper arm on 2002–2012 vehicles. Use a weather- and UV-resistant material.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0092",
+        "imageUrl": "/uploads/category-items/e789e0092a3ebdb3.jpg",
+        "creator": "Charles Durocher (Charl3s)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Standard-Wiper Conversion Clip",
+        "details": "Adapter that allows compatible standard 22-inch wiper blades to fit the L322 front wiper arm without additional hardware. The source recommends ABS, three pe...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0091",
+        "imageUrl": "/uploads/category-items/5e70b81619187609.jpg",
+        "creator": "Charles Durocher (Charl3s)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Wiper-Blade Adapter Clip",
+        "details": "Bolt-on adapter for the side-arm front wiper fitting used on 2003–2012 vehicles, converting it to accept a conventional cross-bar blade attachment. Includes ...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0089",
+        "imageUrl": "/uploads/category-items/c09b790d4fcea612.png",
+        "creator": "Ian Gibbs (realflash)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Number-Plate Screw Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DYH000140. Fits Range Rover L322. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0088",
+        "imageUrl": "/uploads/category-items/75ba00a70b0733c8.png",
+        "creator": "Ian Gibbs (realflash)",
+        "models": [
+          "Range Rover L322"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Cubby-Fridge Can Holder",
+        "details": "Insert for the centre-console cubby refrigerator in a 2007 Discovery 3, designed to keep drink cans from rolling and vibrating while driving. Use a cabin-tem...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0085",
+        "imageUrl": "/uploads/category-items/2194b6f953000725.png",
+        "creator": "refrigerator in a 2007 Discovery 3, designed to keep drink cans from rolling and vibrating while driving. Use a cabin-temperature-resistant material.ABS",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Roof-Rail Eyelet Mount",
+        "details": "Two-part eyelet mount that clamps around a factory roof rail using common M8 hardware. The source recommends PETG, 20% infill, doubled infill lines, and thre...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0084",
+        "imageUrl": "/uploads/category-items/db1daa85d50e4e8d.jpeg",
+        "creator": "Twenty2a",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Towbar-Door Retaining Screw",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DYR500010. Fits Discovery 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0083",
+        "imageUrl": "/uploads/category-items/f6281de2129700e3.jpg",
+        "creator": "Andrea Pasqui (squipa)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Towing-Flap Toggle",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DYR500010. Fits Discovery 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0082",
+        "imageUrl": "/uploads/category-items/a9dbf75db6d43c58.png",
+        "creator": "Glyn Lucas (glynlucas)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear-Seat Adjuster",
+        "details": "Replacement adjuster for the rear seat. Includes the original version and a revised version that prints without supports",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0081",
+        "imageUrl": "/uploads/category-items/8e2e1dde7108c0a8.jpg",
+        "creator": "Ray Lucas (92RSRally)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Wheel Hub Cap",
+        "details": "Replacement centre cap for a Discovery 3 alloy wheel. Confirm wheel and bore dimensions against the original before printing.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0079",
+        "imageUrl": "/uploads/category-items/983ee676076d609e.jpg",
+        "creator": "Валявин Геннадьевич (wromka)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Mid-Row Seat-Belt Latch Holder",
+        "details": "Holder that keeps a second-row seat-belt buckle upright so children can buckle themselves more easily. Designed around the Discovery mid-row seat geometry.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0078",
+        "imageUrl": "/uploads/category-items/5e19fd4c4ce4d107.jpg",
+        "creator": "James Schnaider (jrs824)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Garmin Sat-Nav Screen Mount",
+        "details": "Removable Garmin Nuvi mount sized to sit over the factory navigation display. A raised upper lip locates it in the recess",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0077",
+        "imageUrl": "/uploads/category-items/6e3600347bfab40e.jpg",
+        "creator": "Roger Donoghue (RogerDonoghue)",
+        "models": [
+          "Discovery 3",
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Parking-Sensor Shield",
+        "details": "Shield that prevents the inner rear parking sensors from detecting a raised aftermarket tow hitch. Print two in ASA or another UV- and heat-resistant material.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0075",
+        "imageUrl": "/uploads/category-items/25b8ce6b7ae77846.jpg",
+        "creator": "Hayden Thring (hayden-t)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4",
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Discovery 3 Auxiliary Power Panel",
+        "details": "Dashboard auxiliary-power panel supplied as a single-piece model, with the source also describing a two-piece option for smaller print beds. Confirm socket a...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0074",
+        "imageUrl": "/uploads/category-items/4a812c0fce5d1f49.png",
+        "creator": "Joel Nelson (Equimanthorn)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rear-Wiper Nut Trim Plug",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number DKG500011PMD. Fits Discovery 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0073",
+        "imageUrl": "/uploads/category-items/709159ba231d791d.png",
+        "creator": "Jeff Sauer (jsauer)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Webasto MultiControl Ashtray Mount",
+        "details": "Four-part holder for installing a Webasto MultiControl unit in place of the factory ashtray, including base, bracket, front panel, and spring clip.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0072",
+        "imageUrl": "/uploads/category-items/c627b7cc8b9a120c.jpg",
+        "creator": "Jan Erben (Hyta)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Carling-Switch Ashtray Bracket",
+        "details": "Two-part bracket and frame for installing Carling-style accessory switches in place of the factory ashtray.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0071",
+        "imageUrl": "/uploads/category-items/78acda49ccaeb203.jpg",
+        "creator": "Jan Erben (Hyta)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Passenger Cup-Holder Hinge Repair",
+        "details": "Small friction-fit repair piece that restores the lower passenger cup-holder hinge after its moulded pins shear off. Print two",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0070",
+        "imageUrl": "/uploads/category-items/fef3d3c6847a49ab.jpg",
+        "creator": "James Schnaider (jrs824)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Fuel-Filler Hinge Latch",
+        "details": "Replacement latch component for a broken fuel-filler-door hinge. Compare the model with the original hinge and test movement before final installation.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0069",
+        "imageUrl": "/uploads/category-items/506ee177cb570803.png",
+        "creator": "Wferr (wferr)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Wireless-Charging Phone Mount",
+        "details": "Two-part dashboard phone mount designed around a compact Qi charging puck. Attaches with double-sided foam tape and includes left- and right-side mounting op...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0068",
+        "imageUrl": "/uploads/category-items/8cf62b7796d017e7.jpg",
+        "creator": "mirroringABS",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Centre-Console Cup Holders",
+        "details": "Replacement console cup-holder bodies with flexible retaining stays. Print the main body in PETG and the stays in TPU, then press the stays in from the outsi...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0067",
+        "imageUrl": "/uploads/category-items/d0f10436d029c360.jpeg",
+        "creator": "Andrew Lindsay (Boystot)",
+        "models": [
+          "Discovery 3",
+          "Range Rover Sport L320"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Terrain-Control Console Cover",
+        "details": "Protective cover for the terrain-response and hill-descent-control area of the centre console, intended to prevent pets from pressing the controls accidentally.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0065",
+        "imageUrl": "/uploads/category-items/8cf041cf83523cde.jpg",
+        "creator": "Timothy Ruhl (bizTechRx)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Discovery 3 Eight-Inch Tablet Holder",
+        "details": "Multi-part eight-inch tablet holder designed for the Discovery 3 cabin. Includes the mount, articulated ball-head components, spring, insert, cable guide, nu...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0064",
+        "imageUrl": "/uploads/category-items/b95f15bd07021a16.jpg",
+        "creator": "Jan Erben (Hyta)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Third-Row Seat-Lever Cover",
+        "details": "Two-part replacement cover for the third-row seat release lever, with a separate pictogram insert.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0063",
+        "imageUrl": "/uploads/category-items/9652c551dac1029d.jpg",
+        "creator": "Jan Erben (Hyta)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Discovery 3 Towbar Receiver Plug",
+        "details": "Multi-part protective plug for the removable-towbar receiver, supplied with two spring sizes for fit adjustment.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0061",
+        "imageUrl": "/uploads/category-items/9f69b33f88fff79c.jpg",
+        "creator": "Jan Erben (Hyta)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Headrest Radio Mount",
+        "details": "Headrest-mounted holder for a BaoFeng UV-5R handheld radio, with standard- and extended-battery options plus a screw-retained crossbar. PETG is recommended f...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0060",
+        "imageUrl": "/uploads/category-items/4e83bc3f83982d62.jpg",
+        "creator": "Ronald Tayler (EldronMaker)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Double-DIN Radio Surround",
+        "details": "Two-piece radio surround and mounting bracket designed for a flush Pioneer double-DIN installation",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0059",
+        "imageUrl": "/uploads/category-items/77888e42b7e2e5d6.jpg",
+        "creator": "Roman R (romanoaf)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Removable-Towbar Receiver Plug",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number KNG500013. Fits Discovery 3. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0058",
+        "imageUrl": "/uploads/category-items/669e44a3dcac8f7f.jpg",
+        "creator": "Christian Ditlev (Trueman2000)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Air-Duct Vacuum Nozzle",
+        "details": "Replacement nozzle for the cabin air duct, supplied in screw-in and long-thread versions for differently damaged mounting holes. The source recommends printi...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0057",
+        "imageUrl": "/uploads/category-items/ebe5c5d986ea295b.jpg",
+        "creator": "Olli Rita (GrumpyFinn)",
+        "models": [
+          "Discovery 3",
+          "Discovery 4"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Steering-Wheel Control Buttons",
+        "details": "Printable button, collar, and stop components for exposing the unused steering-wheel control switches found beneath some SE trim covers. Cruise-control activ...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0056",
+        "imageUrl": "/uploads/category-items/b6571c4dcec62167.jpg",
+        "creator": "John Davis (Marsyas)",
+        "models": [
+          "Discovery 3"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Rubber Mat Clip",
+        "details": "Top half of the twist-lock clip for P38 rubber floor mats. The upper retainer has no confirmed standalone Land Rover part number. Use ABS rather than brittle...",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0050",
+        "imageUrl": "/uploads/category-items/992326c05802bf6a.png",
+        "creator": "dave3dprinter",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Sunroof Rail",
+        "details": "Replacement sunroof rail and locking bracket for the P38 electric sliding roof. Related genuine guide assemblies are EXM100360 (RH) and EXM100370 (LH)",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0049",
+        "imageUrl": "/uploads/category-items/469432b82c3158eb.jpg",
+        "creator": "Mr_Mean3r",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Radio-Slot Switch Panel",
+        "details": "Custom panel for a Range Rover P38 stock radio slot, holding auxiliary switches, the ride-height switch, and the interior-air-temperature sensor after reloca...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0048",
+        "imageUrl": "/uploads/category-items/49406f94ba016e22.jpg",
+        "creator": "adamwatson",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Door-Panel Retainer Clip",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number MWC9134. Fits Range Rover P38. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0046",
+        "imageUrl": "/uploads/category-items/d159e3fe86a7b227.jpg",
+        "creator": "alevasi",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "RHD Bonnet Release Lever",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number FSC10004. Fits Range Rover P38. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0045",
+        "imageUrl": "/uploads/category-items/99ae9544d21852bd.png",
+        "creator": "adamwatson",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Ashtray Replacement Utility Panel",
+        "details": "Custom replacement for the front ashtray section of a 1999 Range Rover P38 4.0 automatic. Includes a standard cigarette-lighter socket opening, space for add...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0044",
+        "imageUrl": "/uploads/category-items/bdaa73db75f69244.png",
+        "creator": "sixandhishat",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "EAS Calibration Blocks",
+        "details": "Height-setting blocks for calibrating Range Rover P38 electronic air suspension level sensors. Includes front and rear blocks for Access, Low, Standard, and ...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0043",
+        "imageUrl": "/uploads/category-items/8b95335cd7f5bd45.jpg",
+        "creator": "m1n1m",
+        "models": [
+          "Range Rover P38"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "HRW Cable Sleeve",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number 589818. Fits Range Rover Classic. Download the STL, preview in 3D, print at home.",
+        "material": "PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0042",
+        "imageUrl": "/uploads/category-items/693066d2cd8a9bfe.jpg",
+        "creator": "egil",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Under-Seat Access Panel Clips",
+        "details": "Replacement clips for the Range Rover Classic plastic access-panel doors beneath the front seats. Includes a friction-fit version and a version with a retain...",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0041",
+        "imageUrl": "/uploads/category-items/85da63167d5c6932.png",
+        "creator": "scoblak",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Interior Lamp Cover",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number PRC1634. Fits Range Rover Classic. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0038",
+        "imageUrl": "/uploads/category-items/a3da178e29ef5e00.png",
+        "creator": "RoGa",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "78 mm Centre Hub Cap",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number NRC8254. Fits Range Rover Classic. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, Nylon, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part003778",
+        "imageUrl": "/uploads/category-items/000a686ff34941c7.jpg",
+        "creator": "egil",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Radio Block-Off Plate",
+        "details": "Dashboard blanking plate for a full-size Range Rover Classic when no car radio is installed.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0036",
+        "imageUrl": "/uploads/category-items/edafaee5c7b2354d.jpg",
+        "creator": "Tactical3D",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Screw-Retained Fuse Cover",
+        "details": "Fuse cover designed for an approximately 1993 Range Rover Classic 200Tdi. Uses one M3 x 25 screw. This is the screw-retained alternative to the standard fuse...",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0035",
+        "imageUrl": "/uploads/category-items/fba4a95d1325fcbb.jpg",
+        "creator": "Dnevon",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "Fuse Box Cover",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number BTR3486. Fits Range Rover Classic. Download the STL, preview in 3D, print at home.",
+        "material": "ABS, PETG",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part0034",
+        "imageUrl": "/uploads/category-items/c2116cd82fd53d11.jpg",
+        "creator": "Tactical3D",
+        "models": [
+          "Range Rover Classic"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
+      },
+      {
+        "name": "3rd Row Seat Handle",
+        "details": "Free 3D-printable replacement for Land Rover OEM part number HXO100020. Fits Discovery 2. Download the STL, preview in 3D, print at home.",
+        "material": "ABS",
+        "size": "",
+        "finish": "",
+        "price": "150",
+        "sku": "Part00323",
+        "imageUrl": "/uploads/category-items/d67385105c65c85a.jpg",
+        "creator": "Tomáš Riesner",
+        "models": [
+          "Discovery 2"
+        ],
+        "weight": 300,
+        "shippingWeight": 500,
+        "stockQty": 0,
+        "available": true,
+        "listed": true
       }
     ]
   }

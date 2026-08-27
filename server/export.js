@@ -60,6 +60,10 @@ export function syncPublicJson(db, paths = defaultPaths()) {
           price: item.price,
           sku: item.sku,
           imageUrl: item.imageUrl,
+          // Car-parts fields (GWM/Landrover) -- sourceUrl deliberately
+          // omitted, it's an admin-only reference, not customer-facing.
+          creator: item.creator || '',
+          models: Array.isArray(item.models) ? item.models : [],
           weight: Number(item.weight) || 0,
           // Falls back to weight when unset, same as filament colours --
           // drives shipping-bracket matching, weight is just the spec.

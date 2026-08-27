@@ -2269,6 +2269,16 @@ function normalizeItems(list) {
     price: item.price || '',
     sku: item.sku || '',
     imageUrl: item.imageUrl || '',
+    // Car-parts only (GWM/Landrover) -- who designed the printable part, and
+    // which vehicle model(s) it fits. Stored as plain name strings (not ids
+    // into settings.carPartModels), same convention as
+    // in_house_filament.brand/todo_items.category: renaming a list entry
+    // later must not retroactively change what's already saved on an item.
+    creator: item.creator || '',
+    models: Array.isArray(item.models) ? item.models.filter(Boolean) : [],
+    // Admin-only reference back to the original design's source page --
+    // never sent to the public categories.json export (see export.js).
+    sourceUrl: item.sourceUrl || '',
     // Grams -- matches filament_colours.weight_g and every other weight
     // field end to end (order_items.weight, cart.js, data-weight attrs).
     weight: Number(item.weight) || 0,
