@@ -1889,6 +1889,11 @@ app.put('/api/settings', requireAuth, (req, res) => {
     'lowStockThreshold',
     // SITE-010
     'printLeadTimeDays', 'filamentDispatchDays',
+    // Configurable lists -- inHouseFilamentBrands existed before this (a
+    // textarea in the admin UI) but was never actually in this allow-list,
+    // so every save of it was silently discarded. Fixed here as part of
+    // upgrading it to the same {id,name,active} shape as the two new ones.
+    'inHouseFilamentBrands', 'todoCategories', 'todoPriorities',
   ];
   const patch = {};
   for (const key of allowed) {
@@ -1912,6 +1917,25 @@ app.put('/api/settings', requireAuth, (req, res) => {
     });
   } else {
     delete patch.homeTiles;
+  }
+  // Same shape guard as homeTiles above -- a malformed entry must be
+  // dropped rather than crash the request when read as `.id`/`.name`/
+  // `.active`. Entries with no usable name are dropped outright (unlike
+  // homeTiles' blank-default placeholders) since a nameless list item has
+  // nothing to show in a picker.
+  for (const key of ['inHouseFilamentBrands', 'todoCategories', 'todoPriorities']) {
+    if (!Array.isArray(patch[key])) {
+      delete patch[key];
+      continue;
+    }
+    patch[key] = patch[key]
+      .map((entry) => (entry && typeof entry === 'object' ? entry : {}))
+      .map((entry, i) => ({
+        id: String(entry.id || '').trim() || `item-${i}-${Date.now()}`,
+        name: String(entry.name || '').trim(),
+        active: entry.active !== false,
+      }))
+      .filter((entry) => entry.name);
   }
   const settings = updateSettings(patch);
   syncPublicJson(getDb());

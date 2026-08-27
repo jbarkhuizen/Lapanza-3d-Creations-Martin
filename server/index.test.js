@@ -541,6 +541,58 @@ test('PUT /api/settings with a homeTiles array containing a null/non-object elem
   ]);
 });
 
+test('PUT /api/settings persists inHouseFilamentBrands -- previously allowlist-missing, silently discarded', async (t) => {
+  // Regression test: this field had a textarea in the admin UI and looked
+  // saveable, but was never in the PUT /api/settings allowlist, so every
+  // edit was silently dropped before it ever reached updateSettings().
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({ inHouseFilamentBrands: [{ id: 'sunlu', name: 'SunLu', active: true }] });
+  assert.strictEqual(res.status, 200);
+  assert.deepStrictEqual(res.body.settings.inHouseFilamentBrands, [{ id: 'sunlu', name: 'SunLu', active: true }]);
+
+  const getRes = await request(app).get('/api/settings').set('Cookie', cookie);
+  assert.deepStrictEqual(getRes.body.settings.inHouseFilamentBrands, [{ id: 'sunlu', name: 'SunLu', active: true }]);
+});
+
+test('PUT /api/settings sanitizes a configurable list: malformed entries dropped, active defaults true, missing id backfilled', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({ todoCategories: [null, { name: 'Spike' }, { name: '  ' }, { id: 'x', name: 'Retired', active: false }] });
+  assert.strictEqual(res.status, 200);
+  const saved = res.body.settings.todoCategories;
+  assert.strictEqual(saved.length, 2);
+  assert.strictEqual(saved[0].name, 'Spike');
+  assert.strictEqual(saved[0].active, true);
+  assert.ok(saved[0].id);
+  assert.deepStrictEqual(saved[1], { id: 'x', name: 'Retired', active: false });
+});
+
+test('PUT /api/settings with a non-array configurable list is rejected/ignored instead of 500ing', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app).put('/api/settings').set('Cookie', cookie).send({ todoPriorities: 'not an array' });
+  assert.strictEqual(res.status, 200);
+});
+
 test('PUT /api/products/:id only persists allowlisted fields, not arbitrary request-body keys', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

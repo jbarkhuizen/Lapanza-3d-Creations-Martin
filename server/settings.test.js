@@ -33,3 +33,37 @@ test('publicSettings is a passthrough (no secrets stored in settings anymore)', 
   const settings = { siteName: 'X' };
   assert.deepStrictEqual(publicSettings(settings), settings);
 });
+
+test('getSettings upgrades a legacy plain-string inHouseFilamentBrands array to {id,name,active} objects', () => {
+  const db = openDb(':memory:');
+  updateSettings({ inHouseFilamentBrands: ['SunLu', 'eSUN 3D'] }, db);
+  const settings = getSettings(db);
+  assert.deepStrictEqual(settings.inHouseFilamentBrands, [
+    { id: 'sunlu', name: 'SunLu', active: true },
+    { id: 'esun-3d', name: 'eSUN 3D', active: true },
+  ]);
+  db.close();
+});
+
+test('getSettings leaves an already-upgraded configurable list untouched', () => {
+  const db = openDb(':memory:');
+  const brands = [{ id: 'custom-id', name: 'Custom Brand', active: false }];
+  updateSettings({ inHouseFilamentBrands: brands }, db);
+  const settings = getSettings(db);
+  assert.deepStrictEqual(settings.inHouseFilamentBrands, brands);
+  db.close();
+});
+
+test('getSettings falls back to the seeded defaults for todoCategories/todoPriorities when unset', () => {
+  const db = openDb(':memory:');
+  const settings = getSettings(db);
+  assert.deepStrictEqual(
+    settings.todoCategories.map((c) => c.name),
+    ['Bug', 'Feature', 'Enhancement', 'Tech Debt'],
+  );
+  assert.deepStrictEqual(
+    settings.todoPriorities.map((p) => p.name),
+    ['Critical', 'High', 'Medium', 'Low'],
+  );
+  db.close();
+});

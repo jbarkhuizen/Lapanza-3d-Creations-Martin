@@ -1730,6 +1730,13 @@ async function renderSiteOverview() {
 
 // ---- Todo / Backlog (Settings) ----
 
+// Category and Priority are admin-configurable now (Settings -> Todo/
+// Backlog panels, settings.todoCategories/todoPriorities) -- these two
+// plain arrays only remain as a defensive fallback if that setting is ever
+// empty (e.g. every entry got deleted), used in renderTodos() below. Status
+// stays a fixed, hardcoded enum: it drives real code behavior elsewhere
+// (badge styling below, TODO_STATUS_RANK's sort order, "Claude Fix"/"Won't
+// Fix" have specific meaning), so it's deliberately not configurable.
 const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
 const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix'];
 const TODO_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
@@ -1739,16 +1746,25 @@ const TODO_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 // before "Claude Fix" before "Done" before "In Progress" before "Won't
 // Fix"), burying In Progress under everything else.
 const TODO_STATUS_RANK = { 'In Progress': 0, Backlog: 1, 'Claude Fix': 2, Done: 3, "Won't Fix": 4 };
-// Same problem, same fix -- alphabetical gives Critical, High, Low, Medium.
-const TODO_PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 
-function sortTodos(todos) {
+// Priority's rank is derived from settings.todoPriorities' own array order
+// (built fresh in renderTodos() below), not a fixed map -- since the list
+// is now open-ended, whatever order the admin adds/arranges entries in IS
+// the sort order, with no code change needed for a newly added priority.
+// A priority value not found in the current list (todo referencing one
+// since deleted, or state not loaded yet) ranks last via the `?? 99`
+// fallback where this is used.
+function buildPriorityRank(todoPriorities) {
+  return Object.fromEntries((todoPriorities || []).map((p, i) => [p.name, i]));
+}
+
+function sortTodos(todos, priorityRank) {
   const { key, dir } = state.todoSort;
   const mul = dir === 'desc' ? -1 : 1;
   const sorted = [...todos].sort((a, b) => {
     let cmp;
     if (key === 'status') cmp = (TODO_STATUS_RANK[a.status] ?? 99) - (TODO_STATUS_RANK[b.status] ?? 99);
-    else if (key === 'priority') cmp = (TODO_PRIORITY_RANK[a.priority] ?? 99) - (TODO_PRIORITY_RANK[b.priority] ?? 99);
+    else if (key === 'priority') cmp = (priorityRank[a.priority] ?? 99) - (priorityRank[b.priority] ?? 99);
     else if (key === 'dateAdded' || key === 'plannedFixDate' || key === 'actualFixDate') {
       // Nulls (no date set yet) sort last regardless of direction -- an
       // empty Planned/Actual Fix Date isn't meaningfully "earliest".
@@ -1800,8 +1816,26 @@ function todoPriorityBadge(priority) {
 
 async function renderTodos() {
   state.editingTodo = state.editingTodo || null;
-  const { todos } = await api('/api/todos');
-  const filteredTodos = sortTodos(filterTodos(todos));
+  const [{ todos }, { settings }] = await Promise.all([api('/api/todos'), api('/api/settings')]);
+
+  const configuredCategories = settings.todoCategories?.length ? settings.todoCategories : TODO_CATEGORIES.map((name) => ({ id: name, name, active: true }));
+  const configuredPriorities = settings.todoPriorities?.length ? settings.todoPriorities : TODO_PRIORITIES.map((name) => ({ id: name, name, active: true }));
+  const priorityRank = buildPriorityRank(configuredPriorities);
+
+  const editingCategory = state.editingTodo?.category;
+  const editingPriority = state.editingTodo?.priority;
+  // Filter dropdowns show every configured value (active or not) so an
+  // existing item using a since-retired one is still filterable; the
+  // add/edit form's pickers are active-only, plus whatever value the item
+  // being edited already has -- same reasoning as In-House Filament's
+  // brand pickers above.
+  const allCategoryNames = configuredCategories.map((c) => c.name);
+  const activeCategoryNames = configuredCategories.filter((c) => c.active).map((c) => c.name);
+  if (editingCategory && !activeCategoryNames.includes(editingCategory)) activeCategoryNames.push(editingCategory);
+  const activePriorityNames = configuredPriorities.filter((p) => p.active).map((p) => p.name);
+  if (editingPriority && !activePriorityNames.includes(editingPriority)) activePriorityNames.push(editingPriority);
+
+  const filteredTodos = sortTodos(filterTodos(todos), priorityRank);
 
   const sortHeader = (key, label) => {
     const active = state.todoSort.key === key;
@@ -1835,7 +1869,7 @@ async function renderTodos() {
       <input id="todo-filter-q" type="search" placeholder="Search name or description…" value="${escapeAttr(state.todoFilters.q)}" />
       <select id="todo-filter-category">
         <option value="">All categories</option>
-        ${TODO_CATEGORIES.map((category) => `<option value="${escapeAttr(category)}" ${state.todoFilters.category === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
+        ${allCategoryNames.map((category) => `<option value="${escapeAttr(category)}" ${state.todoFilters.category === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
       </select>
       <select id="todo-filter-status">
         <option value="">All statuses</option>
@@ -1854,7 +1888,7 @@ async function renderTodos() {
         <div class="grid-3">
           <label class="field"><span>Category</span>
             <select id="td-category">
-              ${TODO_CATEGORIES.map((c) => `<option value="${escapeAttr(c)}" ${form.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              ${activeCategoryNames.map((c) => `<option value="${escapeAttr(c)}" ${form.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
             </select>
           </label>
           <label class="field"><span>Status</span>
@@ -1864,7 +1898,7 @@ async function renderTodos() {
           </label>
           <label class="field"><span>Priority</span>
             <select id="td-priority">
-              ${TODO_PRIORITIES.map((priority) => `<option value="${escapeAttr(priority)}" ${(form.priority || 'Medium') === priority ? 'selected' : ''}>${escapeHtml(priority)}</option>`).join('')}
+              ${activePriorityNames.map((priority) => `<option value="${escapeAttr(priority)}" ${(form.priority || 'Medium') === priority ? 'selected' : ''}>${escapeHtml(priority)}</option>`).join('')}
             </select>
           </label>
         </div>
@@ -2105,6 +2139,77 @@ async function renderAuditLog() {
   });
 }
 
+// Shared UI for every admin-editable {id,name,active}[] setting (in-house
+// filament brands, todo categories/priorities). Each panel saves itself
+// immediately on toggle/add -- independent of the page's big "Save
+// settings" button, which only covers the plain scalar fields above it.
+// Slugifying the new-item id client-side is cosmetic (the server backfills
+// one regardless, see PUT /api/settings) -- doing it here just means the
+// id looks sensible immediately, before the round-trip.
+function slugifyListId(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function configurableListPanel(key, label, items, helpText = '') {
+  const rows = (items || [])
+    .map(
+      (item) => `
+        <div class="config-list-row" data-item-id="${escapeAttr(item.id)}">
+          <label class="field checkbox config-list-active" title="${item.active ? 'Active — click to retire' : 'Inactive — click to reactivate'}">
+            <input type="checkbox" data-action="toggle-active" ${item.active ? 'checked' : ''} />
+          </label>
+          <span class="config-list-name">${escapeHtml(item.name)}</span>
+          ${item.active ? '' : '<span class="badge draft">Inactive</span>'}
+        </div>`,
+    )
+    .join('');
+  return `
+    <div class="panel stack gap-3 config-list-panel" data-list-key="${escapeAttr(key)}">
+      <div class="section-head"><h3>${escapeHtml(label)}</h3></div>
+      ${helpText ? `<p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">${helpText}</p>` : ''}
+      <div class="config-list">${rows || '<p class="muted" style="margin:0">No items yet.</p>'}</div>
+      <div class="row-card-actions">
+        <input type="text" class="config-list-new-input" placeholder="Add new…" />
+        <button class="btn small" data-action="add-list-item" type="button">+ Add</button>
+      </div>
+    </div>`;
+}
+
+function wireConfigurableListPanels() {
+  const saveList = async (key, items) => {
+    try {
+      await api('/api/settings', { method: 'PUT', body: JSON.stringify({ [key]: items }) });
+      toast('Saved');
+      await renderSettings();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  };
+
+  $$('#view-settings .config-list-panel').forEach((panel) => {
+    const key = panel.dataset.listKey;
+    panel.querySelectorAll('[data-action="toggle-active"]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const id = cb.closest('[data-item-id]').dataset.itemId;
+        const items = (state.settings[key] || []).map((item) => (item.id === id ? { ...item, active: cb.checked } : item));
+        saveList(key, items);
+      });
+    });
+    const input = panel.querySelector('.config-list-new-input');
+    const addItem = () => {
+      const name = input.value.trim();
+      if (!name) return;
+      const existing = state.settings[key] || [];
+      const id = slugifyListId(name) || `item-${existing.length}`;
+      saveList(key, [...existing, { id, name, active: true }]);
+    };
+    panel.querySelector('[data-action="add-list-item"]').addEventListener('click', addItem);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') addItem();
+    });
+  });
+}
+
 async function renderSettings() {
   const data = await api('/api/settings');
   state.settings = data.settings;
@@ -2257,11 +2362,9 @@ async function renderSettings() {
         <label class="field" style="max-width:220px"><span>Next invoice number seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
         <label class="field" style="max-width:320px"><span>Order &amp; design-request notification email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
       </div>
-      <div class="panel stack gap-3">
-        <div class="section-head"><h3>In-house filament brands</h3></div>
-        <p class="muted" style="margin:0;font-size:0.88rem">One brand per line. Used when adding and filtering local print-stock rolls.</p>
-        <label class="field"><span>Brands</span><textarea id="in-house-filament-brands" rows="4">${escapeHtml((s.inHouseFilamentBrands || []).join('\n'))}</textarea></label>
-      </div>
+${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
+      ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
+      ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
 
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Print Job Costing rates</h3></div>
@@ -2300,6 +2403,7 @@ async function renderSettings() {
   };
   $('[data-setting="useUniversalFont"]')?.addEventListener('change', syncFontModeUI);
   syncFontModeUI();
+  wireConfigurableListPanels();
 
   $('#save-settings').addEventListener('click', async () => {
     const patch = {};
@@ -2315,7 +2419,6 @@ async function renderSettings() {
       tiles[i][input.dataset.tileField] = input.value;
     });
     if (tiles.length) patch.homeTiles = tiles;
-    patch.inHouseFilamentBrands = $('#in-house-filament-brands').value.split(/\r?\n/).map((brand) => brand.trim()).filter(Boolean);
     try {
       await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
       toast('Settings saved — refresh the public site to see fonts/theme defaults');
@@ -3823,7 +3926,18 @@ async function renderInHouseFilament() {
   state.editingInHouseFilament = state.editingInHouseFilament || null;
   state.inHouseFilters = state.inHouseFilters || { q: '', brand: '' };
   const [{ filaments }, { settings }, { items: inventory }] = await Promise.all([api('/api/in-house-filament'), api('/api/settings'), api('/api/inventory')]);
-  const brands = settings.inHouseFilamentBrands || [];
+  // Filtering must still find stock logged under a since-retired brand, so
+  // the filter dropdown lists every configured brand regardless of
+  // `active`; the create/edit form's picker is active-only -- you can't
+  // start a new roll under a retired brand. Both fall back to whatever
+  // brand name is already on the record itself (form.brand / a filament's
+  // own f.brand) even if that name isn't in the list at all anymore, so an
+  // existing value never silently disappears from its own dropdown.
+  const allBrands = settings.inHouseFilamentBrands || [];
+  const activeBrandNames = allBrands.filter((b) => b.active).map((b) => b.name);
+  const editingBrand = state.editingInHouseFilament?.brand;
+  if (editingBrand && !activeBrandNames.includes(editingBrand)) activeBrandNames.push(editingBrand);
+  const filterBrandNames = allBrands.map((b) => b.name);
   const filtered = filaments.filter((f) => (!state.inHouseFilters.brand || f.brand === state.inHouseFilters.brand) && [f.brand, f.filamentType, f.colorName].some((v) => v.toLowerCase().includes(state.inHouseFilters.q.toLowerCase())));
   const stockOptions = inventory.filter((item) => item.kind === 'filament' && item.stockQty > 0);
 
@@ -3852,14 +3966,14 @@ async function renderInHouseFilament() {
     <div class="toolbar">
       <button class="btn btn-primary" id="new-in-house-filament" type="button">+ Filament</button>
       <input id="ihf-filter-q" type="search" placeholder="Search brand, type, colour…" value="${escapeAttr(state.inHouseFilters.q)}" />
-      <select id="ihf-filter-brand"><option value="">All brands</option>${brands.map((brand) => `<option value="${escapeAttr(brand)}" ${state.inHouseFilters.brand === brand ? 'selected' : ''}>${escapeHtml(brand)}</option>`).join('')}</select>
+      <select id="ihf-filter-brand"><option value="">All brands</option>${filterBrandNames.map((brand) => `<option value="${escapeAttr(brand)}" ${state.inHouseFilters.brand === brand ? 'selected' : ''}>${escapeHtml(brand)}</option>`).join('')}</select>
       <span class="muted">${escapeHtml(String(filtered.length))} of ${escapeHtml(String(filaments.length))} filaments</span>
     </div>
     ${form ? `
       <div class="panel stack gap-3" style="max-width:600px">
         <div class="section-head"><h3>${form.id ? 'Edit filament' : 'New filament'}</h3></div>
         <div class="grid-2">
-          <label class="field"><span>Brand</span><select id="ihf-brand"><option value="">Select brand…</option>${brands.map((brand) => `<option value="${escapeAttr(brand)}" ${form.brand === brand ? 'selected' : ''}>${escapeHtml(brand)}</option>`).join('')}</select></label>
+          <label class="field"><span>Brand</span><select id="ihf-brand"><option value="">Select brand…</option>${activeBrandNames.map((brand) => `<option value="${escapeAttr(brand)}" ${form.brand === brand ? 'selected' : ''}>${escapeHtml(brand)}</option>`).join('')}</select></label>
           <label class="field"><span>Filament type</span><input id="ihf-type" value="${escapeAttr(form.filamentType)}" placeholder="PLA" /></label>
           <label class="field"><span>Color name</span><input id="ihf-color" value="${escapeAttr(form.colorName)}" placeholder="Black" /></label>
         </div>

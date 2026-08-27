@@ -66,7 +66,38 @@ export const DEFAULT_SETTINGS = {
   // request) get sent -- separate from LOW_STOCK_ALERT_EMAIL's env-var
   // override since this one's admin-editable, not deploy-time config.
   orderNotificationEmail: 'lapanzaonline@gmail.com',
-  inHouseFilamentBrands: ['SunLu', 'SA Filament', 'Build Volume', 'Creality'],
+  // Configurable lists: { id, name, active }[], admin-managed from Settings
+  // (§ "Configurable lists" panels). `name` is the value actually stored on
+  // records elsewhere (in_house_filament.brand, todo_items.category/
+  // priority) -- `id` only exists so the admin UI has a stable key to toggle/
+  // edit by, renaming a list entry does NOT retroactively change existing
+  // records' stored strings (same as renaming a shipping option never
+  // rewrites past orders). `active: false` hides an entry from pickers used
+  // to create NEW records, but never hides it from a record that already
+  // has it -- a retired brand/category/priority must stay visible on
+  // whatever already used it, same reasoning as `filament_colours.listed`.
+  inHouseFilamentBrands: [
+    { id: 'sunlu', name: 'SunLu', active: true },
+    { id: 'sa-filament', name: 'SA Filament', active: true },
+    { id: 'build-volume', name: 'Build Volume', active: true },
+    { id: 'creality', name: 'Creality', active: true },
+  ],
+  todoCategories: [
+    { id: 'bug', name: 'Bug', active: true },
+    { id: 'feature', name: 'Feature', active: true },
+    { id: 'enhancement', name: 'Enhancement', active: true },
+    { id: 'tech-debt', name: 'Tech Debt', active: true },
+  ],
+  // List order doubles as sort order in the Todo/Backlog table (see
+  // TODO_PRIORITY_RANK in admin.js) -- reordering here would change sort,
+  // but there's no reorder UI yet, only add/toggle-active, so order is
+  // fixed at Critical>High>Medium>Low until that's built.
+  todoPriorities: [
+    { id: 'critical', name: 'Critical', active: true },
+    { id: 'high', name: 'High', active: true },
+    { id: 'medium', name: 'Medium', active: true },
+    { id: 'low', name: 'Low', active: true },
+  ],
 
   // SITE-027: filament colour swatches show "Only N left" instead of a raw
   // stock count once a colour's stockQty drops to or below this -- read by

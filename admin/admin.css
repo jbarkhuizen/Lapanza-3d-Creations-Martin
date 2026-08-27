@@ -444,6 +444,31 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 }
 .field.checkbox input { width: auto; }
 
+/* Configurable lists (Settings): in-house filament brands, todo categories/
+   priorities -- each row is name + active toggle, saved immediately on
+   change rather than needing the page's big "Save settings" click. */
+.config-list { display: flex; flex-direction: column; gap: 0.4rem; }
+.config-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+.config-list-active { margin: 0; }
+.config-list-active input { width: auto; margin: 0; }
+.config-list-name { flex: 1; font-size: 0.9rem; }
+.config-list-panel .row-card-actions { justify-content: flex-start; }
+.config-list-new-input {
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  min-width: 220px;
+}
+
 .section-head {
   display: flex;
   justify-content: space-between;
