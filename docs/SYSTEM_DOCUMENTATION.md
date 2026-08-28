@@ -420,7 +420,7 @@ The admin portal is a **single hand-written vanilla-JS SPA** — no build-time f
 
 ## 6. Data Model (Database Schema)
 
-31 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
+32 tables in a single SQLite file (`data/lapanza.db`), `PRAGMA foreign_keys = ON`.
 
 ### 6.1 Entity Relationship Diagram
 
@@ -714,6 +714,25 @@ Simple key-value store (site config, invoicing config, print-job-costing rates).
 | active, sort_order | |
 | created_at, updated_at | |
 
+#### `testimonials`
+Admin-managed customer testimonials (backlog #51). No public submission form.
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | |
+| customer_name | TEXT NOT NULL | The REAL name — admin-internal record of who consent was obtained from, never exported publicly |
+| display_name | TEXT NOT NULL | What's actually shown on the site — deliberately separate from `customer_name` so the admin can choose full name / first name only / "A happy customer" / etc |
+| consent_given | INTEGER (bool) DEFAULT 0 | Gates `status`: `server/testimonials.js`'s `assertPublishAllowed()` throws if `status` is set to `published` without this being true — enforced at the data layer, not just the admin UI |
+| consent_note | TEXT | Internal — how/when consent was obtained. Never exported publicly |
+| testimonial_date | TEXT NULL | The date the testimonial itself refers to, not `created_at` |
+| quote | TEXT NOT NULL | |
+| link_url, link_label | TEXT NULL | Optional reference to a project/product — a plain URL + label, not a resolved `productId` (testimonials may reference a custom project outside the catalog) |
+| image_path | TEXT NULL | `/uploads/testimonials/...`, same randomized-filename pattern as `resources` |
+| status | TEXT DEFAULT 'draft' | `draft` \| `published` — same vocabulary `filament_types.status` uses |
+| sort_order | INTEGER DEFAULT 0 | |
+| created_at, updated_at | TEXT | |
+
+Published rows are exported into `site-settings.json` (`server/export.js`'s `syncPublicJson()`, same mechanism as `settings.featuredProducts`) via `publicTestimonial()`, which deliberately drops `customer_name`/`consent_note` — only `id`/`displayName`/`quote`/`date`/`linkUrl`/`linkLabel`/`imageUrl` ever reach the browser.
+
 #### `newsletter_subscribers`
 | Column | Type | Notes |
 |---|---|---|
@@ -905,6 +924,7 @@ All routes are prefixed `/api` unless noted. Auth column: **Public** (no auth), 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/api/health` | Public | Health check — verifies the database is actually reachable (not just that the process is alive), returns `503` if not. Designed to be polled by an external uptime monitor (see `docs/UPTIME_MONITORING.md`). |
+| GET | `/api/health/backups` | Public | Backlog #120 — reports `503` if the newest local backup is missing or >30h old. A SEPARATE monitor target from `/api/health` on purpose, so backup staleness is caught even if this site's own email alerting (`server/alerts.js`) is itself broken. |
 | GET | `/api/setup/status` | Public | Reports whether first-run admin setup is needed (`{needsSetup}`) |
 | POST | `/api/setup` | Public | First-run only — creates the first admin account |
 | POST | `/api/auth/login` | Public (rate-limited) | Admin login |
@@ -1017,6 +1037,15 @@ Newsletter template, image, draft, approval, test-send, and queued-send changes 
 | POST | `/api/resources/:id/image`, `/api/resources/:id/file` | Admin | Upload assets |
 | GET | `/api/resources/public/list` | Public | Gallery listing |
 | GET | `/api/resources/:id/download` | Public | Forced file download |
+
+### 7.10a Testimonials (backlog #51)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| GET/POST/PUT/DELETE | `/api/testimonials`, `/api/testimonials/:id` | Admin | Manage testimonials — `GET` accepts `?status=draft|published`. `POST`/`PUT` 400 if `status: 'published'` is sent without `consentGiven: true` |
+| POST | `/api/testimonials/:id/image` | Admin | Upload photo |
+
+No public route — published testimonials reach the storefront only via `site-settings.json` (§7.x Settings, `settings.testimonials`).
 
 ### 7.11 Design Requests
 
@@ -1749,7 +1778,7 @@ No fixed release cadence — features shipped as completed, deployed same-sessio
 - **Framework:** Node's built-in `node:test` + `node:assert` — zero external test-framework dependency.
 - **Isolation:** every test opens its own **in-memory SQLite database** (`openDb(':memory:')`), so tests never touch the real dev/production database and run fully in parallel-safe isolation.
 - **Coverage shape:** unit tests at the domain-module level (`server/*.js` ↔ `server/*.test.js`, 1:1 file pairing) — no end-to-end browser test automation is checked into the repo (manual browser verification was performed interactively during development instead, per session record).
-- **Current count:** 280 tests across 32 test files, 100% passing at last recorded run.
+- **Current count:** 343 tests across 35 test files, 100% passing at last recorded run.
 - **What is NOT covered by automated tests:** frontend JS (`src/js/*`, `admin/admin.js`), CSS/visual regressions, cross-browser behaviour, load/performance testing, real third-party API integration (Payfast/Gmail/Meta calls are exercised via credential-absent "fails gracefully" paths, not live sandbox calls in CI).
 
 ### 13.2 Representative Positive & Negative Test Cases

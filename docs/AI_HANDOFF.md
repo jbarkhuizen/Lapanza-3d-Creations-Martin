@@ -16,7 +16,7 @@ A live e-commerce + operations platform for a South African 3D-printing/filament
 ## Start here, in order
 
 1. `README.md` — quick local-dev setup
-2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (31 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
+2. `docs/SYSTEM_DOCUMENTATION.md` — everything: architecture, DB schema (32 tables), full API reference, every feature's functional spec, requirements, test cases, deployment runbook, known limitations
 3. `deploy/DEPLOY.md` — production deployment/SSH runbook specifically
 4. `docs/UPTIME_MONITORING.md` — external monitoring setup (manual, third-party account signup — not something to attempt on the user's behalf)
 5. `.env.example` and `deploy/.env.production.template` — every config variable, documented
@@ -121,9 +121,14 @@ These are real incidents from this project's build/deploy history — documented
 | Checkout trust badges (closes #54) | Live — secure Payfast checkout / POPIA-compliant / faulty-or-damaged-items-covered badges above the Place Order button, wording checked against the real Returns Policy (not a blanket "money-back guarantee" — most items are custom, non-returnable for change of mind) |
 | Backup restore procedure (closes #119) | Documented and validated (`deploy/DEPLOY.md` §10) — a real backup file passed `PRAGMA integrity_check` plus row-count checks. The full live stop/swap/restart cutover is still unrehearsed |
 | Order data | 18 cancelled test orders (`INV-0009`–`INV-0026`) hard-deleted at owner request 2026-08-26 — pre-delete snapshot kept, audit-logged. Next real order will be `INV-0009`, not a continuation of the deleted test numbers |
-| Test suite | 280/280 passing (`node --test`, 32 test files), run before every commit |
+| Test suite | 343/343 passing (`node --test`, 35 test files), run before every commit |
 | CI/CD | Test-only: `.github/workflows/test.yml` runs `npm ci && npm test && npm run build` on every push/PR to main. Deploy remains manual test-then-push-then-SSH (`bash deploy/deploy-app.sh`) -- automating that needs the VPS SSH key as a GitHub secret, an infra/security decision left to the business owner |
 | Staging environment | None — the VPS is production from first deploy |
+| Branded HTML emails + Settings → Communications (V0.69–V0.70) | Live — every transactional email except the invoice was plain text; all 9 now render through a shared branded HTML shell (`server/email-template.js`). Subject/message wording per email is admin-editable (`settings.emailTemplates`, `{{token}}` placeholders); structural HTML (links, tables, the reset-link expiry disclaimer) stays code-controlled. Click-tested live with real admin access — a genuine password-reset send confirmed working |
+| Operational alerts (V0.72–V0.73, closes backlog #120) | Live — `server/alerts.js` escalates backup failures, Payfast ITN failures, unexpected checkout errors, an email-delivery-down WhatsApp fallback, and security-signal bursts (including admin login failures, added after an initial gap was caught reviewing the item against its own spec). New Settings → Operational Alerts panel (toggles/thresholds) and an unauthenticated `GET /api/health/backups` heartbeat for a second uptime monitor. WhatsApp fallback needs a Meta-approved template the owner must still set up — degrades to console-only until then. Response runbook: `deploy/DEPLOY.md` §11 |
+| Admin-managed testimonials (V0.74, closes backlog #51) | Live — new `testimonials` table + admin CRUD (Client Side nav). A testimonial can't be set to `published` without `consent_given=true`, enforced in `server/testimonials.js` itself (not just the admin UI). `customer_name` (real name, internal) is kept separate from `display_name` (what's shown). Published testimonials ride along in `site-settings.json` (same mechanism as `featuredProducts`), explicitly excluding the real name/consent note. New homepage section, hidden until something's published. Verified live with a real create/publish/verify/delete cycle, no leftover data |
+| Homepage fixes (V0.68, V0.71) | Live — fixed a real CSS bug squashing featured-product images to ~232×56px strips (a fixed height utility was fighting `md:aspect-square`), enlarged the hero flanking columns, removed the dead "Shop the range" tile section, removed "Centurion" from the hero eyebrow line |
+| Get in Touch page (V0.67) | Live — corrected Facebook link (was pointing at the wrong page), added TikTok, added social icons, added a Google Maps embed under the workshop address |
 
 ## Who to ask
 
