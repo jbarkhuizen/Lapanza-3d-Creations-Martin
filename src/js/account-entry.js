@@ -158,15 +158,22 @@ async function init() {
   registerForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     registerNote.textContent = '';
+    if (!registerForm.reportValidity()) return;
     const data = new FormData(registerForm);
+    const password = data.get('password');
+    if (password !== data.get('confirmPassword')) {
+      registerNote.textContent = 'Passwords do not match.';
+      return;
+    }
     try {
       const { message } = await api('/api/client/register', {
         method: 'POST',
         body: JSON.stringify({
           firstName: data.get('firstName'),
           lastName: data.get('lastName'),
+          businessName: data.get('businessName'),
           email: data.get('email'),
-          password: data.get('password'),
+          password,
         }),
       });
       registerNote.textContent = message || 'Account created — check your email to verify it.';

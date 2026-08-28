@@ -77,13 +77,17 @@
                 <div class="grid grid-cols-2 gap-3">
                   <label class="block text-sm">
                     <span class="block mb-1.5 text-espresso/70">First Name</span>
-                    <input name="firstName" type="text" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+                    <input name="firstName" type="text" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
                   </label>
                   <label class="block text-sm">
                     <span class="block mb-1.5 text-espresso/70">Surname</span>
-                    <input name="lastName" type="text" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+                    <input name="lastName" type="text" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
                   </label>
                 </div>
+                <label class="block text-sm">
+                  <span class="block mb-1.5 text-espresso/70">Company Name (Optional)</span>
+                  <input name="businessName" type="text" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+                </label>
                 <label class="block text-sm">
                   <span class="block mb-1.5 text-espresso/70">Email</span>
                   <input name="email" type="email" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
@@ -91,6 +95,10 @@
                 <label class="block text-sm">
                   <span class="block mb-1.5 text-espresso/70">Password (8+ Characters)</span>
                   <input name="password" type="password" required minlength="8" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+                </label>
+                <label class="block text-sm">
+                  <span class="block mb-1.5 text-espresso/70">Confirm Password</span>
+                  <input name="confirmPassword" type="password" required minlength="8" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
                 </label>
                 <button type="submit" class="w-full text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-5 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Create account</button>
                 <p id="register-note" class="text-sm text-espresso/70" role="status"></p>

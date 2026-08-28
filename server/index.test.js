@@ -880,13 +880,40 @@ test('a failed outbound email is recorded to the audit log instead of only conso
   // GMAIL_APP_PASSWORD is deliberately unset in the test env (mailer.js's
   // lazy-transporter comment) -- registering a client genuinely exercises
   // the real failure path, not a mock.
-  const register = await request(app).post('/api/client/register').send({ email: 'newcustomer@example.com', password: 'correcthorsebattery' });
+  const register = await request(app).post('/api/client/register').send({ firstName: 'New', lastName: 'Customer', email: 'newcustomer@example.com', password: 'correcthorsebattery' });
   assert.strictEqual(register.status, 201); // a failed verification email must never fail registration itself
 
   const res = await request(app).get('/api/audit-log?eventType=email_failure').set('Cookie', cookie);
   assert.strictEqual(res.body.entries.length, 1);
   assert.match(res.body.entries[0].detail, /Verification email/);
   assert.match(res.body.entries[0].detail, /GMAIL_APP_PASSWORD/);
+});
+
+test('POST /api/client/register requires first name and surname, and stores company name', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const noFirstName = await request(app).post('/api/client/register').send({ lastName: 'Buyer', email: 'a@example.com', password: 'correcthorsebattery' });
+  assert.strictEqual(noFirstName.status, 400);
+  assert.match(noFirstName.body.error, /first name/i);
+
+  const noLastName = await request(app).post('/api/client/register').send({ firstName: 'Test', email: 'b@example.com', password: 'correcthorsebattery' });
+  assert.strictEqual(noLastName.status, 400);
+  assert.match(noLastName.body.error, /surname/i);
+
+  // registerClient() itself stays lenient (many other callers/tests use it
+  // as a minimal email+password fixture) -- this proves the requirement is
+  // enforced at the public route, not silently bypassable by omission, and
+  // that a supplied company name actually reaches the stored client record.
+  const ok = await request(app).post('/api/client/register').send({
+    firstName: 'Jane', lastName: 'Doe', businessName: 'Acme Co', email: 'jane@example.com', password: 'correcthorsebattery',
+  });
+  assert.strictEqual(ok.status, 201);
+  const list = await request(app).get('/api/clients?q=jane@example.com').set('Cookie', cookie);
+  assert.strictEqual(list.body.clients[0].businessName, 'Acme Co');
 });
 
 test('Payfast checkout does not send the order confirmation immediately -- only manual_eft/cash_on_collection do', async (t) => {
@@ -1006,7 +1033,7 @@ test('a failed customer login records client_login_failure', async (t) => {
   const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
   const cookie = login.headers['set-cookie'];
 
-  await request(app).post('/api/client/register').send({ email: 'customer@example.com', password: 'correcthorsebattery' });
+  await request(app).post('/api/client/register').send({ firstName: 'Test', lastName: 'Customer', email: 'customer@example.com', password: 'correcthorsebattery' });
   await request(app).post('/api/client/login').send({ email: 'customer@example.com', password: 'wrongpassword' });
 
   const audit = await request(app).get('/api/audit-log?eventType=client_login_failure').set('Cookie', cookie);
@@ -1063,7 +1090,7 @@ test('order status changes, inventory updates, catalog changes, and settings cha
 });
 
 async function loggedInClientCookie(app, adminCookie, email) {
-  await request(app).post('/api/client/register').send({ email, password: 'correcthorsebattery' });
+  await request(app).post('/api/client/register').send({ firstName: 'Test', lastName: 'Client', email, password: 'correcthorsebattery' });
   const list = await request(app).get(`/api/clients?q=${encodeURIComponent(email)}`).set('Cookie', adminCookie);
   const clientId = list.body.clients[0].id;
   await request(app).patch(`/api/clients/${clientId}/verify`).set('Cookie', adminCookie);

@@ -372,7 +372,15 @@ function siteUrlFor(req) {
 
 app.post('/api/client/register', authLimiter, async (req, res) => {
   try {
-    const { client, token } = registerClient(req.body || {});
+    const body = req.body || {};
+    // First/last name mandatory for a real customer signing up through the
+    // public form -- registerClient() itself stays lenient (many other call
+    // sites, and most of client-auth.test.js, create a minimal test account
+    // with just email+password as a fixture unrelated to what they're
+    // actually testing), so this validates at the route, not the shared fn.
+    if (!String(body.firstName || '').trim()) return res.status(400).json({ error: 'First name is required' });
+    if (!String(body.lastName || '').trim()) return res.status(400).json({ error: 'Surname is required' });
+    const { client, token } = registerClient(body);
     const verifyUrl = `${req.protocol}://${req.get('host')}/api/client/verify?token=${token}`;
     try {
       await sendClientVerificationEmail(client, verifyUrl);
