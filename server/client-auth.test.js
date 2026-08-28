@@ -13,6 +13,7 @@ import {
   manuallyVerifyClient,
   regenerateVerificationToken,
   deleteOrRevokeClient,
+  setClientDisabled,
 } from './clients.js';
 
 test('registerClient creates an unverified account and returns a verification token', () => {
@@ -124,6 +125,31 @@ test('loginClient rejects a guest-only email that has never registered a passwor
   const result = loginClient('guestonly@example.com', 'anything', db);
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.reason, 'invalid');
+  db.close();
+});
+
+test('setClientDisabled blocks login before the verified check, is reversible, and never touches password_hash', () => {
+  const db = openDb(':memory:');
+  const { token } = registerClient({ email: 'disableme@example.com', password: 'correcthorse' }, db);
+  verifyClientEmail(token, db);
+  assert.strictEqual(loginClient('disableme@example.com', 'correcthorse', db).ok, true);
+
+  const disabled = setClientDisabled(findClientByEmail('disableme@example.com', db).id, true, db);
+  assert.strictEqual(disabled.disabled, true);
+
+  const blocked = loginClient('disableme@example.com', 'correcthorse', db);
+  assert.strictEqual(blocked.ok, false);
+  assert.strictEqual(blocked.reason, 'disabled');
+
+  const reenabled = setClientDisabled(disabled.id, false, db);
+  assert.strictEqual(reenabled.disabled, false);
+  assert.strictEqual(loginClient('disableme@example.com', 'correcthorse', db).ok, true);
+  db.close();
+});
+
+test('setClientDisabled returns null for an unknown id', () => {
+  const db = openDb(':memory:');
+  assert.strictEqual(setClientDisabled('bogus-id', true, db), null);
   db.close();
 });
 

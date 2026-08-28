@@ -419,6 +419,7 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 [data-theme="dark"] .badge.category { color: var(--accent); }
 .badge.published { background: rgb(31 122 69 / 0.14); color: var(--ok); }
 .badge.draft { background: rgb(163 107 18 / 0.16); color: var(--warn); }
+.badge.disabled { background: rgb(178 34 34 / 0.16); color: #a51d1d; margin-left: 0.35rem; }
 
 .editor-layout {
   display: grid;

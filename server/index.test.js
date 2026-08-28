@@ -1089,6 +1089,57 @@ test('order status changes, inventory updates, catalog changes, and settings cha
   assert.match(settingsChange.detail, /siteName/);
 });
 
+test('admin can disable/re-enable a registered client, blocking and restoring login via the real route', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  await request(app).post('/api/client/register').send({ firstName: 'Dis', lastName: 'Able', email: 'disable-route@example.com', password: 'correcthorsebattery' });
+  const list = await request(app).get('/api/clients?q=disable-route@example.com').set('Cookie', adminCookie);
+  const clientId = list.body.clients[0].id;
+  await request(app).patch(`/api/clients/${clientId}/verify`).set('Cookie', adminCookie);
+
+  const disableRes = await request(app).patch(`/api/clients/${clientId}/disabled`).set('Cookie', adminCookie).send({ disabled: true });
+  assert.strictEqual(disableRes.status, 200);
+  assert.strictEqual(disableRes.body.client.disabled, true);
+
+  const blockedLogin = await request(app).post('/api/client/login').send({ email: 'disable-route@example.com', password: 'correcthorsebattery' });
+  assert.strictEqual(blockedLogin.status, 403);
+  assert.match(blockedLogin.body.error, /disabled/i);
+
+  const enableRes = await request(app).patch(`/api/clients/${clientId}/disabled`).set('Cookie', adminCookie).send({ disabled: false });
+  assert.strictEqual(enableRes.body.client.disabled, false);
+  const restoredLogin = await request(app).post('/api/client/login').send({ email: 'disable-route@example.com', password: 'correcthorsebattery' });
+  assert.strictEqual(restoredLogin.status, 200);
+
+  const notFound = await request(app).patch('/api/clients/bogus-id/disabled').set('Cookie', adminCookie).send({ disabled: true });
+  assert.strictEqual(notFound.status, 404);
+});
+
+test('admin can trigger a password reset email for a registered client', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  await request(app).post('/api/client/register').send({ firstName: 'Reset', lastName: 'Me', email: 'admin-reset@example.com', password: 'correcthorsebattery' });
+  const list = await request(app).get('/api/clients?q=admin-reset@example.com').set('Cookie', adminCookie);
+  const clientId = list.body.clients[0].id;
+
+  // GMAIL_APP_PASSWORD is deliberately unset in the test env -- the send
+  // itself fails, but the route must still resolve the client and attempt
+  // it (a 404 here would mean the route never even found the client).
+  const res = await request(app).post(`/api/clients/${clientId}/send-password-reset`).set('Cookie', adminCookie);
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /GMAIL_APP_PASSWORD/);
+
+  const missing = await request(app).post('/api/clients/bogus-id/send-password-reset').set('Cookie', adminCookie);
+  assert.strictEqual(missing.status, 404);
+});
+
 async function loggedInClientCookie(app, adminCookie, email) {
   await request(app).post('/api/client/register').send({ firstName: 'Test', lastName: 'Client', email, password: 'correcthorsebattery' });
   const list = await request(app).get(`/api/clients?q=${encodeURIComponent(email)}`).set('Cookie', adminCookie);

@@ -470,6 +470,7 @@ export function ensureSchema(db) {
   ensureTodoColumns(db);
   ensureDesignRequestStatusColumns(db);
   ensureShippingCategoryColumn(db);
+  ensureClientDisabledColumn(db);
   seedTodoItems(db);
   backfillAnalyticsTotals(db);
 }
@@ -584,6 +585,15 @@ function ensureManagementColumns(db) {
 
 // Phase 4: login-activity tracking + WhatsApp marketing consent (separate
 // from newsletter_subscribers -- email and WhatsApp are separate consents).
+// Registered Users: an admin-facing kill switch distinct from Delete --
+// blocks login without touching password_hash, order history, or the
+// account itself, so it's trivially reversible (unlike delete/revoke).
+function ensureClientDisabledColumn(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'disabled')) {
+    db.exec('ALTER TABLE clients ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
+  }
+}
+
 function ensureEngagementColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'last_login_at')) {
     db.exec('ALTER TABLE clients ADD COLUMN last_login_at TEXT');

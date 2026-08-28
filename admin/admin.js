@@ -170,7 +170,15 @@ function setRoute(route, { id } = {}) {
   const [eyebrow, title] = titles[route] || titles.dashboard;
   $('#top-eyebrow').textContent = eyebrow;
   $('#top-title').textContent = title;
-  show($('.topbar-actions'), route !== 'settings' && route !== 'editor' && route !== 'backups' && route !== 'analytics' && route !== 'version-history' && route !== 'version-detail' && route !== 'documentation' && route !== 'test-cases' && route !== 'site-overview' && route !== 'todos' && route !== 'audit-log');
+  // "+ Filament" / "+ Category" only make sense on the Product Catalog list
+  // and its editor -- an exclusion list here (hide on THESE routes) meant
+  // every route added afterwards (Registered Users, Orders, Clients, New
+  // Order, Invoice History, Shipping, Resources, Design Requests,
+  // Newsletter, WhatsApp Updates, Stock, Purchases, Print Job Costing,
+  // In-House Filament...) defaulted to showing them, which is exactly the
+  // "these buttons don't belong here" bug reported 2026-08-28. Inclusion
+  // list instead, so a new route is hidden by default and has to opt in.
+  show($('.topbar-actions'), route === 'catalog' || route === 'editor');
 }
 
 async function boot() {
@@ -3231,12 +3239,19 @@ async function renderRegisteredUsers() {
           <td><button class="btn-expand" data-action="toggle-orders" type="button" aria-expanded="${expanded}" aria-label="Toggle orders">${expanded ? '▾' : '▸'}</button></td>
           <td>${escapeHtml(c.name || '—')}</td>
           <td>${escapeHtml(c.email)}</td>
-          <td>${c.emailVerified ? '<span class="badge published">Verified</span>' : '<span class="badge draft">Unverified</span>'}</td>
+          <td>
+            ${c.emailVerified ? '<span class="badge published">Verified</span>' : '<span class="badge draft">Unverified</span>'}
+            ${c.disabled ? '<span class="badge disabled">Disabled</span>' : ''}
+          </td>
           <td>${escapeHtml(formatDate(c.createdAt))}</td>
           <td>${c.lastLoginAt ? escapeHtml(formatDate(c.lastLoginAt)) : '<span class="muted">Never</span>'}</td>
           <td>
             ${c.emailVerified ? '' : '<button class="btn small" data-action="verify" type="button">Verify</button>'}
             ${c.emailVerified ? '' : '<button class="btn small" data-action="resend" type="button">Resend email</button>'}
+            <button class="btn small" data-action="send-reset" type="button">Send Password Reset</button>
+            ${c.disabled
+              ? '<button class="btn small" data-action="enable" type="button">Enable</button>'
+              : '<button class="btn small btn-danger" data-action="disable" type="button">Disable</button>'}
             <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
           </td>
         </tr>`;
@@ -3284,6 +3299,33 @@ async function renderRegisteredUsers() {
       try {
         await api(`/api/clients/${id}/resend-verification`, { method: 'POST' });
         toast('Verification email sent');
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="send-reset"]')?.addEventListener('click', async () => {
+      try {
+        await api(`/api/clients/${id}/send-password-reset`, { method: 'POST' });
+        toast('Password reset email sent');
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="disable"]')?.addEventListener('click', async () => {
+      if (!confirm('Disable this account? They will no longer be able to log in until re-enabled. Order history and the account itself are kept.')) return;
+      try {
+        await api(`/api/clients/${id}/disabled`, { method: 'PATCH', body: JSON.stringify({ disabled: true }) });
+        toast('Account disabled');
+        await renderRegisteredUsers();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="enable"]')?.addEventListener('click', async () => {
+      try {
+        await api(`/api/clients/${id}/disabled`, { method: 'PATCH', body: JSON.stringify({ disabled: false }) });
+        toast('Account re-enabled');
+        await renderRegisteredUsers();
       } catch (ex) {
         toast(ex.message);
       }

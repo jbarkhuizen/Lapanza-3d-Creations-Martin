@@ -27,6 +27,7 @@ function rowToClient(row) {
     // exposed on the mapped object, only whether one exists.
     hasAccount: Boolean(row.password_hash),
     emailVerified: Boolean(row.email_verified),
+    disabled: Boolean(row.disabled),
     // Phase 3 -- discountPct only ever applied on manually-created orders
     // (orders.js's createManualOrder), never automatically at checkout.
     discountPct: row.discount_pct,
@@ -283,6 +284,7 @@ export function loginClient(email, password, db = getDb()) {
   if (!row || !row.password_hash || !bcrypt.compareSync(password, row.password_hash)) {
     return { ok: false, reason: 'invalid' };
   }
+  if (row.disabled) return { ok: false, reason: 'disabled' };
   if (!row.email_verified) return { ok: false, reason: 'unverified' };
   db.prepare('UPDATE clients SET last_login_at = ? WHERE id = ?').run(new Date().toISOString(), row.id);
   return { ok: true, client: rowToClient(getClientRow(row.id, db)) };
@@ -300,6 +302,18 @@ export function setWhatsAppOptIn(id, email, optIn, db = getDb()) {
     .prepare('UPDATE clients SET whatsapp_opt_in = ? WHERE id = ? AND LOWER(email) = LOWER(?)')
     .run(optIn ? 1 : 0, id, String(email || '').trim());
   return result.changes > 0;
+}
+
+// Registered Users' "Disable"/"Enable" toggle -- distinct from
+// deleteOrRevokeClient: reversible, and blocks login (loginClient checks
+// this before the verified check) without touching password_hash, order
+// history, or the account record itself. Requires an existing account,
+// same guard deleteOrRevokeClient's callers rely on elsewhere.
+export function setClientDisabled(id, disabled, db = getDb()) {
+  const row = getClientRow(id, db);
+  if (!row) return null;
+  db.prepare('UPDATE clients SET disabled = ? WHERE id = ?').run(disabled ? 1 : 0, id);
+  return getClient(id, db);
 }
 
 // Admin override for a customer who never got/clicked the verification

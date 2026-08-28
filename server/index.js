@@ -53,6 +53,7 @@ import {
   resetClientPassword,
   setWhatsAppOptIn,
   manuallyVerifyClient,
+  setClientDisabled,
   regenerateVerificationToken,
   deleteOrRevokeClient,
   mergeClients,
@@ -407,6 +408,9 @@ app.post('/api/client/login', authLimiter, (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   const result = loginClient(email, password);
+  if (!result.ok && result.reason === 'disabled') {
+    return res.status(403).json({ error: 'This account has been disabled. Contact us if you believe this is a mistake.' });
+  }
   if (!result.ok && result.reason === 'unverified') {
     return res.status(403).json({ error: 'Please verify your email before logging in — check your inbox for the verification link.' });
   }
@@ -1250,6 +1254,32 @@ app.post('/api/clients/:id/resend-verification', requireAuth, async (req, res) =
     if (!result) return res.status(404).json({ error: 'Client not found' });
     const verifyUrl = `${req.protocol}://${req.get('host')}/api/client/verify?token=${result.token}`;
     await sendClientVerificationEmail(result.client, verifyUrl);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Registered Users' Disable/Enable toggle -- see setClientDisabled's own
+// comment (clients.js) for why this is deliberately separate from Delete.
+app.patch('/api/clients/:id/disabled', requireAuth, (req, res) => {
+  const client = setClientDisabled(req.params.id, Boolean((req.body || {}).disabled));
+  if (!client) return res.status(404).json({ error: 'Client not found' });
+  res.json({ client });
+});
+
+// Admin-triggered password reset -- same requestPasswordReset()/email as
+// the customer's own "Forgot password?" flow, just initiated from
+// Registered Users instead of the customer requesting it themselves.
+app.post('/api/clients/:id/send-password-reset', requireAuth, async (req, res) => {
+  try {
+    const client = getClient(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    if (!client.hasAccount) return res.status(400).json({ error: 'This client has no account to reset a password for' });
+    const result = requestPasswordReset(client.email);
+    if (!result) return res.status(404).json({ error: 'Client not found' });
+    const resetUrl = `${siteUrlFor(req)}/account.html?reset_token=${result.token}`;
+    await sendClientPasswordResetEmail(result.client, resetUrl);
     res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
