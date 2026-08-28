@@ -827,11 +827,13 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
   // verifyLogin -- otherwise the thrown error becomes an unhandled 500.
   if (typeof username !== 'string' || !username || typeof password !== 'string' || !password) {
     recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_FAILURE, username: typeof username === 'string' ? username : null, ...requestMeta(req), detail: 'Missing or malformed credentials' });
+    checkSecuritySpike().catch(() => {});
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   const admin = verifyLogin(username, password);
   if (!admin) {
     recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_FAILURE, username, ...requestMeta(req), detail: 'Invalid username or password' });
+    checkSecuritySpike().catch(() => {});
     return res.status(401).json({ error: 'Invalid username or password' });
   }
   startSession(res, admin.id, admin.username);

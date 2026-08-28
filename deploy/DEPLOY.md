@@ -237,6 +237,46 @@ restart → verify) on this server -- only the read-only integrity path
 above has. Worth doing once during a real maintenance window if you want
 the whole procedure proven end-to-end, not just the backup file itself.
 
+## 11. Responding to an operational alert (backlog #120)
+
+`server/alerts.js` sends one of these emails (or the WhatsApp fallback) when
+something needs attention — this is the "what do I actually do" for each.
+On/off toggles and thresholds are in the admin **Settings → Operational
+Alerts** panel.
+
+- **"Backup failure: ..."** — a scheduled backup (local or offsite sync)
+  failed. Check `sudo journalctl -u lapanza-admin -n 100` for the real
+  error, then the admin **Backups** view to confirm whether the most recent
+  backup actually exists and is usable (§10 above has the read-only
+  integrity-check snippet). A local-backup failure is more urgent than an
+  offsite-sync failure — the latter still has a local copy to fall back on.
+- **"Payment processing failure: ..."** — a Payfast ITN either referenced
+  an order that doesn't exist, or failed signature/amount validation. Check
+  **Invoice History** for the order named in the alert — if Payfast's own
+  merchant dashboard shows the payment as COMPLETE but this order is still
+  `pending_payment`, that's the exact failure mode row 98 (§2 Evolution
+  History) already happened once; don't manually mark it paid without
+  confirming the payment actually landed in the real bank account first.
+- **"Unexpected checkout error"** — something broke in `/api/checkout`
+  that ISN'T a normal validation rejection (out of stock, empty cart,
+  etc — those never alert). This likely means checkout is broken for
+  customers right now. Check the server logs for the stack trace; this is
+  the highest-urgency alert type.
+- **Security signal spike** — a burst of rate-limit/unauthorized-access/
+  login-failure events (admin or customer) within the configured window.
+  Check **Audit Logs**, filtered to those event types, for the IP/user
+  agent pattern. A single source hammering the admin login is worth
+  blocking at the firewall (`firewalld`) level; a spread of different IPs
+  hitting the same endpoint is more likely automated scanning, lower
+  urgency.
+- **WhatsApp fallback message** — this only fires when email delivery
+  itself looks broken (several sends failed within the last hour) AND a
+  WhatsApp template/number is configured. Check `GMAIL_APP_PASSWORD` in
+  `.env` first (an expired/revoked Gmail app password is the most likely
+  cause) — every other alert type in this list depends on email actually
+  working, so treat this one as "fix email first, then re-check whether
+  anything else needs attention that got silently missed while it was down."
+
 ## Future deploys
 ```bash
 ssh -i ~/.ssh/lapanza_vps_deploy deploy@<VPS_IP>

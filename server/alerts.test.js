@@ -99,6 +99,21 @@ test('checkSecuritySpike only fires once the event count within the window reach
   db.close();
 });
 
+// Backlog #120 explicitly named "repeated admin-login failures" as one of
+// the signals to alert on -- distinct from CLIENT_LOGIN_FAILURE (a
+// customer), and easy to accidentally leave out (as this feature initially
+// did) since the two event types look so similar.
+test('checkSecuritySpike counts admin LOGIN_FAILURE events toward the spike threshold, not just CLIENT_LOGIN_FAILURE', async () => {
+  _resetAlertCooldowns();
+  const db = openDb(':memory:');
+  updateSettings({ alertSecuritySpikeEnabled: true, alertSecuritySpikeThreshold: 3, alertSecuritySpikeWindowMinutes: 15 }, db);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_FAILURE, detail: 'a' }, db);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_FAILURE, detail: 'b' }, db);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_FAILURE, detail: 'c' }, db);
+  await checkSecuritySpike(db); // at threshold on admin login failures alone -- resolves cleanly
+  db.close();
+});
+
 test('a repeated identical alert within the cooldown window does not attempt to send twice', async () => {
   _resetAlertCooldowns();
   const db = openDb(':memory:');

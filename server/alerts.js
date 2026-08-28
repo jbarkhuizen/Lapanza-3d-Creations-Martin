@@ -141,11 +141,15 @@ export async function checkEmailFallback(db = getDb()) {
 }
 
 // Security/abuse signals (rate_limit_exceeded, unauthorized_access,
-// client_login_failure -- see audit-log.js) were previously "visible when
-// you look, not something that pages you." A single one of any of these is
-// normal background noise (a bot, a mistyped password); a BURST across a
-// short window is the actual signal worth a real alert.
-const SECURITY_EVENT_TYPES = [AUDIT_EVENTS.RATE_LIMIT_EXCEEDED, AUDIT_EVENTS.UNAUTHORIZED_ACCESS, AUDIT_EVENTS.CLIENT_LOGIN_FAILURE];
+// client_login_failure, and admin login_failure -- see audit-log.js) were
+// previously "visible when you look, not something that pages you." A
+// single one of any of these is normal background noise (a bot, a mistyped
+// password); a BURST across a short window is the actual signal worth a
+// real alert. Backlog #120 explicitly named "repeated admin-login failures"
+// -- LOGIN_FAILURE (admin) is distinct from CLIENT_LOGIN_FAILURE (customer)
+// and both matter here: a brute-force attempt against the admin portal is
+// at least as urgent as one against customer accounts.
+const SECURITY_EVENT_TYPES = [AUDIT_EVENTS.RATE_LIMIT_EXCEEDED, AUDIT_EVENTS.UNAUTHORIZED_ACCESS, AUDIT_EVENTS.CLIENT_LOGIN_FAILURE, AUDIT_EVENTS.LOGIN_FAILURE];
 
 export async function checkSecuritySpike(db = getDb()) {
   const settings = getSettings(db);
@@ -157,7 +161,7 @@ export async function checkSecuritySpike(db = getDb()) {
   if (!shouldFire('security-spike', windowMs)) return;
   await fireEmailAlert(
     'Security signal spike',
-    `${count} rate-limit/unauthorized-access/login-failure events in the last ${settings.alertSecuritySpikeWindowMinutes || 15} minutes (threshold: ${threshold}).\n\nCheck the admin Audit Logs page (filter: Rate Limit Exceeded / Unauthorized Access / Client Login Failure) to see if this is a bot/abuse pattern worth blocking at the firewall level.`,
+    `${count} rate-limit/unauthorized-access/login-failure events (admin or customer) in the last ${settings.alertSecuritySpikeWindowMinutes || 15} minutes (threshold: ${threshold}).\n\nCheck the admin Audit Logs page (filter: Rate Limit Exceeded / Unauthorized Access / Client Login Failure / Login Failure) to see if this is a bot/abuse pattern worth blocking at the firewall level.`,
   );
 }
 
