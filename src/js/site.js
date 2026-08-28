@@ -106,6 +106,75 @@ async function hydrateFeaturedProducts() {
   }
 }
 
+// Backlog #51: admin-managed testimonials, same hydrate-at-runtime pattern
+// as featuredProducts above -- index.html is hand-crafted and skipped by
+// the page generator, so this reads the published subset straight from
+// site-settings.json rather than being baked in at build time.
+function testimonialCard(item) {
+  const card = document.createElement('article');
+  card.className = 'testimonial-card bg-cream/85 backdrop-blur-sm border-2 border-charcoal/15 rounded-sm p-6 flex flex-col gap-3';
+
+  const quote = document.createElement('p');
+  quote.className = 'font-serif text-lg leading-relaxed';
+  quote.textContent = `“${item.quote}”`;
+  card.appendChild(quote);
+
+  const footer = document.createElement('div');
+  footer.className = 'flex items-center gap-3 mt-auto pt-2';
+
+  if (item.imageUrl) {
+    const img = document.createElement('img');
+    img.src = item.imageUrl;
+    img.alt = '';
+    img.loading = 'lazy';
+    img.className = 'w-10 h-10 rounded-full object-cover shrink-0';
+    img.onerror = () => img.remove();
+    footer.appendChild(img);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'min-w-0';
+
+  const name = document.createElement('p');
+  name.className = 'text-sm font-semibold';
+  name.textContent = item.displayName;
+  meta.appendChild(name);
+
+  const dateOrLink = document.createElement('p');
+  dateOrLink.className = 'text-xs text-espresso/55';
+  if (item.linkUrl && item.linkLabel) {
+    const link = document.createElement('a');
+    link.href = item.linkUrl;
+    link.className = 'hover:text-terracotta transition-colors';
+    link.textContent = item.linkLabel;
+    dateOrLink.appendChild(link);
+  } else if (item.date) {
+    dateOrLink.textContent = item.date;
+  }
+  if (dateOrLink.textContent || dateOrLink.childNodes.length) meta.appendChild(dateOrLink);
+
+  footer.appendChild(meta);
+  card.appendChild(footer);
+  return card;
+}
+
+async function hydrateTestimonials() {
+  const section = document.getElementById('testimonials-section');
+  const grid = document.getElementById('testimonials-grid');
+  if (!section || !grid) return;
+  try {
+    const res = await fetch('/site-settings.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const settings = await res.json();
+    const items = Array.isArray(settings.testimonials) ? settings.testimonials : [];
+    if (!items.length) return;
+    items.forEach((item) => grid.appendChild(testimonialCard(item)));
+    section.classList.remove('hidden');
+  } catch {
+    /* section stays hidden -- no partial/broken state shown */
+  }
+}
+
 function wireThemeButtons() {
   document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
     if (btn.dataset.bound) return;
@@ -148,5 +217,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   syncYear();
   hydrateHomeTiles();
   hydrateFeaturedProducts();
+  hydrateTestimonials();
   trackVisit();
 });

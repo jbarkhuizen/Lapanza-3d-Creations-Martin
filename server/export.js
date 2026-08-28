@@ -4,6 +4,7 @@ import { listFilaments } from './filaments.js';
 import { getSettings, publicSettings } from './settings.js';
 import { formatRand, formatItemPrice } from './money.js';
 import { itemAnchorId, categoryPagePath, filamentPagePath } from './item-anchor.js';
+import { listTestimonials, publicTestimonial } from './testimonials.js';
 
 function defaultPaths() {
   const root = process.cwd();
@@ -124,6 +125,12 @@ export function syncPublicJson(db, paths = defaultPaths()) {
 
   const settings = publicSettings(getSettings(db));
   settings.featuredProducts = resolveFeaturedProducts(settings.featuredProducts, filaments, categories);
+  // Backlog #51: published testimonials, public-safe subset only (never the
+  // real customer_name/consent_note -- see testimonials.js's
+  // publicTestimonial()). Not a real settings key/DB row, just rides along
+  // in the same site-settings.json write the homepage already fetches at
+  // runtime, same pattern as featuredProducts above.
+  settings.testimonials = listTestimonials({ status: 'published' }, db).map(publicTestimonial);
 
   fs.writeFileSync(paths.filamentsSrc, JSON.stringify(filaments, null, 2));
   fs.writeFileSync(paths.categoriesSrc, JSON.stringify(categories, null, 2));

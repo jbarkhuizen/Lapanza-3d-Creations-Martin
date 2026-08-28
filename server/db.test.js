@@ -39,6 +39,7 @@ test('ensureSchema creates every expected table', () => {
     'shipping_options',
     'test_run_cases',
     'test_runs',
+    'testimonials',
     'todo_items',
     'version_history',
     'version_release_details',

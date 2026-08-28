@@ -1085,6 +1085,77 @@ test('GET /api/health/backups reports unhealthy (503) when no backups exist yet,
   assert.match(res.body.error, /No backups exist yet/);
 });
 
+// -- Backlog #51: admin-managed testimonials ---------------------------
+
+test('POST /api/testimonials creates a draft by default and PUT can publish it once consent is recorded', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app)
+    .post('/api/testimonials')
+    .set('Cookie', cookie)
+    .send({ customerName: 'Jane Real Name', displayName: 'Jane D.', quote: 'Loved the print quality.' });
+  assert.strictEqual(created.status, 201);
+  assert.strictEqual(created.body.testimonial.status, 'draft');
+
+  const publishAttempt = await request(app)
+    .put(`/api/testimonials/${created.body.testimonial.id}`)
+    .set('Cookie', cookie)
+    .send({ status: 'published' });
+  assert.strictEqual(publishAttempt.status, 400);
+  assert.match(publishAttempt.body.error, /consent/i);
+
+  const published = await request(app)
+    .put(`/api/testimonials/${created.body.testimonial.id}`)
+    .set('Cookie', cookie)
+    .send({ status: 'published', consentGiven: true });
+  assert.strictEqual(published.status, 200);
+  assert.strictEqual(published.body.testimonial.status, 'published');
+});
+
+test('GET /api/testimonials?status=published only returns published ones, and the customer real name never leaves the admin API', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  await request(app).post('/api/testimonials').set('Cookie', cookie).send({ customerName: 'Draft Person', displayName: 'D.', quote: 'x' });
+  await request(app)
+    .post('/api/testimonials')
+    .set('Cookie', cookie)
+    .send({ customerName: 'Published Person', displayName: 'P.', quote: 'y', status: 'published', consentGiven: true });
+
+  const res = await request(app).get('/api/testimonials?status=published').set('Cookie', cookie);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.testimonials.length, 1);
+  assert.strictEqual(res.body.testimonials[0].displayName, 'P.');
+});
+
+test('DELETE /api/testimonials/:id removes it', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app).post('/api/testimonials').set('Cookie', cookie).send({ customerName: 'X', displayName: 'X.', quote: 'x' });
+  const del = await request(app).delete(`/api/testimonials/${created.body.testimonial.id}`).set('Cookie', cookie);
+  assert.strictEqual(del.status, 200);
+  const get = await request(app).get(`/api/testimonials/${created.body.testimonial.id}`).set('Cookie', cookie);
+  assert.strictEqual(get.status, 404);
+});
+
+test('POST /api/testimonials without auth is rejected', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  const res = await request(app).post('/api/testimonials').send({ customerName: 'X', displayName: 'X.', quote: 'x' });
+  assert.strictEqual(res.status, 401);
+});
+
 test('deleting an admin and resetting a password are attributed to the acting admin and recorded', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

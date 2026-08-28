@@ -119,6 +119,37 @@ export function deleteResourceFile(filePath) {
   if (fs.existsSync(abs)) fs.unlinkSync(abs);
 }
 
+// ---- Testimonial uploads (backlog #51) ----
+
+export const TESTIMONIAL_UPLOAD_DIR = path.join(root, 'public', 'uploads', 'testimonials');
+
+function ensureTestimonialUploadDir() {
+  if (!fs.existsSync(TESTIMONIAL_UPLOAD_DIR)) fs.mkdirSync(TESTIMONIAL_UPLOAD_DIR, { recursive: true });
+}
+
+function randomTestimonialFilename(ext) {
+  return `${crypto.randomBytes(8).toString('hex')}${ext}`;
+}
+
+export const uploadTestimonialImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureTestimonialUploadDir();
+      cb(null, TESTIMONIAL_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => cb(null, randomTestimonialFilename(MIME_EXTENSIONS[file.mimetype] || '.jpg')),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),
+});
+
+export function deleteTestimonialImage(imagePath) {
+  if (!imagePath) return;
+  const filename = path.basename(imagePath);
+  const abs = path.join(TESTIMONIAL_UPLOAD_DIR, filename);
+  if (fs.existsSync(abs)) fs.unlinkSync(abs);
+}
+
 // ---- Custom design request uploads ----
 // Same two allowlist strategies as the resource uploads above (mimetype for
 // images, extension for model/print files), combined into one multer

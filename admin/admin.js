@@ -119,6 +119,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-shipping'), route === 'shipping');
   show($('#view-stock'), route === 'stock');
   show($('#view-resources'), route === 'resources');
+  show($('#view-testimonials'), route === 'testimonials');
   show($('#view-design-requests'), route === 'design-requests');
   show($('#view-newsletter'), route === 'newsletter');
   show($('#view-whatsapp-updates'), route === 'whatsapp-updates');
@@ -148,6 +149,7 @@ function setRoute(route, { id } = {}) {
     'registered-users': ['Client Side', 'Registered users'],
     shipping: ['Client Side', 'Shipping options'],
     resources: ['Client Side', '3D Resources'],
+    testimonials: ['Client Side', 'Testimonials'],
     'design-requests': ['Client Side', 'Design requests'],
     newsletter: ['Client Side', 'Newsletter'],
     'whatsapp-updates': ['Client Side', 'WhatsApp Updates'],
@@ -420,6 +422,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'resources') {
         setRoute('resources');
         await renderResources();
+      } else if (btn.dataset.route === 'testimonials') {
+        setRoute('testimonials');
+        await renderTestimonials();
       } else if (btn.dataset.route === 'design-requests') {
         setRoute('design-requests');
         await renderDesignRequests();
@@ -5258,6 +5263,159 @@ async function renderResources() {
   }
   await uploadResourceAsset('rf-image-upload', 'image', 'image');
   await uploadResourceAsset('rf-file-upload', 'file', 'file');
+}
+
+// ---- Testimonials (backlog #51) ----
+
+function blankTestimonial() {
+  return {
+    id: null, customerName: '', displayName: '', consentGiven: false, consentNote: '',
+    testimonialDate: '', quote: '', linkUrl: '', linkLabel: '', status: 'draft', imagePath: null,
+  };
+}
+
+function truncate(text, max) {
+  const s = String(text || '');
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+function testimonialsViewHtml(testimonials, form) {
+  const rows = testimonials
+    .map(
+      (t) => `
+        <tr data-id="${escapeAttr(t.id)}">
+          <td>${escapeHtml(t.displayName)}</td>
+          <td class="muted" style="font-size:0.85rem">${escapeHtml(t.customerName)}</td>
+          <td>${escapeHtml(truncate(t.quote, 60))}</td>
+          <td>${escapeHtml(t.testimonialDate || '—')}</td>
+          <td>${t.consentGiven ? '<span class="badge published">Consent on file</span>' : '<span class="badge draft">No consent recorded</span>'}</td>
+          <td>${t.status === 'published' ? '<span class="badge published">Published</span>' : '<span class="badge draft">Draft</span>'}</td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  return `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-testimonial" type="button">+ Testimonial</button>
+      <span class="muted">${escapeHtml(String(testimonials.length))} testimonials</span>
+    </div>
+    <p class="muted" style="margin:0 0 1rem;font-size:0.88rem;line-height:1.5">Admin-managed only -- there's no public submission form. Add a testimonial after getting a customer's explicit permission to quote them; a testimonial can't be Published without "Consent on file" checked below, regardless of what else is filled in.</p>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:700px">
+        <div class="section-head"><h3>${form.id ? 'Edit testimonial' : 'New testimonial'}</h3></div>
+        <div class="grid-2">
+          <label class="field"><span>Customer's Real Name (internal only, never shown publicly)</span><input id="tf-customer-name" value="${escapeAttr(form.customerName)}" /></label>
+          <label class="field"><span>Display Name (shown on the site)</span><input id="tf-display-name" value="${escapeAttr(form.displayName)}" placeholder="e.g. full name, first name only, or &quot;A happy customer&quot;" /></label>
+        </div>
+        <label class="field checkbox"><input id="tf-consent-given" type="checkbox" ${form.consentGiven ? 'checked' : ''} /><span>Consent on file -- this customer explicitly agreed to be quoted publicly</span></label>
+        <label class="field"><span>Consent Note (internal -- how/when consent was obtained)</span><input id="tf-consent-note" value="${escapeAttr(form.consentNote || '')}" placeholder="e.g. WhatsApp message, 2026-08-28" /></label>
+        <div class="grid-2">
+          <label class="field"><span>Date</span><input id="tf-date" type="date" value="${escapeAttr(form.testimonialDate || '')}" /></label>
+          <label class="field"><span>Status</span>
+            <select id="tf-status">
+              <option value="draft" ${form.status !== 'published' ? 'selected' : ''}>Draft</option>
+              <option value="published" ${form.status === 'published' ? 'selected' : ''}>Published</option>
+            </select>
+          </label>
+        </div>
+        <label class="field"><span>Quote</span><textarea id="tf-quote" rows="3">${escapeHtml(form.quote || '')}</textarea></label>
+        <div class="grid-2">
+          <label class="field"><span>Project/Product Link (optional)</span><input id="tf-link-url" value="${escapeAttr(form.linkUrl || '')}" placeholder="e.g. car-parts/gwm.html" /></label>
+          <label class="field"><span>Link Label (optional)</span><input id="tf-link-label" value="${escapeAttr(form.linkLabel || '')}" placeholder="e.g. GWM Cup Holder" /></label>
+        </div>
+        ${form.id ? `
+          <div class="field">
+            <span>Photo (optional) ${form.imagePath ? '(replace)' : ''}</span>
+            <label class="btn small" for="tf-image-upload">Choose File</label>
+            <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" id="tf-image-upload" />
+            ${form.imagePath ? `<img src="${escapeAttr(form.imagePath)}" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:4px;margin-top:0.5rem" />` : ''}
+          </div>` : '<p class="muted" style="font-size:0.85rem">Save the testimonial first to enable a photo upload.</p>'}
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-testimonial" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-testimonial" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Display Name</th><th>Customer</th><th>Quote</th><th>Date</th><th>Consent</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No testimonials yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function renderTestimonials() {
+  state.editingTestimonial = state.editingTestimonial || null;
+  const { testimonials } = await api('/api/testimonials');
+
+  const form = state.editingTestimonial;
+  $('#view-testimonials').innerHTML = testimonialsViewHtml(testimonials, form);
+
+  $('#new-testimonial').addEventListener('click', async () => { state.editingTestimonial = blankTestimonial(); await renderTestimonials(); });
+  $$('#view-testimonials tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const { testimonial } = await api(`/api/testimonials/${tr.dataset.id}`);
+      state.editingTestimonial = testimonial;
+      await renderTestimonials();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this testimonial?')) return;
+      try {
+        await api(`/api/testimonials/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Deleted');
+        await renderTestimonials();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (!form) return;
+
+  $('#cancel-testimonial').addEventListener('click', async () => { state.editingTestimonial = null; await renderTestimonials(); });
+  $('#save-testimonial').addEventListener('click', async () => {
+    const payload = {
+      customerName: $('#tf-customer-name').value,
+      displayName: $('#tf-display-name').value,
+      consentGiven: $('#tf-consent-given').checked,
+      consentNote: $('#tf-consent-note').value,
+      testimonialDate: $('#tf-date').value,
+      status: $('#tf-status').value,
+      quote: $('#tf-quote').value,
+      linkUrl: $('#tf-link-url').value,
+      linkLabel: $('#tf-link-label').value,
+    };
+    try {
+      if (form.id) await api(`/api/testimonials/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      else await api('/api/testimonials', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Testimonial saved');
+      state.editingTestimonial = null;
+      await renderTestimonials();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  const imageInput = $('#tf-image-upload');
+  imageInput?.addEventListener('change', async () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await fetch(`/api/testimonials/${form.id}/image`, { method: 'POST', credentials: 'include', body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      state.editingTestimonial = data.testimonial;
+      toast('Uploaded');
+      await renderTestimonials();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
 }
 
 // ---- Custom 3D design requests (Phase 2) ----

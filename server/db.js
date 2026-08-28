@@ -171,6 +171,33 @@ export function ensureSchema(db) {
       updated_at TEXT NOT NULL
     );
 
+    -- Backlog #51: admin-managed customer testimonials. customer_name is the
+    -- REAL name, kept purely for the admin's own record of who consent was
+    -- obtained from -- never exported to the public site (see
+    -- server/export.js's syncPublicJson, which only reads display_name/
+    -- quote/testimonial_date/link_*/image_path). consent_given gates
+    -- whether status is even allowed to become 'published' -- enforced in
+    -- server/testimonials.js, not just the admin UI, so a stray API call
+    -- can't publish personal data without it. status uses the same
+    -- draft/published vocabulary as filament_types.status (existing admin
+    -- badge CSS: .badge.draft/.badge.published), not a new one.
+    CREATE TABLE IF NOT EXISTS testimonials (
+      id TEXT PRIMARY KEY,
+      customer_name TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      consent_given INTEGER NOT NULL DEFAULT 0,
+      consent_note TEXT NOT NULL DEFAULT '',
+      testimonial_date TEXT,
+      quote TEXT NOT NULL,
+      link_url TEXT,
+      link_label TEXT,
+      image_path TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     -- Phase 2: client accounts, newsletter, custom design requests.
 
     CREATE TABLE IF NOT EXISTS newsletter_subscribers (

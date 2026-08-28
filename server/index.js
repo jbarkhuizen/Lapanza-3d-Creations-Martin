@@ -35,6 +35,8 @@ import {
   uploadPrintJobFile,
   uploadCategoryItemImage,
   deleteCategoryItemImage,
+  uploadTestimonialImage,
+  deleteTestimonialImage,
 } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { formatRand } from './money.js';
@@ -116,6 +118,7 @@ import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } f
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
+import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
 import {
   listPrintJobs,
@@ -1531,6 +1534,77 @@ app.get('/api/resources/:id/download', (req, res) => {
   const downloadName = `${slugify(resource.title)}${path.extname(abs)}`;
   res.download(abs, downloadName);
 });
+
+// ---- Testimonials (backlog #51) ----
+// Fully admin-managed -- no public submission form, no public detail route.
+// The live site only ever sees the published subset via site-settings.json
+// (server/export.js's syncPublicJson -> settings.testimonials), same as
+// featuredProducts. Every mutating route republishes so a save reaches the
+// live site (see publishCatalog()'s own comment -- syncPublicJson() alone
+// only updates public/site-settings.json, nginx serves dist/, only
+// runBuild() copies it there).
+
+app.get('/api/testimonials', requireAuth, (req, res) => {
+  res.json({ testimonials: listTestimonials(req.query.status ? { status: req.query.status } : {}) });
+});
+
+app.get('/api/testimonials/:id', requireAuth, (req, res) => {
+  const testimonial = getTestimonial(req.params.id);
+  if (!testimonial) return res.status(404).json({ error: 'Testimonial not found' });
+  res.json({ testimonial });
+});
+
+app.post('/api/testimonials', requireAuth, async (req, res) => {
+  try {
+    const testimonial = createTestimonial(req.body || {});
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Testimonial created: ${testimonial.displayName} (${testimonial.status})` });
+    res.status(201).json({ testimonial, publishWarning });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/testimonials/:id', requireAuth, async (req, res) => {
+  try {
+    const testimonial = updateTestimonial(req.params.id, req.body || {});
+    if (!testimonial) return res.status(404).json({ error: 'Testimonial not found' });
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Testimonial updated: ${testimonial.displayName} (${testimonial.status})` });
+    res.json({ testimonial, publishWarning });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/testimonials/:id', requireAuth, async (req, res) => {
+  const existing = getTestimonial(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Testimonial not found' });
+  deleteTestimonialImage(existing.imagePath);
+  deleteTestimonial(req.params.id);
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Testimonial deleted: ${existing.displayName}` });
+  res.json({ ok: true, publishWarning });
+});
+
+app.post(
+  '/api/testimonials/:id/image',
+  requireAuth,
+  uploadTestimonialImage.single('image'),
+  async (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const existing = getTestimonial(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Testimonial not found' });
+    deleteTestimonialImage(existing.imagePath); // replace, don't orphan the old file
+    const testimonial = updateTestimonial(req.params.id, { imagePath: `/uploads/testimonials/${req.file.filename}` });
+    const publishWarning = await publishCatalog();
+    res.json({ testimonial, publishWarning });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
+    next(err);
+  },
+);
 
 // ---- Custom 3D design requests (Phase 2) ----
 
