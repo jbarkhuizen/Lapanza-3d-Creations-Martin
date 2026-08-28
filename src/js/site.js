@@ -34,6 +34,33 @@ async function hydrateHomeTiles() {
   }
 }
 
+/** Backlog #78: contact hours / WhatsApp response expectation / escalation
+ *  guidance -- admin-editable (Settings -> Public Site Contact) so the owner
+ *  can update wording without a code change. Same hydrate-at-runtime pattern
+ *  as hydrateHomeTiles above; runs on both index.html (#contact) and
+ *  get-in-touch.html, whichever markers are present on the page. */
+async function hydrateContactInfo() {
+  const hoursEls = document.querySelectorAll('[data-contact-hours]');
+  const whatsappNoteEls = document.querySelectorAll('[data-contact-whatsapp-note]');
+  const escalationEls = document.querySelectorAll('[data-contact-escalation]');
+  if (!hoursEls.length && !whatsappNoteEls.length && !escalationEls.length) return;
+  try {
+    const res = await fetch('/site-settings.json', { cache: 'no-store' });
+    if (!res.ok) return;
+    const settings = await res.json();
+    if (settings.hours) hoursEls.forEach((el) => { el.textContent = settings.hours; });
+    if (settings.whatsappResponseNote) whatsappNoteEls.forEach((el) => { el.textContent = settings.whatsappResponseNote; });
+    if (settings.escalationContactsNote) {
+      escalationEls.forEach((el) => { el.textContent = settings.escalationContactsNote; });
+    } else {
+      // Nothing configured -- hide the wrapper rather than show an empty box.
+      document.querySelectorAll('[data-contact-escalation-wrap]').forEach((el) => el.classList.add('hidden'));
+    }
+  } catch {
+    /* keep the static copy already in the HTML */
+  }
+}
+
 /** Hero "Featured" products -- 2 flanking the hero text on each side
  *  (desktop) / two rows below it (mobile). settings.featuredProducts
  *  arrives already resolved (name/price/image/href) by server/export.js's
@@ -218,5 +245,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   hydrateHomeTiles();
   hydrateFeaturedProducts();
   hydrateTestimonials();
+  hydrateContactInfo();
   trackVisit();
 });

@@ -21,9 +21,16 @@ export const DEFAULT_SETTINGS = {
   phoneTel: '+27826639608',
   email: 'lapanzaonline@gmail.com',
   address: '23 Gladiator Rd, Pierre van Ryneveld, Centurion',
-  hours: 'By appointment',
+  hours: 'Mon–Fri 8am–5pm, Sat 8am–12pm',
   whatsapp:
     'https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%20new%203D%20site.',
+  // Backlog #78: displayed in the contact area (index.html #contact,
+  // get-in-touch.html) alongside `hours` above -- both real figures from
+  // the owner (2026-08-28), not invented. Free text, same convention as
+  // printLeadTimeDays/filamentDispatchDays, so the owner can update the
+  // wording themselves from Settings without needing a code change.
+  whatsappResponseNote: 'Usually within a few hours during business hours',
+  escalationContactsNote: 'For urgent matters outside normal hours, contact Johan on 082 782 4585 or Linandi on 082 663 9608.',
   facebook: 'https://www.facebook.com/Lapanzaloeferox',
   instagram: 'https://www.instagram.com/lapanza_beauty_lifestyle/',
   /** When true, one font is used for body + headings */

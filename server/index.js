@@ -2145,6 +2145,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
   const body = req.body || {};
   const allowed = [
     'siteName', 'tagline', 'phoneDisplay', 'phoneTel', 'email', 'address', 'hours', 'whatsapp',
+    // Backlog #78
+    'whatsappResponseNote', 'escalationContactsNote',
     'facebook', 'instagram', 'useUniversalFont', 'universalFont', 'fontSans', 'fontSerif',
     'defaultTheme', 'homeTiles',
     // Phase 3

@@ -2671,7 +2671,9 @@ async function renderSettings() {
         </div>
         <label class="field"><span>Email</span><input data-setting="email" value="${escapeAttr(s.email || '')}" /></label>
         <label class="field"><span>Address</span><input data-setting="address" value="${escapeAttr(s.address || '')}" /></label>
-        <label class="field"><span>Hours</span><input data-setting="hours" value="${escapeAttr(s.hours || '')}" /></label>
+        <label class="field"><span>Hours</span><input data-setting="hours" value="${escapeAttr(s.hours || '')}" placeholder="e.g. Mon–Fri 8am–5pm, Sat 8am–12pm" /></label>
+        <label class="field"><span>WhatsApp Response Expectation</span><input data-setting="whatsappResponseNote" value="${escapeAttr(s.whatsappResponseNote || '')}" placeholder="e.g. Usually within a few hours during business hours" /></label>
+        <label class="field"><span>Escalation / Appointment Guidance</span><textarea data-setting="escalationContactsNote" rows="2" placeholder="Who to contact and how, outside normal channels">${escapeHtml(s.escalationContactsNote || '')}</textarea></label>
         <label class="field"><span>WhatsApp Link</span><input data-setting="whatsapp" value="${escapeAttr(s.whatsapp || '')}" /></label>
         <div class="grid-2">
           <label class="field"><span>Facebook</span><input data-setting="facebook" value="${escapeAttr(s.facebook || '')}" /></label>

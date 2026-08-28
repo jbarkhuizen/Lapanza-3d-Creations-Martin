@@ -1085,6 +1085,30 @@ test('GET /api/health/backups reports unhealthy (503) when no backups exist yet,
   assert.match(res.body.error, /No backups exist yet/);
 });
 
+test('PUT /api/settings persists the backlog #78 contact fields (hours/whatsappResponseNote/escalationContactsNote)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({
+      hours: 'Mon-Fri 9am-4pm',
+      whatsappResponseNote: 'Within the hour, usually',
+      escalationContactsNote: 'Call Jane on 000',
+    });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.settings.hours, 'Mon-Fri 9am-4pm');
+  assert.strictEqual(res.body.settings.whatsappResponseNote, 'Within the hour, usually');
+  assert.strictEqual(res.body.settings.escalationContactsNote, 'Call Jane on 000');
+
+  const getRes = await request(app).get('/api/settings').set('Cookie', cookie);
+  assert.strictEqual(getRes.body.settings.whatsappResponseNote, 'Within the hour, usually');
+});
+
 // -- Backlog #51: admin-managed testimonials ---------------------------
 
 test('POST /api/testimonials creates a draft by default and PUT can publish it once consent is recorded', async (t) => {
