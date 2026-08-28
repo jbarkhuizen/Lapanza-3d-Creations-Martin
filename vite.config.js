@@ -17,6 +17,7 @@ function htmlEntries() {
     checkoutComplete: resolve(__dirname, 'checkout-complete.html'),
     resources: resolve(__dirname, 'resources.html'),
     designRequest: resolve(__dirname, 'design-request.html'),
+    getInTouch: resolve(__dirname, 'get-in-touch.html'),
     account: resolve(__dirname, 'account.html'),
     terms: resolve(__dirname, 'terms.html'),
     privacy: resolve(__dirname, 'privacy.html'),
