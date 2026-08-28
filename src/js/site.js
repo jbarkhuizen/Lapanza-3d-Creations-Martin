@@ -48,7 +48,7 @@ function featuredProductCard(item) {
     'featured-product group flex items-center gap-3 md:flex-col md:items-stretch md:text-center bg-cream/85 backdrop-blur-sm border-2 border-charcoal/15 rounded-sm p-2.5 hover:border-terracotta transition-colors w-full';
 
   const imgWrap = document.createElement('div');
-  imgWrap.className = 'w-14 h-14 md:w-full md:aspect-square shrink-0 rounded-sm overflow-hidden bg-linen flex items-center justify-center';
+  imgWrap.className = 'w-20 h-20 md:w-full md:h-auto md:aspect-square shrink-0 rounded-sm overflow-hidden bg-linen flex items-center justify-center';
   if (item.image) {
     const img = document.createElement('img');
     img.src = item.image;
