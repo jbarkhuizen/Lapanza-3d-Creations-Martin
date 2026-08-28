@@ -100,14 +100,20 @@ export async function sendInvoiceEmail(order, { paid = false } = {}) {
   });
 }
 
-// Low-stock alerts go to the shop owner, not a customer -- separate,
-// overridable via env in case that address ever changes.
-const LOW_STOCK_ALERT_TO = process.env.LOW_STOCK_ALERT_EMAIL || 'jbarkhuizen@gmail.com';
-
+// Low-stock alerts go to the shop owner, not a customer. Previously a
+// separate hardcoded fallback (a personal address, LOW_STOCK_ALERT_EMAIL
+// env override) independent of every other owner-facing notification --
+// found 2026-08-28 to be the reason low-stock mail was landing in a
+// personal inbox instead of the business one. Now reads the same single
+// settings.orderNotificationEmail every other owner notification already
+// uses (sendNewOrderNotificationEmail etc, just below), so there is
+// exactly one place -- Settings -- that decides where operational email
+// goes, not one env var plus a hardcoded fallback plus a DB setting.
 export async function sendLowStockAlert(item, replenishUrl) {
+  const s = getSettings();
   await getTransporter().sendMail({
     from: FROM_ADDRESS,
-    to: LOW_STOCK_ALERT_TO,
+    to: s.orderNotificationEmail,
     subject: `Low stock: ${item.name} (${item.stockQty} left)`,
     text: `${item.name} is running low.
 
