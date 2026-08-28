@@ -9,7 +9,7 @@ import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 import { getSettings, updateSettings, publicSettings } from './settings.js';
-import { FONT_OPTIONS } from './settings-defaults.js';
+import { FONT_OPTIONS, DEFAULT_SETTINGS } from './settings-defaults.js';
 import { hasAnyAdmin, listAdmins, createAdmin, deleteAdmin, resetPassword, verifyLogin } from './admins.js';
 import { AUDIT_EVENTS, recordAuditEvent, listAuditLog } from './audit-log.js';
 import {
@@ -2044,6 +2044,11 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     // configurable-list shape, so it gets its own guard further down
     // rather than reusing the loop those four share.
     'featuredProducts',
+    // Communications: { templateKey: {subject, message} }, admin-editable
+    // wording for every branded transactional email (server/mailer.js).
+    // Gets its own guard further down -- same class of bug as the four
+    // above if forgotten here (this codebase has now hit it three times).
+    'emailTemplates',
   ];
   const patch = {};
   for (const key of allowed) {
@@ -2102,6 +2107,24 @@ app.put('/api/settings', requireAuth, async (req, res) => {
       .filter((entry) => entry.productId);
   } else {
     delete patch.featuredProducts;
+  }
+  // Same shape-guard reasoning as above: rebuild from the known template
+  // keys (DEFAULT_SETTINGS.emailTemplates) rather than trusting whatever
+  // keys the request happens to send, so a malformed/missing entry falls
+  // back to its default subject/message instead of a sender crashing later
+  // on `undefined.subject`, and an unrecognized key can't be smuggled in.
+  if (patch.emailTemplates && typeof patch.emailTemplates === 'object') {
+    const incoming = patch.emailTemplates;
+    patch.emailTemplates = {};
+    for (const key of Object.keys(DEFAULT_SETTINGS.emailTemplates)) {
+      const entry = incoming[key] && typeof incoming[key] === 'object' ? incoming[key] : {};
+      patch.emailTemplates[key] = {
+        subject: String(entry.subject ?? '').trim() || DEFAULT_SETTINGS.emailTemplates[key].subject,
+        message: String(entry.message ?? '').trim() || DEFAULT_SETTINGS.emailTemplates[key].message,
+      };
+    }
+  } else {
+    delete patch.emailTemplates;
   }
   const settings = updateSettings(patch);
   syncPublicJson(getDb());

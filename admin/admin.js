@@ -2289,6 +2289,48 @@ async function renderAuditLog() {
   });
 }
 
+// Subject/message for every branded transactional email server/mailer.js
+// sends (see its per-function comments for the authoritative token list --
+// kept in sync here). Structural HTML (buttons, order tables, security
+// disclaimers) is code-controlled, not editable here, on purpose.
+const EMAIL_TEMPLATE_META = [
+  { key: 'passwordReset', label: 'Password reset', tokens: '{{name}}' },
+  { key: 'emailVerification', label: 'Verify email', tokens: '{{name}}' },
+  { key: 'orderConfirmation', label: 'Order confirmation', tokens: '{{name}}, {{orderRef}}' },
+  { key: 'designRequestStatus', label: 'Design request status', tokens: '{{name}}, {{status}}' },
+  { key: 'newsletterConfirm', label: 'Newsletter confirmation', tokens: '(none)' },
+  { key: 'lowStockAlert', label: 'Low stock alert (to owner)', tokens: '{{itemName}}, {{stockQty}}, {{sku}}' },
+  { key: 'newOrderNotification', label: 'New order notification (to owner)', tokens: '{{orderRef}}, {{total}}, {{clientName}}, {{clientEmail}}, {{paymentMethod}}, {{itemCount}}' },
+  { key: 'orderCancelledNotification', label: 'Order cancelled notification (to owner)', tokens: '{{orderRef}}, {{total}}, {{clientName}}, {{clientEmail}}, {{reason}}' },
+  { key: 'newDesignRequestNotification', label: 'New design request notification (to owner)', tokens: '{{name}}, {{email}}, {{phone}}' },
+];
+
+// Panel content saves via the page's main "Save settings" button (like
+// homeTiles) rather than saving itself immediately (like configurableListPanel
+// below) -- editing several templates' wording in one sitting shouldn't mean
+// several separate round-trips.
+function communicationsPanel(templates) {
+  const t = templates || {};
+  const rows = EMAIL_TEMPLATE_META.map(({ key, label, tokens }) => {
+    const entry = t[key] || {};
+    return `
+      <div class="stack gap-2" style="padding:14px 0;border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <strong style="font-size:0.92rem">${escapeHtml(label)}</strong>
+          <span class="muted" style="font-size:0.78rem">Available: ${escapeHtml(tokens)}</span>
+        </div>
+        <label class="field"><span>Subject</span><input data-email-template="${escapeAttr(key)}" data-email-template-field="subject" value="${escapeAttr(entry.subject || '')}" /></label>
+        <label class="field"><span>Message</span><textarea data-email-template="${escapeAttr(key)}" data-email-template-field="message" rows="3">${escapeHtml(entry.message || '')}</textarea></label>
+      </div>`;
+  }).join('');
+  return `
+    <div class="panel stack gap-3">
+      <div class="section-head"><h3>Communications</h3></div>
+      <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Subject and message copy for every automated email. Structural parts (buttons, links, order details, the reset-link expiry notice) always stay in place — only the wording here is editable, so a save here can't drop a link or a security notice.</p>
+      ${rows}
+    </div>`;
+}
+
 // Shared UI for every admin-editable {id,name,active}[] setting (in-house
 // filament brands, todo categories/priorities). Each panel saves itself
 // immediately on toggle/add -- independent of the page's big "Save
@@ -2621,6 +2663,7 @@ async function renderSettings() {
         <label class="field" style="max-width:220px"><span>Next Invoice Number Seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
         <label class="field" style="max-width:320px"><span>Order &amp; Design-request Notification Email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
       </div>
+${communicationsPanel(s.emailTemplates)}
 ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
       ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
       ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
@@ -2682,6 +2725,13 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
       tiles[i][input.dataset.tileField] = input.value;
     });
     if (tiles.length) patch.homeTiles = tiles;
+    const emailTemplates = {};
+    $$('[data-email-template]').forEach((input) => {
+      const key = input.dataset.emailTemplate;
+      emailTemplates[key] = emailTemplates[key] || {};
+      emailTemplates[key][input.dataset.emailTemplateField] = input.value;
+    });
+    if (Object.keys(emailTemplates).length) patch.emailTemplates = emailTemplates;
     const saveBtn = $('#save-settings');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving & publishing…';

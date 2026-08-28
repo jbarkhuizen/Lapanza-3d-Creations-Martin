@@ -159,6 +159,58 @@ export const DEFAULT_SETTINGS = {
   // ("3-5", not a number) since these are ranges, not exact day counts.
   printLeadTimeDays: '3-5',
   filamentDispatchDays: '1-2',
+
+  // Communications: subject + message (the greeting/intro copy) for every
+  // branded transactional email server/mailer.js sends, admin-editable from
+  // Settings -> Communications. Structural HTML (buttons, order tables,
+  // security disclaimers) stays code-controlled in mailer.js/email-
+  // template.js -- only wording is editable here, so an admin can't
+  // accidentally drop a reset link or a "link expires" disclaimer. {{token}}
+  // placeholders get substituted per-send (see interpolate() in
+  // email-template.js); each template's available tokens are listed in its
+  // comment in mailer.js. Invoice emails and one-off newsletter campaigns
+  // aren't here -- they have their own dedicated templates/composer
+  // (server/invoice.js, the newsletter campaign UI) since they're either
+  // shared with a non-email surface (the printable invoice) or authored
+  // fresh per send rather than a fixed reusable template.
+  emailTemplates: {
+    passwordReset: {
+      subject: 'Reset your Lapanza 3D password',
+      message: 'We received a request to reset your Lapanza 3D Creative Lab account password. Click the button below to choose a new one.',
+    },
+    emailVerification: {
+      subject: 'Verify your email — Lapanza 3D',
+      message: "Thanks for creating an account with Lapanza 3D Creative Lab. Confirm your email address to finish setting it up.",
+    },
+    orderConfirmation: {
+      subject: 'Order confirmation {{orderRef}} — Lapanza 3D',
+      message: "Thanks for your order from Lapanza 3D Creative Lab! Here's a summary of what you ordered.",
+    },
+    designRequestStatus: {
+      subject: 'Your design request is now {{status}} — Lapanza 3D',
+      message: 'Your custom design request has been updated to: {{status}}.',
+    },
+    newsletterConfirm: {
+      subject: 'Confirm your newsletter signup — Lapanza 3D',
+      message: 'Thanks for signing up to hear from Lapanza 3D Creative Lab! Confirm your subscription below.',
+    },
+    lowStockAlert: {
+      subject: 'Low stock: {{itemName}} ({{stockQty}} left)',
+      message: '{{itemName}} is running low on stock.',
+    },
+    newOrderNotification: {
+      subject: 'New order {{orderRef}} — {{total}}',
+      message: 'A new order has been placed.',
+    },
+    orderCancelledNotification: {
+      subject: 'Order cancelled: {{orderRef}}',
+      message: 'An order was cancelled.',
+    },
+    newDesignRequestNotification: {
+      subject: 'New design request from {{name}}',
+      message: 'A new custom design request has been submitted.',
+    },
+  },
 };
 
 export function findFont(id) {

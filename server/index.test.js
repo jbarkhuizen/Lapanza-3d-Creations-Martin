@@ -646,6 +646,58 @@ test('PUT /api/settings persists featuredProducts, including sanitizing malforme
   assert.strictEqual(getRes.body.settings.featuredProducts.length, 1);
 });
 
+test('PUT /api/settings persists an edited emailTemplates entry and keeps every other template at its default', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({ emailTemplates: { passwordReset: { subject: 'Custom subject', message: 'Custom message body.' } } });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.settings.emailTemplates.passwordReset.subject, 'Custom subject');
+  assert.strictEqual(res.body.settings.emailTemplates.passwordReset.message, 'Custom message body.');
+  // Only passwordReset was sent -- every other template must still be
+  // present with real copy, not wiped out by a shallow-merge/overwrite.
+  assert.ok(res.body.settings.emailTemplates.orderConfirmation.subject);
+  assert.ok(res.body.settings.emailTemplates.newDesignRequestNotification.message);
+
+  const getRes = await request(app).get('/api/settings').set('Cookie', cookie);
+  assert.strictEqual(getRes.body.settings.emailTemplates.passwordReset.subject, 'Custom subject');
+  assert.ok(getRes.body.settings.emailTemplates.orderConfirmation.subject);
+});
+
+test('PUT /api/settings falls back to the default subject/message for a blank or malformed emailTemplates entry instead of saving an empty email', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({ emailTemplates: { passwordReset: { subject: '   ', message: '' }, unknownKey: { subject: 'x', message: 'y' } } });
+  assert.strictEqual(res.status, 200);
+  assert.ok(res.body.settings.emailTemplates.passwordReset.subject.trim());
+  assert.ok(res.body.settings.emailTemplates.passwordReset.message.trim());
+  assert.strictEqual(res.body.settings.emailTemplates.unknownKey, undefined);
+});
+
+test('PUT /api/settings with a non-object emailTemplates is rejected/ignored instead of 500ing', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app).put('/api/settings').set('Cookie', cookie).send({ emailTemplates: 'not an object' });
+  assert.strictEqual(res.status, 200);
+});
+
 test('POST /api/todos defaults createdBy to the logged-in admin, but an explicit createdBy (Claude) wins', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
