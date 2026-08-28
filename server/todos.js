@@ -2,7 +2,12 @@ import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 
 export const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
-export const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix'];
+// 'Discarded' (2026-08-28): distinct from "Won't Fix" -- Won't Fix means a
+// real decision not to build a still-valid idea; Discarded means the item
+// itself is no longer applicable (superseded, already covered elsewhere, or
+// describes something the site no longer needs) -- a backlog-hygiene
+// classification, not a scope/priority call.
+export const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix', 'Discarded'];
 export const TODO_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 
 function rowToTodo(row) {

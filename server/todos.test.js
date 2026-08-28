@@ -93,6 +93,15 @@ test('updateTodo also auto-stamps actualFixDate when status moves to Claude Fix'
   db.close();
 });
 
+test('updateTodo accepts Discarded and does NOT auto-stamp actualFixDate for it -- discarding an item is not "fixing" it', () => {
+  const db = openDb(':memory:');
+  const todo = createTodo({ name: 'Superseded idea', status: 'Backlog' }, db);
+  const discarded = updateTodo(todo.id, { status: 'Discarded' }, db);
+  assert.strictEqual(discarded.status, 'Discarded');
+  assert.strictEqual(discarded.actualFixDate, null);
+  db.close();
+});
+
 test('updateTodo edits fields without touching status', () => {
   const db = openDb(':memory:');
   const todo = createTodo({ name: 'Original name', category: 'Bug', description: 'Original desc' }, db);
