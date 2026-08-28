@@ -30,6 +30,15 @@ export const AUDIT_EVENTS = {
   SETTINGS_UPDATED: 'settings_updated',
   MARKETING_UPDATED: 'marketing_updated',
 
+  // Backlog #120: previously console.error-only, invisible short of SSHing
+  // into the VPS and reading the systemd journal. See server/alerts.js for
+  // the actual alerting decision (these audit rows are recorded
+  // unconditionally, for visibility, regardless of whether an alert email
+  // fires for a given occurrence).
+  BACKUP_FAILURE: 'backup_failure',
+  PAYMENT_FAILURE: 'payment_failure',
+  CHECKOUT_ERROR: 'checkout_error',
+
   // Security/abuse signals -- passive logging only (no email alert), same
   // reasoning as everything else on this page: visible when you look,
   // not something that pages you.

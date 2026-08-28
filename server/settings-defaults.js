@@ -211,6 +211,36 @@ export const DEFAULT_SETTINGS = {
       message: 'A new custom design request has been submitted.',
     },
   },
+
+  // Backlog #120: operational alerts (server/alerts.js) -- backup/payment/
+  // checkout failures and security-signal spikes were previously console-
+  // only or, at best, an audit_log row nobody proactively checks. Each
+  // failure class has its own on/off switch since some sites may want
+  // payment-failure alerts but not security-spike ones, etc. Alert wording
+  // itself is fixed/code-authored, NOT here -- these only control
+  // whether/how sensitively an alert fires. Email alerts go to the existing
+  // `orderNotificationEmail`, not a separate address, matching every other
+  // owner-facing notification in this project.
+  alertBackupFailureEnabled: true,
+  alertPaymentFailureEnabled: true,
+  alertCheckoutErrorEnabled: true,
+  // Email-delivery-down fallback: if Gmail itself is broken, an email ABOUT
+  // Gmail being broken never arrives -- this falls back to WhatsApp once
+  // `alertEmailFallbackThreshold` sends fail within an hour. Requires a
+  // Meta-approved WhatsApp template (business-initiated messages can't be
+  // free text, see server/whatsapp.js) -- degrades to a console.error until
+  // both the template name and WHATSAPP_ACCESS_TOKEN/WHATSAPP_PHONE_NUMBER_ID
+  // (env, server-side only) are actually configured.
+  alertEmailFallbackEnabled: true,
+  alertEmailFallbackThreshold: 3,
+  alertEmailFallbackWhatsappNumber: '',
+  alertEmailFallbackWhatsappTemplateName: '',
+  // Security-signal burst detection (rate_limit_exceeded/unauthorized_access/
+  // client_login_failure) -- a single one of any of these is normal
+  // background noise; a burst within the window below is the actual signal.
+  alertSecuritySpikeEnabled: true,
+  alertSecuritySpikeThreshold: 10,
+  alertSecuritySpikeWindowMinutes: 15,
 };
 
 export function findFont(id) {

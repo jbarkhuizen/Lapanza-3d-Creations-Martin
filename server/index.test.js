@@ -1012,6 +1012,79 @@ test('Payfast checkout does not send the order confirmation immediately -- only 
   assert.strictEqual(forOrder(payfastRes.body.order.id).length, 0);
 });
 
+// -- Backlog #120: actionable alerts for backup/email/payment failures -----
+
+test('a checkout error (even an ordinary validation rejection) is always recorded to audit_log, previously logged nowhere at all', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app).post('/api/checkout').send({ client: { firstName: 'A', lastName: 'B', email: 'a@example.com' }, items: [], shippingMethod: 'collect', paymentMethod: 'manual_eft' });
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /Cart is empty/);
+
+  const audit = await request(app).get('/api/audit-log?eventType=checkout_error').set('Cookie', cookie);
+  assert.strictEqual(audit.body.entries.length, 1);
+  assert.match(audit.body.entries[0].detail, /Cart is empty/);
+});
+
+test('a Payfast ITN for an unknown order is recorded as a payment_failure audit event, previously console-only', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const itnRes = await request(app).post('/api/payfast/itn').type('form').send({ m_payment_id: 'does-not-exist', pf_payment_id: '123', payment_status: 'COMPLETE' });
+  assert.strictEqual(itnRes.status, 200); // always 200 to Payfast regardless of outcome
+
+  const audit = await request(app).get('/api/audit-log?eventType=payment_failure').set('Cookie', cookie);
+  assert.strictEqual(audit.body.entries.length, 1);
+  assert.match(audit.body.entries[0].detail, /Unknown order: does-not-exist/);
+});
+
+test('PUT /api/settings persists the new operational-alert keys', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({
+      alertBackupFailureEnabled: false,
+      alertPaymentFailureEnabled: false,
+      alertCheckoutErrorEnabled: false,
+      alertEmailFallbackEnabled: true,
+      alertEmailFallbackThreshold: 5,
+      alertEmailFallbackWhatsappNumber: '27821234567',
+      alertEmailFallbackWhatsappTemplateName: 'system_alert',
+      alertSecuritySpikeEnabled: true,
+      alertSecuritySpikeThreshold: 20,
+      alertSecuritySpikeWindowMinutes: 30,
+    });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.settings.alertBackupFailureEnabled, false);
+  assert.strictEqual(res.body.settings.alertEmailFallbackThreshold, 5);
+  assert.strictEqual(res.body.settings.alertEmailFallbackWhatsappNumber, '27821234567');
+  assert.strictEqual(res.body.settings.alertSecuritySpikeWindowMinutes, 30);
+
+  const getRes = await request(app).get('/api/settings').set('Cookie', cookie);
+  assert.strictEqual(getRes.body.settings.alertCheckoutErrorEnabled, false);
+});
+
+test('GET /api/health/backups reports unhealthy (503) when no backups exist yet, unauthenticated (matches /api/health)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  const res = await request(app).get('/api/health/backups');
+  assert.strictEqual(res.status, 503);
+  assert.match(res.body.error, /No backups exist yet/);
+});
+
 test('deleting an admin and resetting a password are attributed to the acting admin and recorded', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

@@ -92,6 +92,7 @@ import {
   sendNewDesignRequestNotificationEmail,
   sendOrderCancelledNotificationEmail,
 } from './mailer.js';
+import { alertPaymentFailure, alertCheckoutError, checkEmailFallback, checkSecuritySpike } from './alerts.js';
 import { subscribe as subscribeNewsletter, confirm as confirmNewsletter, unsubscribeMarketing } from './newsletter.js';
 import {
   listCampaigns as listNewsletterCampaigns,
@@ -201,6 +202,7 @@ function rateLimitHandler(limiterName) {
       detail: `${limiterName}: ${req.method} ${req.originalUrl}`,
       ...requestMeta(req),
     });
+    checkSecuritySpike().catch(() => {});
     res.status(options.statusCode).json(options.message);
   };
 }
@@ -285,6 +287,12 @@ function logEmailFailure(context, err, req = null) {
     detail: `${context}: ${err.message}`,
     ...(req ? requestMeta(req) : {}),
   });
+  // Fire-and-forget: logEmailFailure is called from many sync call sites
+  // that don't await it. checkEmailFallback() (server/alerts.js) counts
+  // recent failures and, past a threshold, falls back to WhatsApp -- since
+  // email itself may be the thing that's broken, this can't be an emailed
+  // alert. Swallow any error here; it already logs its own failure internally.
+  checkEmailFallback().catch(() => {});
 }
 
 function requireAuth(req, res, next) {
@@ -298,6 +306,7 @@ function requireAuth(req, res, next) {
     // NOT logged here; that's expected, not a security signal.
     if (!token) {
       recordAuditEvent({ eventType: AUDIT_EVENTS.UNAUTHORIZED_ACCESS, detail: `${req.method} ${req.originalUrl}`, ...requestMeta(req) });
+      checkSecuritySpike().catch(() => {});
     }
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -405,6 +414,7 @@ app.post('/api/client/login', authLimiter, (req, res) => {
   const { email, password } = req.body || {};
   if (typeof email !== 'string' || !email || typeof password !== 'string' || !password) {
     recordAuditEvent({ eventType: AUDIT_EVENTS.CLIENT_LOGIN_FAILURE, username: typeof email === 'string' ? email : null, ...requestMeta(req), detail: 'Missing or malformed credentials' });
+    checkSecuritySpike().catch(() => {});
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   const result = loginClient(email, password);
@@ -416,6 +426,7 @@ app.post('/api/client/login', authLimiter, (req, res) => {
   }
   if (!result.ok) {
     recordAuditEvent({ eventType: AUDIT_EVENTS.CLIENT_LOGIN_FAILURE, username: email, ...requestMeta(req), detail: 'Invalid email or password' });
+    checkSecuritySpike().catch(() => {});
     return res.status(401).json({ error: 'Invalid email or password' });
   }
   startClientSession(res, result.client.id);
@@ -760,6 +771,32 @@ app.get('/api/health', (_req, res) => {
     res.json({ ok: true, service: 'lapanza-admin', time: new Date().toISOString() });
   } catch (err) {
     res.status(503).json({ ok: false, service: 'lapanza-admin', time: new Date().toISOString(), error: 'Database unreachable' });
+  }
+});
+
+// Backlog #120, item 2: an external heartbeat for backup health, deliberately
+// SEPARATE from /api/health above and unauthenticated for the same reason --
+// meant to be polled by an external monitor (e.g. a second UptimeRobot
+// check) so backup staleness is caught even if this site's OWN email
+// alerting (alertBackupFailure, server/alerts.js) is what's broken. Flags
+// stale at 30h, not 24h -- startAutoBackupJob (server/jobs.js) runs daily,
+// so 30h gives a buffer for job-timing jitter before a monitor cries wolf.
+const BACKUP_STALE_MS = 30 * 60 * 60 * 1000;
+
+app.get('/api/health/backups', (_req, res) => {
+  try {
+    const backups = listBackups();
+    const newest = backups[0];
+    if (!newest) {
+      return res.status(503).json({ ok: false, error: 'No backups exist yet' });
+    }
+    const ageMs = Date.now() - new Date(newest.createdAt).getTime();
+    if (ageMs > BACKUP_STALE_MS) {
+      return res.status(503).json({ ok: false, error: `Newest backup is stale (${Math.round(ageMs / (60 * 60 * 1000))}h old)`, newestBackupAt: newest.createdAt });
+    }
+    res.json({ ok: true, newestBackupAt: newest.createdAt });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: err.message });
   }
 });
 
@@ -1943,6 +1980,13 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     const payfast = buildPayfastRedirect({ order, siteUrl, apiUrl, paymentMethod: body.paymentMethod });
     res.status(201).json({ order, emailSent, redirect: payfast, clientDataUpdated });
   } catch (err) {
+    // Every checkout error is recorded for visibility (previously nothing
+    // was, not even console.error) -- but only alerted on if it's NOT one of
+    // createOrder()'s own known validation rejections (out of stock, empty
+    // cart, etc), which are normal customer-facing outcomes, not a system
+    // problem. See server/alerts.js's isExpectedCheckoutValidationError().
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CHECKOUT_ERROR, detail: err.message, ...requestMeta(req) });
+    alertCheckoutError(err).catch(() => {});
     res.status(400).json({ error: err.message });
   }
 });
@@ -1967,6 +2011,8 @@ app.post(
     const order = getOrder(req.body.m_payment_id);
     if (!order) {
       console.error('Payfast ITN for unknown order:', req.body.m_payment_id);
+      recordAuditEvent({ eventType: AUDIT_EVENTS.PAYMENT_FAILURE, detail: `Unknown order: ${req.body.m_payment_id}` });
+      alertPaymentFailure('Unknown order', `Payfast ITN referenced an order id that doesn't exist: ${req.body.m_payment_id}`).catch(() => {});
       return;
     }
 
@@ -1974,6 +2020,12 @@ app.post(
     const result = await verifyItn(rawBody, req.body, order.total, req.ip);
     if (!result.valid) {
       console.error('Payfast ITN failed validation:', result);
+      // The one failure class this project has already been bitten by for
+      // real (SYSTEM_DOCUMENTATION.md §2 -- a genuine paid order sat stuck
+      // at pending_payment for days, discovered only by manual audit, not
+      // any alert). Highest-value alert of this whole batch.
+      recordAuditEvent({ eventType: AUDIT_EVENTS.PAYMENT_FAILURE, detail: `ITN validation failed for order ${order.id}: ${JSON.stringify(result)}` });
+      alertPaymentFailure(`ITN validation failed (order ${order.invoiceNumber || order.id.slice(0, 8)})`, `Payfast's ITN for this order failed signature/amount/server validation.\n\nDetail: ${JSON.stringify(result)}\n\nThis order may be paid on Payfast's side but stuck at pending_payment here -- check Payfast's merchant dashboard against Invoice History.`).catch(() => {});
       return;
     }
 
@@ -2049,6 +2101,13 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     // Gets its own guard further down -- same class of bug as the four
     // above if forgotten here (this codebase has now hit it three times).
     'emailTemplates',
+    // Backlog #120: operational alerts (server/alerts.js) -- all plain
+    // scalars, no shape guard needed (unlike emailTemplates/homeTiles/the
+    // configurable lists above).
+    'alertBackupFailureEnabled', 'alertPaymentFailureEnabled', 'alertCheckoutErrorEnabled',
+    'alertEmailFallbackEnabled', 'alertEmailFallbackThreshold', 'alertEmailFallbackWhatsappNumber',
+    'alertEmailFallbackWhatsappTemplateName',
+    'alertSecuritySpikeEnabled', 'alertSecuritySpikeThreshold', 'alertSecuritySpikeWindowMinutes',
   ];
   const patch = {};
   for (const key of allowed) {

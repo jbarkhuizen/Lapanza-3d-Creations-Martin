@@ -341,4 +341,23 @@ export async function sendNewDesignRequestNotificationEmail(request) {
   });
 }
 
+// Backlog #120: operational alerts (backup/payment/checkout failures,
+// security spikes -- see server/alerts.js, the one caller). Deliberately
+// separate from the emailTemplate()-driven functions above: fixed wording,
+// not admin-editable via Settings -> Communications (an urgent diagnostic
+// message shouldn't be softenable/loseable by an edit) -- only whether it
+// fires at all is admin-controlled, from Settings -> Operational Alerts.
+export async function sendOperationalAlertEmail(subject, messageText) {
+  const settings = getSettings();
+  const bodyHtml = `<p style="margin:0 0 16px;font-weight:700;color:#c24b28;">Operational Alert</p>
+    ${textToHtml(messageText)}
+    <p style="margin:16px 0 0;font-size:13px;color:#3b322b;">Sent automatically by the Lapanza 3D system. Manage these alerts in admin Settings &rarr; Operational Alerts.</p>`;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: settings.orderNotificationEmail,
+    subject: `⚠ ${subject}`,
+    html: renderEmailShell({ settings, preheader: subject, bodyHtml }),
+  });
+}
+
 export { FROM_ADDRESS };

@@ -1,8 +1,9 @@
 import { cancelStalePendingOrders } from './orders.js';
 import { createBackup, pruneOldBackups, syncOffsite } from './backups.js';
-import { pruneOldAuditLogEntries, AUDIT_LOG_RETENTION_MONTHS } from './audit-log.js';
+import { pruneOldAuditLogEntries, AUDIT_LOG_RETENTION_MONTHS, recordAuditEvent, AUDIT_EVENTS } from './audit-log.js';
 import { pruneOldPageViews, PAGE_VIEWS_RETENTION_MONTHS } from './analytics.js';
 import { sendOrderCancelledNotificationEmail } from './mailer.js';
+import { alertBackupFailure } from './alerts.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const CANCEL_AFTER_MS = 7 * 24 * HOUR_MS; // 7 days
@@ -57,6 +58,8 @@ export function startAutoBackupJob(intervalMs = BACKUP_INTERVAL_MS, keep = BACKU
       console.log(`Auto-backup: created ${backup.filename}${pruned ? `, pruned ${pruned} old backup(s)` : ''}`);
     } catch (err) {
       console.error('Auto-backup job failed:', err);
+      recordAuditEvent({ eventType: AUDIT_EVENTS.BACKUP_FAILURE, detail: `Local backup: ${err.message}` });
+      alertBackupFailure('Local database backup', err).catch(() => {});
       return; // don't sync a possibly-broken local backup set offsite
     }
     // Separate try/catch: an offsite hiccup (network, rclone not yet
@@ -67,6 +70,8 @@ export function startAutoBackupJob(intervalMs = BACKUP_INTERVAL_MS, keep = BACKU
       console.log('Auto-backup: synced to offsite remote');
     } catch (err) {
       console.error('Offsite backup sync failed (local backup still succeeded):', err.message);
+      recordAuditEvent({ eventType: AUDIT_EVENTS.BACKUP_FAILURE, detail: `Offsite sync: ${err.message}` });
+      alertBackupFailure('Offsite backup sync', err).catch(() => {});
     }
   }
   run();

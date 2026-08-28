@@ -2289,6 +2289,43 @@ async function renderAuditLog() {
   });
 }
 
+// Backlog #120: on/off + threshold controls for server/alerts.js. Deliberately
+// plain data-setting scalar fields (checkboxes/inputs), same collector as
+// every other Settings field -- saves via the page's one "Save settings"
+// button, no dedicated wiring needed.
+function operationalAlertsPanel(s) {
+  return `
+    <div class="panel stack gap-3">
+      <div class="section-head"><h3>Operational Alerts</h3></div>
+      <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Automatic alerts for system problems (backup, payment, checkout failures) -- distinct from the customer/owner business-event emails above. Email alerts go to the "Order &amp; Design-request Notification Email" set above under Invoicing &amp; Bank Details.</p>
+
+      <label class="field checkbox"><input type="checkbox" data-setting="alertBackupFailureEnabled" ${s.alertBackupFailureEnabled ? 'checked' : ''} /><span>Email me if a scheduled backup (local or offsite sync) fails</span></label>
+      <label class="field checkbox"><input type="checkbox" data-setting="alertPaymentFailureEnabled" ${s.alertPaymentFailureEnabled ? 'checked' : ''} /><span>Email me if a Payfast payment notification (ITN) fails validation or references an unknown order</span></label>
+      <label class="field checkbox"><input type="checkbox" data-setting="alertCheckoutErrorEnabled" ${s.alertCheckoutErrorEnabled ? 'checked' : ''} /><span>Email me on an unexpected checkout error (not normal rejections like out-of-stock or empty cart)</span></label>
+
+      <div class="stack gap-2" style="padding-top:8px;border-top:1px solid var(--border)">
+        <strong style="font-size:0.92rem">Email-delivery-down fallback (WhatsApp)</strong>
+        <p class="muted" style="margin:0;font-size:0.85rem;line-height:1.5">If Gmail itself stops sending, an email alert about that can't reach you -- this falls back to a WhatsApp message once several sends fail within an hour. Requires a WhatsApp message template approved in Meta Business Manager (free text isn't allowed for business-initiated messages) and the server's WhatsApp API credentials configured -- until both exist, this silently no-ops (logs to the server only).</p>
+        <label class="field checkbox"><input type="checkbox" data-setting="alertEmailFallbackEnabled" ${s.alertEmailFallbackEnabled ? 'checked' : ''} /><span>Enable WhatsApp fallback</span></label>
+        <div class="grid-2">
+          <label class="field"><span>Failures Before Fallback Fires</span><input data-setting="alertEmailFallbackThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.alertEmailFallbackThreshold ?? 3))}" /></label>
+          <label class="field"><span>Your WhatsApp Number</span><input data-setting="alertEmailFallbackWhatsappNumber" placeholder="27821234567" value="${escapeAttr(s.alertEmailFallbackWhatsappNumber || '')}" /></label>
+        </div>
+        <label class="field"><span>Approved Meta Template Name</span><input data-setting="alertEmailFallbackWhatsappTemplateName" placeholder="e.g. system_alert" value="${escapeAttr(s.alertEmailFallbackWhatsappTemplateName || '')}" /></label>
+      </div>
+
+      <div class="stack gap-2" style="padding-top:8px;border-top:1px solid var(--border)">
+        <strong style="font-size:0.92rem">Security signal spike</strong>
+        <p class="muted" style="margin:0;font-size:0.85rem;line-height:1.5">A single failed login or rate-limit hit is normal background noise. A burst of them in a short window is worth a look.</p>
+        <label class="field checkbox"><input type="checkbox" data-setting="alertSecuritySpikeEnabled" ${s.alertSecuritySpikeEnabled ? 'checked' : ''} /><span>Email me on a security-signal burst</span></label>
+        <div class="grid-2">
+          <label class="field"><span>Events To Trigger</span><input data-setting="alertSecuritySpikeThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.alertSecuritySpikeThreshold ?? 10))}" /></label>
+          <label class="field"><span>Within (Minutes)</span><input data-setting="alertSecuritySpikeWindowMinutes" type="number" min="1" step="1" value="${escapeAttr(String(s.alertSecuritySpikeWindowMinutes ?? 15))}" /></label>
+        </div>
+      </div>
+    </div>`;
+}
+
 // Subject/message for every branded transactional email server/mailer.js
 // sends (see its per-function comments for the authoritative token list --
 // kept in sync here). Structural HTML (buttons, order tables, security
@@ -2664,6 +2701,7 @@ async function renderSettings() {
         <label class="field" style="max-width:320px"><span>Order &amp; Design-request Notification Email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
       </div>
 ${communicationsPanel(s.emailTemplates)}
+${operationalAlertsPanel(s)}
 ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
       ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
       ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
