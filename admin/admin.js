@@ -1895,14 +1895,14 @@ const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
 // (superseded, already covered elsewhere, describes something the site no
 // longer needs) -- distinct from "Won't Fix" (a real decision not to build a
 // still-valid idea). A backlog-hygiene classification, not a scope call.
-const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix', 'Discarded'];
+const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix', 'Discarded', 'Deferred'];
 const TODO_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 
 // Default view: active work (In Progress, Backlog) on top, resolved/rejected
 // work at the bottom -- plain alphabetical would scatter these ("Backlog"
 // before "Claude Fix" before "Discarded" before "Done" before "In Progress"
 // before "Won't Fix"), burying In Progress under everything else.
-const TODO_STATUS_RANK = { 'In Progress': 0, Backlog: 1, 'Claude Fix': 2, Done: 3, "Won't Fix": 4, Discarded: 5 };
+const TODO_STATUS_RANK = { 'In Progress': 0, Backlog: 1, Deferred: 2, 'Claude Fix': 3, Done: 4, "Won't Fix": 5, Discarded: 6 };
 
 // Priority's rank is derived from settings.todoPriorities' own array order
 // (built fresh in renderTodos() below), not a fixed map -- since the list
@@ -1962,7 +1962,7 @@ function toDateInputValue(iso) {
 
 function todoStatusBadge(status) {
   const s = escapeHtml(status);
-  const cls = status === 'Done' || status === 'Claude Fix' ? 'published' : status === "Won't Fix" || status === 'Discarded' ? 'draft' : '';
+  const cls = status === 'Done' || status === 'Claude Fix' ? 'published' : status === "Won't Fix" || status === 'Discarded' || status === 'Deferred' ? 'draft' : '';
   return `<span class="badge ${cls}">${s}</span>`;
 }
 

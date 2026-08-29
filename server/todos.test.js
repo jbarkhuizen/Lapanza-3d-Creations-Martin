@@ -102,6 +102,15 @@ test('updateTodo accepts Discarded and does NOT auto-stamp actualFixDate for it 
   db.close();
 });
 
+test('updateTodo accepts Deferred and does NOT auto-stamp actualFixDate for it -- parking an item is not "fixing" it', () => {
+  const db = openDb(':memory:');
+  const todo = createTodo({ name: 'Parked idea', status: 'Backlog' }, db);
+  const deferred = updateTodo(todo.id, { status: 'Deferred' }, db);
+  assert.strictEqual(deferred.status, 'Deferred');
+  assert.strictEqual(deferred.actualFixDate, null);
+  db.close();
+});
+
 test('updateTodo edits fields without touching status', () => {
   const db = openDb(':memory:');
   const todo = createTodo({ name: 'Original name', category: 'Bug', description: 'Original desc' }, db);

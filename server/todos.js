@@ -7,7 +7,11 @@ export const TODO_CATEGORIES = ['Bug', 'Feature', 'Enhancement', 'Tech Debt'];
 // itself is no longer applicable (superseded, already covered elsewhere, or
 // describes something the site no longer needs) -- a backlog-hygiene
 // classification, not a scope/priority call.
-export const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix', 'Discarded'];
+// 'Deferred' (2026-08-29): a still-valid item deliberately parked for later --
+// distinct from Backlog (queued for work) and from Won't Fix/Discarded (not
+// happening). Items usually carry an explicit revisit trigger in their
+// description (sales volume, staff growth, dependency shipping first, etc).
+export const TODO_STATUSES = ['Backlog', 'In Progress', 'Done', "Won't Fix", 'Claude Fix', 'Discarded', 'Deferred'];
 export const TODO_PRIORITIES = ['Critical', 'High', 'Medium', 'Low'];
 
 function rowToTodo(row) {
