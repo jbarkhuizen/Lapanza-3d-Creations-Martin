@@ -27,7 +27,6 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
 <div class="flex items-start justify-between gap-3 mb-2">
   <div class="min-w-0">
     <a href="${p}index.html" class="brand-mark font-serif text-[1.35rem] hover:opacity-80 transition-opacity tracking-tight font-semibold">Lapanza <span class="mark-3d">3D</span></a>
-    <p class="text-[0.65rem] uppercase tracking-[0.22em] text-espresso/45 mt-1 mb-0">Creative Lab · Centurion</p>
   </div>
   <button type="button" class="theme-toggle-btn shrink-0 hidden md:inline-flex" data-theme-toggle aria-label="Toggle dark mode" title="Toggle dark mode">
     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
