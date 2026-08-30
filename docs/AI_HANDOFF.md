@@ -86,7 +86,7 @@ These are real incidents from this project's build/deploy history — documented
 
 | Item | State |
 |---|---|
-| Payfast | `PAYFAST_MODE=live` (confirmed 2026-08-27, #6 closed). Passphrase confirmed matching the dashboard. Root cause of the ITN signature failure found and fixed: `buildSignature()` was dropping blank-valued fields before hashing, contradicting Payfast's own reference algorithm — see the gotcha below and SYSTEM_DOCUMENTATION.md §2/§15. Backlog #45 stays open until a real transaction actually completes end-to-end and proves it |
+| Payfast | **Fully verified end-to-end with a real live transaction (2026-08-30, closes #45)** — order INV-0011, R5.00, Payfast ref 324392419: ITN from a genuine Payfast IP passed `signature=true`/`serverConfirmed=true`/`amountValid=true` (first live ITN ever to pass — proves the 2026-08-27 `buildSignature()` blank-fields fix), order auto-flipped paid/paid, transaction recorded COMPLETE, all three customer emails (placement invoice, order confirmation, Paid-in-Full invoice) confirmed received by the owner. `PAYFAST_MODE=live`, passphrase matches the dashboard. Unlike every earlier "verified" claim in this project's history, this one is backed by a live payload, not code review |
 | WhatsApp campaigns | Not configured (`WHATSAPP_ACCESS_TOKEN`/`WHATSAPP_PHONE_NUMBER_ID` unset) — requires the business owner to complete Meta Business Account + template approval first; sends fail cleanly with "not configured" until then |
 | Gmail SMTP | Configured and working (order confirmations, verification emails, notifications) |
 | SSL | Live, Let's Encrypt via certbot, auto-renewing |
