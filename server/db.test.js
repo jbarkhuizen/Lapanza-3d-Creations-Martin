@@ -13,6 +13,7 @@ test('ensureSchema creates every expected table', () => {
     .map((r) => r.name);
   assert.deepStrictEqual(tables, [
     'admins',
+    'analytics_events',
     'analytics_page_totals',
     'analytics_seen_visitors',
     'audit_log',

@@ -3,12 +3,15 @@ import assert from 'node:assert';
 import { openDb } from './db.js';
 import { createClient } from './clients.js';
 import {
+  recordEvent,
+  getEventSummary,
+  pruneOldPageViews,
+  ANALYTICS_EVENT_TYPES,
   recordPageView,
   touchActiveVisitor,
   pruneActiveVisitors,
   getActiveVisitors,
   getVisitSummary,
-  pruneOldPageViews,
   _activeVisitorsMap,
 } from './analytics.js';
 
@@ -154,5 +157,35 @@ test('a repeat visit from the same visitor does not inflate uniqueVisitorsAllTim
   const summary = getVisitSummary(db);
   assert.strictEqual(summary.totalVisits, 3);
   assert.strictEqual(summary.uniqueVisitorsAllTime, 1);
+  db.close();
+});
+
+test('recordEvent enforces the fixed vocabulary and getEventSummary reports 30-day funnel counts (#113)', () => {
+  const db = openDb(':memory:');
+  assert.strictEqual(recordEvent({ visitorId: 'v1', eventType: 'made_up_event' }, db), false);
+  assert.ok(ANALYTICS_EVENT_TYPES.includes('payment_complete'));
+  recordEvent({ visitorId: 'v1', eventType: 'add_to_cart', path: '/filament/pla.html', detail: 'filament:pla:sku1' }, db);
+  recordEvent({ visitorId: 'v1', eventType: 'add_to_cart' }, db);
+  recordEvent({ visitorId: 'v2', eventType: 'checkout_start' }, db);
+  recordEvent({ eventType: 'payment_complete', detail: 'order:abc' }, db);
+  const summary = getEventSummary(db);
+  const byType = Object.fromEntries(summary.map((e) => [e.eventType, e]));
+  assert.strictEqual(byType.add_to_cart.count, 2);
+  assert.strictEqual(byType.add_to_cart.uniqueVisitors, 1);
+  assert.strictEqual(byType.checkout_start.count, 1);
+  assert.strictEqual(byType.payment_complete.count, 1);
+  // every vocabulary type is present even at zero, so the admin funnel
+  // always shows the full ladder
+  assert.strictEqual(summary.length, ANALYTICS_EVENT_TYPES.length);
+  assert.strictEqual(byType.quote_submit.count, 0);
+  db.close();
+});
+
+test('pruneOldPageViews also prunes old analytics_events on the same cycle', () => {
+  const db = openDb(':memory:');
+  recordEvent({ visitorId: 'v1', eventType: 'add_to_cart' }, db);
+  db.prepare("UPDATE analytics_events SET created_at = '2020-01-01T00:00:00.000Z'").run();
+  pruneOldPageViews(12, db);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM analytics_events').get().c, 0);
   db.close();
 });

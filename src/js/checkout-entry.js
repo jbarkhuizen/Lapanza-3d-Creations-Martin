@@ -185,6 +185,11 @@ async function init() {
   }
 
   renderLines(items);
+  // Backlog #113: a checkout page load with a non-empty cart = checkout
+  // started (fires once per load; analytics.js's listener does the send).
+  try {
+    document.dispatchEvent(new CustomEvent('lapanza:track', { detail: { eventType: 'checkout_start' } }));
+  } catch { /* tracking must never break checkout */ }
   const weight = getCartTotalWeight();
   const subtotal = getCartTotal();
   document.getElementById('checkout-weight').textContent = `${weight}g`;

@@ -38,6 +38,11 @@ export function getCartTotalWeight() {
 
 export function addItem({ productId, name, price, image, weight, quantity = 1 }) {
   if (!productId) return getCart();
+  // Backlog #113: decoupled event dispatch -- analytics.js listens for
+  // 'lapanza:track' when loaded; on pages without it this is a no-op.
+  try {
+    document.dispatchEvent(new CustomEvent('lapanza:track', { detail: { eventType: 'add_to_cart', detail: productId } }));
+  } catch { /* tracking must never break the cart */ }
   const items = readRaw();
   const existing = items.find((i) => i.productId === productId);
   if (existing) {

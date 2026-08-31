@@ -560,6 +560,20 @@ async function renderAnalytics() {
     </div>
 
     <div class="panel table-wrap">
+      <div class="section-head"><h3>Shopping Funnel — Last 30 Days</h3></div>
+      <table class="catalog">
+        <thead><tr><th>Step</th><th>Events</th><th>Unique Visitors</th></tr></thead>
+        <tbody>${(summary.events || [])
+          .map((e) => {
+            const labels = { add_to_cart: 'Added to cart', checkout_start: 'Started checkout', payment_complete: 'Payment completed', quote_submit: 'Quote requested', whatsapp_click: 'WhatsApp clicked' };
+            return `<tr><td>${escapeHtml(labels[e.eventType] || e.eventType)}</td><td>${escapeHtml(String(e.count))}</td><td>${escapeHtml(String(e.uniqueVisitors))}</td></tr>`;
+          })
+          .join('')}</tbody>
+      </table>
+      <p class="muted" style="font-size:0.8rem">First-party and anonymous, same visitor id as page views. Payment completions are recorded server-side from Payfast confirmations (no visitor id).</p>
+    </div>
+
+    <div class="panel table-wrap">
       <div class="section-head"><h3>Active Registered Clients</h3></div>
       <table class="catalog">
         <thead><tr><th>Name</th><th>Email</th><th>Page</th><th>Last seen</th></tr></thead>

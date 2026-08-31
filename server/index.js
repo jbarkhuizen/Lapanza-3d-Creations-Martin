@@ -115,7 +115,7 @@ import {
 import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
-import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary } from './analytics.js';
+import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
@@ -566,6 +566,12 @@ app.post('/api/analytics/beacon', analyticsLimiter, (req, res) => {
   try {
     if (type === 'heartbeat') {
       touchActiveVisitor({ visitorId, clientId, path: pagePath });
+    } else if (type === 'event') {
+      // Backlog #113: eventType validated against the fixed server-side
+      // vocabulary inside recordEvent -- unknown types are dropped, and
+      // payment_complete only ever comes from the ITN handler, not here.
+      const { eventType, detail } = req.body || {};
+      if (eventType !== 'payment_complete') recordEvent({ visitorId, clientId, eventType, path: pagePath, detail });
     } else {
       recordPageView({ visitorId, clientId, path: pagePath, referrer });
     }
@@ -582,7 +588,7 @@ app.get('/api/analytics/active', requireAuth, (_req, res) => {
 });
 
 app.get('/api/analytics/summary', requireAuth, (_req, res) => {
-  res.json(getVisitSummary());
+  res.json({ ...getVisitSummary(), events: getEventSummary() });
 });
 
 // Phase 4: the post-checkout opt-in prompt toggles this without requiring a
@@ -2120,6 +2126,10 @@ app.post(
       // Payfast retry would resend "your order is confirmed" every time.
       const { changed, lowStock } = markOrderPaid(order.id);
       if (changed) {
+        // Backlog #113: payment_complete rides the changed flag, which is
+        // exactly the ITN-redelivery dedupe -- a Payfast retry for an
+        // already-paid order records nothing.
+        recordEvent({ clientId: order.clientId || null, eventType: 'payment_complete', detail: `order:${order.id}` });
         if (lowStock.length) await sendLowStockAlerts(lowStock);
         try {
           await sendOrderConfirmationEmail(order);

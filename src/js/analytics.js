@@ -45,6 +45,14 @@ function sendBeacon(payload) {
   });
 }
 
+// Backlog #113: conversion events -- same anonymous id, same beacon
+// endpoint, a fixed event vocabulary validated server-side. Other modules
+// fire events without importing this file (no coupling) by dispatching:
+//   document.dispatchEvent(new CustomEvent('lapanza:track', { detail: { eventType, detail } }))
+export function trackEvent(eventType, detail = '') {
+  sendBeacon({ visitorId: getOrCreateVisitorId(), path: location.pathname, type: 'event', eventType, detail });
+}
+
 export function trackVisit() {
   const visitorId = getOrCreateVisitorId();
   sendBeacon({ visitorId, path: location.pathname, referrer: document.referrer, type: 'pageview' });
@@ -53,4 +61,15 @@ export function trackVisit() {
     if (document.visibilityState !== 'visible') return; // don't count a backgrounded tab as "active"
     sendBeacon({ visitorId, path: location.pathname, type: 'heartbeat' });
   }, HEARTBEAT_MS);
+
+  document.addEventListener('lapanza:track', (e) => {
+    if (e.detail?.eventType) trackEvent(e.detail.eventType, e.detail.detail || '');
+  });
+
+  // WhatsApp CTA clicks -- delegated, so it covers every current and future
+  // WhatsApp link without per-page wiring.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest?.('a[href*="api.whatsapp.com"], a[href*="wa.me"]');
+    if (a) trackEvent('whatsapp_click');
+  });
 }

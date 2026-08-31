@@ -384,6 +384,22 @@ export function ensureSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views (created_at);
     CREATE INDEX IF NOT EXISTS idx_page_views_visitor ON page_views (visitor_id);
 
+    -- Backlog #113 (SITE-079): first-party conversion events, same anonymous
+    -- visitor-id discipline as page_views (no IP, no fingerprint, no third
+    -- parties). event_type is a fixed server-side vocabulary, never
+    -- client-invented. Pruned on the same 12-month cycle as page_views.
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id TEXT PRIMARY KEY,
+      visitor_id TEXT NOT NULL DEFAULT '',
+      client_id TEXT REFERENCES clients(id),
+      event_type TEXT NOT NULL,
+      path TEXT NOT NULL DEFAULT '',
+      detail TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_analytics_events_created ON analytics_events (created_at);
+    CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events (event_type);
+
     -- Permanent running tallies, updated alongside every page_views insert
     -- (recordPageView in analytics.js) -- exist specifically so pruning old
     -- page_views rows (pruneOldPageViews, backlog #32) doesn't quietly turn

@@ -55,6 +55,9 @@ async function init() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Something went wrong');
       note.textContent = "Thanks — we've received your request and will be in touch.";
+      try {
+        document.dispatchEvent(new CustomEvent('lapanza:track', { detail: { eventType: 'quote_submit' } }));
+      } catch { /* tracking must never break the form */ }
       form.reset();
     } catch (err) {
       note.textContent = err.message || 'Something went wrong — please try again.';

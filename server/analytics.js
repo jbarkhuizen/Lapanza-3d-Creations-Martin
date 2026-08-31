@@ -129,12 +129,52 @@ export function getVisitSummary(db = getDb()) {
   return { totalVisits, uniqueVisitorsAllTime, todayVisits, dailyVisits, topPages };
 }
 
+// ---- Conversion events (backlog #113 / SITE-079) ----
+// Fixed vocabulary -- the beacon route validates against this list, so a
+// client can never invent event types. payment_complete is recorded
+// SERVER-side only (the Payfast ITN handler, inside its existing
+// changed-flag dedupe, so ITN redeliveries never double-count).
+export const ANALYTICS_EVENT_TYPES = ['add_to_cart', 'checkout_start', 'quote_submit', 'whatsapp_click', 'payment_complete'];
+
+export function recordEvent({ visitorId = '', clientId = null, eventType, path = '', detail = '' }, db = getDb()) {
+  if (!ANALYTICS_EVENT_TYPES.includes(eventType)) return false;
+  db.prepare(
+    `INSERT INTO analytics_events (id, visitor_id, client_id, event_type, path, detail, created_at)
+     VALUES (@id, @visitor_id, @client_id, @event_type, @path, @detail, @created_at)`,
+  ).run({
+    id: randomUUID(),
+    visitor_id: String(visitorId || '').slice(0, 64),
+    client_id: clientId,
+    event_type: eventType,
+    path: String(path || '').slice(0, 300),
+    detail: String(detail || '').slice(0, 300),
+    created_at: new Date().toISOString(),
+  });
+  return true;
+}
+
+// Last-30-days funnel counts, plus distinct visitors per step -- enough for
+// the admin's "where do buyers drop off" read without any per-person view.
+export function getEventSummary(db = getDb()) {
+  const rows = db
+    .prepare(
+      `SELECT event_type AS eventType, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS uniqueVisitors
+       FROM analytics_events
+       WHERE created_at >= datetime('now', '-30 days')
+       GROUP BY event_type`,
+    )
+    .all();
+  const byType = Object.fromEntries(rows.map((r) => [r.eventType, r]));
+  return ANALYTICS_EVENT_TYPES.map((t) => ({ eventType: t, count: byType[t]?.count || 0, uniqueVisitors: byType[t]?.uniqueVisitors || 0 }));
+}
+
 // Detail rows only -- analytics_page_totals/analytics_seen_visitors are
 // permanent by design (see db.js's comment on those two tables) and are
-// never touched here.
+// never touched here. analytics_events shares page_views' retention cycle.
 export function pruneOldPageViews(monthsToKeep = PAGE_VIEWS_RETENTION_MONTHS, db = getDb()) {
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - monthsToKeep);
   const result = db.prepare('DELETE FROM page_views WHERE created_at < ?').run(cutoff.toISOString());
+  db.prepare('DELETE FROM analytics_events WHERE created_at < ?').run(cutoff.toISOString());
   return result.changes;
 }
