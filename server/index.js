@@ -148,6 +148,7 @@ import { getDocumentation, listDocumentation } from './documentation.js';
 import { getTestRun, listTestCases, listTestRuns, startTestRun } from './test-runs.js';
 import { getSiteOverview, listSiteDirectory } from './site-overview.js';
 import { createImportedTemplate, createTemplate, listTemplates } from './newsletter-content.js';
+import { generateImageVariants } from './images.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -1042,6 +1043,9 @@ app.post(
     const imagePath = `/uploads/filaments/${req.file.filename}`;
     const filament = setColourImage(req.params.filamentId, req.params.colourId, imagePath);
     if (!filament) return res.status(404).json({ error: 'Colour not found' });
+    // #106: responsive variants BEFORE publish, so the regenerated pages
+    // can already reference them.
+    await generateImageVariants(req.file.path).catch(() => {});
     const publishWarning = await publishCatalog();
     res.json({ filament, ...(publishWarning ? { publishWarning } : {}) });
   },
@@ -1183,6 +1187,7 @@ app.post(
     if (item.imageUrl && item.imageUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.imageUrl);
     item.imageUrl = `/uploads/category-items/${req.file.filename}`;
     upsertProduct(product);
+    await generateImageVariants(req.file.path).catch(() => {}); // #106
     const publishWarning = await publishCatalog();
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated photo for "${item.name}" on "${product.name}"` });
     res.json({ product, ...(publishWarning ? { publishWarning } : {}) });

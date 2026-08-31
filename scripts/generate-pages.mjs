@@ -259,6 +259,25 @@ function addToCartButton({ productId, name, price, image, weight, extraClass = '
 // this closes that gap by checking the file is actually there before
 // trusting the reference, so a stale/broken path degrades the same way a
 // genuinely absent one always has.
+// Backlog #106: emit a <picture> with WebP srcset when responsive variants
+// exist on disk (server/images.js writes <name>-480.webp / <name>-960.webp
+// next to every upload; scripts/generate-image-variants.mjs backfilled the
+// existing library). Falls back to the plain <img> for external URLs or
+// photos without variants -- output is never worse than before.
+function responsiveImg(url, alt, className) {
+  const plain = `<img src="${escapeAttr(url)}" alt="${escapeAttr(alt)}" class="${className}" loading="lazy">`;
+  if (!url || /^https?:\/\//i.test(url)) return plain;
+  const parsed = path.parse(url);
+  const variants = [480, 960]
+    .filter((w) => fs.existsSync(path.join(root, 'public', parsed.dir, `${parsed.name}-${w}.webp`)))
+    .map((w) => ({ w, url: `${parsed.dir}/${parsed.name}-${w}.webp` }));
+  if (!variants.length) return plain;
+  const srcset = variants.map((v) => `${escapeAttr(v.url)} ${v.w}w`).join(', ');
+  // Cards render ~230-300px wide; give the browser real numbers so it picks
+  // the 480 variant on virtually every screen.
+  return `<picture><source type="image/webp" srcset="${srcset}" sizes="(min-width: 768px) 300px, 45vw">${plain}</picture>`;
+}
+
 function imageFileExists(url) {
   if (!url) return false;
   // Category items can still carry a plain external URL from before the
@@ -288,7 +307,7 @@ function colourCards(colours, filament) {
       return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
                   ${
                     imageFileExists(c.imageUrl)
-                      ? `<img src="${c.imageUrl}" alt="${c.name}" class="w-full aspect-square object-cover rounded-sm mb-3" loading="lazy">`
+                      ? responsiveImg(c.imageUrl, c.name, 'w-full aspect-square object-cover rounded-sm mb-3')
                       : `<div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>`
                   }
                   <p class="font-medium mb-1 tracking-tight">${c.name}</p>
@@ -360,7 +379,7 @@ function catalogueItems(label, items, categorySlug) {
         .filter(Boolean)
         .join(' · ');
       const img = imageFileExists(item.imageUrl)
-        ? `<img src="${item.imageUrl}" alt="${item.name}" class="w-full h-full object-cover" loading="lazy">`
+        ? responsiveImg(item.imageUrl, item.name, 'w-full h-full object-cover')
         : `<span class="text-espresso/35 text-xs uppercase tracking-[0.2em]">Photo coming soon</span>`;
       const name = item.name || `${label} piece`;
       // Category items don't always have an admin-set sku (it's optional,

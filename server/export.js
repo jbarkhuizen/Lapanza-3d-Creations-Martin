@@ -6,6 +6,22 @@ import { formatRand, formatItemPrice } from './money.js';
 import { itemAnchorId, categoryPagePath, filamentPagePath } from './item-anchor.js';
 import { listTestimonials, publicTestimonial } from './testimonials.js';
 
+// Backlog #106: featured-product hero cards render at ~230px but were
+// serving original uploads (one measured at 3.0MB on the live homepage).
+// Prefer the 480px WebP variant when server/images.js has produced one;
+// fall back to the original untouched otherwise.
+function preferSmallVariant(imageUrl) {
+  if (!imageUrl || !imageUrl.startsWith('/uploads/')) return imageUrl || '';
+  const parsed = path.parse(imageUrl);
+  const variantRel = `${parsed.dir}/${parsed.name}-480.webp`;
+  try {
+    if (fs.existsSync(path.join(process.cwd(), 'public', variantRel))) return variantRel;
+  } catch {
+    /* fall through to original */
+  }
+  return imageUrl;
+}
+
 function defaultPaths() {
   const root = process.cwd();
   return {
@@ -46,7 +62,7 @@ function resolveFeaturedProducts(refs, filaments, categories) {
           productId: r.productId,
           name: `${filament.name} — ${colour.name}`,
           price: colour.price,
-          image: colour.imageUrl || '',
+          image: preferSmallVariant(colour.imageUrl),
           href: `${filamentPagePath(slug)}#${itemAnchorId(colour.sku, colour.name)}`,
         };
       }
@@ -60,7 +76,7 @@ function resolveFeaturedProducts(refs, filaments, categories) {
           productId: r.productId,
           name: item.name,
           price: formatItemPrice(item.price),
-          image: item.imageUrl || '',
+          image: preferSmallVariant(item.imageUrl),
           href: `${categoryPagePath(slug)}#${itemAnchorId(item.sku, item.name)}`,
         };
       }
