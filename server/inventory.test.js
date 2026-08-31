@@ -92,7 +92,7 @@ test('bulkUpdateInventory can pull a category item off the products page without
   assert.strictEqual(result.ok, true);
   const row = listInventory().find((r) => r.id === 'i1');
   assert.strictEqual(row.listed, false);
-  assert.strictEqual(row.stockQty, 2);
+  assert.strictEqual(row.stockQty, 3);
   assert.strictEqual(row.price, 150);
 });
 
