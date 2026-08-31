@@ -34,13 +34,37 @@ function toast(message) {
   toast._t = setTimeout(() => el.classList.add('hidden'), 2800);
 }
 
+// Sessions are in-memory server-side, so EVERY deploy/restart signs all
+// admins out and the 12h TTL expires them daily. This is the one place all
+// panels' requests pass through, so the 401 handling lives here: return the
+// UI to the login screen instead of leaving whatever panel was open to fail
+// blank. /api/auth/* is exempt -- a failed login must show its own message
+// on the login form, not bounce through the session-expired path.
+function handleSessionExpired() {
+  if (analyticsPollTimer) { clearInterval(analyticsPollTimer); analyticsPollTimer = null; }
+  if (testRunPollTimer) { clearInterval(testRunPollTimer); testRunPollTimer = null; }
+  if (!state.authenticated) return;
+  state.authenticated = false;
+  renderAuth();
+  toast('Your session has ended — please sign in again');
+}
+
 async function api(path, options = {}) {
-  const res = await fetch(`${API}${path}`, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, {
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+    });
+  } catch {
+    throw new Error('Could not reach the server — check the connection and try again');
+  }
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && !path.startsWith('/api/auth/')) {
+    handleSessionExpired();
+    throw new Error('Your session has ended — please sign in again');
+  }
   if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
 }
@@ -205,7 +229,13 @@ async function boot() {
     state.authenticated = false;
   }
   renderAuth();
-  if (state.authenticated) await loadApp();
+  if (state.authenticated) {
+    try {
+      await loadApp();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  }
 }
 
 function renderAuth() {
@@ -364,13 +394,19 @@ function bindChrome() {
   });
 
   $('#btn-logout').addEventListener('click', async () => {
-    await api('/api/auth/logout', { method: 'POST' });
+    try {
+      await api('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Server unreachable or already restarted -- either way the session
+      // is gone; sign the UI out locally rather than staying stuck signed-in.
+    }
     state.authenticated = false;
     renderAuth();
   });
 
   $$('.nav-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      try {
       if (btn.dataset.route === 'dashboard') {
         setRoute('dashboard');
         await renderDashboard();
@@ -449,6 +485,13 @@ function bindChrome() {
       } else if (btn.dataset.route === 'in-house-filament') {
         setRoute('in-house-filament');
         await renderInHouseFilament();
+      }
+      } catch (ex) {
+        // Every panel render above is an unguarded await -- without this,
+        // any API failure left the view blank with nothing but a console
+        // rejection. (A 401 has already routed to the login screen inside
+        // api() before this toast fires.)
+        toast(ex.message);
       }
     });
   });

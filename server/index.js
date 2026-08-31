@@ -193,6 +193,18 @@ const app = express();
 // throws on the X-Forwarded-For header nginx sets, since Express doesn't yet
 // know it's safe to trust it for req.ip. Harmless locally (no proxy in front).
 app.set('trust proxy', 1);
+// Baseline security response headers on everything Express serves (API +
+// /uploads). HSTS only over HTTPS (the spec ignores it on plain HTTP, and
+// sending it in local dev would be meaningless noise); one year, no
+// includeSubDomains since other subdomains of the apex aren't this app's
+// to make promises about. The static dist/ pages nginx serves directly get
+// their headers from the nginx config, not here.
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'DENY');
+  if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
+  next();
+});
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
@@ -334,10 +346,16 @@ function requireAuth(req, res, next) {
   next();
 }
 
-function startSession(res, adminId, username) {
+// `secure: req.secure` rather than a NODE_ENV gate: with 'trust proxy' set
+// (nginx in front in production), req.secure is true exactly when the login
+// arrived over HTTPS -- so production cookies get the Secure attribute (a
+// later cleartext-HTTP request can't leak them) while plain-HTTP local dev
+// keeps working with zero configuration. NODE_ENV isn't set on the VPS, so
+// gating on it would silently never apply the flag where it matters.
+function startSession(req, res, adminId, username) {
   const token = randomUUID();
   sessions.set(token, { createdAt: Date.now(), adminId, username });
-  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
+  res.cookie(SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: SESSION_TTL_MS });
 }
 
 // Revokes every live session belonging to a given admin -- used when that
@@ -370,10 +388,10 @@ function requireClientAuth(req, res, next) {
   next();
 }
 
-function startClientSession(res, clientId) {
+function startClientSession(req, res, clientId) {
   const token = randomUUID();
   clientSessions.set(token, { createdAt: Date.now(), clientId });
-  res.cookie(CLIENT_SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: SESSION_TTL_MS });
+  res.cookie(CLIENT_SESSION_COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: SESSION_TTL_MS });
 }
 
 // Password reset proves the requester currently controls the mailbox, but
@@ -440,7 +458,7 @@ app.post('/api/client/login', authLimiter, (req, res) => {
     checkSecuritySpike().catch(() => {});
     return res.status(401).json({ error: 'Invalid email or password' });
   }
-  startClientSession(res, result.client.id);
+  startClientSession(req, res, result.client.id);
   res.json({ ok: true, client: result.client });
 });
 
@@ -481,7 +499,7 @@ app.post('/api/client/reset-password', authLimiter, (req, res) => {
       return res.status(400).json({ error: 'This reset link is invalid or has expired — request a new one.' });
     }
     revokeSessionsForClient(client.id);
-    startClientSession(res, client.id);
+    startClientSession(req, res, client.id);
     res.json({ ok: true, client });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -928,7 +946,7 @@ app.post('/api/setup', (req, res) => {
   }
   try {
     const admin = createAdmin({ username, password });
-    startSession(res, admin.id, admin.username);
+    startSession(req, res, admin.id, admin.username);
     recordAuditEvent({ eventType: AUDIT_EVENTS.SETUP, adminId: admin.id, username: admin.username, ...requestMeta(req), detail: 'Initial admin account created' });
     res.status(201).json({ ok: true });
   } catch (err) {
@@ -952,7 +970,7 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
     checkSecuritySpike().catch(() => {});
     return res.status(401).json({ error: 'Invalid username or password' });
   }
-  startSession(res, admin.id, admin.username);
+  startSession(req, res, admin.id, admin.username);
   recordAuditEvent({ eventType: AUDIT_EVENTS.LOGIN_SUCCESS, adminId: admin.id, username: admin.username, ...requestMeta(req) });
   res.json({ ok: true });
 });
@@ -969,8 +987,13 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/me', (req, res) => {
+  // Must apply the same TTL check as requireAuth -- a bare sessions.has()
+  // reported an EXPIRED session as authenticated, so the admin SPA booted
+  // into the shell and then every real API call 401'd, which read as
+  // "the admin is broken" instead of a login screen.
   const token = req.cookies[SESSION_COOKIE];
-  res.json({ authenticated: Boolean(token && sessions.has(token)) });
+  const session = token ? sessions.get(token) : undefined;
+  res.json({ authenticated: Boolean(session && Date.now() - session.createdAt < SESSION_TTL_MS) });
 });
 
 app.get('/api/admins', requireAuth, (_req, res) => {
@@ -2813,6 +2836,10 @@ function runGenerate() {
       cwd: root,
       stdio: 'inherit',
     });
+    // 'error' fires INSTEAD of 'exit' when the process fails to spawn at all
+    // (ENOENT, EACCES) -- without this handler the promise never settles and
+    // the settings-save/publish request hangs until the socket times out.
+    child.on('error', (err) => reject(new Error(`generate-pages failed to start: ${err.message}`)));
     child.on('exit', (code) => {
       if (code === 0) resolve();
       else reject(new Error(`generate-pages exited with code ${code}`));
@@ -2831,6 +2858,9 @@ function runBuild() {
   return new Promise((resolve, reject) => {
     const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
     const child = spawn(npmCmd, ['run', 'build'], { cwd: root, stdio: 'inherit' });
+    // Same reasoning as runGenerate: a spawn failure fires 'error', never
+    // 'exit', so without this the publish request hangs forever.
+    child.on('error', (err) => reject(new Error(`vite build failed to start: ${err.message}`)));
     child.on('exit', (code) => {
       if (code === 0) resolve();
       else reject(new Error(`vite build exited with code ${code}`));

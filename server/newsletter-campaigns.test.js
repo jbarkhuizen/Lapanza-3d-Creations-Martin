@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
 import { subscribe, confirm } from './newsletter.js';
-import { approveCampaign, createCampaign, getCampaign, getCampaignAnalytics, listCampaignRecipients, listEligibleRecipients, sendCampaign } from './newsletter-campaigns.js';
+import { approveCampaign, createCampaign, getCampaign, getCampaignAnalytics, listCampaignRecipients, listEligibleRecipients, queueCampaign, sendCampaign } from './newsletter-campaigns.js';
 
 function recipientKey(db, email = 'campaign-recipient@example.com') {
   const { subscriber, token } = subscribe(email, db);
@@ -43,6 +43,28 @@ test('failed Gmail delivery is retained per recipient and leaves a partial campa
   assert.strictEqual(sent.status, 'partial');
   assert.strictEqual(sent.failedCount, 1);
   assert.strictEqual(listCampaignRecipients(campaign.id, db)[0].status, 'failed');
+  db.close();
+});
+
+test('a crash escaping sendCampaign inside queueCampaign is caught and re-opens the campaign as partial', async () => {
+  // Regression: queueCampaign fires sendCampaign as void ... .finally() --
+  // before the .catch was added, a throw past the per-recipient try/catch
+  // (e.g. the totals UPDATE failing) became an unhandled rejection outside
+  // any request context (process-fatal on Node >=15) and stranded the
+  // campaign at 'sending', a status sendCampaign refuses to re-enter.
+  const db = openDb(':memory:');
+  const campaign = createCampaign({ subject: 'Subj', bodyText: 'Body', recipientKeys: [recipientKey(db)] }, db);
+  approveCampaign(campaign.id, db);
+  const failingDb = {
+    prepare(sql) {
+      if (sql.includes('SET status = ?, sent_at')) throw new Error('disk I/O error');
+      return db.prepare(sql);
+    },
+  };
+  const queued = queueCampaign(campaign.id, { siteUrl: 'http://localhost:5173' }, failingDb);
+  assert.strictEqual(queued.status, 'sending');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.strictEqual(getCampaign(campaign.id, db).status, 'partial', 'the catch must re-open the crashed campaign as re-sendable partial');
   db.close();
 });
 

@@ -169,6 +169,23 @@ export function queueCampaign(id, options, db = getDb()) {
   if (!campaign) return null;
   if (!['approved', 'partial'].includes(campaign.status)) throw new Error('Only an approved or partial campaign can be sent');
   activeCampaigns.add(id);
-  void sendCampaign(id, options, db).finally(() => activeCampaigns.delete(id));
+  // The .catch is load-bearing: a throw that escapes sendCampaign's
+  // per-recipient try/catch (the totals UPDATE, a failed getCampaign
+  // re-read) would otherwise be an unhandled rejection outside any request
+  // context -- Node >=15 terminates the whole process on that, taking the
+  // storefront down -- and the campaign would be stranded at 'sending',
+  // a status sendCampaign refuses to re-enter. 'partial' is deliberately
+  // re-sendable: unsent recipients are still 'selected'/'failed', so a
+  // retry picks up exactly where the crash left off.
+  void sendCampaign(id, options, db)
+    .catch((error) => {
+      console.error(`Campaign ${id} send failed:`, error.message);
+      try {
+        db.prepare("UPDATE newsletter_campaigns SET status = 'partial' WHERE id = ? AND status = 'sending'").run(id);
+      } catch {
+        // DB itself unusable -- nothing safer left to do than log above.
+      }
+    })
+    .finally(() => activeCampaigns.delete(id));
   return { ...campaign, status: 'sending' };
 }

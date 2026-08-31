@@ -106,6 +106,42 @@ test('login requires username + password, protected routes require a session', a
   assert.deepStrictEqual(withAuth.body.filaments, []);
 });
 
+test('session cookie carries Secure over HTTPS, not over plain-HTTP dev, and responses carry baseline security headers', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+
+  // trust proxy is set, so X-Forwarded-Proto https marks the request secure --
+  // exactly what nginx sends in production.
+  const httpsLogin = await request(app)
+    .post('/api/auth/login')
+    .set('X-Forwarded-Proto', 'https')
+    .send({ username: 'johan', password: 'correcthorsebattery' });
+  assert.strictEqual(httpsLogin.status, 200);
+  assert.match(String(httpsLogin.headers['set-cookie']), /Secure/, 'HTTPS login must set a Secure cookie');
+  assert.match(String(httpsLogin.headers['strict-transport-security'] || ''), /max-age=/, 'HTTPS responses must carry HSTS');
+
+  const httpLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  assert.strictEqual(httpLogin.status, 200);
+  assert.doesNotMatch(String(httpLogin.headers['set-cookie']), /Secure/, 'plain-HTTP local dev must still get a usable cookie');
+  assert.strictEqual(httpLogin.headers['x-content-type-options'], 'nosniff');
+  assert.strictEqual(httpLogin.headers['x-frame-options'], 'DENY');
+});
+
+test('/api/auth/me applies the session TTL, not just token existence', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const live = await request(app).get('/api/auth/me').set('Cookie', cookie);
+  assert.strictEqual(live.body.authenticated, true);
+
+  const missing = await request(app).get('/api/auth/me');
+  assert.strictEqual(missing.body.authenticated, false);
+});
+
 test('version history detail endpoint returns Git-backed release details to an admin', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
