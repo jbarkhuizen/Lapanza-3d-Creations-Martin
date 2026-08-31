@@ -3068,6 +3068,7 @@ function blankClient() {
   return {
     id: null, name: '', firstName: '', lastName: '', businessName: '', email: '', phone: '',
     street: '', suburb: '', city: '', province: '', postalCode: '', country: 'South Africa',
+    pudoRelevant: false, pudoLockerName: '', pudoLockerAddress: '', pudoLockerSuburb: '', pudoLockerCity: '', pudoLockerPostalCode: '',
     discountPct: 0, discountNote: '', source: '', emailMarketingOptIn: false, emailMarketingConsentSource: '',
   };
 }
@@ -3194,6 +3195,18 @@ async function renderClients() {
           <label class="field"><span>Province</span><input id="cf-province" value="${escapeAttr(form.province)}" /></label>
         </div>
         <label class="field" style="max-width:200px"><span>Postal Code</span><input id="cf-postal" value="${escapeAttr(form.postalCode)}" /></label>
+        <label class="field checkbox"><input id="cf-pudo-relevant" type="checkbox" ${form.pudoRelevant ? 'checked' : ''} /><span>PUDO Address Relevant (Preferred Locker on File)</span></label>
+        <div id="cf-pudo-fields" class="${form.pudoRelevant ? '' : 'hidden'} stack gap-2">
+          <div class="grid-2">
+            <label class="field"><span>Locker Name</span><input id="cf-pudo-name" value="${escapeAttr(form.pudoLockerName || '')}" placeholder="e.g. PUDO Locker — Pierre van Ryneveld Spar" /></label>
+            <label class="field"><span>Locker Address</span><input id="cf-pudo-address" value="${escapeAttr(form.pudoLockerAddress || '')}" /></label>
+          </div>
+          <div class="grid-3">
+            <label class="field"><span>Locker Suburb</span><input id="cf-pudo-suburb" value="${escapeAttr(form.pudoLockerSuburb || '')}" /></label>
+            <label class="field"><span>Locker City</span><input id="cf-pudo-city" value="${escapeAttr(form.pudoLockerCity || '')}" /></label>
+            <label class="field" style="max-width:200px"><span>Locker Postal Code</span><input id="cf-pudo-postal" value="${escapeAttr(form.pudoLockerPostalCode || '')}" /></label>
+          </div>
+        </div>
         <div class="grid-3">
           <label class="field"><span>Discount %</span><input id="cf-discount-pct" type="number" min="0" max="100" step="0.5" value="${escapeAttr(String(form.discountPct ?? 0))}" /></label>
           <label class="field"><span>Discount Note</span><input id="cf-discount-note" value="${escapeAttr(form.discountNote || '')}" placeholder="e.g. Family, Supplier" /></label>
@@ -3310,6 +3323,12 @@ async function renderClients() {
         province: $('#cf-province').value,
         postalCode: $('#cf-postal').value,
         country: $('#cf-country').value,
+        pudoRelevant: $('#cf-pudo-relevant').checked,
+        pudoLockerName: $('#cf-pudo-name').value,
+        pudoLockerAddress: $('#cf-pudo-address').value,
+        pudoLockerSuburb: $('#cf-pudo-suburb').value,
+        pudoLockerCity: $('#cf-pudo-city').value,
+        pudoLockerPostalCode: $('#cf-pudo-postal').value,
         discountPct: Number($('#cf-discount-pct').value) || 0,
         discountNote: $('#cf-discount-note').value,
         source: $('#cf-source').value,
@@ -3325,6 +3344,9 @@ async function renderClients() {
       } catch (ex) {
         toast(ex.message);
       }
+    });
+    $('#cf-pudo-relevant').addEventListener('change', (event) => {
+      $('#cf-pudo-fields').classList.toggle('hidden', !event.target.checked);
     });
     $('#cf-email-marketing-opt-in').addEventListener('change', (event) => {
       $('#cf-email-marketing-source').disabled = !event.target.checked;
@@ -3754,6 +3776,7 @@ async function renderNewOrder() {
               <p class="muted" style="margin:0.4rem 0 0">${escapeHtml(order.selectedClient.email || '')}</p>
               <p class="muted" style="margin:0.2rem 0 0">${escapeHtml(order.selectedClient.phone || 'No phone on file')}</p>
               <p class="muted" style="margin:0.2rem 0 0">${escapeHtml([order.selectedClient.street, order.selectedClient.suburb, order.selectedClient.city, order.selectedClient.province, order.selectedClient.postalCode].filter(Boolean).join(', ') || 'No shipping address on file')}</p>
+              ${order.selectedClient.pudoRelevant ? `<p class="muted" style="margin:0.2rem 0 0">PUDO: ${escapeHtml([order.selectedClient.pudoLockerName, order.selectedClient.pudoLockerAddress, order.selectedClient.pudoLockerSuburb, order.selectedClient.pudoLockerCity, order.selectedClient.pudoLockerPostalCode].filter(Boolean).join(', ') || 'locker marked relevant, details not filled in yet')}</p>` : ''}
             </div>` : `
             <input id="no-client-q" type="search" placeholder="Search name, email, client code…" value="${escapeAttr(order.clientQuery)}" />
             <div class="stack gap-2">${clientResultsHtml}</div>`}

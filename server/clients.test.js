@@ -1,8 +1,30 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { createClient, mergeClients, getClient } from './clients.js';
+import { createClient, mergeClients, getClient, updateClient } from './clients.js';
 import { createDesignRequest } from './design-requests.js';
+
+test('updateClient round-trips PUDO locker fields; untouched updates preserve them (#24)', () => {
+  const db = openDb(':memory:');
+  const c = createClient({ email: 'pudo@example.com', name: 'Pudo Client' }, db);
+  assert.strictEqual(c.pudoRelevant, false);
+  const updated = updateClient(c.id, {
+    pudoRelevant: true,
+    pudoLockerName: 'PUDO — Spar PvR',
+    pudoLockerAddress: '12 Main Rd',
+    pudoLockerSuburb: 'Pierre van Ryneveld',
+    pudoLockerCity: 'Centurion',
+    pudoLockerPostalCode: '0157',
+  }, db);
+  assert.strictEqual(updated.pudoRelevant, true);
+  assert.strictEqual(updated.pudoLockerName, 'PUDO — Spar PvR');
+  assert.strictEqual(updated.pudoLockerPostalCode, '0157');
+  // An unrelated update must not clobber the locker record.
+  const after = updateClient(c.id, { phone: '0820000000' }, db);
+  assert.strictEqual(after.pudoRelevant, true);
+  assert.strictEqual(after.pudoLockerSuburb, 'Pierre van Ryneveld');
+  db.close();
+});
 
 test('mergeClients moves order and design-request history from source to target, then deletes the source', () => {
   const db = openDb(':memory:');

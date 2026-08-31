@@ -592,6 +592,18 @@ function ensureManagementColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'source')) {
     db.exec("ALTER TABLE clients ADD COLUMN source TEXT NOT NULL DEFAULT ''");
   }
+  // Backlog #24: a client's preferred PUDO locker, recorded on the admin
+  // Client page (before this, the locker a PUDO order ships to was written
+  // down nowhere -- it travelled by WhatsApp). pudo_relevant gates whether
+  // the locker fields show/apply at all.
+  if (!hasColumn(db, 'PRAGMA table_info(clients)', 'pudo_relevant')) {
+    db.exec('ALTER TABLE clients ADD COLUMN pudo_relevant INTEGER NOT NULL DEFAULT 0');
+    db.exec("ALTER TABLE clients ADD COLUMN pudo_locker_name TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE clients ADD COLUMN pudo_locker_address TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE clients ADD COLUMN pudo_locker_suburb TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE clients ADD COLUMN pudo_locker_city TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE clients ADD COLUMN pudo_locker_postal_code TEXT NOT NULL DEFAULT ''");
+  }
   // Cumulative consumption logged by print jobs (server/print-jobs.js) --
   // remaining/%left are computed at read time from stock_qty * roll_length_m
   // minus these, never stored, so there's only one source of truth.
