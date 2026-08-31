@@ -1444,3 +1444,45 @@ test('client invoice route serves own orders only; tracking rides along in order
   const row = history.body.orders.find((o) => o.id === orderId);
   assert.strictEqual(row.tracking_number, 'PUD123456');
 });
+
+test('buy-again re-resolves own past orders at current prices; foreign orders 404 (#96)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/filaments').set('Cookie', adminCookie).send({ name: 'PLA96', slug: 'pla96' });
+  const colour = await request(app)
+    .post(`/api/filaments/${filament.body.filament.id}/colours`)
+    .set('Cookie', adminCookie)
+    .send({ name: 'Blue', sku: 'PLA96-BLUE', priceRand: 100, weightG: 100, stockQty: 10 });
+  const productId = `filament:pla96:${colour.body.filament.colours[0].sku}`;
+
+  const owner = await loggedInClientCookie(app, adminCookie, 'buyagain@example.com');
+  const other = await loggedInClientCookie(app, adminCookie, 'buyagain-other@example.com');
+
+  const checkout = await request(app).post('/api/checkout').send({
+    client: { firstName: 'Buy', lastName: 'Again', email: 'buyagain@example.com' },
+    items: [{ productId, quantity: 2 }],
+    shippingMethod: 'collect',
+    paymentMethod: 'manual_eft',
+  });
+  const orderId = checkout.body.orderId || checkout.body.order?.id;
+
+  // Price change after the order -- buy-again must return TODAY's price.
+  await request(app)
+    .put(`/api/filaments/${filament.body.filament.id}/colours/${colour.body.filament.colours[0].id}`)
+    .set('Cookie', adminCookie)
+    .send({ priceRand: 150 });
+
+  const res = await request(app).get(`/api/client/orders/${orderId}/buy-again`).set('Cookie', owner.cookie);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.items.length, 1);
+  assert.strictEqual(res.body.items[0].price, 150);
+  assert.strictEqual(res.body.items[0].quantity, 2);
+  assert.deepStrictEqual(res.body.unavailable, []);
+
+  const foreign = await request(app).get(`/api/client/orders/${orderId}/buy-again`).set('Cookie', other.cookie);
+  assert.strictEqual(foreign.status, 404);
+});

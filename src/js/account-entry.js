@@ -1,5 +1,6 @@
 import './site.js';
 import { formatRand as formatPrice } from './money.js';
+import { addItem } from './cart.js';
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -40,6 +41,16 @@ function orderRow(order) {
   invoiceLink.className = 'text-xs font-semibold uppercase tracking-[0.1em] text-terracotta hover:underline mr-3';
   invoiceLink.textContent = 'Invoice';
   actionTd.appendChild(invoiceLink);
+
+  // Backlog #96: recreate this order's purchasable lines in the cart at
+  // TODAY's prices (server re-resolves against the live catalog);
+  // discontinued/out-of-stock items are named, never silently dropped.
+  const buyAgainBtn = document.createElement('button');
+  buyAgainBtn.type = 'button';
+  buyAgainBtn.className = 'buy-again-btn text-xs font-semibold uppercase tracking-[0.1em] text-terracotta hover:underline mr-3';
+  buyAgainBtn.dataset.orderId = order.id;
+  buyAgainBtn.textContent = 'Buy Again';
+  actionTd.appendChild(buyAgainBtn);
   // Only an order still awaiting payment can be cancelled self-service --
   // mirrors cancelOrderByClient's own server-side guard, this is just the
   // UI-level reflection of the same rule (paid/shipped/completed orders
@@ -96,6 +107,32 @@ function wireOrderCancelHandler() {
   });
 }
 
+// Backlog #96 -- same delegation reasoning as the cancel handler above.
+function wireBuyAgainHandler() {
+  const tbody = document.getElementById('account-orders');
+  const note = document.getElementById('account-orders-note');
+  tbody?.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.buy-again-btn');
+    if (!btn) return;
+    btn.disabled = true;
+    note.classList.add('hidden');
+    try {
+      const { items, unavailable } = await api(`/api/client/orders/${btn.dataset.orderId}/buy-again`);
+      items.forEach((line) => addItem(line));
+      const parts = [];
+      if (items.length) parts.push(`${items.length} item${items.length === 1 ? '' : 's'} added to your cart at current prices.`);
+      if (unavailable.length) parts.push(`Not available right now: ${unavailable.join(', ')}.`);
+      note.textContent = parts.join(' ') || 'Nothing from this order is available right now.';
+      note.classList.remove('hidden');
+    } catch (err) {
+      note.textContent = err.message || 'Something went wrong.';
+      note.classList.remove('hidden');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
 async function showLoggedIn(client) {
   document.getElementById('account-loading').classList.add('hidden');
   document.getElementById('account-guest').classList.add('hidden');
@@ -107,6 +144,7 @@ async function showLoggedIn(client) {
   document.getElementById('account-welcome').textContent = `Welcome back${welcomeName}`;
 
   wireOrderCancelHandler();
+  wireBuyAgainHandler();
   await loadOrders();
 }
 

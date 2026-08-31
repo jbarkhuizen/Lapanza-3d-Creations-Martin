@@ -71,6 +71,7 @@ import {
 import {
   listOrders,
   getOrder,
+  resolveProductSnapshot,
   createOrder,
   createManualOrder,
   updateOrderStatus,
@@ -1974,6 +1975,33 @@ app.get('/api/client/orders/:id/invoice', requireClientAuth, (req, res) => {
   const order = getOrder(req.params.id);
   if (!order || order.clientId !== req.clientId) return res.status(404).send('Order not found');
   res.send(renderInvoiceHtml(order, getSettings()));
+});
+
+// Backlog #96 (SITE-062): "Buy again" -- re-resolves a past order's lines
+// against the CURRENT catalog (same resolver checkout itself prices with),
+// returning add-to-cart-ready lines at today's prices plus the names of
+// anything discontinued/out of stock, so the client-side can say exactly
+// what changed instead of silently dropping items.
+app.get('/api/client/orders/:id/buy-again', requireClientAuth, (req, res) => {
+  const order = getOrder(req.params.id);
+  if (!order || order.clientId !== req.clientId) return res.status(404).json({ error: 'Order not found' });
+  const items = [];
+  const unavailable = [];
+  for (const line of order.items || []) {
+    const snapshot = line.productId ? resolveProductSnapshot(line.productId) : null;
+    if (!snapshot || snapshot.stockQty <= 0) {
+      unavailable.push(line.productName || line.productId || 'Unknown item');
+      continue;
+    }
+    items.push({
+      productId: line.productId,
+      name: snapshot.name,
+      price: snapshot.price,
+      weight: snapshot.weight,
+      quantity: Math.min(line.quantity || 1, snapshot.stockQty),
+    });
+  }
+  res.json({ items, unavailable });
 });
 
 // Invoice History's delete action -- a genuine hard delete, unlike cancel
