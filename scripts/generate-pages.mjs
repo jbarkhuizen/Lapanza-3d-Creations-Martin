@@ -25,12 +25,14 @@ let LOW_STOCK_THRESHOLD = 3;
 // script has no DB access. Defaults here must match settings-defaults.js.
 let PRINT_LEAD_TIME_DAYS = '3-5';
 let FILAMENT_DISPATCH_DAYS = '1-2';
+let VOLUME_DISCOUNTS = [];
 try {
   const settings = JSON.parse(fs.readFileSync(path.join(root, 'src/data/settings.json'), 'utf8'));
   const configured = Number(settings.lowStockThreshold);
   if (Number.isFinite(configured) && configured > 0) LOW_STOCK_THRESHOLD = configured;
   if (settings.printLeadTimeDays) PRINT_LEAD_TIME_DAYS = settings.printLeadTimeDays;
   if (settings.filamentDispatchDays) FILAMENT_DISPATCH_DAYS = settings.filamentDispatchDays;
+  if (Array.isArray(settings.volumeDiscounts)) VOLUME_DISCOUNTS = settings.volumeDiscounts.filter((t) => t && t.active !== false && Number(t.minQty) > 0 && Number(t.pct) > 0);
 } catch {
   /* settings.json not synced yet -- use the defaults above */
 }
@@ -39,6 +41,16 @@ try {
 // fast) from made-to-order printed products (toys/homeware/phones/car
 // parts -- no stock concept, always printed on demand) so shoppers don't
 // expect filament-speed turnaround on a custom print, or vice versa.
+// Backlog #60: shopper-facing note for configured volume tiers -- empty
+// string when none are configured, so the feature is invisible until the
+// owner sets real numbers in Settings.
+function volumeDiscountNote() {
+  if (!VOLUME_DISCOUNTS.length) return '';
+  const tiers = [...VOLUME_DISCOUNTS].sort((a, b) => Number(a.minQty) - Number(b.minQty))
+    .map((t) => `${t.minQty}+ rolls: ${t.pct}% off`).join(' · ');
+  return `<div class="rounded-sm border border-charcoal/10 bg-linen/60 p-4 text-sm text-espresso/70 mb-8"><strong style="color:#2e6e46">Volume pricing</strong> — ${tiers}, applied automatically at checkout on filament.</div>`;
+}
+
 function deliveryNote(kind) {
   const dispatch =
     kind === 'filament'
@@ -610,6 +622,7 @@ ${shellStart({ depth: 1 })}
       </div>
       <p class="text-espresso/75 leading-relaxed max-w-2xl mb-12 text-lg">${f.description}</p>
       ${deliveryNote('filament')}
+      ${volumeDiscountNote()}
       ${specsBlock(f.specs)}
       ${colours}
       ${valueProps('filament')}

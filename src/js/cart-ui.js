@@ -1,6 +1,7 @@
 import gsap from 'gsap';
 import { getCart, getCartCount, getCartTotal, getCartTotalWeight, addItem, removeItem, updateQuantity, clearCart } from './cart.js';
 import { formatRand as formatPrice } from './money.js';
+import { computeVolumeDiscount } from './volume-discount.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -57,6 +58,7 @@ export function mountCartUI() {
       <p id="cart-delivery-note" class="px-6 pt-4 text-xs text-espresso/55 leading-relaxed">Ready-stock filament dispatches in 1-2 business days; custom prints need 3-5 business days production. Nationwide via PUDO, or Local Delivery in Centurion.</p>
       <div class="px-6 py-5 border-t border-charcoal/10">
         <p id="cart-shipping-estimate" class="hidden text-xs text-espresso/55 leading-relaxed mb-3"></p>
+        <p id="cart-volume-discount" class="hidden text-xs text-forest font-semibold leading-relaxed mb-3" style="color:#2e6e46"></p>
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-semibold uppercase tracking-wide">Total</span>
           <span id="cart-total" class="font-serif text-xl text-terracotta">R 0.00</span>
@@ -97,6 +99,7 @@ export function mountCartUI() {
       const res = await fetch('/site-settings.json', { cache: 'no-store' });
       if (!res.ok) return;
       const settings = await res.json();
+      volumeTiers = Array.isArray(settings.volumeDiscounts) ? settings.volumeDiscounts : [];
       const dispatch = settings.filamentDispatchDays || '1-2';
       const leadTime = settings.printLeadTimeDays || '3-5';
       deliveryNoteEl.textContent = `Ready-stock filament dispatches in ${dispatch} business days; custom prints need ${leadTime} business days production. Nationwide via PUDO, or Local Delivery in Centurion.`;
@@ -110,6 +113,7 @@ export function mountCartUI() {
   // (/api/shipping-match for the weight-bracketed courier price,
   // /public/fixed for PUDO/Local Delivery) so the estimate can never
   // disagree with checkout's real numbers -- it's the same data, earlier.
+  let volumeTiers = [];
   const estimateEl = document.getElementById('cart-shipping-estimate');
   let fixedOptionsCache = null;
   let estimateSeq = 0;
@@ -152,7 +156,16 @@ export function mountCartUI() {
     linesEl.innerHTML = items.map(lineItemHtml).join('');
     emptyEl.classList.toggle('hidden', items.length > 0);
     deliveryNoteEl.classList.toggle('hidden', items.length === 0);
-    totalEl.textContent = formatPrice(getCartTotal());
+    // #60: mirror the server's volume-discount rule for display only.
+    const vd = computeVolumeDiscount(items, volumeTiers);
+    const discountEl = document.getElementById('cart-volume-discount');
+    if (vd && discountEl) {
+      discountEl.textContent = `Volume discount (${vd.qty} rolls): −${formatPrice(vd.amount)} · applied at checkout`;
+      discountEl.classList.remove('hidden');
+    } else if (discountEl) {
+      discountEl.classList.add('hidden');
+    }
+    totalEl.textContent = formatPrice(Math.max(0, getCartTotal() - (vd ? vd.amount : 0)));
     updateShippingEstimate();
   }
 

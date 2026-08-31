@@ -2226,6 +2226,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'orderNotificationEmail',
     // SITE-027
     'lowStockThreshold',
+    // SITE-026 / #60 -- volume price breaks (shape-guarded below)
+    'volumeDiscounts',
     // SITE-010
     'printLeadTimeDays', 'filamentDispatchDays',
     // Configurable lists -- inHouseFilamentBrands existed before this (a
@@ -2297,6 +2299,18 @@ app.put('/api/settings', requireAuth, async (req, res) => {
         active: entry.active !== false,
       }))
       .filter((entry) => entry.name);
+  }
+
+  // #60: volumeDiscounts shape guard -- numeric tiers only, clamped sane.
+  if (patch.volumeDiscounts !== undefined) {
+    patch.volumeDiscounts = (Array.isArray(patch.volumeDiscounts) ? patch.volumeDiscounts : [])
+      .map((t, i) => ({
+        id: String(t?.id || '').trim() || `vd-${i}-${Date.now()}`,
+        minQty: Math.max(2, Math.round(Number(t?.minQty) || 0)),
+        pct: Math.min(90, Math.max(0, Number(t?.pct) || 0)),
+        active: t?.active !== false,
+      }))
+      .filter((t) => t.minQty >= 2 && t.pct > 0);
   }
   // Same shape-guard reasoning as the configurable lists above, but its own
   // block: a featured-product entry has no `name` field to require (the

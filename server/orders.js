@@ -233,7 +233,20 @@ export function createOrder(
   }
 
   const shippingPrice = shippingOption?.price || 0;
-  const total = subtotal + shippingPrice;
+
+  // Backlog #60 (SITE-026): volume price breaks on filament. Configured
+  // tiers (settings.volumeDiscounts, empty by default so the feature is
+  // inert until the owner sets real numbers) apply the best matching
+  // percentage to the FILAMENT portion of the cart only, keyed on total
+  // filament-roll quantity. Applied server-side here -- the client-side
+  // cart/checkout displays are estimates mirroring this same rule.
+  const filamentQty = resolved.filter((i) => String(i.productId || '').startsWith('filament:')).reduce((sum, i) => sum + i.quantity, 0);
+  const filamentSubtotal = resolved.filter((i) => String(i.productId || '').startsWith('filament:')).reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const tiers = (getSettings(db).volumeDiscounts || []).filter((t) => t.active !== false && Number(t.minQty) > 0 && Number(t.pct) > 0);
+  const bestTier = tiers.filter((t) => filamentQty >= Number(t.minQty)).sort((a, b) => Number(b.minQty) - Number(a.minQty))[0] || null;
+  const discountPct = bestTier ? Math.min(100, Number(bestTier.pct)) : 0;
+  const discountAmount = bestTier ? Math.round(filamentSubtotal * (discountPct / 100)) : 0;
+  const total = Math.max(0, subtotal - discountAmount + shippingPrice);
 
   let clientDataUpdated = false;
   const tx = db.transaction(() => {
@@ -244,16 +257,18 @@ export function createOrder(
     const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO orders
-        (id, invoice_number, client_id, status, subtotal, shipping_option_id, shipping_price, shipping_method, total, total_weight,
+        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, shipping_option_id, shipping_price, shipping_method, total, total_weight,
          payment_method, payment_status, tracking_number, created_at, updated_at)
        VALUES
-        (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
+        (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @discount_pct, @discount_amount, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
          @payment_method, 'pending', '', @created_at, @updated_at)`,
     ).run({
       id: orderId,
       invoice_number: invoiceNumber,
       client_id: client.id,
       subtotal,
+      discount_pct: discountPct,
+      discount_amount: discountAmount,
       shipping_option_id: shippingOption?.id || null,
       shipping_price: shippingPrice,
       shipping_method: shippingMethod,

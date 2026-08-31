@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
+import { updateSettings } from './settings.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
 import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot } from './orders.js';
 import { createShippingOption } from './shipping.js';
@@ -476,5 +477,49 @@ test('deleteOrder does not double-restore stock for an order that was already sh
 test('deleteOrder returns false for a missing id', () => {
   const db = openDb(':memory:');
   assert.strictEqual(deleteOrder('does-not-exist', db), false);
+  db.close();
+});
+
+test('createOrder applies the best volume-discount tier to the filament portion only (#60)', () => {
+  const db = openDb(':memory:');
+  updateSettings({ volumeDiscounts: [
+    { id: 'a', minQty: 3, pct: 5, active: true },
+    { id: 'b', minQty: 5, pct: 10, active: true },
+    { id: 'c', minQty: 2, pct: 50, active: false }, // inactive -- never applies
+  ] }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const withColour = addColour(filament.id, { name: 'Grey', sku: 'PLA-GREY-1KG', priceRand: 100, weightG: 1000, stockQty: 20 }, db);
+  const productId = `filament:pla:${withColour.colours[0].sku}`;
+
+  // 5 rolls -> the 10% tier (best matching), on filament subtotal 500 = 50 off.
+  const order = createOrder(
+    { client: { name: 'Bulk Buyer', email: 'bulk@example.com' }, items: [{ productId, quantity: 5 }], shippingMethod: 'collect', paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(order.subtotal, 500);
+  assert.strictEqual(order.discountPct, 10);
+  assert.strictEqual(order.discountAmount, 50);
+  assert.strictEqual(order.total, 450);
+
+  // 2 rolls -> below every active tier -> no discount.
+  const small = createOrder(
+    { client: { name: 'Bulk Buyer', email: 'bulk@example.com' }, items: [{ productId, quantity: 2 }], shippingMethod: 'collect', paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(small.discountAmount, 0);
+  assert.strictEqual(small.total, 200);
+  db.close();
+});
+
+test('createOrder with no configured volume tiers applies no discount (#60 default-inert)', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const withColour = addColour(filament.id, { name: 'Ivory', sku: 'PLA-IVORY-1KG', priceRand: 100, weightG: 1000, stockQty: 20 }, db);
+  const order = createOrder(
+    { client: { name: 'B', email: 'b@example.com' }, items: [{ productId: `filament:pla:${withColour.colours[0].sku}`, quantity: 6 }], shippingMethod: 'collect', paymentMethod: 'manual_eft' },
+    db,
+  );
+  assert.strictEqual(order.discountAmount, 0);
+  assert.strictEqual(order.total, 600);
   db.close();
 });

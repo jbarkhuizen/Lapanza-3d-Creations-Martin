@@ -2723,6 +2723,21 @@ async function renderSettings() {
           <label class="field"><span>Ready-stock Filament Dispatch (Business Days)</span><input data-setting="filamentDispatchDays" value="${escapeAttr(s.filamentDispatchDays || '')}" /></label>
           <label class="field"><span>Custom-print Production Lead Time (Business Days)</span><input data-setting="printLeadTimeDays" value="${escapeAttr(s.printLeadTimeDays || '')}" /></label>
         </div>
+        <div class="section-head" style="margin-top:0.5rem"><h3>Filament Volume Discounts (#60)</h3></div>
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Quantity price breaks on filament rolls, applied automatically at online checkout to the filament portion of the order (best matching tier wins). Leave empty for no discounts. Shown to shoppers on filament pages after the next Publish to site.</p>
+        <div id="volume-discount-rows" class="stack gap-2">
+          ${(s.volumeDiscounts || [])
+            .map(
+              (t, i) => `<div class="row-card-actions" data-vd-index="${i}">
+              <label class="field" style="max-width:160px"><span>From (Rolls)</span><input data-vd="minQty" type="number" min="2" step="1" value="${escapeAttr(String(t.minQty))}" /></label>
+              <label class="field" style="max-width:160px"><span>Discount %</span><input data-vd="pct" type="number" min="0" max="90" step="0.5" value="${escapeAttr(String(t.pct))}" /></label>
+              <label class="field checkbox"><input data-vd="active" type="checkbox" ${t.active !== false ? 'checked' : ''} /><span>Active</span></label>
+              <button type="button" class="btn small btn-ghost" data-vd-remove="${i}">Remove</button>
+            </div>`,
+            )
+            .join('')}
+        </div>
+        <div><button type="button" class="btn small" id="vd-add">+ Add Tier</button></div>
       </div>
 
       <div class="panel stack gap-3">
@@ -2788,6 +2803,27 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
   wireConfigurableListPanels();
   wireFeaturedProductsPanel();
 
+  // #60: tier add/remove -- static template, values typed by the admin.
+  $('#vd-add')?.addEventListener('click', () => {
+    const rows = $('#volume-discount-rows');
+    const idx = rows.querySelectorAll('[data-vd-index]').length;
+    const div = document.createElement('div');
+    div.className = 'row-card-actions';
+    div.dataset.vdIndex = String(idx);
+    div.insertAdjacentHTML(
+      'beforeend',
+      `<label class="field" style="max-width:160px"><span>From (Rolls)</span><input data-vd="minQty" type="number" min="2" step="1" value="3" /></label>
+       <label class="field" style="max-width:160px"><span>Discount %</span><input data-vd="pct" type="number" min="0" max="90" step="0.5" value="5" /></label>
+       <label class="field checkbox"><input data-vd="active" type="checkbox" checked /><span>Active</span></label>
+       <button type="button" class="btn small btn-ghost" data-vd-remove type="button">Remove</button>`,
+    );
+    rows.appendChild(div);
+  });
+  $('#volume-discount-rows')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-vd-remove]');
+    if (btn) btn.closest('[data-vd-index]').remove();
+  });
+
   $('#save-settings').addEventListener('click', async () => {
     const patch = {};
     $$('[data-setting]').forEach((input) => {
@@ -2809,6 +2845,13 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
       emailTemplates[key][input.dataset.emailTemplateField] = input.value;
     });
     if (Object.keys(emailTemplates).length) patch.emailTemplates = emailTemplates;
+    // #60: volume-discount tiers -- always sent (an empty list is a real
+    // "no discounts" choice, not an omission).
+    patch.volumeDiscounts = $$('#volume-discount-rows [data-vd-index]').map((row) => ({
+      minQty: Number(row.querySelector('[data-vd="minQty"]').value) || 0,
+      pct: Number(row.querySelector('[data-vd="pct"]').value) || 0,
+      active: row.querySelector('[data-vd="active"]').checked,
+    }));
     const saveBtn = $('#save-settings');
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving & publishing…';

@@ -2,6 +2,7 @@ import './site.js';
 import { getCart, getCartTotal, getCartTotalWeight, clearCart } from './cart.js';
 import { formatRand as formatPrice } from './money.js';
 import { readCheckoutPrefs as readPrefs, writeCheckoutPrefs as writePrefs, clearCheckoutPrefs } from './checkout-prefs.js';
+import { computeVolumeDiscount } from './volume-discount.js';
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => ({
@@ -192,6 +193,23 @@ async function init() {
   } catch { /* tracking must never break checkout */ }
   const weight = getCartTotalWeight();
   const subtotal = getCartTotal();
+  // Backlog #60: mirror the server's volume-discount rule so the displayed
+  // total always matches what createOrder will actually charge (and what
+  // Payfast is asked for). Settings fetch failure -> no discount shown; the
+  // server still applies it, erring on charging LESS than displayed.
+  let volumeDiscountAmount = 0;
+  try {
+    const settingsRes = await fetch('/site-settings.json', { cache: 'no-store' });
+    if (settingsRes.ok) {
+      const vd = computeVolumeDiscount(items, (await settingsRes.json()).volumeDiscounts);
+      if (vd) {
+        volumeDiscountAmount = vd.amount;
+        document.getElementById('checkout-discount').textContent = `−${formatPrice(vd.amount)}`;
+        document.getElementById('checkout-discount-row').classList.remove('hidden');
+      }
+    }
+  } catch { /* no discount display -- server remains the authority */ }
+  const orderTotal = (shippingPrice) => Math.max(0, subtotal - volumeDiscountAmount + shippingPrice);
   document.getElementById('checkout-weight').textContent = `${weight}g`;
   document.getElementById('checkout-subtotal').textContent = formatPrice(subtotal);
 
@@ -253,7 +271,7 @@ async function init() {
       writePrefs({ fixedShippingOptionId: shippingOption?.id || null });
       const price = shippingOption?.price || 0;
       document.getElementById('checkout-shipping-price').textContent = formatPrice(price);
-      document.getElementById('checkout-total').textContent = formatPrice(subtotal + price);
+      document.getElementById('checkout-total').textContent = formatPrice(orderTotal(price));
     });
     // Restore a previously-picked PUDO/local-delivery option (the select's
     // own choices, not just the shippingMethod radio above it) after coming
@@ -287,7 +305,7 @@ async function init() {
         method === 'collect' ? 'No delivery charge — collect from our store.' : "No delivery charge — you'll arrange your own courier collection."
       }</p>`;
       document.getElementById('checkout-shipping-price').textContent = formatPrice(0);
-      document.getElementById('checkout-total').textContent = formatPrice(subtotal);
+      document.getElementById('checkout-total').textContent = formatPrice(orderTotal(0));
       return;
     }
 
@@ -326,7 +344,7 @@ async function init() {
       note.textContent = `${match.name} — ${formatPrice(match.price)}`;
       shippingBox.appendChild(note);
       document.getElementById('checkout-shipping-price').textContent = formatPrice(match.price);
-      document.getElementById('checkout-total').textContent = formatPrice(subtotal + match.price);
+      document.getElementById('checkout-total').textContent = formatPrice(orderTotal(match.price));
       submitBtn.disabled = false;
     } catch (err) {
       shippingBox.textContent = '';

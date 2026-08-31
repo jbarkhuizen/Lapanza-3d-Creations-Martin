@@ -159,6 +159,12 @@ export const DEFAULT_SETTINGS = {
   // Distinct from LOW_STOCK_ALERT_EMAIL's owner-notification threshold
   // (hardcoded at <=1 in orders.js) -- this one is customer-facing copy.
   lowStockThreshold: 3,
+  // Backlog #60 (SITE-026): volume price breaks on filament rolls --
+  // [{ id, minQty, pct, active }], best matching tier's pct applies to the
+  // filament portion of an online order, server-side (orders.js). EMPTY by
+  // default: the feature stays inert until the owner configures real tiers
+  // in Settings -> Storefront stock & delivery messaging.
+  volumeDiscounts: [],
 
   // SITE-010: real figures from the business owner (2026-08-27), not
   // invented -- shown on filament/category pages (generate-pages.mjs) and
