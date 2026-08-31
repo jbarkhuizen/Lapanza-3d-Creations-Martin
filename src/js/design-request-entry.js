@@ -4,14 +4,45 @@ import './site.js';
 // `data-file-input` with a styled trigger, a name display, and a clear
 // button. Phase-5 #82: inputs are `multiple` now; the display shows the
 // count + names.
+// Mirrors server/uploads.js's allowlists. The server's multer fileFilter
+// silently DROPS a disallowed file (cb(null, false)) -- the request still
+// succeeds and the customer sees "we've received your request" with no file
+// attached. Rejecting here, at pick time, is the only place the customer
+// actually gets told.
+const FILE_RULES = {
+  referenceImage: {
+    ok: (f) => ['image/jpeg', 'image/png', 'image/webp'].includes(f.type),
+    hint: 'JPG, PNG or WebP images',
+  },
+  referenceFile: {
+    ok: (f) => ['.stl', '.3mf', '.obj', '.gcode', '.zip', '.pdf'].some((ext) => f.name.toLowerCase().endsWith(ext)),
+    hint: 'STL, 3MF, OBJ, GCODE, ZIP or PDF files',
+  },
+};
+const MAX_FILE_BYTES = 50 * 1024 * 1024; // matches server/uploads.js fileSize limit
+
 function initFileField(input) {
   const row = input.closest('div');
   const display = row.querySelector('.file-name-display');
   const clearBtn = row.querySelector('.file-clear-btn');
   const defaultText = display.dataset.defaultText;
+  const rule = FILE_RULES[input.name];
 
   input.addEventListener('change', () => {
     const files = [...(input.files || [])];
+    const rejected = rule ? files.filter((f) => !rule.ok(f)) : [];
+    const oversized = files.filter((f) => f.size > MAX_FILE_BYTES);
+    if (rejected.length || oversized.length) {
+      input.value = '';
+      display.textContent = rejected.length
+        ? `${rejected.map((f) => f.name).join(', ')} — not accepted here. Please pick ${rule.hint}.`
+        : `${oversized.map((f) => f.name).join(', ')} — over the 50MB limit. Please pick a smaller file.`;
+      display.classList.add('text-terracotta');
+      display.classList.remove('text-charcoal', 'text-espresso/60');
+      clearBtn.classList.add('hidden');
+      return;
+    }
+    display.classList.remove('text-terracotta');
     display.textContent = files.length
       ? files.length === 1
         ? files[0].name

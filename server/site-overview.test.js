@@ -20,6 +20,12 @@ test('site directory inventory returns safe metadata and rejects paths outside i
   }
 });
 
+test('directory browsing defaults its root to the app directory, not the whole drive', () => {
+  // Regression: the default used to be path.parse(cwd).root -- i.e. / --
+  // letting a logged-in admin enumerate /etc, /root, /home names and sizes.
+  assert.throws(() => listSiteDirectory(path.dirname(process.cwd())), /outside/);
+});
+
 test('site overview includes the latest deployed release', () => {
   const db = openDb(':memory:');
   db.prepare(`

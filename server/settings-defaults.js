@@ -31,7 +31,7 @@ export const DEFAULT_SETTINGS = {
   // wording themselves from Settings without needing a code change.
   whatsappResponseNote: 'Usually within a few hours during business hours',
   escalationContactsNote: 'For urgent matters outside normal hours, contact Johan on 082 782 4585 or Linandi on 082 663 9608.',
-  facebook: 'https://www.facebook.com/Lapanzaloeferox',
+  facebook: 'https://www.facebook.com/profile.php?id=61591435717039',
   instagram: 'https://www.instagram.com/lapanza_beauty_lifestyle/',
   /** When true, one font is used for body + headings */
   useUniversalFont: false,

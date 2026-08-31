@@ -113,7 +113,7 @@ const SITE = {
   email: 'lapanzaonline@gmail.com',
   phone: '082 663 9608',
   phoneTel: '+27826639608',
-  facebook: 'https://www.facebook.com/Lapanzaloeferox',
+  facebook: 'https://www.facebook.com/profile.php?id=61591435717039',
   instagram: 'https://www.instagram.com/lapanza_beauty_lifestyle/',
 };
 

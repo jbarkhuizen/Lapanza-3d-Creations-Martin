@@ -356,7 +356,25 @@ async function init() {
   }
 
   function updatePaymentOptions() {
-    cocLabel.classList.add('flex');
+    // Cash on Collection is only valid with the 'collect' shipping method --
+    // the server hard-rejects every other combination (orders.js), so hide
+    // the option rather than letting the customer fill in the whole form and
+    // only learn about the rule at submit time.
+    const method = form.querySelector('[name="shippingMethod"]:checked')?.value;
+    const collectChosen = method === 'collect';
+    cocLabel.classList.toggle('hidden', !collectChosen);
+    cocLabel.classList.toggle('flex', collectChosen);
+    const cocRadio = cocLabel.querySelector('input[name="paymentMethod"]');
+    if (cocRadio) {
+      cocRadio.disabled = !collectChosen;
+      if (!collectChosen && cocRadio.checked) {
+        const fallback = form.querySelector('[name="paymentMethod"][value="payfast_card"]');
+        if (fallback) {
+          fallback.checked = true;
+          writePrefs({ paymentMethod: fallback.value });
+        }
+      }
+    }
   }
 
   // Restore the shippingMethod/paymentMethod radio the customer had picked
@@ -419,7 +437,14 @@ async function init() {
     const infoEl = document.getElementById('checkout-info');
     errorEl.classList.add('hidden');
     infoEl.classList.add('hidden');
-    if (!shippingReady) return;
+    if (!shippingReady) {
+      // Previously a silent no-op -- the button just "did nothing" when
+      // shipping options had failed to load or no fixed option was picked.
+      errorEl.textContent = 'Please choose a shipping option above before placing the order.';
+      errorEl.classList.remove('hidden');
+      errorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
 
     const missing = collectMissingFields();
     if (missing.length) {

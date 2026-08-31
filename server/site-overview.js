@@ -44,7 +44,12 @@ function assertBrowsable(pathname, filesystemRoot) {
   return resolved;
 }
 
-export function listSiteDirectory(requestedPath, { filesystemRoot = path.parse(process.cwd()).root } = {}) {
+// Browsing is clamped to the app's own directory, not the drive root it
+// previously defaulted to -- a storefront admin (or anyone holding a stolen
+// session) has no business enumerating /etc, /root, or /home, even
+// names-and-sizes only. Disk-usage totals in getSiteOverview still read the
+// volume root via statfs; that returns numbers, not directory contents.
+export function listSiteDirectory(requestedPath, { filesystemRoot = process.cwd() } = {}) {
   const directory = assertBrowsable(requestedPath || filesystemRoot, filesystemRoot);
   const cached = directoryCache.get(directory);
   if (cached && Date.now() - cached.createdAt < 30_000) return cached.value;
