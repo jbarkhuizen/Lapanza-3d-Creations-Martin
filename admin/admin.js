@@ -1061,6 +1061,17 @@ function bindEditorEvents() {
     p.specs.push({ id: uid(), label: '', value: '' });
     renderEditor();
   });
+  // Backlog #126: a newly added row appends to the END of the array on purpose
+  // (array order IS the persisted storefront render order -- unshifting would
+  // silently reorder the live page), so instead scroll the new row into view
+  // and focus its first field to spare the long scroll on big catalogs.
+  function focusNewRow(selector) {
+    const rows = $$(selector);
+    const row = rows[rows.length - 1];
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.querySelector('input, textarea, select')?.focus({ preventScroll: true });
+  }
   $('#add-colour')?.addEventListener('click', () => {
     p.colours = p.colours || [];
     p.colours.push({
@@ -1078,6 +1089,7 @@ function bindEditorEvents() {
       _isNew: true, // not yet persisted -- Save will POST this as a new colour, not PUT
     });
     renderEditor();
+    focusNewRow('[data-colour-index]');
   });
   $('#add-item')?.addEventListener('click', () => {
     p.items = p.items || [];
@@ -1103,6 +1115,7 @@ function bindEditorEvents() {
       _isNew: true, // not yet persisted -- photo upload needs a real item id from the server first
     });
     renderEditor();
+    focusNewRow('[data-item-index]');
   });
 
   $$('[data-remove-spec]').forEach((btn) => {
