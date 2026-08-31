@@ -1,0 +1,7 @@
+User-agent: *
+Disallow: /admin
+Disallow: /api/
+Disallow: /checkout.html
+Disallow: /account.html
+
+Sitemap: https://www.lapanza3d.co.za/sitemap.xml

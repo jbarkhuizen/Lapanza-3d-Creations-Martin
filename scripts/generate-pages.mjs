@@ -61,8 +61,22 @@ const SITE = {
   instagram: 'https://www.instagram.com/lapanza_beauty_lifestyle/',
 };
 
-function head({ title, description, depth = 0, pagePath = '', extra = '', script = '/src/js/site.js' }) {
+// Backlog #109 (SITE-075): canonical URLs, og:url, and structured data are
+// emitted per page; robots.txt + sitemap.xml are written at the end of the
+// run from the pages actually generated this pass.
+const SITE_ORIGIN = 'https://www.lapanza3d.co.za';
+
+function jsonLdScript(data) {
+  if (!data) return '';
+  const list = Array.isArray(data) ? data : [data];
+  // JSON-LD is metadata, not rendered HTML, but it still lands inside a
+  // <script> tag -- escape the one sequence that could break out of it.
+  return list.map((d) => `<script type="application/ld+json">${JSON.stringify(d).replace(/</g, '\\u003c')}</script>`).join('\n');
+}
+
+function head({ title, description, depth = 0, pagePath = '', extra = '', script = '/src/js/site.js', jsonLd = null }) {
   const prefix = '../'.repeat(depth);
+  const canonical = `${SITE_ORIGIN}/${pagePath === 'index.html' ? '' : pagePath}`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -71,9 +85,12 @@ function head({ title, description, depth = 0, pagePath = '', extra = '', script
 <title>${title}</title>
 <meta name="description" content="${description}">
 <meta name="theme-color" content="#f7f3eb">
+<link rel="canonical" href="${canonical}">
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${description}">
+<meta property="og:url" content="${canonical}">
 <meta property="og:type" content="website">
+${jsonLdScript(jsonLd)}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&display=swap" rel="stylesheet">
@@ -413,11 +430,63 @@ function backToHomeButton({ depth, label = '← Back to Home' }) {
   return `<a href="${'../'.repeat(depth)}index.html" class="inline-flex text-sm font-semibold border-2 border-charcoal rounded-full px-5 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">${label}</a>`;
 }
 
+const writtenPages = [];
 function write(file, content) {
   const abs = path.join(root, file);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, content);
+  if (file.endsWith('.html')) writtenPages.push(file);
   console.log('wrote', file);
+}
+
+// Shared JSON-LD builders (#109). Breadcrumbs come from the same
+// "Home / Toys" crumb strings the visible breadcrumb renders from, so the
+// markup can never disagree with what's on screen.
+function breadcrumbJsonLd(crumbString, pagePath) {
+  const parts = String(crumbString || '').split('/').map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: parts.map((label, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: label,
+      ...(i === 0 ? { item: `${SITE_ORIGIN}/` } : i === parts.length - 1 ? { item: `${SITE_ORIGIN}/${pagePath}` } : {}),
+    })),
+  };
+}
+
+function productListJsonLd({ pagePath, listName, products }) {
+  // Prices are stored as display strings ("R 299.00", "R350") -- strip to
+  // the numeric value for the Offer.
+  const parsePrice = (p) => Number(String(p ?? '').replace(/[^\d.]/g, ''));
+  const visible = products
+    .map((p) => ({ ...p, price: parsePrice(p.price) }))
+    .filter((p) => p.name && p.price > 0);
+  if (!visible.length) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    name: listName,
+    itemListElement: visible.map((p, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      item: {
+        '@type': 'Product',
+        name: p.name,
+        ...(p.imageUrl ? { image: `${SITE_ORIGIN}/${String(p.imageUrl).replace(/^\//, '')}` } : {}),
+        ...(p.sku ? { sku: p.sku } : {}),
+        offers: {
+          '@type': 'Offer',
+          price: String(Number(p.price)),
+          priceCurrency: 'ZAR',
+          availability: p.inStock ? 'https://schema.org/InStock' : 'https://schema.org/MadeToOrder',
+          url: `${SITE_ORIGIN}/${pagePath}`,
+        },
+      },
+    })),
+  };
 }
 
 function generateFilamentPage(f) {
@@ -436,11 +505,20 @@ function generateFilamentPage(f) {
           Colour list available on request — <a class="text-terracotta font-semibold hover:underline" href="${SITE.whatsapp}" target="_blank" rel="noopener noreferrer">WhatsApp us</a> for the full swatch.
         </div>`;
 
+  const filamentPagePath = `filament/${f.slug}.html`;
   const html = `${head({
     title: `${f.name} — Lapanza 3D Creative Lab`,
     description: f.description.slice(0, 155),
     depth: 1,
-    pagePath: `filament/${f.slug}.html`,
+    pagePath: filamentPagePath,
+    jsonLd: [
+      breadcrumbJsonLd(`Home / Filament / ${f.name}`, filamentPagePath),
+      productListJsonLd({
+        pagePath: filamentPagePath,
+        listName: `${f.name} filament colours`,
+        products: listedColours.map((c) => ({ name: `${f.name} — ${c.name}`, price: c.price, sku: c.sku, imageUrl: c.imageUrl, inStock: Number(c.stockQty) > 0 })),
+      }),
+    ].filter(Boolean),
   })}
 ${shellStart({ depth: 1 })}
     <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
@@ -566,6 +644,16 @@ ${footer({ depth: 0 })}`;
     description,
     depth,
     pagePath,
+    jsonLd: [
+      breadcrumbJsonLd(crumbs, pagePath),
+      productListJsonLd({
+        pagePath,
+        listName: name,
+        products: (items || [])
+          .filter((i) => i.listed !== false)
+          .map((i) => ({ name: i.name, price: i.price, sku: i.sku, imageUrl: i.imageUrl, inStock: Number(i.stockQty) > 0 && i.available !== false })),
+      }),
+    ].filter(Boolean),
   })}
 ${shellStart({ depth })}
     <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
@@ -669,5 +757,24 @@ if (fs.existsSync(legacyHome)) {
   fs.unlinkSync(legacyHome);
   console.log('removed premium.html (replaced by index.html)');
 }
+
+// ---- robots.txt + sitemap.xml (#109 / SITE-075) ----
+// The sitemap covers every page this run generated, plus the hand-written
+// public pages (kept in step with vite.config.js's htmlEntries list).
+// Checkout/account/cart are deliberately excluded (transactional, no search
+// value); /admin and /api are disallowed outright.
+const HAND_WRITTEN_PUBLIC_PAGES = ['index.html', 'get-in-touch.html', 'design-request.html', 'resources.html'];
+const sitemapPages = [...new Set([...HAND_WRITTEN_PUBLIC_PAGES, ...writtenPages])]
+  .filter((p) => !['checkout.html', 'account.html'].includes(p));
+const today = new Date().toISOString().slice(0, 10);
+const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${sitemapPages
+  .map((p) => `  <url><loc>${SITE_ORIGIN}/${p === 'index.html' ? '' : p}</loc><lastmod>${today}</lastmod></url>`)
+  .join('\n')}
+</urlset>
+`;
+write('public/sitemap.xml', sitemap);
+write('public/robots.txt', `User-agent: *\nDisallow: /admin\nDisallow: /api/\nDisallow: /checkout.html\nDisallow: /account.html\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`);
 
 console.log('\\nDone.');
