@@ -1011,6 +1011,74 @@ ${footer({ depth: 0 })}`;
   write(guidePagePath, html);
 }
 
+// ---- Local SEO landing pages (#110 / SITE-076) ----
+// Three pages targeting real local search intent. Every claim is factual:
+// counts come from the live catalogue, times/zones from the same settings
+// the storefront renders. Copy flagged for owner review in the shipping
+// commit. Generated (not hand-written) so sitemap + search index include
+// them automatically and catalogue counts never go stale.
+{
+  const partCount = ['gwm', 'landrover'].reduce((sum, slug) => sum + (categories[slug]?.items || []).filter((i) => i.listed !== false).length, 0);
+  const colourCount = filaments.reduce((sum, f) => sum + (f.colours || []).filter((c) => c.listed !== false).length, 0);
+  const typeCount = filaments.length;
+
+  const seoPage = ({ file, title, description, h1, body }) => {
+    const html = `${head({ title, description, depth: 0, pagePath: file, jsonLd: [breadcrumbJsonLd(`Home / ${h1}`, file)] })}
+${shellStart({ depth: 0 })}
+    <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-3xl">
+      <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
+        <a href="index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">${h1}</span>
+      </nav>
+      <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-6">${h1}</h1>
+      ${body}
+      <div class="mt-12 flex flex-wrap gap-3">
+        <a href="design-request.html" class="inline-flex text-sm font-semibold bg-charcoal text-cream rounded-full px-6 py-3 hover:bg-terracotta transition-colors">Upload a File for a Quote</a>
+        <a href="${SITE.whatsapp}" class="inline-flex text-sm font-semibold border-2 border-charcoal rounded-full px-6 py-3 hover:bg-charcoal hover:text-cream transition-colors" target="_blank" rel="noopener noreferrer">Chat on WhatsApp</a>
+      </div>
+      <div class="mt-10">${backToHomeButton({ depth: 0 })}</div>
+      </div>
+    </main>
+${footer({ depth: 0 })}`;
+    write(file, html);
+  };
+
+  const para = (t) => `<p class="text-espresso/75 leading-relaxed mb-5">${t}</p>`;
+
+  seoPage({
+    file: 'custom-3d-printing-centurion.html',
+    title: 'Custom 3D Printing in Centurion & Pretoria — Lapanza 3D Creative Lab',
+    description: 'Local custom 3D printing from Pierre van Ryneveld, Centurion — functional parts, replacements, prototypes and gifts, printed to order in PLA, PETG, ABS, ASA, TPU or CPE.',
+    h1: 'Custom 3D Printing in Centurion & Pretoria',
+    body:
+      para(`Lapanza 3D Creative Lab is a family-run print workshop in Pierre van Ryneveld, Centurion. We design and print functional parts, replacement pieces, prototypes, toys and gifts to order — for customers around Centurion and Pretoria, and by courier across South Africa.`) +
+      para(`Bring us a 3D file if you have one, or just a photo, sketch or broken part if you don't — designing the model for you is half of what we do. Production typically takes ${PRINT_LEAD_TIME_DAYS} business days; collect from us in Pierre van Ryneveld, use Local Delivery around Centurion, or ship nationwide via PUDO Locker.`) +
+      para(`We print in every mainstream material — PLA for detail, PETG for working parts, ABS and ASA for heat and outdoor use, flexible TPU, and engineering-grade CPE. Not sure which fits your project? Our <a class="text-terracotta font-semibold hover:underline" href="materials-guide.html">Materials Guide</a> gives the honest short version, or just ask.`),
+  });
+
+  seoPage({
+    file: 'filament-south-africa.html',
+    title: '3D Printer Filament, Stocked in South Africa — Lapanza 3D Creative Lab',
+    description: `${typeCount} filament types and ${colourCount} colours of SA-stocked 1.75mm filament — PLA, PETG, ABS, ASA, TPU and CPE with real specs, dispatched in ${FILAMENT_DISPATCH_DAYS} business days, PUDO nationwide.`,
+    h1: '3D Printer Filament, Stocked in South Africa',
+    body:
+      para(`We stock ${typeCount} filament types across ${colourCount} listed colours — real local stock in Centurion, not import-wait listings. Everything is 1.75&nbsp;mm on 1&nbsp;kg spools, with genuine print/bed temperatures and mechanical specs published on every product page.`) +
+      para(`Orders dispatch within ${FILAMENT_DISPATCH_DAYS} business days of payment: PUDO Locker to anywhere in South Africa, Local Delivery around Centurion, or collect from the workshop. Pay by card or Instant EFT through Payfast.`) +
+      para(`Start with <a class="text-terracotta font-semibold hover:underline" href="filament/pla.html">PLA</a> for everyday printing, or use the <a class="text-terracotta font-semibold hover:underline" href="materials-guide.html">Materials Guide</a> to match a material to your project.`),
+  });
+
+  seoPage({
+    file: 'vehicle-3d-printed-parts.html',
+    title: '3D Printed Vehicle Parts — GWM & Land Rover — Lapanza 3D Creative Lab',
+    description: `${partCount} listed 3D printed vehicle parts for GWM and Land Rover — clips, trims, brackets and hard-to-find replacements, printed to order in Centurion and shipped across South Africa.`,
+    h1: '3D Printed Vehicle Parts — GWM & Land Rover',
+    body:
+      para(`Discontinued clip? Brittle trim piece the dealer no longer stocks? We keep ${partCount} listed vehicle parts for <a class="text-terracotta font-semibold hover:underline" href="car-parts/gwm.html">GWM</a> and <a class="text-terracotta font-semibold hover:underline" href="car-parts/landrover.html">Land Rover</a> — printable to order in materials chosen for the job, including heat-tolerant ABS and UV-stable ASA for parts that live in the sun.`) +
+      para(`Every parts page has search and per-model filtering, and each part lists its material and fitment. Production takes ${PRINT_LEAD_TIME_DAYS} business days; parts ship nationwide via PUDO or can be collected in Centurion.`) +
+      para(`Don't see your part — or drive something else entirely? Use the request route below with a photo or part number and we'll tell you if it's printable.`),
+  });
+}
+
 // ---- search index (#39 / SITE-005) ----
 // One compact entry per filament colour, category item, and navigable page;
 // consumed client-side by src/js/search.js. Anchors use the exact same
@@ -1046,6 +1114,9 @@ ${footer({ depth: 0 })}`;
     }
   }
   for (const [n, h] of [
+    ['Custom 3D Printing in Centurion & Pretoria', 'custom-3d-printing-centurion.html'],
+    ['3D Printer Filament, Stocked in South Africa', 'filament-south-africa.html'],
+    ['3D Printed Vehicle Parts — GWM & Land Rover', 'vehicle-3d-printed-parts.html'],
     ['Materials Guide — which filament to choose', 'materials-guide.html'],
     ['Our Story', 'story.html'],
     ['Get in Touch', 'get-in-touch.html'],
