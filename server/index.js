@@ -2376,6 +2376,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     // (read side) and the admin UI, but not here -- every save silently
     // discarded, identical to the inHouseFilamentBrands bug above.
     'carPartModelsLandrover', 'carPartModelsGwm',
+    // #130 -- brand list itself
+    'carPartBrands',
     // Homepage featured products -- {id,productId,active}[], resolved to
     // display data by syncPublicJson() below, NOT the {id,name,active}
     // configurable-list shape, so it gets its own guard further down

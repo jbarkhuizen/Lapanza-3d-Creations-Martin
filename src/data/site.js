@@ -1,4 +1,5 @@
 import filaments from '../data/filaments.json';
+import siteSettings from '../data/settings.json';
 
 export const SITE = {
   name: 'Lapanza 3D Creative Lab',
@@ -66,4 +67,16 @@ export function colourHex(name) {
 export const FILAMENT_NAV = filaments.map((f) => ({
   slug: f.slug,
   label: f.name,
+}));
+
+// #130: car-part brands for the sidebar nav -- bundled from the synced
+// settings export at build time (a publish rebuilds, same freshness as
+// FILAMENT_NAV above). Falls back to the two founding brands when the
+// export predates the setting.
+const rawBrands = Array.isArray(siteSettings.carPartBrands) && siteSettings.carPartBrands.length
+  ? siteSettings.carPartBrands.filter((b) => b && b.active !== false && b.name)
+  : [{ name: 'GWM' }, { name: 'Landrover' }];
+export const CAR_BRANDS_NAV = rawBrands.map((b) => ({
+  slug: String(b.name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+  label: b.name,
 }));

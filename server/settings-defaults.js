@@ -128,6 +128,15 @@ export const DEFAULT_SETTINGS = {
     { id: 'series-2a', name: 'Series 2A', active: true },
     { id: 'series-3', name: 'Series 3', active: true },
   ],
+  // Backlog #130 (P6): the car-part BRANDS themselves, admin-addable. name
+  // drives the page slug via slugify (GWM -> car-parts/gwm.html) -- keep
+  // names URL-friendly. Deactivating hides the page/nav link on the next
+  // publish without touching existing catalog items. A new brand also needs
+  // its category created (+Category, parent car-parts, matching slug).
+  carPartBrands: [
+    { id: 'gwm', name: 'GWM', active: true },
+    { id: 'landrover', name: 'Landrover', active: true },
+  ],
   carPartModelsGwm: [
     { id: 'p300', name: 'P300', active: true },
     { id: 'p500', name: 'P500', active: true },

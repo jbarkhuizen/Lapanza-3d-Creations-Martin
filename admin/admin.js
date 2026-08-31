@@ -931,8 +931,11 @@ function carPartItemFields(item, categorySlug) {
   // Separate lists per brand -- GWM (P300/P500/Tank 300/Tank 500/P-Series)
   // and Land Rover's naming don't overlap, and a shared list risked tagging
   // a part with the wrong brand's model (see settings-defaults.js).
-  const listKey = categorySlug === 'gwm' ? 'carPartModelsGwm' : 'carPartModelsLandrover';
-  const configured = state.settings?.[listKey] || [];
+  // #130: only the two founding brands have model lists; a newly-added
+  // brand gets no picker (its items still work, just untagged) rather than
+  // silently inheriting the wrong brand's models.
+  const listKey = categorySlug === 'gwm' ? 'carPartModelsGwm' : categorySlug === 'landrover' ? 'carPartModelsLandrover' : null;
+  const configured = (listKey && state.settings?.[listKey]) || [];
   const selected = new Set(item.models || []);
   const models = [
     ...configured,
@@ -2764,6 +2767,7 @@ ${operationalAlertsPanel(s)}
 ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
       ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
       ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
+      ${configurableListPanel('carPartBrands', 'Car-part brands', s.carPartBrands, 'The vehicle brands with their own car-parts page (name becomes the page URL — keep it simple, e.g. Toyota). After adding one: create its category via Product Catalog → + Category with parent car-parts and the matching slug, then Publish to site. Unticking hides the page and nav link on the next publish without touching existing items.')}
       ${configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
       ${configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
       ${featuredProductsPanel(s.featuredProducts)}

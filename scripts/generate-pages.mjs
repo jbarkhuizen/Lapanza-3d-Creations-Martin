@@ -26,12 +26,15 @@ let LOW_STOCK_THRESHOLD = 3;
 let PRINT_LEAD_TIME_DAYS = '3-5';
 let FILAMENT_DISPATCH_DAYS = '1-2';
 let VOLUME_DISCOUNTS = [];
+// #130: car-part brands, admin-configurable (Settings). name -> page slug.
+let CAR_PART_BRANDS = [{ name: 'GWM' }, { name: 'Landrover' }];
 try {
   const settings = JSON.parse(fs.readFileSync(path.join(root, 'src/data/settings.json'), 'utf8'));
   const configured = Number(settings.lowStockThreshold);
   if (Number.isFinite(configured) && configured > 0) LOW_STOCK_THRESHOLD = configured;
   if (settings.printLeadTimeDays) PRINT_LEAD_TIME_DAYS = settings.printLeadTimeDays;
   if (settings.filamentDispatchDays) FILAMENT_DISPATCH_DAYS = settings.filamentDispatchDays;
+  if (Array.isArray(settings.carPartBrands) && settings.carPartBrands.length) CAR_PART_BRANDS = settings.carPartBrands.filter((x) => x && x.active !== false && x.name);
   if (Array.isArray(settings.volumeDiscounts)) VOLUME_DISCOUNTS = settings.volumeDiscounts.filter((t) => t && t.active !== false && Number(t.minQty) > 0 && Number(t.pct) > 0);
 } catch {
   /* settings.json not synced yet -- use the defaults above */
@@ -848,12 +851,19 @@ generateLegalPage({ file: 'returns.html', title: 'Returns & Refunds Policy', des
 // admin-editable, so a slug can legitimately be missing (fresh checkout,
 // category deleted, etc.) — skip and warn rather than crashing the whole
 // publish partway through.
+// #130: the car-parts entries come from the admin-configurable brand list
+// (Settings -> Car-part brands) -- a new brand needs only its category
+// created (+Category, parent car-parts, matching slug) and a publish.
+// Deactivated brands stop generating/linking without touching their items.
+const brandSlug = (name) => String(name || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const categoryPages = [
   { slug: 'toys', file: 'toys.html', depth: 0, pagePath: 'toys.html', description: 'Playful, durable 3D printed toys — printed locally to order in colours you choose.' },
   { slug: 'homeware', file: 'homeware.html', depth: 0, pagePath: 'homeware.html', description: 'Practical and decorative homeware — hooks, organisers, planters and more, printed to order.' },
   { slug: 'phones', file: 'phones.html', depth: 0, pagePath: 'phones.html', description: 'Phone cases, stands and accessories — fitted and finished for everyday use.' },
-  { slug: 'gwm', file: 'car-parts/gwm.html', depth: 1, pagePath: 'car-parts/gwm.html', name: 'GWM' },
-  { slug: 'landrover', file: 'car-parts/landrover.html', depth: 1, pagePath: 'car-parts/landrover.html', name: 'Landrover' },
+  ...CAR_PART_BRANDS.map((b) => {
+    const slug = brandSlug(b.name);
+    return { slug, file: `car-parts/${slug}.html`, depth: 1, pagePath: `car-parts/${slug}.html`, name: b.name };
+  }),
 ];
 
 const skippedCategories = [];
@@ -1126,8 +1136,7 @@ ${footer({ depth: 0 })}`;
     ['Toys', 'toys.html'],
     ['Homeware', 'homeware.html'],
     ['Phones', 'phones.html'],
-    ['Car Parts — GWM', 'car-parts/gwm.html'],
-    ['Car Parts — Landrover', 'car-parts/landrover.html'],
+    ...CAR_PART_BRANDS.map((b) => [`Car Parts — ${b.name}`, `car-parts/${brandSlug(b.name)}.html`]),
   ]) {
     entries.push({ t: 'Page', n, s: '', k: '', h, p: '' });
   }

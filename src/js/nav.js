@@ -1,4 +1,4 @@
-import { FILAMENT_NAV, SITE } from '../data/site.js';
+import { FILAMENT_NAV, CAR_BRANDS_NAV, SITE } from '../data/site.js';
 
 function depthPrefix() {
   const depth = (window.__PAGE_DEPTH__ ?? 0) | 0;
@@ -16,6 +16,14 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
   const p = depthPrefix();
   const filamentOpen = openGroups.includes('Filament') || current.startsWith('filament/');
   const carOpen = openGroups.includes('Car Parts') || current.startsWith('car-parts/');
+
+  // #130: brand links come from the admin-configurable list (bundled at
+  // build via src/data/site.js) -- same pattern as filamentLinks below.
+  const carBrandLinks = CAR_BRANDS_NAV.map((b) => {
+    const href = `car-parts/${b.slug}.html`;
+    const active = isActive(href, current) ? 'active' : '';
+    return `<a href="${p}${href}" class="side-link ${active} block py-1.5 text-espresso/70 hover:text-terracotta transition-colors">${b.label}</a>`;
+  }).join('\n    ');
 
   const filamentLinks = FILAMENT_NAV.map((item) => {
     const href = `${p}filament/${item.slug}.html`;
@@ -49,8 +57,7 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
 <details class="rot-open border-t border-charcoal/10 py-2" data-nav-key="Car Parts" ${carOpen ? 'open' : ''}>
   <summary class="flex items-center justify-between uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors py-1.5 font-semibold"><span>Car Parts</span><span class="chev transition-transform duration-200 text-terracotta">&#8250;</span></summary>
   <div class="pl-3 mt-1 space-y-0.5 border-l border-charcoal/10">
-    <a href="${p}car-parts/gwm.html" class="side-link ${isActive('car-parts/gwm.html', current) ? 'active' : ''} block py-1.5 text-espresso/70 hover:text-terracotta transition-colors">GWM</a>
-    <a href="${p}car-parts/landrover.html" class="side-link ${isActive('car-parts/landrover.html', current) ? 'active' : ''} block py-1.5 text-espresso/70 hover:text-terracotta transition-colors">Landrover</a>
+    ${carBrandLinks}
   </div>
 </details>
 <a href="${p}toys.html" class="side-link ${isActive('toys.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Toys</a>
