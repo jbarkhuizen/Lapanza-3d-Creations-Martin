@@ -652,6 +652,11 @@ function ensurePrintJobColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'listing_item_id')) {
     db.exec('ALTER TABLE print_jobs ADD COLUMN listing_item_id TEXT');
   }
+  // Backlog #134: batch quantity. Pre-existing rows are all single prints,
+  // so the backfill default of 1 is genuinely correct history, not a guess.
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'quantity')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN quantity INTEGER NOT NULL DEFAULT 1');
+  }
   // Uploaded files/photos are stored on disk under a randomized name (see
   // uploads.js) so two uploads can never collide -- these columns keep the
   // admin-facing original filename (e.g. "Joint Box 8x5.3mf") separately,

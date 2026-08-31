@@ -69,6 +69,36 @@ test('computeJobCost with no filament grams: only power + labour + running cost 
   assert.strictEqual(cost.runningCost, 0.08);
 });
 
+test('computeJobCost quantity scales per-copy inputs but not one-off design/setup labour', () => {
+  const slots = [{ grams: 100, meters: 33.5, costPerG: 0.3 }];
+  const single = computeJobCost({ printTimeMinutes: 60, designHours: 2, setupHours: 1, postProcessingHours: 0.5 }, SETTINGS, slots);
+  const batch = computeJobCost({ quantity: 3, printTimeMinutes: 60, designHours: 2, setupHours: 1, postProcessingHours: 0.5 }, SETTINGS, slots);
+  assert.strictEqual(batch.quantity, 3);
+  assert.strictEqual(batch.totalGrams, 300);
+  assert.strictEqual(batch.filamentCost, 90); // 100g x 3 x R0.30
+  assert.strictEqual(single.powerCost, 0.8);
+  assert.strictEqual(batch.powerCost, 2.4); // 1h x 3 x 0.2kW x R4
+  // design (2h*100) + setup (1h*50) stay one-off; post-processing (0.5h*20) triples
+  assert.strictEqual(single.labourCost, 200 + 50 + 10);
+  assert.strictEqual(batch.labourCost, 200 + 50 + 30);
+});
+
+test('createPrintJob with quantity stores it and decrements filament usage for the whole batch', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob(
+    { itemName: 'Batch Widget', quantity: 4, filaments: [{ inHouseFilamentId: f.id, grams: 50, meters: 16.75 }], printTimeMinutes: 30 },
+    db,
+  );
+  assert.strictEqual(job.quantity, 4);
+  assert.strictEqual(job.totalGrams, 200);
+  assert.strictEqual(job.filaments[0].grams, 200); // slot rows record physical batch consumption
+  const used = db.prepare('SELECT used_g, used_m FROM in_house_filament WHERE id = ?').get(f.id);
+  assert.strictEqual(used.used_g, 200);
+  assert.strictEqual(used.used_m, 67);
+  db.close();
+});
+
 test('createPrintJob requires at least one filament slot', () => {
   const db = openDb(':memory:');
   assert.throws(() => createPrintJob({ itemName: 'X', filaments: [] }, db), /At least one filament is required/);

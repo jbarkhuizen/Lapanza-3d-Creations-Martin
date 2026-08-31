@@ -3949,6 +3949,7 @@ const MAX_PRINT_JOB_FILAMENT_SLOTS = 4;
 function blankPrintJob() {
   return {
     itemName: '',
+    quantity: 1,
     slots: Array.from({ length: MAX_PRINT_JOB_FILAMENT_SLOTS }, () => ({ inHouseFilamentId: '', grams: '', meters: '' })),
     // Captured as separate hours/minutes fields for easier data entry --
     // combined into the single printTimeMinutes the API/DB actually store
@@ -3972,6 +3973,7 @@ function readPrintJobPayload(draft) {
     .map((s) => ({ inHouseFilamentId: s.inHouseFilamentId, grams: Number(s.grams) || 0, meters: Number(s.meters) || 0 }));
   return {
     itemName: draft.itemName.trim(),
+    quantity: Math.max(1, Math.round(Number(draft.quantity) || 1)),
     filaments,
     printTimeMinutes: (Number(draft.printTimeHours) || 0) * 60 + (Number(draft.printTimeMins) || 0),
     designHours: Number(draft.designHours) || 0,
@@ -4013,7 +4015,7 @@ async function renderPrintJobs() {
       <div class="panel stack gap-2" style="background:var(--panel-2, transparent)">
         <div class="section-head"><h3>Validation Result</h3></div>
         <p>Filament cost: ${formatRand(preview.filamentCost)} · Power: ${formatRand(preview.powerCost)} · Labour: ${formatRand(preview.labourCost)} · Running: ${formatRand(preview.runningCost)}</p>
-        <p><strong>Total cost: ${formatRand(preview.totalCost)} — Markup: ${formatRand(preview.markupAmount)} — Selling price: ${formatRand(preview.sellingPrice)}</strong></p>
+        <p><strong>Total cost: ${formatRand(preview.totalCost)} — Markup: ${formatRand(preview.markupAmount)} — Selling price: ${formatRand(preview.sellingPrice)}${(preview.quantity || 1) > 1 ? ` (${preview.quantity} copies — ${formatRand(Math.round((preview.sellingPrice / preview.quantity) * 100) / 100)} each)` : ''}</strong></p>
         ${stockWarningsHtml(preview.stockWarnings)}
       </div>` : '';
 
@@ -4030,7 +4032,7 @@ async function renderPrintJobs() {
     .map(
       (j) => `
         <tr data-id="${escapeAttr(j.id)}">
-          <td>${j.referenceImagePath ? `<img src="${escapeAttr(j.referenceImagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:0.5rem" />` : ''}${escapeHtml(j.itemName)}</td>
+          <td>${j.referenceImagePath ? `<img src="${escapeAttr(j.referenceImagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:0.5rem" />` : ''}${escapeHtml(j.itemName)}${(j.quantity || 1) > 1 ? ` <span class="muted">×${j.quantity}</span>` : ''}</td>
           <td style="font-size:0.8rem">
             <div class="stack gap-1">
               <div>
@@ -4090,6 +4092,7 @@ async function renderPrintJobs() {
       <div class="panel stack gap-3" style="max-width:900px">
         <div class="section-head"><h3>Log a Print Job</h3></div>
         <label class="field"><span>Item / File Name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
+        <label class="field"><span>Quantity (Copies Printed — Filament, Print Time &amp; Post-processing Below Are Per Copy)</span><input id="pj-qty" type="number" min="1" step="1" value="${escapeAttr(String(draft.quantity || 1))}" /></label>
 
         <div class="stack gap-2">${slotRows}</div>
         <p class="muted" style="font-size:0.85rem">Totals: <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
@@ -4103,7 +4106,7 @@ async function renderPrintJobs() {
           </label>
           <label class="field"><span>Design (hrs)</span><input id="pj-design-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.designHours))}" /></label>
           <label class="field"><span>Setup (hrs)</span><input id="pj-setup-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.setupHours))}" /></label>
-          <label class="field"><span>Post-processing (hrs)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
+          <label class="field"><span>Post-processing (hrs, Per Copy)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
         </div>
         <div class="grid-3">
           <label class="field"><span>Markup Override (Fraction, Blank = Settings Default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
@@ -4176,6 +4179,7 @@ async function renderPrintJobs() {
 
   function syncFormIntoDraft() {
     draft.itemName = $('#pj-name').value;
+    draft.quantity = $('#pj-qty').value;
     draft.printTimeHours = $('#pj-time-h').value;
     draft.printTimeMins = $('#pj-time-m').value;
     draft.designHours = $('#pj-design-hrs').value;

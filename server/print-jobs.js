@@ -14,6 +14,7 @@ function rowToJob(row, filamentRows = []) {
   return {
     id: row.id,
     itemName: row.item_name,
+    quantity: row.quantity ?? 1,
     totalGrams: row.total_grams,
     totalMeters: row.total_meters,
     printTimeMinutes: row.print_time_minutes,
@@ -65,17 +66,24 @@ function rowToJob(row, filamentRows = []) {
 // in_house_filament.costPerG (not a single shared filament like the
 // original single-material design).
 export function computeJobCost(input, settings, resolvedSlots) {
-  const totalGrams = resolvedSlots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0);
-  const totalMeters = resolvedSlots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0);
-  const slotCosts = resolvedSlots.map((s) => round2((Number(s.grams) || 0) * (s.costPerG || 0)));
+  // Backlog #134: `quantity` = how many copies this job prints (default 1).
+  // Per-copy inputs scale by it: slot grams/meters, print time, and
+  // post-processing hours are all entered PER COPY; design and setup hours
+  // are one-off per job (you design and slice once, however many you print).
+  // Every total below is for the whole batch; the per-copy minimum is just
+  // sellingPrice / quantity, derived in the UI, never stored.
+  const quantity = Math.max(1, Math.round(Number(input.quantity) || 1));
+  const totalGrams = resolvedSlots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0) * quantity;
+  const totalMeters = resolvedSlots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0) * quantity;
+  const slotCosts = resolvedSlots.map((s) => round2((Number(s.grams) || 0) * quantity * (s.costPerG || 0)));
   const filamentCost = round2(slotCosts.reduce((sum, c) => sum + c, 0));
 
-  const printTimeHours = (Number(input.printTimeMinutes) || 0) / 60;
+  const printTimeHours = ((Number(input.printTimeMinutes) || 0) / 60) * quantity;
   const powerCost = round2(printTimeHours * (Number(settings.printerPowerDraw) || 0) * (Number(settings.electricityRate) || 0));
 
   const designHours = Number(input.designHours) || 0;
   const setupHours = Number(input.setupHours) || 0;
-  const postProcessingHours = Number(input.postProcessingHours) || 0;
+  const postProcessingHours = (Number(input.postProcessingHours) || 0) * quantity;
   const labourCost = round2(
     designHours * (Number(settings.designRate) || 0) +
       setupHours * (Number(settings.setupRate) || 0) +
@@ -92,6 +100,7 @@ export function computeJobCost(input, settings, resolvedSlots) {
   const sellingPrice = round2(totalCost + markupAmount);
 
   return {
+    quantity,
     totalGrams,
     totalMeters,
     slotCosts,
@@ -140,10 +149,10 @@ function resolveSlots(items, db) {
 // backfills jobs that exceed available stock for exactly this reason. So:
 // warn, don't reject. Shared by both the Validate preview and the real
 // create path so they never disagree about which jobs are worth flagging.
-function stockWarnings(slots) {
+function stockWarnings(slots, quantity = 1) {
   return slots
-    .filter((s) => s.grams > s.remainingG)
-    .map((s) => ({ inHouseFilamentId: s.inHouseFilamentId, name: s.name, requestedG: s.grams, remainingG: s.remainingG }));
+    .filter((s) => s.grams * quantity > s.remainingG)
+    .map((s) => ({ inHouseFilamentId: s.inHouseFilamentId, name: s.name, requestedG: s.grams * quantity, remainingG: s.remainingG }));
 }
 
 // Computes the cost breakdown WITHOUT writing anything -- the "Validate"
@@ -156,7 +165,7 @@ export function previewPrintJobCost(data, db = getDb()) {
   return {
     ...cost,
     filaments: slots.map((s, i) => ({ inHouseFilamentId: s.inHouseFilamentId, name: s.name, grams: s.grams, meters: s.meters, cost: cost.slotCosts[i] })),
-    stockWarnings: stockWarnings(slots),
+    stockWarnings: stockWarnings(slots, cost.quantity),
   };
 }
 
@@ -183,7 +192,7 @@ export function createPrintJob(data, db = getDb()) {
   const cost = computeJobCost(data, settings, slots);
   // Computed before the transaction below decrements usage -- remainingG
   // must reflect stock as it stood before *this* job's own consumption.
-  const warnings = stockWarnings(slots);
+  const warnings = stockWarnings(slots, cost.quantity);
 
   // Defaults to the computed minimum if not supplied/invalid -- covers the
   // common case of just accepting the calculated price without typing it
@@ -197,16 +206,17 @@ export function createPrintJob(data, db = getDb()) {
   const tx = db.transaction(() => {
     db.prepare(
       `INSERT INTO print_jobs
-        (id, item_name, total_grams, total_meters, print_time_minutes, design_hours, setup_hours, post_processing_hours,
+        (id, item_name, quantity, total_grams, total_meters, print_time_minutes, design_hours, setup_hours, post_processing_hours,
          markup_pct, filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price,
          final_selling_price, status, date_printed, created_at)
        VALUES
-        (@id, @item_name, @total_grams, @total_meters, @print_time_minutes, @design_hours, @setup_hours, @post_processing_hours,
+        (@id, @item_name, @quantity, @total_grams, @total_meters, @print_time_minutes, @design_hours, @setup_hours, @post_processing_hours,
          @markup_pct, @filament_cost, @power_cost, @labour_cost, @running_cost, @total_cost, @markup_amount, @selling_price,
          @final_selling_price, @status, @date_printed, @created_at)`,
     ).run({
       id,
       item_name: String(data.itemName).trim(),
+      quantity: cost.quantity,
       total_grams: cost.totalGrams,
       total_meters: cost.totalMeters,
       print_time_minutes: Number(data.printTimeMinutes) || 0,
@@ -231,17 +241,20 @@ export function createPrintJob(data, db = getDb()) {
       `INSERT INTO print_job_filaments (id, print_job_id, in_house_filament_id, grams, meters, cost, slot_order)
        VALUES (@id, @print_job_id, @in_house_filament_id, @grams, @meters, @cost, @slot_order)`,
     );
+    // Slot rows store what was PHYSICALLY consumed for the whole batch
+    // (per-copy input x quantity) -- keeps every existing "grams used"
+    // reader truthful without needing to know about quantity.
     slots.forEach((slot, i) => {
       insertSlot.run({
         id: randomUUID(),
         print_job_id: id,
         in_house_filament_id: slot.inHouseFilamentId,
-        grams: slot.grams,
-        meters: slot.meters,
+        grams: slot.grams * cost.quantity,
+        meters: slot.meters * cost.quantity,
         cost: cost.slotCosts[i],
         slot_order: slot.slotOrder,
       });
-      incrementInHouseFilamentUsage(slot.inHouseFilamentId, { usedG: slot.grams, usedM: slot.meters }, db);
+      incrementInHouseFilamentUsage(slot.inHouseFilamentId, { usedG: slot.grams * cost.quantity, usedM: slot.meters * cost.quantity }, db);
     });
 
     return id;
