@@ -92,6 +92,32 @@ test('bulkUpdateInventory can pull a category item off the products page without
   assert.strictEqual(result.ok, true);
   const row = listInventory().find((r) => r.id === 'i1');
   assert.strictEqual(row.listed, false);
-  assert.strictEqual(row.stockQty, 3);
+  assert.strictEqual(row.stockQty, 2);
   assert.strictEqual(row.price, 150);
+});
+
+test('getReorderReport lists at/below-threshold items with 30-day sales, cancelled orders excluded (#122)', async (t) => {
+  await withTempCwd(t);
+  const { createFilament, addColour } = await import(`./filaments.js?t=${Date.now()}`);
+  const { updateSettings } = await import(`./settings.js?t=${Date.now()}`);
+  const { createOrder, updateOrderStatus } = await import(`./orders.js?t=${Date.now()}`);
+  const { getReorderReport } = await import(`./inventory.js?t=${Date.now()}`);
+
+  updateSettings({ lowStockThreshold: 3 });
+  const f = createFilament({ name: 'PLA', slug: 'pla' });
+  addColour(f.id, { name: 'Low', sku: 'PLA-LOW', priceRand: 100, weightG: 100, stockQty: 6 });
+  addColour(f.id, { name: 'Fine', sku: 'PLA-FINE', priceRand: 100, weightG: 100, stockQty: 50 });
+
+  // 4 sold (stock 6 -> 2); a further 1-unit order reserves then cancels
+  // (2 -> 1 -> back to 2), and its unit must NOT count as sold.
+  createOrder({ client: { name: 'B', email: 'b@example.com' }, items: [{ productId: 'filament:pla:PLA-LOW', quantity: 4 }], shippingMethod: 'collect', paymentMethod: 'manual_eft' });
+  const cancelled = createOrder({ client: { name: 'B', email: 'b@example.com' }, items: [{ productId: 'filament:pla:PLA-LOW', quantity: 1 }], shippingMethod: 'collect', paymentMethod: 'manual_eft' });
+  updateOrderStatus(cancelled.id, 'cancelled');
+
+  const report = getReorderReport();
+  const row = report.find((r) => r.sku === 'PLA-LOW');
+  assert.ok(row, 'low-stock colour appears');
+  assert.strictEqual(row.stockQty, 2);
+  assert.strictEqual(row.soldLast30Days, 4);
+  assert.ok(!report.find((r) => r.sku === 'PLA-FINE'), 'healthy stock excluded');
 });

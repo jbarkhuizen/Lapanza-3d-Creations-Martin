@@ -1,4 +1,5 @@
 import { getDb } from './db.js';
+import { getSettings } from './settings.js';
 import { listFilaments, updateColour } from './filaments.js';
 import { getProduct, upsertProduct } from './store.js';
 import { readCategoryProducts } from './export.js';
@@ -109,4 +110,29 @@ export function bulkUpdateInventory(updates, db = getDb()) {
     }
   }
   return results;
+}
+
+// Backlog #122 (SITE-088): reorder report -- every sellable item at/below
+// the low-stock threshold, with 30-day units sold so the owner can size
+// the reorder. Threshold is the same admin-editable lowStockThreshold the
+// storefront messaging and low-stock alerts already use (per-item reorder
+// points remain an easy follow-up if one global line proves too coarse).
+// Cancelled orders excluded -- their stock came back.
+export function getReorderReport(db = getDb()) {
+  const threshold = Number(getSettings(db).lowStockThreshold) || 3;
+  const sold = new Map(
+    db
+      .prepare(
+        `SELECT oi.product_id AS productId, SUM(oi.quantity) AS units
+         FROM order_items oi JOIN orders o ON o.id = oi.order_id
+         WHERE o.created_at >= datetime('now', '-30 days') AND o.status != 'cancelled'
+         GROUP BY oi.product_id`,
+      )
+      .all()
+      .map((r) => [r.productId, r.units]),
+  );
+  return listInventory(db)
+    .filter((i) => Number(i.stockQty) <= threshold)
+    .map((i) => ({ ...i, soldLast30Days: sold.get(i.productId) || 0 }))
+    .sort((a, b) => a.stockQty - b.stockQty || b.soldLast30Days - a.soldLast30Days);
 }

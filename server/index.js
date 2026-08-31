@@ -121,7 +121,7 @@ import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary } from './analytics.js';
-import { listInventory, bulkUpdateInventory } from './inventory.js';
+import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, getDesignRequestByToken, listDesignRequestFiles, setDesignRequestQuote, acceptDesignRequestQuote } from './design-requests.js';
@@ -1533,6 +1533,11 @@ app.get('/api/shipping-options/public/fixed', (_req, res) => {
 });
 
 // ---- Inventory / Stock Management ----
+
+// #122: reorder report -- at/below-threshold items + 30-day sales.
+app.get('/api/reorder-report', requireAuth, (_req, res) => {
+  res.json({ items: getReorderReport(), threshold: Number(getSettings().lowStockThreshold) || 3 });
+});
 
 app.get('/api/inventory', requireAuth, (_req, res) => {
   res.json({ items: listInventory() });
