@@ -278,6 +278,46 @@ function responsiveImg(url, alt, className) {
   return `<picture><source type="image/webp" srcset="${srcset}" sizes="(min-width: 768px) 300px, 45vw">${plain}</picture>`;
 }
 
+// Backlog #66 (SITE-032): standardized fulfilment label per category item.
+// Vocabulary is fixed here, not admin-editable (same enum discipline as
+// order/todo statuses): stocked units ship fast; an available item without
+// stock is printed on demand; unavailable means what it says. Filament
+// swatches keep their own richer stock messaging (In stock / Only N left).
+function fulfilmentLabel(item) {
+  if (item.available === false) return `<p class="text-[0.65rem] uppercase tracking-[0.12em] font-bold text-espresso/40 mb-3">Currently Unavailable</p>`;
+  if (Number(item.stockQty) > 0) return `<p class="text-[0.65rem] uppercase tracking-[0.12em] font-bold text-forest mb-3" style="color:#2e6e46">Ready to Ship</p>`;
+  return `<p class="text-[0.65rem] uppercase tracking-[0.12em] font-bold text-espresso/50 mb-3">Printed to Order</p>`;
+}
+
+// Backlog #50 (SITE-016): reusable "why buy from Lapanza" strip, placed on
+// catalogue pages near the buying decision. Every claim is factual and
+// self-maintaining -- dispatch/lead-time figures come from the same
+// admin-editable settings the delivery notes read, so wording can never
+// drift from what the business actually promises. Homepage and checkout
+// already carry their own variants (family-run blurb, trust badges).
+function valueProps(kind) {
+  const speed =
+    kind === 'filament'
+      ? `Ready stock — dispatched in ${FILAMENT_DISPATCH_DAYS} business days`
+      : `Printed to order in ${PRINT_LEAD_TIME_DAYS} business days`;
+  const props = [
+    ['Family-run local lab', 'Real people in Centurion, not a print farm'],
+    [speed, 'PUDO nationwide, Local Delivery or collect'],
+    ['Secure Payfast checkout', 'Card or Instant EFT — we never see card details'],
+    ['Custom work welcome', 'Upload a file or idea for a quote any time'],
+  ];
+  return `<div class="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4">
+    ${props
+      .map(
+        ([title, sub]) => `<div class="border border-charcoal/10 rounded-sm bg-linen/40 p-4">
+          <p class="text-sm font-semibold mb-1">${title}</p>
+          <p class="text-xs text-espresso/55 leading-relaxed">${sub}</p>
+        </div>`,
+      )
+      .join('')}
+  </div>`;
+}
+
 function imageFileExists(url) {
   if (!url) return false;
   // Category items can still carry a plain external URL from before the
@@ -402,7 +442,8 @@ function catalogueItems(label, items, categorySlug) {
                 <p class="text-espresso/60 text-sm mb-2">${item.details || 'Custom printed to order.'}</p>
                 ${meta ? `<p class="text-espresso/45 text-xs mb-2">${meta}</p>` : ''}
                 ${fitment ? `<p class="text-espresso/45 text-xs mb-2">${fitment}</p>` : ''}
-                ${item.price ? `<p class="text-terracotta font-semibold mb-3">${formatItemPrice(item.price)}</p>` : ''}
+                ${item.price ? `<p class="text-terracotta font-semibold mb-1">${formatItemPrice(item.price)}</p>` : ''}
+                ${fulfilmentLabel(item)}
                 <a href="${SITE.whatsapp}" class="text-sm font-semibold text-terracotta hover:underline" target="_blank" rel="noopener noreferrer">Enquire</a>
                 ${
                   canAddToCart
@@ -556,6 +597,7 @@ ${shellStart({ depth: 1 })}
       ${deliveryNote('filament')}
       ${specsBlock(f.specs)}
       ${colours}
+      ${valueProps('filament')}
       <div class="mt-14 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth: 1 })}</div>
       </div>
     </main>
@@ -593,6 +635,7 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
       ${isCarParts ? partFilterBar(items) : ''}
       <div class="grid grid-cols-2 md:grid-cols-3 gap-5 catalogue-grid">${catalogueItems(name, items, slug)}</div>
       ${isCarParts ? `<p id="part-filter-empty" class="hidden text-espresso/50 text-sm py-10 text-center">No parts match your search/filter.</p>` : ''}
+      ${valueProps(kind === 'catalog' ? 'category' : kind)}
       <div class="mt-14 p-7 md:p-8 bg-linen border-2 border-charcoal/10 rounded-sm brutal">
         <p class="eyebrow mb-3">Custom request</p>
         <p class="font-serif text-2xl mb-3 tracking-tight">Need something specific?</p>
