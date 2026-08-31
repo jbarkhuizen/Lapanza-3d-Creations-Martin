@@ -528,6 +528,7 @@ export function ensureSchema(db) {
   ensureUploadOriginalNameColumns(db);
   ensureTodoColumns(db);
   ensureDesignRequestStatusColumns(db);
+  ensureDesignRequestV2Columns(db);
   ensureShippingCategoryColumn(db);
   ensureClientDisabledColumn(db);
   seedTodoItems(db);
@@ -735,6 +736,52 @@ function ensureUploadOriginalNameColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(design_requests)', 'reference_file_original_name')) {
     db.exec('ALTER TABLE design_requests ADD COLUMN reference_file_original_name TEXT');
   }
+}
+
+// Phase-5 quote cluster (#81 #82 #86 #87): structured quote capture,
+// multi-file uploads, guest status tokens, and quote/deposit fields.
+// All nullable/defaulted -- existing rows stay valid untouched.
+function ensureDesignRequestV2Columns(db) {
+  const cols = [
+    ['service_type', "TEXT NOT NULL DEFAULT ''"], // print_my_model | design_for_me
+    ['intended_use', "TEXT NOT NULL DEFAULT ''"],
+    ['dimensions', "TEXT NOT NULL DEFAULT ''"],
+    ['quantity', 'INTEGER NOT NULL DEFAULT 1'],
+    ['material_pref', "TEXT NOT NULL DEFAULT ''"],
+    ['colour_pref', "TEXT NOT NULL DEFAULT ''"],
+    ['finish_pref', "TEXT NOT NULL DEFAULT ''"],
+    ['urgency', "TEXT NOT NULL DEFAULT ''"],
+    ['delivery_pref', "TEXT NOT NULL DEFAULT ''"],
+    // #86: tokenized status link for guests (account linkage via client_id
+    // already exists); backfilled below so old requests get links too.
+    ['status_token', 'TEXT'],
+    // #87: the quote itself. Amount in whole rand (same convention as
+    // orders.total); quote_status '' | 'quoted' | 'accepted'.
+    ['quote_amount', 'INTEGER'],
+    ['quote_terms', "TEXT NOT NULL DEFAULT ''"],
+    ['quoted_at', 'TEXT'],
+    ['quote_status', "TEXT NOT NULL DEFAULT ''"],
+    ['quote_order_id', 'TEXT'], // the deposit/full-payment order, once accepted
+  ];
+  for (const [name, type] of cols) {
+    if (!hasColumn(db, 'PRAGMA table_info(design_requests)', name)) {
+      db.exec(`ALTER TABLE design_requests ADD COLUMN ${name} ${type}`);
+    }
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS design_request_files (
+      id TEXT PRIMARY KEY,
+      design_request_id TEXT NOT NULL REFERENCES design_requests(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL DEFAULT 'file',
+      file_path TEXT NOT NULL,
+      original_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_design_request_files_request ON design_request_files (design_request_id);
+  `);
+  // Backfill status tokens for pre-existing rows (crypto not imported here;
+  // hex from randomblob is equivalent).
+  db.exec("UPDATE design_requests SET status_token = lower(hex(randomblob(24))) WHERE status_token IS NULL");
 }
 
 // Stock Management "Listed on site" radio: lets an admin pull a filament

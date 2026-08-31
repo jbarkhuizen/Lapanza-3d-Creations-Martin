@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import { getDb } from './db.js';
 
 const VALID_STATUSES = ['new', 'in_progress', 'finalized'];
@@ -17,6 +17,23 @@ function rowToDesignRequest(row) {
     referenceImageOriginalName: row.reference_image_original_name,
     referenceFilePath: row.reference_file_path,
     referenceFileOriginalName: row.reference_file_original_name,
+    // Phase-5 structured capture (#81)
+    serviceType: row.service_type || '',
+    intendedUse: row.intended_use || '',
+    dimensions: row.dimensions || '',
+    quantity: row.quantity ?? 1,
+    materialPref: row.material_pref || '',
+    colourPref: row.colour_pref || '',
+    finishPref: row.finish_pref || '',
+    urgency: row.urgency || '',
+    deliveryPref: row.delivery_pref || '',
+    statusToken: row.status_token,
+    // #87 quote fields
+    quoteAmount: row.quote_amount,
+    quoteTerms: row.quote_terms || '',
+    quotedAt: row.quoted_at,
+    quoteStatus: row.quote_status || '',
+    quoteOrderId: row.quote_order_id,
     status: row.status,
     adminNotes: row.admin_notes,
     finalizedAt: row.finalized_at,
@@ -44,8 +61,12 @@ export function createDesignRequest(data, db = getDb()) {
   const id = randomUUID();
   const now = new Date().toISOString();
   db.prepare(
-    `INSERT INTO design_requests (id, client_id, name, email, phone, description, budget_note, reference_image_path, reference_image_original_name, reference_file_path, reference_file_original_name, status, admin_notes, created_at, updated_at)
-     VALUES (@id, @client_id, @name, @email, @phone, @description, @budget_note, @reference_image_path, @reference_image_original_name, @reference_file_path, @reference_file_original_name, 'new', '', @created_at, @updated_at)`,
+    `INSERT INTO design_requests (id, client_id, name, email, phone, description, budget_note,
+       service_type, intended_use, dimensions, quantity, material_pref, colour_pref, finish_pref, urgency, delivery_pref, status_token,
+       reference_image_path, reference_image_original_name, reference_file_path, reference_file_original_name, status, admin_notes, created_at, updated_at)
+     VALUES (@id, @client_id, @name, @email, @phone, @description, @budget_note,
+       @service_type, @intended_use, @dimensions, @quantity, @material_pref, @colour_pref, @finish_pref, @urgency, @delivery_pref, @status_token,
+       @reference_image_path, @reference_image_original_name, @reference_file_path, @reference_file_original_name, 'new', '', @created_at, @updated_at)`,
   ).run({
     id,
     client_id: data.clientId || null,
@@ -54,6 +75,16 @@ export function createDesignRequest(data, db = getDb()) {
     phone: data.phone || '',
     description: String(data.description).trim(),
     budget_note: data.budgetNote || '',
+    service_type: data.serviceType === 'design_for_me' ? 'design_for_me' : 'print_my_model',
+    intended_use: String(data.intendedUse || '').slice(0, 300),
+    dimensions: String(data.dimensions || '').slice(0, 200),
+    quantity: Math.max(1, Math.round(Number(data.quantity) || 1)),
+    material_pref: String(data.materialPref || '').slice(0, 100),
+    colour_pref: String(data.colourPref || '').slice(0, 100),
+    finish_pref: String(data.finishPref || '').slice(0, 100),
+    urgency: String(data.urgency || '').slice(0, 100),
+    delivery_pref: String(data.deliveryPref || '').slice(0, 100),
+    status_token: randomBytes(24).toString('hex'),
     reference_image_path: data.referenceImagePath || null,
     reference_image_original_name: data.referenceImageOriginalName || null,
     reference_file_path: data.referenceFilePath || null,
@@ -61,7 +92,34 @@ export function createDesignRequest(data, db = getDb()) {
     created_at: now,
     updated_at: now,
   });
+  // #82: multi-file uploads land in the child table (legacy two-column
+  // storage stays readable for pre-existing rows).
+  const insertFile = db.prepare(
+    'INSERT INTO design_request_files (id, design_request_id, kind, file_path, original_name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+  );
+  for (const f of Array.isArray(data.files) ? data.files : []) {
+    insertFile.run(randomUUID(), id, f.kind === 'image' ? 'image' : 'file', f.filePath, f.originalName || '', now);
+  }
   return getDesignRequest(id, db);
+}
+
+export function listDesignRequestFiles(designRequestId, db = getDb()) {
+  return db
+    .prepare('SELECT id, kind, file_path AS filePath, original_name AS originalName FROM design_request_files WHERE design_request_id = ? ORDER BY created_at ASC')
+    .all(designRequestId);
+}
+
+// #86: guest status lookup by token -- returns only what a customer may
+// see (never admin_notes).
+export function getDesignRequestByToken(token, db = getDb()) {
+  const row = db.prepare('SELECT * FROM design_requests WHERE status_token = ?').get(String(token || ''));
+  if (!row) return null;
+  const r = rowToDesignRequest(row);
+  return {
+    id: r.id, status: r.status, createdAt: r.createdAt, finalizedAt: r.finalizedAt,
+    serviceType: r.serviceType, description: r.description,
+    quoteAmount: r.quoteAmount, quoteTerms: r.quoteTerms, quoteStatus: r.quoteStatus, quotedAt: r.quotedAt,
+  };
 }
 
 export function updateDesignRequest(id, data, db = getDb()) {
@@ -100,6 +158,31 @@ export function updateDesignRequest(id, data, db = getDb()) {
   return getDesignRequest(id, db);
 }
 
+// #87: the quote lifecycle. Setting a quote (re)stamps quoted_at and puts
+// quote_status at 'quoted'; accepting is only valid FROM 'quoted' and
+// records the order that payment now rides on. Amounts are whole rand,
+// same convention as orders.total.
+export function setDesignRequestQuote(id, { amount, terms }, db = getDb()) {
+  const existing = getDesignRequest(id, db);
+  if (!existing) return null;
+  const value = Math.round(Number(amount));
+  if (!Number.isFinite(value) || value <= 0) throw new Error('Quote amount must be a positive rand value');
+  db.prepare(
+    "UPDATE design_requests SET quote_amount = ?, quote_terms = ?, quoted_at = ?, quote_status = 'quoted', updated_at = ? WHERE id = ?",
+  ).run(value, String(terms || '').slice(0, 2000), new Date().toISOString(), new Date().toISOString(), id);
+  return getDesignRequest(id, db);
+}
+
+export function acceptDesignRequestQuote(token, orderId, db = getDb()) {
+  const row = db.prepare('SELECT * FROM design_requests WHERE status_token = ?').get(String(token || ''));
+  if (!row) throw new Error('Request not found');
+  if (row.quote_status !== 'quoted') throw new Error('This request has no open quote to accept');
+  db.prepare(
+    "UPDATE design_requests SET quote_status = 'accepted', quote_order_id = ?, status = 'in_progress', updated_at = ? WHERE id = ?",
+  ).run(orderId, new Date().toISOString(), row.id);
+  return getDesignRequest(row.id, db);
+}
+
 export function deleteDesignRequest(id, db = getDb()) {
   const result = db.prepare('DELETE FROM design_requests WHERE id = ?').run(id);
   return result.changes > 0;
@@ -122,16 +205,29 @@ export function pruneExpiredDesignFiles(retentionMonths, deleteFile, db = getDb(
          AND (reference_image_path IS NOT NULL OR reference_file_path IS NOT NULL)`,
     )
     .all(cutoff.toISOString());
-  const pruned = [];
+  // Multi-file rows (#82) expire on the same clock.
+  const fileRows = db
+    .prepare(
+      `SELECT f.id, f.file_path, f.design_request_id FROM design_request_files f
+       JOIN design_requests r ON r.id = f.design_request_id
+       WHERE r.status = 'finalized' AND r.finalized_at IS NOT NULL AND r.finalized_at < ?`,
+    )
+    .all(cutoff.toISOString());
+  const pruned = new Set();
+  for (const f of fileRows) {
+    deleteFile(f.file_path);
+    db.prepare('DELETE FROM design_request_files WHERE id = ?').run(f.id);
+    pruned.add(f.design_request_id);
+  }
   for (const row of rows) {
     if (row.reference_image_path) deleteFile(row.reference_image_path);
     if (row.reference_file_path) deleteFile(row.reference_file_path);
     db.prepare(
       'UPDATE design_requests SET reference_image_path = NULL, reference_file_path = NULL, updated_at = ? WHERE id = ?',
     ).run(new Date().toISOString(), row.id);
-    pruned.push(row.id);
+    pruned.add(row.id);
   }
-  return pruned;
+  return [...pruned];
 }
 
 export { VALID_STATUSES as DESIGN_REQUEST_STATUSES };

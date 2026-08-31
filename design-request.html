@@ -48,46 +48,128 @@
         <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Request a Custom Print</h1>
         <p class="text-espresso/75 leading-relaxed max-w-xl mb-12 text-lg">Tell us what you need — a repair part, a one-off design, a reference photo of something you'd like recreated. We'll get back to you with a quote.</p>
 
-        <form id="design-request-form" class="space-y-5" novalidate>
-          <div class="grid sm:grid-cols-2 gap-5">
+        <form id="design-request-form" class="space-y-8" novalidate>
+          <!-- Phase-5 #81 (absorbs #80's guided flow + #92's service-type
+               split): sectioned single page — accessible and mobile-friendly
+               without wizard step-state — ending in a review-before-submit
+               summary built by design-request-entry.js. -->
+          <fieldset class="space-y-4">
+            <legend class="font-serif text-xl tracking-tight mb-2">1 · What do you need?</legend>
+            <div class="grid sm:grid-cols-2 gap-3 text-sm">
+              <label class="flex items-start gap-3 border border-charcoal/15 rounded-sm p-4 cursor-pointer has-[:checked]:border-terracotta">
+                <input type="radio" name="serviceType" value="print_my_model" checked class="mt-0.5" />
+                <span><strong class="block">Print my model</strong><span class="text-espresso/60">I have a 3D file (or can get one) — print it for me.</span></span>
+              </label>
+              <label class="flex items-start gap-3 border border-charcoal/15 rounded-sm p-4 cursor-pointer has-[:checked]:border-terracotta">
+                <input type="radio" name="serviceType" value="design_for_me" class="mt-0.5" />
+                <span><strong class="block">Design it for me</strong><span class="text-espresso/60">I have an idea, photo, sketch or broken part — design and print it.</span></span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset class="space-y-4">
+            <legend class="font-serif text-xl tracking-tight mb-2">2 · Your details</legend>
+            <div class="grid sm:grid-cols-2 gap-5">
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Name *</span>
+                <input name="name" type="text" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Email *</span>
+                <input name="email" type="email" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+            </div>
             <label class="block text-sm">
-              <span class="block mb-1.5 text-espresso/70">Name *</span>
-              <input name="name" type="text" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              <span class="block mb-1.5 text-espresso/70">Phone *</span>
+              <input name="phone" type="tel" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
             </label>
+          </fieldset>
+
+          <fieldset class="space-y-4">
+            <legend class="font-serif text-xl tracking-tight mb-2">3 · The project</legend>
             <label class="block text-sm">
-              <span class="block mb-1.5 text-espresso/70">Email *</span>
-              <input name="email" type="email" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              <span class="block mb-1.5 text-espresso/70">Describe What You Need *</span>
+              <textarea name="description" required rows="4" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent"></textarea>
             </label>
-          </div>
-          <label class="block text-sm">
-            <span class="block mb-1.5 text-espresso/70">Phone *</span>
-            <input name="phone" type="tel" required class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
-          </label>
-          <label class="block text-sm">
-            <span class="block mb-1.5 text-espresso/70">Describe What You Need *</span>
-            <textarea name="description" required rows="5" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent"></textarea>
-          </label>
-          <label class="block text-sm">
-            <span class="block mb-1.5 text-espresso/70">Budget (Optional)</span>
-            <input name="budgetNote" type="text" placeholder="e.g. under R500" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
-          </label>
+            <div class="grid sm:grid-cols-2 gap-5">
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">What Will It Be Used For?</span>
+                <input name="intendedUse" type="text" placeholder="e.g. replacement clip for a cupboard hinge" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Size / Dimensions (If Known)</span>
+                <input name="dimensions" type="text" placeholder="e.g. 120 × 40 × 15 mm" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+            </div>
+            <div class="grid sm:grid-cols-3 gap-5">
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Quantity</span>
+                <input name="quantity" type="number" min="1" step="1" value="1" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Material Preference</span>
+                <select name="materialPref" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent">
+                  <option value="">Recommend for me</option>
+                  <option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option><option>TPU (flexible)</option><option>CPE</option>
+                </select>
+              </label>
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Colour Preference</span>
+                <input name="colourPref" type="text" placeholder="e.g. black, or match photo" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              </label>
+            </div>
+            <div class="grid sm:grid-cols-3 gap-5">
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Finish</span>
+                <select name="finishPref" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent">
+                  <option value="">As printed (standard)</option>
+                  <option>Smoothed / sanded</option>
+                  <option>Not sure — advise me</option>
+                </select>
+              </label>
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">How Urgent?</span>
+                <select name="urgency" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent">
+                  <option value="">No rush</option>
+                  <option>Within 2 weeks</option>
+                  <option>Within a week</option>
+                  <option>ASAP — tell me what's possible</option>
+                </select>
+              </label>
+              <label class="block text-sm">
+                <span class="block mb-1.5 text-espresso/70">Delivery / Collection</span>
+                <select name="deliveryPref" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent">
+                  <option value="">Decide later</option>
+                  <option>Collect (Centurion)</option>
+                  <option>PUDO Locker</option>
+                  <option>Local Delivery</option>
+                </select>
+              </label>
+            </div>
+            <label class="block text-sm">
+              <span class="block mb-1.5 text-espresso/70">Budget (Optional)</span>
+              <input name="budgetNote" type="text" placeholder="e.g. under R500" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+            </label>
+          </fieldset>
+          <fieldset class="space-y-4">
+            <legend class="font-serif text-xl tracking-tight mb-2">4 &middot; Photos &amp; files</legend>
           <div class="grid sm:grid-cols-2 gap-5">
             <div class="text-sm">
-              <span class="block mb-1.5 text-espresso/70" id="referenceImage-label">Reference Image (Optional)</span>
+              <span class="block mb-1.5 text-espresso/70" id="referenceImage-label">Reference Images (Up to 5)</span>
               <span class="block text-xs text-espresso/50 mb-2">JPG, PNG or WebP &middot; up to 50MB</span>
               <div class="flex items-center gap-3">
                 <label for="referenceImage" class="shrink-0 cursor-pointer text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Choose file</label>
-                <input id="referenceImage" name="referenceImage" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="referenceImage-label" class="sr-only" data-file-input />
+                <input id="referenceImage" name="referenceImage" type="file" multiple accept="image/jpeg,image/png,image/webp" aria-describedby="referenceImage-label" class="sr-only" data-file-input />
                 <span class="file-name-display text-sm text-espresso/60 truncate" data-default-text="No file chosen">No file chosen</span>
                 <button type="button" class="file-clear-btn hidden shrink-0 text-espresso/40 hover:text-terracotta text-lg leading-none font-bold" aria-label="Remove selected file">&times;</button>
               </div>
             </div>
             <div class="text-sm">
-              <span class="block mb-1.5 text-espresso/70" id="referenceFile-label">Reference File (Optional)</span>
+              <span class="block mb-1.5 text-espresso/70" id="referenceFile-label">Model / Reference Files (Up to 5)</span>
               <span class="block text-xs text-espresso/50 mb-2">STL, 3MF, OBJ, GCODE, ZIP or PDF &middot; up to 50MB</span>
               <div class="flex items-center gap-3">
                 <label for="referenceFile" class="shrink-0 cursor-pointer text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Choose file</label>
-                <input id="referenceFile" name="referenceFile" type="file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" aria-describedby="referenceFile-label" class="sr-only" data-file-input />
+                <input id="referenceFile" name="referenceFile" type="file" multiple accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" aria-describedby="referenceFile-label" class="sr-only" data-file-input />
                 <span class="file-name-display text-sm text-espresso/60 truncate" data-default-text="No file chosen">No file chosen</span>
                 <button type="button" class="file-clear-btn hidden shrink-0 text-espresso/40 hover:text-terracotta text-lg leading-none font-bold" aria-label="Remove selected file">&times;</button>
               </div>
@@ -107,7 +189,23 @@
             </ul>
             <p class="text-sm text-espresso/60 mt-3">Material undecided? See our <a href="materials-guide.html" class="text-terracotta font-semibold hover:underline">Materials Guide</a>.</p>
           </details>
-          <button type="submit" class="w-full sm:w-auto text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-8 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Send request</button>
+          </fieldset>
+
+          <!-- #81/#83: review-before-submit summary + upload progress, both
+               driven by design-request-entry.js -->
+          <div id="dr-review" class="hidden border-2 border-charcoal/15 rounded-sm p-5 bg-linen/40">
+            <p class="font-serif text-lg mb-3">Quick check before it goes</p>
+            <dl id="dr-review-body" class="text-sm space-y-1.5"></dl>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <button type="submit" id="dr-confirm" class="text-sm font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-6 py-3 hover:bg-charcoal transition-colors">Confirm &amp; send</button>
+              <button type="button" id="dr-edit" class="text-sm font-semibold border-2 border-charcoal rounded-full px-6 py-3 hover:bg-charcoal hover:text-cream transition-colors">Go back &amp; edit</button>
+            </div>
+            <div id="dr-progress" class="hidden mt-4">
+              <div class="h-2 bg-charcoal/10 rounded-full overflow-hidden"><div id="dr-progress-bar" class="h-full bg-terracotta rounded-full transition-all" style="width:0%"></div></div>
+              <p id="dr-progress-text" class="text-xs text-espresso/60 mt-1.5">Uploading…</p>
+            </div>
+          </div>
+          <button type="submit" class="w-full sm:w-auto text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-8 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Review &amp; send</button>
           <p id="design-request-note" class="text-sm text-espresso/70" role="status"></p>
         </form>
       </div>

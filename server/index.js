@@ -87,6 +87,8 @@ import {
   sendOrderConfirmationEmail,
   sendOrderShippedEmail,
   sendRestockEmail,
+  sendDesignRequestReceivedEmail,
+  sendDesignRequestQuoteEmail,
   sendInvoiceEmail,
   sendLowStockAlert,
   sendClientVerificationEmail,
@@ -122,7 +124,7 @@ import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary,
 import { listInventory, bulkUpdateInventory } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
-import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
+import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, getDesignRequestByToken, listDesignRequestFiles, setDesignRequestQuote, acceptDesignRequestQuote } from './design-requests.js';
 import {
   listPrintJobs,
   getPrintJob,
@@ -666,6 +668,76 @@ app.get('/api/restock/unsubscribe', (req, res) => {
 
 app.get('/api/restock-subscriptions', requireAuth, (_req, res) => {
   res.json({ subscriptions: listPendingRestockSubscriptions() });
+});
+
+// ---- Design-request status (#86 / SITE-052) ----
+
+app.get('/api/design-request-status', (req, res) => {
+  const request = getDesignRequestByToken(req.query.token);
+  if (!request) return res.status(404).json({ error: 'Request not found' });
+  res.json({ request });
+});
+
+app.get('/api/client/design-requests', requireClientAuth, (req, res) => {
+  const all = listDesignRequests({});
+  const mine = all
+    .filter((r) => r.clientId === req.clientId)
+    .map((r) => ({ id: r.id, status: r.status, createdAt: r.createdAt, finalizedAt: r.finalizedAt, serviceType: r.serviceType, description: r.description, statusToken: r.statusToken, quoteAmount: r.quoteAmount, quoteTerms: r.quoteTerms, quoteStatus: r.quoteStatus }));
+  res.json({ designRequests: mine });
+});
+
+// #87 (SITE-053): admin sets/sends a quote; customer accepts + pays a
+// configurable deposit (or full amount) through the same order/Payfast
+// pipeline every other payment uses -- acceptance, terms, and payment all
+// land in the ordinary audit/order trail.
+app.put('/api/design-requests/:id/quote', requireAuth, async (req, res) => {
+  try {
+    const request = setDesignRequestQuote(req.params.id, req.body || {});
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Design request ${request.id}: quoted R${request.quoteAmount}` });
+    try {
+      await sendDesignRequestQuoteEmail(request, `${siteUrlFor(req)}/design-request-status.html?token=${request.statusToken}`);
+      res.json({ request, emailSent: true });
+    } catch (err) {
+      logEmailFailure(`Design request ${request.id} quote email`, err, req);
+      res.json({ request, emailSent: false, emailError: 'Quote saved, but the email failed to send — check SMTP settings.' });
+    }
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/design-request-status/accept', publicFormLimiter, async (req, res) => {
+  try {
+    const token = (req.body || {}).token;
+    const request = getDesignRequestByToken(token);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.quoteStatus !== 'quoted') return res.status(400).json({ error: 'This request has no open quote to accept' });
+
+    const settings = getSettings();
+    const depositPct = Math.min(100, Math.max(1, Math.round(Number(settings.quoteDepositPct) || 100)));
+    const payable = Math.max(1, Math.round((request.quoteAmount * depositPct) / 100));
+    const label = depositPct < 100 ? `${depositPct}% deposit` : 'full payment';
+
+    // Full request row (token lookup returns the customer-safe subset).
+    const full = listDesignRequests({}).find((r) => r.statusToken === token);
+    const order = createManualOrder({
+      client: { name: full.name, email: full.email, phone: full.phone },
+      items: [{ name: `Custom print (request ${full.id.slice(0, 8)}) — ${label} on quote of R${request.quoteAmount}`, price: payable, quantity: 1 }],
+      shippingMethod: 'collect',
+      paymentMethod: 'payfast_card',
+    });
+    acceptDesignRequestQuote(token, order.id);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, detail: `Design request ${full.id}: quote R${request.quoteAmount} accepted by customer; ${label} order ${order.id} (R${payable}) created`, ...requestMeta(req) });
+
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+    const siteUrl = process.env.SITE_URL || requestOrigin;
+    const apiUrl = process.env.API_URL || requestOrigin;
+    const payfast = buildPayfastRedirect({ order, siteUrl, apiUrl, paymentMethod: 'payfast_card' });
+    res.json({ ok: true, redirect: payfast });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ---- Newsletter campaigns: compose -> approve -> send (Phase 4) ----
@@ -1674,21 +1746,32 @@ app.post(
   '/api/design-requests',
   publicFormLimiter,
   uploadDesignRequestAssets.fields([
-    { name: 'referenceImage', maxCount: 1 },
-    { name: 'referenceFile', maxCount: 1 },
+    { name: 'referenceImage', maxCount: 5 },
+    { name: 'referenceFile', maxCount: 5 },
   ]),
   async (req, res, next) => {
     try {
-      const imageFile = req.files?.referenceImage?.[0];
-      const fileFile = req.files?.referenceFile?.[0];
-      const request = createDesignRequest({
-        ...(req.body || {}),
-        referenceImagePath: imageFile ? `/uploads/design-requests/${imageFile.filename}` : undefined,
-        referenceImageOriginalName: imageFile ? imageFile.originalname : undefined,
-        referenceFilePath: fileFile ? `/uploads/design-requests/${fileFile.filename}` : undefined,
-        referenceFileOriginalName: fileFile ? fileFile.originalname : undefined,
-      });
-      res.status(201).json({ ok: true, designRequest: request });
+      // #82: every upload (up to 5 images + 5 model files) lands in the
+      // files child table; the legacy two-column shape is no longer written.
+      const files = [
+        ...(req.files?.referenceImage || []).map((f) => ({ kind: 'image', filePath: `/uploads/design-requests/${f.filename}`, originalName: f.originalname })),
+        ...(req.files?.referenceFile || []).map((f) => ({ kind: 'file', filePath: `/uploads/design-requests/${f.filename}`, originalName: f.originalname })),
+      ];
+      // #86: attach the logged-in customer when a valid client session rides
+      // along (same opportunistic lookup as the analytics beacon).
+      const clientToken = req.cookies[CLIENT_SESSION_COOKIE];
+      const clientSession = clientToken && clientSessions.get(clientToken);
+      const clientId = clientSession && Date.now() - clientSession.createdAt < SESSION_TTL_MS ? clientSession.clientId : null;
+      const request = createDesignRequest({ ...(req.body || {}), files, clientId });
+      res.status(201).json({ ok: true, designRequest: { id: request.id, statusToken: request.statusToken } });
+      // #86: acknowledgement email with the tokenized status link -- the
+      // guest's way back to their request; account holders also see it on
+      // the account page.
+      try {
+        await sendDesignRequestReceivedEmail(request, `${siteUrlFor(req)}/design-request-status.html?token=${request.statusToken}`);
+      } catch (err) {
+        logEmailFailure('Design request acknowledgement email', err, req);
+      }
       try {
         await sendNewDesignRequestNotificationEmail(request);
       } catch (err) {
@@ -1705,7 +1788,9 @@ app.post(
 );
 
 app.get('/api/design-requests', requireAuth, (req, res) => {
-  res.json({ designRequests: listDesignRequests({ status: req.query.status }) });
+  // #82: multi-file uploads attached per request for the admin detail view.
+  const designRequests = listDesignRequests({ status: req.query.status }).map((r) => ({ ...r, files: listDesignRequestFiles(r.id) }));
+  res.json({ designRequests });
 });
 
 app.get('/api/design-requests/:id', requireAuth, (req, res) => {
@@ -2273,6 +2358,7 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'volumeDiscounts',
     // SITE-056/057 / #90 -- design-file retention window
     'designFileRetentionMonths',
+    'quoteDepositPct',
     // SITE-010
     'printLeadTimeDays', 'filamentDispatchDays',
     // Configurable lists -- inHouseFilamentBrands existed before this (a

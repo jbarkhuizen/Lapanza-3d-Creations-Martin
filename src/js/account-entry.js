@@ -107,6 +107,40 @@ function wireOrderCancelHandler() {
   });
 }
 
+// Phase-5 #86: the customer's design requests, linked by client_id (the
+// public form attaches it when a session rides along). Each row links to
+// the same tokenized status page the acknowledgement email carries.
+async function loadDesignRequests() {
+  const tbody = document.getElementById('account-design-requests');
+  const emptyEl = document.getElementById('account-dr-empty');
+  if (!tbody) return;
+  try {
+    const { designRequests } = await api('/api/client/design-requests');
+    emptyEl.classList.toggle('hidden', designRequests.length > 0);
+    tbody.replaceChildren(
+      ...designRequests.map((r) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-t border-charcoal/10';
+        tr.appendChild(textCell(new Date(r.createdAt).toLocaleDateString()));
+        tr.appendChild(textCell(r.serviceType === 'design_for_me' ? 'Design & print' : 'Print my model'));
+        tr.appendChild(textCell({ new: 'Received', in_progress: 'In progress', finalized: 'Finalized' }[r.status] || r.status));
+        tr.appendChild(textCell(r.quoteStatus === 'accepted' ? 'Accepted' : r.quoteStatus === 'quoted' ? formatPrice(r.quoteAmount || 0) : '—'));
+        const td = document.createElement('td');
+        td.className = 'px-4 py-2.5';
+        const a = document.createElement('a');
+        a.href = `design-request-status.html?token=${encodeURIComponent(r.statusToken)}`;
+        a.className = 'text-xs font-semibold uppercase tracking-[0.1em] text-terracotta hover:underline';
+        a.textContent = r.quoteStatus === 'quoted' ? 'View Quote' : 'View';
+        td.appendChild(a);
+        tr.appendChild(td);
+        return tr;
+      }),
+    );
+  } catch {
+    /* section is a nice-to-have; the account page still works */
+  }
+}
+
 // Backlog #96 -- same delegation reasoning as the cancel handler above.
 function wireBuyAgainHandler() {
   const tbody = document.getElementById('account-orders');
@@ -146,6 +180,7 @@ async function showLoggedIn(client) {
   wireOrderCancelHandler();
   wireBuyAgainHandler();
   await loadOrders();
+  await loadDesignRequests();
 }
 
 function showGuest() {

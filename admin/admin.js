@@ -2372,6 +2372,8 @@ const EMAIL_TEMPLATE_META = [
   { key: 'orderConfirmation', label: 'Order confirmation', tokens: '{{name}}, {{orderRef}}' },
   { key: 'orderShipped', label: 'Order shipped (tracking number set)', tokens: '{{name}}, {{orderRef}}, {{trackingNumber}}' },
   { key: 'restockAlert', label: 'Back-in-stock alert', tokens: '{{productName}}' },
+  { key: 'designRequestReceived', label: 'Design request received (acknowledgement)', tokens: '{{name}}' },
+  { key: 'designRequestQuoted', label: 'Design request quoted (accept & pay link)', tokens: '{{name}}, {{amount}}' },
   { key: 'designRequestStatus', label: 'Design request status', tokens: '{{name}}, {{status}}' },
   { key: 'newsletterConfirm', label: 'Newsletter confirmation', tokens: '(none)' },
   { key: 'lowStockAlert', label: 'Low stock alert (to owner)', tokens: '{{itemName}}, {{stockQty}}, {{sku}}' },
@@ -2718,6 +2720,7 @@ async function renderSettings() {
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Storefront Stock &amp; Delivery Messaging</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
+        <label class="field" style="max-width:220px"><span>Quote Deposit % (100 = Full Payment)</span><input data-setting="quoteDepositPct" type="number" min="1" max="100" step="1" value="${escapeAttr(String(s.quoteDepositPct ?? 50))}" /></label>
         <label class="field" style="max-width:260px"><span>Design-file Retention (Months After Finalized)</span><input data-setting="designFileRetentionMonths" type="number" min="1" step="1" value="${escapeAttr(String(s.designFileRetentionMonths ?? 12))}" /></label>
         <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
@@ -5619,6 +5622,19 @@ async function renderDesignRequests() {
       <p class="muted" style="margin:0;font-size:0.85rem">Uploaded reference files auto-delete a set number of months after a request is finalized (Settings → Storefront → Design-file Retention). The request record itself is kept.</p>
         <p class="muted" style="font-size:0.85rem">${escapeHtml(form.email)} ${form.phone ? `· ${escapeHtml(form.phone)}` : ''}</p>
         <label class="field"><span>Description</span><textarea readonly>${escapeHtml(form.description)}</textarea></label>
+        ${form.serviceType || form.intendedUse || form.dimensions || (form.quantity || 1) > 1 || form.materialPref || form.colourPref || form.finishPref || form.urgency || form.deliveryPref ? `
+        <div class="muted" style="font-size:0.85rem;line-height:1.6">
+          ${form.serviceType ? `<div><strong>Service:</strong> ${form.serviceType === 'design_for_me' ? 'Design it for me' : 'Print my model'}</div>` : ''}
+          ${form.intendedUse ? `<div><strong>Use:</strong> ${escapeHtml(form.intendedUse)}</div>` : ''}
+          ${form.dimensions ? `<div><strong>Size:</strong> ${escapeHtml(form.dimensions)}</div>` : ''}
+          ${(form.quantity || 1) > 1 ? `<div><strong>Quantity:</strong> ${escapeHtml(String(form.quantity))}</div>` : ''}
+          ${form.materialPref ? `<div><strong>Material:</strong> ${escapeHtml(form.materialPref)}</div>` : ''}
+          ${form.colourPref ? `<div><strong>Colour:</strong> ${escapeHtml(form.colourPref)}</div>` : ''}
+          ${form.finishPref ? `<div><strong>Finish:</strong> ${escapeHtml(form.finishPref)}</div>` : ''}
+          ${form.urgency ? `<div><strong>Urgency:</strong> ${escapeHtml(form.urgency)}</div>` : ''}
+          ${form.deliveryPref ? `<div><strong>Delivery:</strong> ${escapeHtml(form.deliveryPref)}</div>` : ''}
+        </div>` : ''}
+        ${(form.files || []).length ? `<div class="muted" style="font-size:0.85rem"><strong>Files:</strong> ${form.files.map((f) => `<a class="text-terracotta" style="text-decoration:underline;margin-right:0.6rem" href="${escapeAttr(f.filePath)}" ${f.kind === 'image' ? 'target="_blank" rel="noopener"' : `download="${escapeAttr(f.originalName || 'file')}"`}>${escapeHtml(f.originalName || f.filePath.split('/').pop())}</a>`).join('')}</div>` : ''}
         ${form.budgetNote ? `<p class="muted" style="font-size:0.85rem">Budget: ${escapeHtml(form.budgetNote)}</p>` : ''}
         <div class="grid-2">
           ${form.referenceImagePath ? `<img src="${escapeAttr(form.referenceImagePath)}" alt="Reference image" style="width:120px;height:120px;object-fit:cover;border-radius:4px" />` : ''}
@@ -5627,6 +5643,19 @@ async function renderDesignRequests() {
         <label class="field"><span>Status</span><select id="dr-status">${statusOptions}</select></label>
         ${form.finalizedAt ? `<p class="muted" style="font-size:0.85rem">Finalized ${escapeHtml(formatDate(form.finalizedAt))}</p>` : ''}
         <label class="field"><span>Admin Notes</span><textarea id="dr-notes">${escapeHtml(form.adminNotes || '')}</textarea></label>
+        <div class="stack gap-2" style="padding-top:8px;border-top:1px solid var(--border)">
+          <strong style="font-size:0.92rem">Quote (#87)</strong>
+          ${form.quoteStatus === 'accepted'
+            ? `<p class="muted" style="margin:0">Quote of R${escapeHtml(String(form.quoteAmount))} ACCEPTED ${form.quoteOrderId ? `— payment order <code>${escapeHtml(form.quoteOrderId.slice(0, 8))}</code> (see Invoice History)` : ''}</p>`
+            : `
+          <div class="row-card-actions">
+            <label class="field" style="max-width:180px"><span>Amount (R)</span><input id="dr-quote-amount" type="number" min="1" step="1" value="${escapeAttr(form.quoteAmount ? String(form.quoteAmount) : '')}" /></label>
+            <button class="btn small btn-primary" id="dr-send-quote" type="button">${form.quoteStatus === 'quoted' ? 'Update & Re-email Quote' : 'Save & Email Quote'}</button>
+          </div>
+          <label class="field"><span>Quote Terms (Shown to the Customer)</span><textarea id="dr-quote-terms" placeholder="e.g. Price includes design time and one revision. Balance due on collection.">${escapeHtml(form.quoteTerms || '')}</textarea></label>
+          ${form.quoteStatus === 'quoted' ? `<p class="muted" style="margin:0;font-size:0.85rem">Quoted R${escapeHtml(String(form.quoteAmount))} on ${escapeHtml((form.quotedAt || '').slice(0, 10))} — awaiting customer acceptance. Deposit on acceptance: set under Settings → Storefront (Quote Deposit %).</p>` : ''}
+          `}
+        </div>
         <div class="row-card-actions">
           <button class="btn btn-primary" id="save-design-request" type="button">Save</button>
           <button class="btn btn-ghost" id="cancel-design-request" type="button">Close</button>
@@ -5676,6 +5705,23 @@ async function renderDesignRequests() {
   if (!form) return;
 
   $('#cancel-design-request').addEventListener('click', async () => { state.editingDesignRequest = null; await renderDesignRequests(); });
+  // #87: save + email the quote in one action.
+  $('#dr-send-quote')?.addEventListener('click', async () => {
+    const btn = $('#dr-send-quote');
+    btn.disabled = true;
+    try {
+      const { request, emailSent, emailError } = await api(`/api/design-requests/${form.id}/quote`, {
+        method: 'PUT',
+        body: JSON.stringify({ amount: Number($('#dr-quote-amount').value), terms: $('#dr-quote-terms').value }),
+      });
+      toast(emailSent ? 'Quote saved and emailed to the customer' : emailError || 'Quote saved (email failed)');
+      state.editingDesignRequest = request;
+      await renderDesignRequests();
+    } catch (ex) {
+      toast(ex.message);
+      btn.disabled = false;
+    }
+  });
   $('#save-design-request').addEventListener('click', async () => {
     const payload = { status: $('#dr-status').value, adminNotes: $('#dr-notes').value };
     try {

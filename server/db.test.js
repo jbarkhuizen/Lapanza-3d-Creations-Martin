@@ -18,6 +18,7 @@ test('ensureSchema creates every expected table', () => {
     'analytics_seen_visitors',
     'audit_log',
     'clients',
+    'design_request_files',
     'design_requests',
     'filament_colours',
     'filament_types',

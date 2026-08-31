@@ -19,6 +19,7 @@ function htmlEntries() {
     designRequest: resolve(__dirname, 'design-request.html'),
     getInTouch: resolve(__dirname, 'get-in-touch.html'),
     materialsGuide: resolve(__dirname, 'materials-guide.html'),
+    designRequestStatus: resolve(__dirname, 'design-request-status.html'),
     seoCustomPrinting: resolve(__dirname, 'custom-3d-printing-centurion.html'),
     seoFilamentSa: resolve(__dirname, 'filament-south-africa.html'),
     seoVehicleParts: resolve(__dirname, 'vehicle-3d-printed-parts.html'),

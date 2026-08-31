@@ -170,6 +170,10 @@ export const DEFAULT_SETTINGS = {
   // stay -- only the binary files go). 12 months default; the privacy
   // policy states whatever this is set to, so change both together.
   designFileRetentionMonths: 12,
+  // #87 (SITE-053): what an accepted quote pays up front -- 100 = full
+  // amount, anything lower = that percentage as a deposit (balance settled
+  // per the quote's own terms). Whole-number percent.
+  quoteDepositPct: 50,
 
   // SITE-010: real figures from the business owner (2026-08-27), not
   // invented -- shown on filament/category pages (generate-pages.mjs) and
@@ -207,6 +211,14 @@ export const DEFAULT_SETTINGS = {
     orderShipped: {
       subject: 'Your order {{orderRef}} is on its way — Lapanza 3D',
       message: 'Good news — your order has been handed to the courier. You can track it with the tracking number below.',
+    },
+    designRequestReceived: {
+      subject: "We've received your design request — Lapanza 3D",
+      message: "Thanks — your custom design/print request is in. We'll review it and come back to you with questions or a quote. You can check its status any time with the link below.",
+    },
+    designRequestQuoted: {
+      subject: 'Your quote from Lapanza 3D — R{{amount}}',
+      message: "Good news — we've quoted your custom design request. Review the amount and terms below, and accept online when you're ready; production starts once your payment is in.",
     },
     restockAlert: {
       subject: 'Back in stock: {{productName}} — Lapanza 3D',

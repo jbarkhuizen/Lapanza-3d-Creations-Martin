@@ -126,6 +126,42 @@ export async function sendOrderShippedEmail(order) {
   });
 }
 
+// Phase-5 #86: acknowledgement + tokenized status link, sent on submission.
+export async function sendDesignRequestReceivedEmail(request, statusUrl) {
+  if (!request.email) throw new Error('Design request has no email');
+  const settings = getSettings();
+  const vars = { name: request.name || 'there' };
+  const bodyHtml = `<p style="margin:0 0 16px;">Hi ${escapeHtml(vars.name)},</p>
+    ${messageHtmlFor(settings, 'designRequestReceived', vars)}
+    ${renderButton('Check request status', statusUrl)}
+    <p style="margin:16px 0 0;font-size:12px;color:#6b6257;">Keep this email — the link above is your direct line to this request's progress.</p>`;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: request.email,
+    subject: subjectFor(settings, 'designRequestReceived', vars),
+    html: renderEmailShell({ settings, preheader: 'Your design request is in', bodyHtml }),
+  });
+}
+
+// #87: the quote itself, with the accept-and-pay link (the same tokenized
+// status page, which now shows the quote + accept button).
+export async function sendDesignRequestQuoteEmail(request, statusUrl) {
+  if (!request.email) throw new Error('Design request has no email');
+  const settings = getSettings();
+  const vars = { name: request.name || 'there', amount: String(request.quoteAmount) };
+  const bodyHtml = `<p style="margin:0 0 16px;">Hi ${escapeHtml(vars.name)},</p>
+    ${messageHtmlFor(settings, 'designRequestQuoted', vars)}
+    <p style="margin:0 0 8px;font-size:22px;font-weight:bold;color:#c24b28;">R ${escapeHtml(vars.amount)}</p>
+    ${request.quoteTerms ? `<p style="margin:0 0 16px;font-size:13px;color:#3b322b;">${textToHtml(request.quoteTerms)}</p>` : ''}
+    ${renderButton('Review & accept your quote', statusUrl)}`;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: request.email,
+    subject: subjectFor(settings, 'designRequestQuoted', vars),
+    html: renderEmailShell({ settings, preheader: 'Your custom print quote is ready', bodyHtml }),
+  });
+}
+
 // Backlog #43: back-in-stock alert -- single-purpose, self-requested, with
 // a one-click unsubscribe link (the subscription's own token). productHref
 // is the absolute URL to the product's card anchor.

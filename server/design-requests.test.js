@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, pruneExpiredDesignFiles } from './design-requests.js';
+import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, pruneExpiredDesignFiles, setDesignRequestQuote, acceptDesignRequestQuote, listDesignRequestFiles, getDesignRequestByToken } from './design-requests.js';
 
 function basePayload(overrides = {}) {
   return { email: 'customer@example.com', name: 'Customer', phone: '0821234567', description: 'A custom bracket for my car', ...overrides };
@@ -122,5 +122,49 @@ test('pruneExpiredDesignFiles deletes only finalized-and-expired uploads, keeps 
   assert.strictEqual(row.reference_file_path, null);
   assert.strictEqual(row.description, 'x'); // record kept
   assert.strictEqual(db.prepare('SELECT reference_file_path FROM design_requests WHERE id = ?').get(active.id).reference_file_path, '/uploads/design-requests/c.stl');
+  db.close();
+});
+
+test('quote lifecycle: set -> accept (only from quoted), amounts validated (#87)', () => {
+  const db = openDb(':memory:');
+  const r = createDesignRequest({ name: 'Q', email: 'q@example.com', phone: '082', description: 'widget' }, db);
+  assert.throws(() => setDesignRequestQuote(r.id, { amount: 0 }, db), /positive rand/);
+  const quoted = setDesignRequestQuote(r.id, { amount: 750, terms: 'One revision included.' }, db);
+  assert.strictEqual(quoted.quoteStatus, 'quoted');
+  assert.strictEqual(quoted.quoteAmount, 750);
+  assert.ok(quoted.quotedAt);
+
+  // Accept requires the token and an open quote.
+  assert.throws(() => acceptDesignRequestQuote('wrong-token', 'order-1', db), /not found/);
+  const accepted = acceptDesignRequestQuote(quoted.statusToken, 'order-1', db);
+  assert.strictEqual(accepted.quoteStatus, 'accepted');
+  assert.strictEqual(accepted.quoteOrderId, 'order-1');
+  assert.strictEqual(accepted.status, 'in_progress');
+  // A second accept must fail -- no open quote anymore.
+  assert.throws(() => acceptDesignRequestQuote(quoted.statusToken, 'order-2', db), /no open quote/);
+  db.close();
+});
+
+test('createDesignRequest stores structured fields, files, and a status token (#81/#82/#86)', () => {
+  const db = openDb(':memory:');
+  const r = createDesignRequest({
+    name: 'S', email: 's@example.com', phone: '082', description: 'bracket',
+    serviceType: 'design_for_me', intendedUse: 'shelf bracket', dimensions: '100x50mm', quantity: 4,
+    materialPref: 'PETG', urgency: 'Within a week',
+    files: [
+      { kind: 'image', filePath: '/uploads/design-requests/a.jpg', originalName: 'photo.jpg' },
+      { kind: 'file', filePath: '/uploads/design-requests/b.stl', originalName: 'bracket.stl' },
+    ],
+  }, db);
+  assert.strictEqual(r.serviceType, 'design_for_me');
+  assert.strictEqual(r.quantity, 4);
+  assert.ok(r.statusToken?.length >= 32);
+  const files = listDesignRequestFiles(r.id, db);
+  assert.strictEqual(files.length, 2);
+  assert.strictEqual(files[1].originalName, 'bracket.stl');
+  // Token lookup returns the customer-safe subset only.
+  const viewed = getDesignRequestByToken(r.statusToken, db);
+  assert.strictEqual(viewed.status, 'new');
+  assert.strictEqual(viewed.adminNotes, undefined);
   db.close();
 });
