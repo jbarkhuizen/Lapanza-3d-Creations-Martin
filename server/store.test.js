@@ -28,3 +28,27 @@ test('upsertProduct adds a category product and getProduct retrieves it', async 
   assert.strictEqual(deleteProduct('p1'), true);
   assert.strictEqual(getProduct('p1'), null);
 });
+
+test('saveCatalog writes atomically -- no .tmp residue, valid JSON on disk', async (t) => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'store-test-'));
+  const originalCwd = process.cwd();
+  fs.mkdirSync(path.join(tmpRoot, 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'src', 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'public'), { recursive: true });
+  process.chdir(tmpRoot);
+
+  t.after(() => {
+    closeAllCachedDbs();
+    process.chdir(originalCwd);
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  const { upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+
+  upsertProduct({ id: 'p2', kind: 'category', slug: 'homeware', name: 'Homeware', items: [{ sku: 'H1', stockQty: 4 }] });
+
+  const dataFiles = fs.readdirSync(path.join(tmpRoot, 'data'));
+  assert.ok(!dataFiles.some((f) => f.endsWith('.tmp')), 'temp file must be renamed away, not left behind');
+  const onDisk = JSON.parse(fs.readFileSync(path.join(tmpRoot, 'data', 'catalog.json'), 'utf8'));
+  assert.strictEqual(onDisk.products[0].items[0].stockQty, 4);
+});

@@ -42,7 +42,13 @@ export function saveCatalog(catalog, db = getDb()) {
   const p = paths();
   ensureDir(p);
   catalog.updatedAt = now();
-  fs.writeFileSync(p.catalogPath, JSON.stringify(catalog, null, 2));
+  // Write-temp-then-rename so a crash mid-write can never truncate the
+  // only copy of the category catalog -- catalog.json is real business
+  // data (prices, SKUs, stock) that exists nowhere else, and a bare
+  // writeFileSync interrupted halfway leaves an unparseable file behind.
+  const tmpPath = `${p.catalogPath}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(catalog, null, 2));
+  fs.renameSync(tmpPath, p.catalogPath);
   syncPublicJson(db);
   return catalog;
 }

@@ -389,7 +389,7 @@ lapanza-3d-fullsite/
 | `settings-defaults.js` | Default values for every setting + the Google Fonts curated list |
 | `uploads.js` | Multer storage configs + allowed-extension lists per upload type (filament images, resource images/files, design-request attachments, print-job images/files) |
 | `jobs.js` | Background/periodic tasks: cancelling stale pending-payment orders (hourly check, 7-day threshold), and the daily automated database backup (`startAutoBackupJob`) |
-| `backups.js` | Database backup lifecycle — `createBackup()` (better-sqlite3's online backup API, safe against a live WAL-mode DB), `listBackups()`, `deleteBackup()`, `getBackupPath()`, `pruneOldBackups()` |
+| `backups.js` | Database backup lifecycle — `createBackup()` (better-sqlite3's online backup API, safe against a live WAL-mode DB; also snapshots `data/catalog.json` to a paired `<same-timestamp>.catalog.json`, since the category-item catalog lives only in that gitignored file, not SQLite), `listBackups()`, `deleteBackup()` (removes the paired catalog snapshot too), `getBackupPath()`, `pruneOldBackups()`. The offsite `rclone sync` carries catalog snapshots automatically (whole-dir sync). `saveCatalog()` in `store.js` writes temp-then-rename so a crash mid-write can never truncate the live catalog. |
 | `analytics.js` | Visitor tracking — `recordPageView()` (writes to `page_views`), `touchActiveVisitor()`/`getActiveVisitors()`/`pruneActiveVisitors()` (in-memory only, never persisted), `getVisitSummary()` (historical totals/daily breakdown/top pages) |
 | `audit-log.js` | Security/session audit trail — `recordAuditEvent()` (called from `index.js` on login/logout/session-expiry/admin-account changes), `listAuditLog()` (filterable by `eventType`/`q`, admin "Audit Logs" page) |
 

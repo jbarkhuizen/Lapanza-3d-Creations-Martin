@@ -3,7 +3,7 @@ import path from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getDb } from './db.js';
-import { backupsDir, uploadsDir } from './paths.js';
+import { backupsDir, uploadsDir, dataDir } from './paths.js';
 
 // execFile (async), not execFileSync -- syncOffsite now makes two rclone
 // calls instead of one (DB backups, then uploads), and uploads is real
@@ -43,6 +43,17 @@ function assertSafeFilename(filename) {
   }
 }
 
+// Each .db backup gets a paired snapshot of data/catalog.json under the
+// same timestamp. The category-item catalog (toys/homeware/phones/car-parts
+// prices, SKUs, stock) lives ONLY in that one gitignored JSON file -- not in
+// SQLite -- so until this pairing existed the backup job protected the
+// database while the other half of the product data had no copy anywhere.
+// The pair rides along to the offsite remote for free: syncOffsite() rclone-
+// syncs the whole backups dir, not just *.db.
+function catalogSnapshotName(dbFilename) {
+  return dbFilename.replace(/\.db$/, '.catalog.json');
+}
+
 // better-sqlite3's db.backup() uses SQLite's own online backup API -- safe
 // to run against a live database in WAL mode, no need to stop the app or
 // lock out writers for the duration.
@@ -50,7 +61,12 @@ export async function createBackup(db = getDb()) {
   const dir = ensureBackupsDir();
   const filename = backupFilename();
   await db.backup(path.join(dir, filename));
-  return statBackup(dir, filename);
+  const catalogSource = path.join(dataDir(), 'catalog.json');
+  const catalogIncluded = fs.existsSync(catalogSource);
+  if (catalogIncluded) {
+    fs.copyFileSync(catalogSource, path.join(dir, catalogSnapshotName(filename)));
+  }
+  return { ...statBackup(dir, filename), catalogIncluded };
 }
 
 export function listBackups() {
@@ -64,9 +80,14 @@ export function listBackups() {
 
 export function deleteBackup(filename) {
   assertSafeFilename(filename);
-  const filePath = path.join(ensureBackupsDir(), filename);
+  const dir = ensureBackupsDir();
+  const filePath = path.join(dir, filename);
   if (!fs.existsSync(filePath)) return false;
   fs.unlinkSync(filePath);
+  // Remove the paired catalog snapshot too, so pruneOldBackups never
+  // strands orphaned .catalog.json files that nothing lists or rotates.
+  const catalogPath = path.join(dir, catalogSnapshotName(filename));
+  if (filename.endsWith('.db') && fs.existsSync(catalogPath)) fs.unlinkSync(catalogPath);
   return true;
 }
 

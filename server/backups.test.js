@@ -32,6 +32,72 @@ test('createBackup writes a real, non-empty .db file and returns its metadata', 
   });
 });
 
+// Same isolation idea as withTempBackupsDir, for the catalog's home:
+// points DATA_DIR at a temp dir so these tests control whether a
+// catalog.json exists without touching the real dev data folder.
+function withTempDataDir(fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-data-test-'));
+  const previous = process.env.DATA_DIR;
+  process.env.DATA_DIR = dir;
+  return Promise.resolve(fn(dir)).finally(() => {
+    if (previous === undefined) delete process.env.DATA_DIR;
+    else process.env.DATA_DIR = previous;
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+}
+
+test('createBackup snapshots data/catalog.json alongside the .db under the same timestamp', async () => {
+  await withTempBackupsDir(async (dir) => {
+    await withTempDataDir(async (data) => {
+      fs.writeFileSync(path.join(data, 'catalog.json'), JSON.stringify({ version: 1, products: [{ id: 'p1' }] }));
+      const db = openDb(':memory:');
+      const backup = await createBackup(db);
+      db.close();
+
+      assert.strictEqual(backup.catalogIncluded, true);
+      const snapshotName = backup.filename.replace(/\.db$/, '.catalog.json');
+      const snapshot = JSON.parse(fs.readFileSync(path.join(dir, snapshotName), 'utf8'));
+      assert.strictEqual(snapshot.products[0].id, 'p1');
+    });
+  });
+});
+
+test('createBackup still succeeds when no catalog.json exists, and says so', async () => {
+  await withTempBackupsDir(async (dir) => {
+    await withTempDataDir(async () => {
+      const db = openDb(':memory:');
+      const backup = await createBackup(db);
+      db.close();
+
+      assert.strictEqual(backup.catalogIncluded, false);
+      assert.ok(fs.existsSync(path.join(dir, backup.filename)));
+      assert.strictEqual(fs.readdirSync(dir).filter((f) => f.endsWith('.catalog.json')).length, 0);
+    });
+  });
+});
+
+test('deleteBackup removes the paired catalog snapshot, and pruning strands no orphans', async () => {
+  await withTempBackupsDir(async (dir) => {
+    await withTempDataDir(async (data) => {
+      fs.writeFileSync(path.join(data, 'catalog.json'), '{"version":1,"products":[]}');
+      const db = openDb(':memory:');
+      for (let i = 0; i < 3; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await createBackup(db);
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      db.close();
+
+      assert.strictEqual(fs.readdirSync(dir).filter((f) => f.endsWith('.catalog.json')).length, 3);
+      pruneOldBackups(1);
+      const remaining = fs.readdirSync(dir);
+      assert.strictEqual(remaining.filter((f) => f.endsWith('.db')).length, 1);
+      assert.strictEqual(remaining.filter((f) => f.endsWith('.catalog.json')).length, 1, 'pruned .db files must take their catalog snapshots with them');
+    });
+  });
+});
+
 test('listBackups returns newest first and only lists .db files', async () => {
   await withTempBackupsDir(async (dir) => {
     fs.writeFileSync(path.join(dir, 'not-a-backup.txt'), 'ignore me');
