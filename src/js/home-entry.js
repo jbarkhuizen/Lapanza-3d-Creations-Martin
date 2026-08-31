@@ -1,11 +1,13 @@
 import './site.js';
 import './home-header.js';
-import { clearCart } from './cart.js';
+import { clearCart, isCartStale } from './cart.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Phase 4: a cart carried over from a previous, unrelated visit shouldn't
-  // silently reappear when someone lands back on the homepage.
-  clearCart();
+  // Phase 4 intent, corrected 2026-08-31: only a cart untouched for 24h+ is
+  // "a previous, unrelated visit" worth clearing. The original unconditional
+  // clearCart() here wiped an ACTIVE cart on any homepage round-trip -- e.g.
+  // home -> Shop Filament -> add to cart -> back home lost the roll.
+  if (isCartStale()) clearCart();
 
   const { initHomeMotion } = await import('./home.js');
   initHomeMotion();

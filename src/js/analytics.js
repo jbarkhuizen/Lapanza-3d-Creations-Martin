@@ -10,6 +10,30 @@
 const VISITOR_ID_KEY = 'lapanza-visitor-id';
 const HEARTBEAT_MS = 45_000;
 
+// Owner/AI-assistant exclusion: browsing with ?analytics=off once sets a
+// persistent opt-out for that browser (?analytics=on clears it). Opted-out
+// browsers send NO beacons at all -- no pageviews, heartbeats, or events.
+// Complements the server-side rule that skips any beacon carrying a valid
+// ADMIN session (so logged-in admin browsing never counts even without the
+// flag). Customers are unaffected -- nothing links to these URLs.
+const OPTOUT_KEY = 'lapanza-analytics-optout';
+
+function applyOptOutSwitch() {
+  try {
+    const v = new URLSearchParams(location.search).get('analytics');
+    if (v === 'off') localStorage.setItem(OPTOUT_KEY, '1');
+    if (v === 'on') localStorage.removeItem(OPTOUT_KEY);
+  } catch { /* ignore */ }
+}
+
+function isOptedOut() {
+  try {
+    return localStorage.getItem(OPTOUT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function getOrCreateVisitorId() {
   try {
     let id = localStorage.getItem(VISITOR_ID_KEY);
@@ -50,10 +74,13 @@ function sendBeacon(payload) {
 // fire events without importing this file (no coupling) by dispatching:
 //   document.dispatchEvent(new CustomEvent('lapanza:track', { detail: { eventType, detail } }))
 export function trackEvent(eventType, detail = '') {
+  if (isOptedOut()) return;
   sendBeacon({ visitorId: getOrCreateVisitorId(), path: location.pathname, type: 'event', eventType, detail });
 }
 
 export function trackVisit() {
+  applyOptOutSwitch();
+  if (isOptedOut()) return;
   const visitorId = getOrCreateVisitorId();
   sendBeacon({ visitorId, path: location.pathname, referrer: document.referrer, type: 'pageview' });
 

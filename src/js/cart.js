@@ -1,4 +1,23 @@
 const STORAGE_KEY = 'lapanza-cart';
+// Stamped on every cart write -- lets the homepage distinguish "cart from a
+// previous, long-gone visit" (cleared) from "cart I'm actively shopping with
+// and just navigated home" (kept). Before this, the homepage cleared the
+// cart unconditionally, which wiped an active cart on any home round-trip.
+const TOUCHED_KEY = 'lapanza-cart-touched';
+const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // 24h
+
+export function isCartStale() {
+  try {
+    if (!readRaw().length) return false; // nothing to clear
+    const touched = Number(localStorage.getItem(TOUCHED_KEY));
+    // A cart with no stamp predates this feature -- keep it (it gets a
+    // stamp on its next mutation); never wipe a possibly-active cart.
+    if (!Number.isFinite(touched) || touched <= 0) return false;
+    return Date.now() - touched > STALE_AFTER_MS;
+  } catch {
+    return false;
+  }
+}
 
 function readRaw() {
   try {
@@ -12,6 +31,7 @@ function readRaw() {
 function writeRaw(items) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    localStorage.setItem(TOUCHED_KEY, String(Date.now()));
   } catch {
     /* private-mode/quota-full localStorage — cart still works for this page load, just won't persist */
   }

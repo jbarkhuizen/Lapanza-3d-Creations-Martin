@@ -556,6 +556,12 @@ app.patch('/api/client/me', requireClientAuth, (req, res) => {
 // visitor -- the client-side beacon call is fire-and-forget.
 
 app.post('/api/analytics/beacon', analyticsLimiter, (req, res) => {
+  // Owner exclusion: a browser holding a valid ADMIN session is the owner
+  // (or this project's AI assistant) working on the site, not a visitor --
+  // drop the beacon entirely. Complements the client-side ?analytics=off
+  // opt-out for owner browsing that isn't admin-logged-in.
+  const adminToken = req.cookies[SESSION_COOKIE];
+  if (adminToken && sessions.get(adminToken)) return res.status(204).end();
   const { visitorId, path: pagePath, referrer, type } = req.body || {};
   // Opportunistic, non-blocking: attach the client if a valid session
   // cookie is present, same lookup requireClientAuth uses, but this route
