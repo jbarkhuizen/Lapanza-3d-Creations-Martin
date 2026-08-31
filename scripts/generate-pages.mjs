@@ -482,8 +482,11 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
   // WhatsApp alone doesn't capture a reference photo/file, which matters
   // most for a part that needs to be designed and printed from scratch.
   const isCarParts = pagePath.startsWith('car-parts/');
+  // Backlog #72: vehicle pages pass their brand as ?context= so the
+  // design-request form can pre-seed the description (vehicle + part-number
+  // prompt) -- see design-request-entry.js.
   const requestPartCta = isCarParts
-    ? `<a href="${'../'.repeat(depth)}design-request.html" class="inline-flex text-sm font-semibold border-2 border-charcoal text-charcoal rounded-full px-5 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">Request a part to be designed &amp; printed</a>`
+    ? `<a href="${'../'.repeat(depth)}design-request.html?context=${encodeURIComponent(name)}" class="inline-flex text-sm font-semibold border-2 border-charcoal text-charcoal rounded-full px-5 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">Request a ${escapeAttr(name)} part not listed</a>`
     : '';
 
   const body =

@@ -32,6 +32,19 @@ async function init() {
 
   form.querySelectorAll('[data-file-input]').forEach(initFileField);
 
+  // Backlog #72: vehicle pages link here with ?context=<brand>. Seed the
+  // description with the vehicle and a part-number prompt so the request
+  // arrives complete -- only when the field is still empty, never over
+  // anything the customer already typed. Set via .value (plain text), so
+  // the URL param can't inject markup.
+  const context = new URLSearchParams(window.location.search).get('context');
+  if (context) {
+    const desc = form.querySelector('[name="description"]');
+    if (desc && !desc.value.trim()) {
+      desc.value = `Vehicle: ${context.slice(0, 60)}\nPart number (if known): \nWhat the part is / what it should do: `;
+    }
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     note.textContent = '';
