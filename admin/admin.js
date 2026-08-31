@@ -3999,8 +3999,8 @@ async function renderPrintJobs() {
               ${printJobFilamentOptions(filaments, slot.inHouseFilamentId)}
             </select>
           </label>
-          <label class="field"><span>Grams</span><input class="pjs-grams" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.grams))}" /></label>
-          <label class="field"><span>Meters</span><input class="pjs-meters" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.meters))}" /></label>
+          <label class="field"><span>Grams (Per Copy)</span><input class="pjs-grams" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.grams))}" /></label>
+          <label class="field"><span>Meters (Per Copy)</span><input class="pjs-meters" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.meters))}" /></label>
         </div>`)
     .join('');
 
@@ -4095,7 +4095,24 @@ async function renderPrintJobs() {
         <label class="field"><span>Quantity (Copies Printed — Filament, Print Time &amp; Post-processing Below Are Per Copy)</span><input id="pj-qty" type="number" min="1" step="1" value="${escapeAttr(String(draft.quantity || 1))}" /></label>
 
         <div class="stack gap-2">${slotRows}</div>
-        <p class="muted" style="font-size:0.85rem">Totals: <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
+        <div>
+          <button type="button" class="btn small" id="pj-new-roll-toggle">+ New In-House Roll</button>
+          <div id="pj-new-roll-form" class="hidden panel stack gap-2" style="margin-top:0.5rem;padding:0.75rem">
+            <div class="grid-3">
+              <label class="field"><span>Brand</span><input id="pj-nr-brand" placeholder="e.g. SunLu" /></label>
+              <label class="field"><span>Filament Type</span><input id="pj-nr-type" placeholder="e.g. PLA" /></label>
+              <label class="field"><span>Colour</span><input id="pj-nr-colour" placeholder="e.g. Black" /></label>
+            </div>
+            <div class="grid-4">
+              <label class="field"><span>Rolls Available</span><input id="pj-nr-rolls" type="number" min="0" step="1" value="1" /></label>
+              <label class="field"><span>Roll Weight (g)</span><input id="pj-nr-weight" type="number" min="0" step="1" value="1000" /></label>
+              <label class="field"><span>Roll Length (m)</span><input id="pj-nr-length" type="number" min="0" step="0.1" value="335" /></label>
+              <label class="field"><span>Cost / Roll (R)</span><input id="pj-nr-cost" type="number" min="0" step="0.01" /></label>
+            </div>
+            <div><button type="button" class="btn small" id="pj-new-roll-save">Save Roll</button></div>
+          </div>
+        </div>
+        <p class="muted" style="font-size:0.85rem">Totals (Per Copy): <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
 
         <div class="grid-4">
           <label class="field"><span>Print Time</span>
@@ -4189,6 +4206,35 @@ async function renderPrintJobs() {
     draft.status = $('#pj-status').value;
     draft.finalSellingPrice = $('#pj-final-price').value;
   }
+
+  // Backlog #135: log a brand-new in-house roll without leaving the
+  // print-job form. On save, the new roll auto-selects into the first
+  // empty filament slot; the In-House Filament page stays the place for
+  // full roll management (edit/transfer/history).
+  $('#pj-new-roll-toggle')?.addEventListener('click', () => {
+    $('#pj-new-roll-form').classList.toggle('hidden');
+  });
+  $('#pj-new-roll-save')?.addEventListener('click', async () => {
+    const payload = {
+      brand: $('#pj-nr-brand').value.trim(),
+      filamentType: $('#pj-nr-type').value.trim(),
+      colorName: $('#pj-nr-colour').value.trim(),
+      rollsAvailable: Number($('#pj-nr-rolls').value) || 0,
+      weightG: Number($('#pj-nr-weight').value) || 0,
+      rollLengthM: Number($('#pj-nr-length').value) || 0,
+      costPerRollRand: Number($('#pj-nr-cost').value) || 0,
+    };
+    try {
+      const { filament } = await api('/api/in-house-filament', { method: 'POST', body: JSON.stringify(payload) });
+      syncFormIntoDraft();
+      const empty = draft.slots.find((s) => !s.inHouseFilamentId);
+      if (empty && filament?.id) empty.inHouseFilamentId = filament.id;
+      toast('Roll saved and selected');
+      renderPrintJobs();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
 
   $('#validate-job').addEventListener('click', async () => {
     syncFormIntoDraft();
