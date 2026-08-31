@@ -51,6 +51,47 @@ function volumeDiscountNote() {
   return `<div class="rounded-sm border border-charcoal/10 bg-linen/60 p-4 text-sm text-espresso/70 mb-8"><strong style="color:#2e6e46">Volume pricing</strong> — ${tiers}, applied automatically at checkout on filament.</div>`;
 }
 
+// Backlog #76 (SITE-042): purchase FAQ beside the buying actions, one
+// flavour per page type. Every answer is either a fixed product fact
+// (diameter, spool size), pulled live from admin-editable settings
+// (dispatch/lead times), or restates the real published policies -- no
+// invented claims. Emits matching FAQPage JSON-LD inline (valid in <body>).
+function purchaseFaq(kind) {
+  const faqs =
+    kind === 'filament'
+      ? [
+          ['What diameter and spool size is your filament?', 'All filament is 1.75 mm diameter on 1 kg spools unless a product page says otherwise.'],
+          ['How fast does filament ship?', `Ready stock dispatches within ${FILAMENT_DISPATCH_DAYS} business days of payment — PUDO Locker nationwide, Local Delivery around Centurion, or collect from us.`],
+          ['What print settings should I use?', 'Each filament page lists its real print and bed temperatures under Specifications. Not sure which material suits your project? See our Materials Guide.'],
+          ['Can I return filament?', 'Unopened, unused spools have a 7-day cooling-off period. Faulty or misdescribed items are covered for 6 months — see our Returns Policy.'],
+        ]
+      : [
+          ['How long does a printed item take?', `Items are printed to order — allow ${PRINT_LEAD_TIME_DAYS} business days for production before dispatch or collection.`],
+          ['Can I choose the colour or material?', "Usually, yes — use the item's Enquire link or the custom request box below and tell us what you'd like."],
+          ["Can you print something that isn't listed?", 'That is half of what we do. Send a photo, sketch, file or part number through the custom design request and we will quote you.'],
+          ['Can I return a custom print?', 'Custom-printed items cannot be returned for change of mind, but faulty or misdescribed items are covered for 6 months — see our Returns Policy.'],
+        ];
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })),
+  };
+  return `<div class="mt-12">
+    <h2 class="font-serif text-xl mb-4 tracking-tight">Quick Questions</h2>
+    <div class="stack gap-2">
+      ${faqs
+        .map(
+          ([q, a]) => `<details class="border border-charcoal/10 rounded-sm px-4 py-3">
+        <summary class="text-sm font-semibold cursor-pointer">${q}</summary>
+        <p class="text-sm text-espresso/70 leading-relaxed mt-2">${a}</p>
+      </details>`,
+        )
+        .join('')}
+    </div>
+    ${jsonLdScript(jsonLd)}
+  </div>`;
+}
+
 function deliveryNote(kind) {
   const dispatch =
     kind === 'filament'
@@ -627,6 +668,7 @@ ${shellStart({ depth: 1 })}
       ${specsBlock(f.specs)}
       ${colours}
       ${valueProps('filament')}
+      ${purchaseFaq('filament')}
       <div class="mt-14 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth: 1 })}</div>
       </div>
     </main>
@@ -665,6 +707,7 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
       <div class="grid grid-cols-2 md:grid-cols-3 gap-5 catalogue-grid">${catalogueItems(name, items, slug)}</div>
       ${isCarParts ? `<p id="part-filter-empty" class="hidden text-espresso/50 text-sm py-10 text-center">No parts match your search/filter.</p>` : ''}
       ${valueProps(kind === 'catalog' ? 'category' : kind)}
+      ${purchaseFaq('category')}
       <div class="mt-14 p-7 md:p-8 bg-linen border-2 border-charcoal/10 rounded-sm brutal">
         <p class="eyebrow mb-3">Custom request</p>
         <p class="font-serif text-2xl mb-3 tracking-tight">Need something specific?</p>
