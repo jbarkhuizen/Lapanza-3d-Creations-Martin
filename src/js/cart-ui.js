@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { getCart, getCartCount, getCartTotal, addItem, removeItem, updateQuantity, clearCart } from './cart.js';
+import { getCart, getCartCount, getCartTotal, getCartTotalWeight, addItem, removeItem, updateQuantity, clearCart } from './cart.js';
 import { formatRand as formatPrice } from './money.js';
 
 function escapeHtml(value) {
@@ -56,6 +56,7 @@ export function mountCartUI() {
       <p id="cart-empty" class="hidden px-6 py-10 text-center text-sm text-espresso/50">Your cart is empty.</p>
       <p id="cart-delivery-note" class="px-6 pt-4 text-xs text-espresso/55 leading-relaxed">Ready-stock filament dispatches in 1-2 business days; custom prints need 3-5 business days production. Nationwide via PUDO, or Local Delivery in Centurion.</p>
       <div class="px-6 py-5 border-t border-charcoal/10">
+        <p id="cart-shipping-estimate" class="hidden text-xs text-espresso/55 leading-relaxed mb-3"></p>
         <div class="flex items-center justify-between mb-4">
           <span class="text-sm font-semibold uppercase tracking-wide">Total</span>
           <span id="cart-total" class="font-serif text-xl text-terracotta">R 0.00</span>
@@ -104,6 +105,45 @@ export function mountCartUI() {
     }
   })();
 
+  // Backlog #62 / SITE-028: shipping estimate in the drawer, before
+  // checkout. Reuses the exact endpoints checkout itself prices from
+  // (/api/shipping-match for the weight-bracketed courier price,
+  // /public/fixed for PUDO/Local Delivery) so the estimate can never
+  // disagree with checkout's real numbers -- it's the same data, earlier.
+  const estimateEl = document.getElementById('cart-shipping-estimate');
+  let fixedOptionsCache = null;
+  let estimateSeq = 0;
+  async function updateShippingEstimate() {
+    const seq = ++estimateSeq; // stale-response guard for rapid cart edits
+    const items = getCart();
+    if (!items.length) { estimateEl.classList.add('hidden'); return; }
+    try {
+      const parts = [];
+      if (!fixedOptionsCache) {
+        const res = await fetch('/api/shipping-options/public/fixed');
+        fixedOptionsCache = res.ok ? (await res.json()).shippingOptions || [] : [];
+      }
+      if (fixedOptionsCache.length) {
+        const cheapest = Math.min(...fixedOptionsCache.map((o) => Number(o.price) || 0));
+        parts.push(`PUDO / Local Delivery from ${formatPrice(cheapest)}`);
+      }
+      const weight = getCartTotalWeight();
+      if (weight > 0) {
+        const res = await fetch(`/api/shipping-match?weight=${weight}`);
+        if (res.ok) {
+          const { shippingOption } = await res.json();
+          if (shippingOption) parts.push(`Courier ${formatPrice(shippingOption.price)}`);
+        }
+      }
+      if (seq !== estimateSeq) return;
+      if (!parts.length) { estimateEl.classList.add('hidden'); return; }
+      estimateEl.textContent = `Delivery estimate: ${parts.join(' · ')} — final cost at checkout.`;
+      estimateEl.classList.remove('hidden');
+    } catch {
+      if (seq === estimateSeq) estimateEl.classList.add('hidden');
+    }
+  }
+
   function render() {
     const items = getCart();
     const count = getCartCount();
@@ -113,6 +153,7 @@ export function mountCartUI() {
     emptyEl.classList.toggle('hidden', items.length > 0);
     deliveryNoteEl.classList.toggle('hidden', items.length === 0);
     totalEl.textContent = formatPrice(getCartTotal());
+    updateShippingEstimate();
   }
 
   function openDrawer() {
