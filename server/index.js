@@ -86,6 +86,7 @@ import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
 import {
   sendOrderConfirmationEmail,
   sendOrderShippedEmail,
+  sendRestockEmail,
   sendInvoiceEmail,
   sendLowStockAlert,
   sendClientVerificationEmail,
@@ -151,6 +152,8 @@ import { getTestRun, listTestCases, listTestRuns, startTestRun } from './test-ru
 import { getSiteOverview, listSiteDirectory } from './site-overview.js';
 import { createImportedTemplate, createTemplate, listTemplates } from './newsletter-content.js';
 import { generateImageVariants } from './images.js';
+import { itemAnchorId, filamentPagePath, categoryPagePath } from './item-anchor.js';
+import { subscribeRestock, unsubscribeRestock, listPendingRestockSubscriptions, processRestockNotifications } from './restock.js';
 
 // Loads .env into process.env for local dev (real Payfast/Gmail secrets
 // never get committed -- see .env.example). Silently no-ops if the file
@@ -642,6 +645,29 @@ app.get('/api/newsletter/unsubscribe', (req, res) => {
   res.redirect(`${siteUrl}/index.html?newsletter=${subscriber ? 'unsubscribed' : 'invalid'}`);
 });
 
+// ---- Back-in-stock notifications (#43 / SITE-009) ----
+
+app.post('/api/restock-subscriptions', publicFormLimiter, (req, res) => {
+  try {
+    subscribeRestock((req.body || {}).productId, (req.body || {}).email);
+    // Same-shape response whether new or duplicate -- no enumeration of
+    // who's already subscribed to what.
+    res.status(201).json({ message: "Done — we'll email you the moment it's back." });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/restock/unsubscribe', (req, res) => {
+  const ok = unsubscribeRestock(req.query.token);
+  const siteUrl = siteUrlFor(req);
+  res.redirect(`${siteUrl}/index.html?restock=${ok ? 'unsubscribed' : 'invalid'}`);
+});
+
+app.get('/api/restock-subscriptions', requireAuth, (_req, res) => {
+  res.json({ subscriptions: listPendingRestockSubscriptions() });
+});
+
 // ---- Newsletter campaigns: compose -> approve -> send (Phase 4) ----
 
 app.get('/api/newsletter-campaigns', requireAuth, (_req, res) => {
@@ -1108,11 +1134,25 @@ app.get('/api/products/:id', requireAuth, (req, res) => {
 // public page stayed stale until someone ran "Publish to site" or a code
 // deploy. Non-fatal: the save itself already succeeded above, so a publish
 // hiccup here is surfaced as a warning, not a failed save.
+// Backlog #43: absolute product URL for restock emails -- same anchor scheme
+// the cards render with. sendRestockNotification is what restock.js's
+// processor actually calls per pending subscription.
+function restockProductHref(productId) {
+  const parts = String(productId || '').split(':');
+  if (parts[0] === 'filament' && parts.length === 3) return `https://www.lapanza3d.co.za/${filamentPagePath(parts[1])}#${itemAnchorId(parts[2], parts[2])}`;
+  if (parts[0] === 'category' && parts.length === 3) return `https://www.lapanza3d.co.za/${categoryPagePath(parts[1])}#${itemAnchorId(parts[2], parts[2])}`;
+  return 'https://www.lapanza3d.co.za/';
+}
+const sendRestockNotification = (sub, snapshot) => sendRestockEmail(sub, snapshot, restockProductHref(sub.productId));
+
 async function publishCatalog() {
   syncPublicJson(getDb());
   try {
     await runGenerate();
     await runBuild();
+    // #43: a catalog publish is exactly when stock may have come back --
+    // fire-and-forget; failures log inside the processor and stay pending.
+    processRestockNotifications(sendRestockNotification).catch(() => {});
     return undefined;
   } catch (err) {
     return `Saved, but publishing to the live site failed: ${err.message}. Try "Publish to site" from the dashboard.`;
@@ -1946,6 +1986,9 @@ app.put('/api/orders/:id/status', requireAuth, async (req, res) => {
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.id}: status ${before?.status} → ${order.status}` });
     res.json({ order });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
+    // #43: cancelling restores stock -- one of the moments an item can
+    // come back into stock without a catalog publish.
+    if (order.status === 'cancelled') processRestockNotifications(sendRestockNotification).catch(() => {});
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -2711,6 +2754,11 @@ if (isMainModule) {
   startAutoBackupJob();
   startAuditLogPruneJob();
   startPageViewsPruneJob();
+  // #43 safety net: catches restocks whose trigger path was missed (e.g.
+  // auto-cancel job restores, direct DB edits) -- daily, same idiom as the
+  // other in-process jobs.
+  setInterval(() => processRestockNotifications(sendRestockNotification).catch(() => {}), 24 * 60 * 60 * 1000);
+  processRestockNotifications(sendRestockNotification).catch(() => {});
 }
 
 export default app;

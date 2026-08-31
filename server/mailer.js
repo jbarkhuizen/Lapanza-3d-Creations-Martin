@@ -126,6 +126,25 @@ export async function sendOrderShippedEmail(order) {
   });
 }
 
+// Backlog #43: back-in-stock alert -- single-purpose, self-requested, with
+// a one-click unsubscribe link (the subscription's own token). productHref
+// is the absolute URL to the product's card anchor.
+export async function sendRestockEmail({ email, token }, { name: productName, price }, productHref) {
+  const settings = getSettings();
+  const vars = { productName };
+  const bodyHtml = `<p style="margin:0 0 16px;">Hi there,</p>
+    ${messageHtmlFor(settings, 'restockAlert', vars)}
+    <p style="margin:0 0 16px;"><strong>${escapeHtml(productName)}</strong>${price ? ` — R ${escapeHtml((price / 1).toFixed(2))}` : ''}</p>
+    ${renderButton('View product', productHref)}
+    <p style="margin:16px 0 0;font-size:12px;color:#6b6257;">You asked us to tell you when this item was back. This is a once-off alert — you won't hear from us about it again. <a href="https://www.lapanza3d.co.za/api/restock/unsubscribe?token=${encodeURIComponent(token)}" style="color:#6b6257;">Remove this alert</a>.</p>`;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: subjectFor(settings, 'restockAlert', vars),
+    html: renderEmailShell({ settings, preheader: `${productName} is back in stock`, bodyHtml }),
+  });
+}
+
 // Sends the real numbered invoice (server/invoice.js's renderInvoiceHtml,
 // the same template the admin's "Print invoice" route uses) as the email
 // body -- called once at order placement (any payment method, `paid:

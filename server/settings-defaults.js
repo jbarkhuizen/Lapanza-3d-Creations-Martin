@@ -203,6 +203,10 @@ export const DEFAULT_SETTINGS = {
       subject: 'Your order {{orderRef}} is on its way — Lapanza 3D',
       message: 'Good news — your order has been handed to the courier. You can track it with the tracking number below.',
     },
+    restockAlert: {
+      subject: 'Back in stock: {{productName}} — Lapanza 3D',
+      message: 'Good news — {{productName}} is back in stock at Lapanza 3D Creative Lab. Grab it before it sells out again!',
+    },
     designRequestStatus: {
       subject: 'Your design request is now {{status}} — Lapanza 3D',
       message: 'Your custom design request has been updated to: {{status}}.',

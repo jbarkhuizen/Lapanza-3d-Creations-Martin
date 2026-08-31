@@ -2371,6 +2371,7 @@ const EMAIL_TEMPLATE_META = [
   { key: 'emailVerification', label: 'Verify email', tokens: '{{name}}' },
   { key: 'orderConfirmation', label: 'Order confirmation', tokens: '{{name}}, {{orderRef}}' },
   { key: 'orderShipped', label: 'Order shipped (tracking number set)', tokens: '{{name}}, {{orderRef}}, {{trackingNumber}}' },
+  { key: 'restockAlert', label: 'Back-in-stock alert', tokens: '{{productName}}' },
   { key: 'designRequestStatus', label: 'Design request status', tokens: '{{name}}, {{status}}' },
   { key: 'newsletterConfirm', label: 'Newsletter confirmation', tokens: '(none)' },
   { key: 'lowStockAlert', label: 'Low stock alert (to owner)', tokens: '{{itemName}}, {{stockQty}}, {{sku}}' },

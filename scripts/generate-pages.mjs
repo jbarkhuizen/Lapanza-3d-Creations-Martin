@@ -366,6 +366,7 @@ function colourCards(colours, filament) {
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">${c.sku}</p>
                   <p class="text-terracotta font-semibold">${c.price}</p>
                   <p class="text-[0.72rem] mt-0.5 ${stock.className}">${stock.label}</p>
+                  ${Number(c.stockQty) <= 0 ? `<button type="button" class="restock-notify text-xs font-semibold text-terracotta hover:underline mt-1" data-restock-product="filament:${escapeAttr(filament.slug)}:${escapeAttr(c.sku)}">Email me when it's back</button>` : ''}
                   ${addToCartButton({
                     productId: `filament:${filament.slug}:${c.sku}`,
                     name: `${filament.name} — ${c.name}`,

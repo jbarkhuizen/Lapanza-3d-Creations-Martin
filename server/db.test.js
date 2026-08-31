@@ -36,6 +36,7 @@ test('ensureSchema creates every expected table', () => {
     'print_jobs',
     'purchases',
     'resources',
+    'restock_subscriptions',
     'settings',
     'shipping_options',
     'test_run_cases',

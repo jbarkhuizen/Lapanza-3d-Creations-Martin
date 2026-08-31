@@ -400,6 +400,22 @@ export function ensureSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_analytics_events_created ON analytics_events (created_at);
     CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events (event_type);
 
+    -- Backlog #43 (SITE-009): consent-based restock alerts. product_id uses
+    -- the same filament:slug:sku scheme as carts/orders; one row per
+    -- (product, email) pair (UNIQUE below prevents duplicate subscriptions);
+    -- token drives one-click unsubscribe; notified_at marks a sent alert --
+    -- a row is only ever notified once, re-subscribing after a new
+    -- out-of-stock period creates intent afresh.
+    CREATE TABLE IF NOT EXISTS restock_subscriptions (
+      id TEXT PRIMARY KEY,
+      product_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      notified_at TEXT,
+      created_at TEXT NOT NULL,
+      UNIQUE (product_id, email)
+    );
+
     -- Permanent running tallies, updated alongside every page_views insert
     -- (recordPageView in analytics.js) -- exist specifically so pruning old
     -- page_views rows (pruneOldPageViews, backlog #32) doesn't quietly turn

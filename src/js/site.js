@@ -7,6 +7,7 @@ import { trackVisit } from './analytics.js';
 import { mountCarPartsFilter } from './car-parts-filter.js';
 import { mountFilamentFilter } from './filament-filter.js';
 import { attachSearch } from './search.js';
+import { mountRestockNotify } from './restock-notify.js';
 
 window.toggleDrawer = toggleDrawer;
 
@@ -249,6 +250,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   enhanceColourCards();
   mountCarPartsFilter();
   mountFilamentFilter();
+  mountRestockNotify();
   syncYear();
   hydrateHomeTiles();
   hydrateFeaturedProducts();
