@@ -2718,6 +2718,7 @@ async function renderSettings() {
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Storefront Stock &amp; Delivery Messaging</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
+        <label class="field" style="max-width:260px"><span>Design-file Retention (Months After Finalized)</span><input data-setting="designFileRetentionMonths" type="number" min="1" step="1" value="${escapeAttr(String(s.designFileRetentionMonths ?? 12))}" /></label>
         <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
         <div class="grid-2">
@@ -5615,6 +5616,7 @@ async function renderDesignRequests() {
     ${form ? `
       <div class="panel stack gap-3" style="max-width:700px">
         <div class="section-head"><h3>Request from ${escapeHtml(form.name || form.email)}</h3></div>
+      <p class="muted" style="margin:0;font-size:0.85rem">Uploaded reference files auto-delete a set number of months after a request is finalized (Settings → Storefront → Design-file Retention). The request record itself is kept.</p>
         <p class="muted" style="font-size:0.85rem">${escapeHtml(form.email)} ${form.phone ? `· ${escapeHtml(form.phone)}` : ''}</p>
         <label class="field"><span>Description</span><textarea readonly>${escapeHtml(form.description)}</textarea></label>
         ${form.budgetNote ? `<p class="muted" style="font-size:0.85rem">Budget: ${escapeHtml(form.budgetNote)}</p>` : ''}

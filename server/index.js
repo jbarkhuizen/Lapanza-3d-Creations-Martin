@@ -116,7 +116,7 @@ import {
   sendCampaign as sendWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
-import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob } from './jobs.js';
+import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory } from './inventory.js';
@@ -2271,6 +2271,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'lowStockThreshold',
     // SITE-026 / #60 -- volume price breaks (shape-guarded below)
     'volumeDiscounts',
+    // SITE-056/057 / #90 -- design-file retention window
+    'designFileRetentionMonths',
     // SITE-010
     'printLeadTimeDays', 'filamentDispatchDays',
     // Configurable lists -- inHouseFilamentBrands existed before this (a
@@ -2754,6 +2756,7 @@ if (isMainModule) {
   startAutoBackupJob();
   startAuditLogPruneJob();
   startPageViewsPruneJob();
+  startDesignFilePruneJob(); // #90 design-file retention
   // #43 safety net: catches restocks whose trigger path was missed (e.g.
   // auto-cancel job restores, direct DB edits) -- daily, same idiom as the
   // other in-process jobs.

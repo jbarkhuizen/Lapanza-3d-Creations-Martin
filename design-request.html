@@ -93,6 +93,20 @@
               </div>
             </div>
           </div>
+          <!-- Backlog #89 (SITE-055): design-for-manufacturing checklist,
+               right where files get attached. Standard FDM guidance. -->
+          <details class="border border-charcoal/10 rounded-sm px-4 py-3 bg-linen/40">
+            <summary class="text-sm font-semibold cursor-pointer">Uploading your own 3D model? Quick checklist for a smooth print</summary>
+            <ul class="text-sm text-espresso/70 leading-relaxed mt-3 space-y-1.5 list-disc pl-5">
+              <li><strong>Walls:</strong> keep them 1.2 mm or thicker — paper-thin walls print weak or not at all.</li>
+              <li><strong>Fitting parts:</strong> leave ±0.2–0.3 mm clearance between pieces that must slide or snap together.</li>
+              <li><strong>Overhangs:</strong> anything steeper than ±50° from vertical needs support material — fine, but it affects surface finish and price.</li>
+              <li><strong>Size &amp; units:</strong> tell us the real-world size you want, or make sure your file's units are millimetres — a common export slip.</li>
+              <li><strong>One solid mesh:</strong> watertight models print best. Holes or flipped faces? Send it anyway — we check and repair every file before printing.</li>
+              <li><strong>No model at all?</strong> A photo, sketch or part number is enough — describing what it should do helps us design it for you.</li>
+            </ul>
+            <p class="text-sm text-espresso/60 mt-3">Material undecided? See our <a href="materials-guide.html" class="text-terracotta font-semibold hover:underline">Materials Guide</a>.</p>
+          </details>
           <button type="submit" class="w-full sm:w-auto text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-8 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Send request</button>
           <p id="design-request-note" class="text-sm text-espresso/70" role="status"></p>
         </form>

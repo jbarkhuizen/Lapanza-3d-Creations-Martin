@@ -105,4 +105,33 @@ export function deleteDesignRequest(id, db = getDb()) {
   return result.changes > 0;
 }
 
+// Backlog #90 (SITE-056/057): POPIA retention -- uploaded design files
+// auto-delete N months after a request is FINALIZED. Only the binary files
+// go (deleted from disk via the injectable deleteFile, path columns nulled);
+// the request row and its text stay as the business record. Requests still
+// new/in_progress are never touched regardless of age. Returns the pruned
+// request ids so the caller can audit-log the batch.
+export function pruneExpiredDesignFiles(retentionMonths, deleteFile, db = getDb()) {
+  const months = Math.max(1, Math.round(Number(retentionMonths) || 12));
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  const rows = db
+    .prepare(
+      `SELECT id, reference_image_path, reference_file_path FROM design_requests
+       WHERE status = 'finalized' AND finalized_at IS NOT NULL AND finalized_at < ?
+         AND (reference_image_path IS NOT NULL OR reference_file_path IS NOT NULL)`,
+    )
+    .all(cutoff.toISOString());
+  const pruned = [];
+  for (const row of rows) {
+    if (row.reference_image_path) deleteFile(row.reference_image_path);
+    if (row.reference_file_path) deleteFile(row.reference_file_path);
+    db.prepare(
+      'UPDATE design_requests SET reference_image_path = NULL, reference_file_path = NULL, updated_at = ? WHERE id = ?',
+    ).run(new Date().toISOString(), row.id);
+    pruned.push(row.id);
+  }
+  return pruned;
+}
+
 export { VALID_STATUSES as DESIGN_REQUEST_STATUSES };

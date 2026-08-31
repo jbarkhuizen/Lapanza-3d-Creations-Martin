@@ -4,6 +4,9 @@ import { pruneOldAuditLogEntries, AUDIT_LOG_RETENTION_MONTHS, recordAuditEvent, 
 import { pruneOldPageViews, PAGE_VIEWS_RETENTION_MONTHS } from './analytics.js';
 import { sendOrderCancelledNotificationEmail } from './mailer.js';
 import { alertBackupFailure } from './alerts.js';
+import { pruneExpiredDesignFiles } from './design-requests.js';
+import { deleteDesignRequestFile } from './uploads.js';
+import { getSettings } from './settings.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const CANCEL_AFTER_MS = 7 * 24 * HOUR_MS; // 7 days
@@ -111,6 +114,34 @@ export function startPageViewsPruneJob(intervalMs = PAGE_VIEWS_PRUNE_INTERVAL_MS
       if (pruned > 0) console.log(`Page-views prune: removed ${pruned} row(s) older than ${monthsToKeep} months`);
     } catch (err) {
       console.error('Page-views prune job failed:', err);
+    }
+  }
+  run();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
+  return timer;
+}
+
+// Backlog #90 (SITE-056/057): daily sweep deleting uploaded design files
+// for requests finalized longer ago than settings.designFileRetentionMonths
+// (admin-editable; the privacy policy states the same figure). Same
+// in-process shape as every other job here; audit-logged per batch so the
+// deletion trail is inspectable.
+export function startDesignFilePruneJob(intervalMs = 24 * 60 * 60 * 1000) {
+  function run() {
+    try {
+      const months = getSettings().designFileRetentionMonths;
+      const pruned = pruneExpiredDesignFiles(months, deleteDesignRequestFile);
+      if (pruned.length > 0) {
+        console.log(`Design-file prune: removed uploads for ${pruned.length} finalized request(s) older than ${months} months`);
+        recordAuditEvent({
+          eventType: AUDIT_EVENTS.SETTINGS_UPDATED,
+          username: 'system',
+          detail: `Design-file retention prune: deleted uploaded files for ${pruned.length} request(s) finalized > ${months} months ago (ids: ${pruned.join(', ')})`,
+        });
+      }
+    } catch (err) {
+      console.error('Design-file prune job failed:', err);
     }
   }
   run();

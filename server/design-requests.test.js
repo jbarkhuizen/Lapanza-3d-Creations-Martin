@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest } from './design-requests.js';
+import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, pruneExpiredDesignFiles } from './design-requests.js';
 
 function basePayload(overrides = {}) {
   return { email: 'customer@example.com', name: 'Customer', phone: '0821234567', description: 'A custom bracket for my car', ...overrides };
@@ -99,5 +99,28 @@ test('deleteDesignRequest removes the row and getDesignRequest returns null afte
   const request = createDesignRequest(basePayload(), db);
   assert.strictEqual(deleteDesignRequest(request.id, db), true);
   assert.strictEqual(getDesignRequest(request.id, db), null);
+  db.close();
+});
+
+test('pruneExpiredDesignFiles deletes only finalized-and-expired uploads, keeps rows and active requests (#90)', () => {
+  const db = openDb(':memory:');
+  const old = createDesignRequest({ name: 'Old', email: 'o@example.com', phone: '082', description: 'x' }, db);
+  const fresh = createDesignRequest({ name: 'Fresh', email: 'f@example.com', phone: '082', description: 'y' }, db);
+  const active = createDesignRequest({ name: 'Active', email: 'a@example.com', phone: '082', description: 'z' }, db);
+  db.prepare("UPDATE design_requests SET reference_image_path = '/uploads/design-requests/a.jpg', reference_file_path = '/uploads/design-requests/a.stl', status = 'finalized', finalized_at = '2024-01-01T00:00:00.000Z' WHERE id = ?").run(old.id);
+  db.prepare("UPDATE design_requests SET reference_file_path = '/uploads/design-requests/b.stl', status = 'finalized', finalized_at = ? WHERE id = ?").run(new Date().toISOString(), fresh.id);
+  db.prepare("UPDATE design_requests SET reference_file_path = '/uploads/design-requests/c.stl', status = 'in_progress' WHERE id = ?").run(active.id);
+  // Backdate the active one too -- status, not age, must protect it.
+  db.prepare("UPDATE design_requests SET created_at = '2020-01-01T00:00:00.000Z' WHERE id = ?").run(active.id);
+
+  const deleted = [];
+  const pruned = pruneExpiredDesignFiles(12, (p) => deleted.push(p), db);
+  assert.deepStrictEqual(pruned, [old.id]);
+  assert.deepStrictEqual(deleted.sort(), ['/uploads/design-requests/a.jpg', '/uploads/design-requests/a.stl']);
+  const row = db.prepare('SELECT reference_image_path, reference_file_path, description FROM design_requests WHERE id = ?').get(old.id);
+  assert.strictEqual(row.reference_image_path, null);
+  assert.strictEqual(row.reference_file_path, null);
+  assert.strictEqual(row.description, 'x'); // record kept
+  assert.strictEqual(db.prepare('SELECT reference_file_path FROM design_requests WHERE id = ?').get(active.id).reference_file_path, '/uploads/design-requests/c.stl');
   db.close();
 });

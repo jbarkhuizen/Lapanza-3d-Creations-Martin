@@ -165,6 +165,11 @@ export const DEFAULT_SETTINGS = {
   // default: the feature stays inert until the owner configures real tiers
   // in Settings -> Storefront stock & delivery messaging.
   volumeDiscounts: [],
+  // Backlog #90 (SITE-056/057 merged): uploaded design files auto-delete
+  // this many months after a request is FINALIZED (the row and its text
+  // stay -- only the binary files go). 12 months default; the privacy
+  // policy states whatever this is set to, so change both together.
+  designFileRetentionMonths: 12,
 
   // SITE-010: real figures from the business owner (2026-08-27), not
   // invented -- shown on filament/category pages (generate-pages.mjs) and
