@@ -10,3 +10,6 @@ data/lapanza.db-*
 data/publish-warnings.json
 data/backups/
 .env
+# Playwright (#115)
+test-results/
+playwright-report/

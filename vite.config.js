@@ -58,4 +58,14 @@ export default defineConfig({
       '/api': 'http://localhost:8787',
     },
   },
+  // #115: `vite preview` serves the built dist/ for the Playwright smoke
+  // pack -- same /api proxy reasoning as the dev server above, plus
+  // /uploads (nginx handles both in production).
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': 'http://localhost:8787',
+      '/uploads': 'http://localhost:8787',
+    },
+  },
 });

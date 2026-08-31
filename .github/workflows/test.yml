@@ -19,3 +19,13 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      # #115: browser-level smoke pack -- real built site + real backend
+      # with a scratch DB. Runs after build since vite preview serves dist/.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7

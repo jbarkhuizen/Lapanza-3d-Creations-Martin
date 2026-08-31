@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
-  "description": "Lapanza 3D Creative Lab — professional site",
+  "description": "Lapanza 3D Creative Lab \u2014 professional site",
   "scripts": {
     "dev": "vite",
     "dev:site": "vite",
@@ -13,7 +13,8 @@
     "preview": "vite preview",
     "generate": "node scripts/generate-pages.mjs",
     "admin": "node server/index.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -30,6 +31,7 @@
     "three": "^0.172.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/vite": "^4.0.6",
     "nodemon": "^3.1.14",
     "supertest": "^7.2.2",
