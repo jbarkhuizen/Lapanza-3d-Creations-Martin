@@ -1401,3 +1401,46 @@ test('PATCH /api/client/me is rejected without a client session', async (t) => {
   const res = await request(app).patch('/api/client/me').send({ firstName: 'Jane' });
   assert.strictEqual(res.status, 401);
 });
+
+test('client invoice route serves own orders only; tracking rides along in order history (#97)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/filaments').set('Cookie', adminCookie).send({ name: 'PLA97', slug: 'pla97' });
+  const colour = await request(app)
+    .post(`/api/filaments/${filament.body.filament.id}/colours`)
+    .set('Cookie', adminCookie)
+    .send({ name: 'Red', sku: 'PLA97-RED', priceRand: 100, weightG: 100, stockQty: 10 });
+  const productId = `filament:pla97:${colour.body.filament.colours[0].sku}`;
+
+  const owner = await loggedInClientCookie(app, adminCookie, 'invoice-owner@example.com');
+  const other = await loggedInClientCookie(app, adminCookie, 'invoice-other@example.com');
+
+  const checkout = await request(app).post('/api/checkout').send({
+    client: { firstName: 'Test', lastName: 'Client', email: 'invoice-owner@example.com' },
+    items: [{ productId, quantity: 1 }],
+    shippingMethod: 'collect',
+    paymentMethod: 'manual_eft',
+  });
+  assert.strictEqual(checkout.status, 201);
+  const orderId = checkout.body.orderId || checkout.body.order?.id;
+
+  // Owner sees their invoice; another logged-in client gets a 404, never
+  // someone else's document.
+  const own = await request(app).get(`/api/client/orders/${orderId}/invoice`).set('Cookie', owner.cookie);
+  assert.strictEqual(own.status, 200);
+  assert.match(own.text, /Invoice|INV-/);
+  const foreign = await request(app).get(`/api/client/orders/${orderId}/invoice`).set('Cookie', other.cookie);
+  assert.strictEqual(foreign.status, 404);
+  const anon = await request(app).get(`/api/client/orders/${orderId}/invoice`);
+  assert.strictEqual(anon.status, 401);
+
+  // Tracking number set by admin appears in the client's order history.
+  await request(app).put(`/api/orders/${orderId}/tracking`).set('Cookie', adminCookie).send({ trackingNumber: 'PUD123456' });
+  const history = await request(app).get('/api/client/orders').set('Cookie', owner.cookie);
+  const row = history.body.orders.find((o) => o.id === orderId);
+  assert.strictEqual(row.tracking_number, 'PUD123456');
+});

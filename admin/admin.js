@@ -2370,6 +2370,7 @@ const EMAIL_TEMPLATE_META = [
   { key: 'passwordReset', label: 'Password reset', tokens: '{{name}}' },
   { key: 'emailVerification', label: 'Verify email', tokens: '{{name}}' },
   { key: 'orderConfirmation', label: 'Order confirmation', tokens: '{{name}}, {{orderRef}}' },
+  { key: 'orderShipped', label: 'Order shipped (tracking number set)', tokens: '{{name}}, {{orderRef}}, {{trackingNumber}}' },
   { key: 'designRequestStatus', label: 'Design request status', tokens: '{{name}}, {{status}}' },
   { key: 'newsletterConfirm', label: 'Newsletter confirmation', tokens: '(none)' },
   { key: 'lowStockAlert', label: 'Low stock alert (to owner)', tokens: '{{itemName}}, {{stockQty}}, {{sku}}' },

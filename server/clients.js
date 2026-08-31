@@ -225,7 +225,7 @@ export function findOrCreateClientForCheckout(data, db = getDb()) {
 }
 
 export function listOrdersForClient(clientId, db = getDb()) {
-  return db.prepare('SELECT id, invoice_number, status, total, created_at FROM orders WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
+  return db.prepare('SELECT id, invoice_number, status, total, created_at, tracking_number FROM orders WHERE client_id = ? ORDER BY created_at DESC').all(clientId);
 }
 
 // ---- Phase 2: client accounts ----

@@ -107,6 +107,25 @@ export async function sendOrderConfirmationEmail(order) {
   });
 }
 
+// Backlog #97: "your order has shipped" -- sent by the tracking route the
+// first time a tracking number is set on an order (never on edits/re-saves
+// of the same number; the route gates on the previous value being empty).
+export async function sendOrderShippedEmail(order) {
+  if (!order.client?.email) throw new Error('Order has no client email');
+  const settings = getSettings();
+  const vars = { name: order.client?.name || 'there', orderRef: order.invoiceNumber || order.id.slice(0, 8), trackingNumber: order.trackingNumber || '' };
+  const bodyHtml = `<p style="margin:0 0 16px;">Hi ${escapeHtml(vars.name)},</p>
+    ${messageHtmlFor(settings, 'orderShipped', vars)}
+    <p style="margin:0 0 16px;">Tracking number: <strong>${escapeHtml(vars.trackingNumber)}</strong></p>
+    <p style="margin:0;font-size:13px;color:#3b322b;">Order reference: <strong>${escapeHtml(vars.orderRef)}</strong> — you can also view this order and its invoice any time from your account page.</p>`;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: order.client.email,
+    subject: subjectFor(settings, 'orderShipped', vars),
+    html: renderEmailShell({ settings, preheader: 'Your order is on its way', bodyHtml }),
+  });
+}
+
 // Sends the real numbered invoice (server/invoice.js's renderInvoiceHtml,
 // the same template the admin's "Print invoice" route uses) as the email
 // body -- called once at order placement (any payment method, `paid:

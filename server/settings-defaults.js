@@ -193,6 +193,10 @@ export const DEFAULT_SETTINGS = {
       subject: 'Order confirmation {{orderRef}} — Lapanza 3D',
       message: "Thanks for your order from Lapanza 3D Creative Lab! Here's a summary of what you ordered.",
     },
+    orderShipped: {
+      subject: 'Your order {{orderRef}} is on its way — Lapanza 3D',
+      message: 'Good news — your order has been handed to the courier. You can track it with the tracking number below.',
+    },
     designRequestStatus: {
       subject: 'Your design request is now {{status}} — Lapanza 3D',
       message: 'Your custom design request has been updated to: {{status}}.',

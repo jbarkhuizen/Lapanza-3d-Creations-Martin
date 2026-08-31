@@ -25,9 +25,21 @@ function orderRow(order) {
   tr.appendChild(textCell(order.invoice_number || order.id?.slice(0, 8) || order.id));
   tr.appendChild(textCell(new Date(order.created_at).toLocaleDateString()));
   tr.appendChild(textCell(order.status));
+  // Backlog #97: courier tracking, shown once the admin has entered it.
+  tr.appendChild(textCell(order.tracking_number || '—'));
 
   const actionTd = document.createElement('td');
-  actionTd.className = 'px-4 py-2.5';
+  actionTd.className = 'px-4 py-2.5 whitespace-nowrap';
+  // Backlog #97: on-demand invoice -- the same numbered document the emails
+  // carry, served by the ownership-gated client route. Browser print
+  // handles save-as-PDF.
+  const invoiceLink = document.createElement('a');
+  invoiceLink.href = `/api/client/orders/${encodeURIComponent(order.id)}/invoice`;
+  invoiceLink.target = '_blank';
+  invoiceLink.rel = 'noopener';
+  invoiceLink.className = 'text-xs font-semibold uppercase tracking-[0.1em] text-terracotta hover:underline mr-3';
+  invoiceLink.textContent = 'Invoice';
+  actionTd.appendChild(invoiceLink);
   // Only an order still awaiting payment can be cancelled self-service --
   // mirrors cancelOrderByClient's own server-side guard, this is just the
   // UI-level reflection of the same rule (paid/shipped/completed orders

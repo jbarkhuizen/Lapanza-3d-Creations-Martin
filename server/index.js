@@ -84,6 +84,7 @@ import {
 import { buildPayfastRedirect, verifyItn, PAYFAST_URLS } from './payfast.js';
 import {
   sendOrderConfirmationEmail,
+  sendOrderShippedEmail,
   sendInvoiceEmail,
   sendLowStockAlert,
   sendClientVerificationEmail,
@@ -1949,11 +1950,30 @@ app.put('/api/orders/:id/status', requireAuth, async (req, res) => {
   }
 });
 
-app.put('/api/orders/:id/tracking', requireAuth, (req, res) => {
+app.put('/api/orders/:id/tracking', requireAuth, async (req, res) => {
+  // Backlog #97: read the previous value BEFORE updating -- the shipped
+  // email fires only on the empty -> non-empty transition, so editing or
+  // re-saving an existing number never re-mails the customer.
+  const previous = getOrder(req.params.id);
   const order = updateOrderTracking(req.params.id, (req.body || {}).trackingNumber);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.id}: tracking number set to "${order.trackingNumber}"` });
+  if (!previous?.trackingNumber && order.trackingNumber && order.client?.email) {
+    try {
+      await sendOrderShippedEmail(order);
+    } catch (err) {
+      logEmailFailure(`Order ${order.id} shipped email`, err, req);
+    }
+  }
   res.json({ order });
+});
+
+// Backlog #97: customer's own invoice, on demand -- same renderer as the
+// admin route and the emailed copy, gated on ownership of the order.
+app.get('/api/client/orders/:id/invoice', requireClientAuth, (req, res) => {
+  const order = getOrder(req.params.id);
+  if (!order || order.clientId !== req.clientId) return res.status(404).send('Order not found');
+  res.send(renderInvoiceHtml(order, getSettings()));
 });
 
 // Invoice History's delete action -- a genuine hard delete, unlike cancel
