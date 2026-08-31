@@ -5,6 +5,7 @@ import { initAppearance, toggleTheme, applyTheme } from './appearance.js';
 import { mountCartUI } from './cart-ui.js';
 import { trackVisit } from './analytics.js';
 import { mountCarPartsFilter } from './car-parts-filter.js';
+import { mountFilamentFilter } from './filament-filter.js';
 import { attachSearch } from './search.js';
 
 window.toggleDrawer = toggleDrawer;
@@ -247,6 +248,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   mountCartUI();
   enhanceColourCards();
   mountCarPartsFilter();
+  mountFilamentFilter();
   syncYear();
   hydrateHomeTiles();
   hydrateFeaturedProducts();

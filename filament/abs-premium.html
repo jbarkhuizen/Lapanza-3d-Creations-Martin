@@ -71,7 +71,18 @@
 <div class="flex justify-between border-b border-charcoal/10 py-3 last:border-0"><span class="text-espresso/55 text-sm">Elongation at Break</span><span class="font-semibold tracking-tight">30%</span></div></div></div>
       <div>
           <h2 class="font-serif text-xl mb-5 tracking-tight">Colours</h2>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4"><div id="item-sa-f-abspre-a01-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="White">
+          <div id="colour-filter-bar" class="flex flex-wrap items-center gap-3 mb-5">
+            <input id="colour-search" type="search" placeholder="Filter colours…" aria-label="Filter colours" class="border border-charcoal/20 rounded-sm px-3 py-2 text-sm bg-transparent w-44" />
+            <label class="flex items-center gap-2 text-sm text-espresso/70"><input id="colour-instock" type="checkbox" class="accent-terracotta" /> In stock only</label>
+            <select id="colour-sort" aria-label="Sort colours" class="border border-charcoal/20 rounded-sm px-3 py-2 text-sm bg-transparent">
+              <option value="">Default order</option>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </div>
+          <p id="colour-filter-empty" class="hidden text-espresso/50 text-sm py-6">No colours match your filter.</p>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4" id="colour-grid"><div id="item-sa-f-abspre-a01-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="White" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">White</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A01-100175PG</p>
@@ -85,7 +96,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a02-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Black">
+<div id="item-sa-f-abspre-a02-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Black" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Black</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A02-100175PG</p>
@@ -99,7 +110,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a26-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Cool White">
+<div id="item-sa-f-abspre-a26-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Cool White" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Cool White</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A26-100175PG</p>
@@ -113,7 +124,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a21-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Silver">
+<div id="item-sa-f-abspre-a21-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Silver" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Silver</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A21-100175PG</p>
@@ -127,7 +138,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a03-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Grey">
+<div id="item-sa-f-abspre-a03-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Grey" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Grey</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A03-100175PG</p>
@@ -141,7 +152,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a05-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Red">
+<div id="item-sa-f-abspre-a05-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Red" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Red</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A05-100175PG</p>
@@ -155,7 +166,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a04-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Blue">
+<div id="item-sa-f-abspre-a04-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Blue" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Blue</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A04-100175PG</p>
@@ -169,7 +180,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a08-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Orange">
+<div id="item-sa-f-abspre-a08-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Orange" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Orange</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A08-100175PG</p>
@@ -183,7 +194,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a07-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Green">
+<div id="item-sa-f-abspre-a07-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Green" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Green</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A07-100175PG</p>
@@ -197,7 +208,7 @@
             data-weight="0"
             data-image="">Add to Cart</button>
                 </div>
-<div id="item-sa-f-abspre-a14-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Natural/Ivory">
+<div id="item-sa-f-abspre-a14-100175pg" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="Natural/Ivory" data-price="275" data-instock="1">
                   <div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>
                   <p class="font-medium mb-1 tracking-tight">Natural/Ivory</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">SA-F-ABSPRE-A14-100175PG</p>

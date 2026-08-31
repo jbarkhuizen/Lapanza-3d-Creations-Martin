@@ -344,7 +344,7 @@ function colourCards(colours, filament) {
     .filter((c) => c.listed !== false)
     .map((c) => {
       const stock = stockMessage(c.stockQty);
-      return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}">
+      return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}" data-price="${escapeAttr(String(parsePrice(c.price) || 0))}" data-instock="${Number(c.stockQty) > 0 ? 1 : 0}">
                   ${
                     imageFileExists(c.imageUrl)
                       ? responsiveImg(c.imageUrl, c.name, 'w-full aspect-square object-cover rounded-sm mb-3')
@@ -558,7 +558,22 @@ function generateFilamentPage(f) {
     listedColours.length > 0
       ? `<div>
           <h2 class="font-serif text-xl mb-5 tracking-tight">Colours</h2>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">${colourCards(listedColours, f)}</div>
+          ${
+            listedColours.length > 3
+              ? `<div id="colour-filter-bar" class="flex flex-wrap items-center gap-3 mb-5">
+            <input id="colour-search" type="search" placeholder="Filter colours…" aria-label="Filter colours" class="border border-charcoal/20 rounded-sm px-3 py-2 text-sm bg-transparent w-44" />
+            <label class="flex items-center gap-2 text-sm text-espresso/70"><input id="colour-instock" type="checkbox" class="accent-terracotta" /> In stock only</label>
+            <select id="colour-sort" aria-label="Sort colours" class="border border-charcoal/20 rounded-sm px-3 py-2 text-sm bg-transparent">
+              <option value="">Default order</option>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </div>
+          <p id="colour-filter-empty" class="hidden text-espresso/50 text-sm py-6">No colours match your filter.</p>`
+              : ''
+          }
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4" id="colour-grid">${colourCards(listedColours, f)}</div>
           ${note}
         </div>`
       : `<div class="border border-dashed border-charcoal/20 rounded-sm p-6 text-sm text-espresso/60">
