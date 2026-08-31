@@ -849,6 +849,125 @@ if (fs.existsSync(legacyHome)) {
   console.log('removed premium.html (replaced by index.html)');
 }
 
+// ---- Material selection guide (#73 / SITE-039) ----
+// Family-level guidance prose is authored here (plain language, flagged for
+// owner review in the shipping commit); the comparison table is generated
+// from the SAME specs the filament pages render, so it can never drift from
+// the catalogue. Families only render when at least one of their types
+// exists in the live catalogue.
+{
+  const FAMILIES = [
+    {
+      match: (s) => s.startsWith('pla') || s === 'silk-pla-plus' || s === 'eco-pla',
+      name: 'PLA (all variants)',
+      use: 'The everyday material: decor, toys, prototypes, organisers, anything indoors.',
+      strengths: 'Easiest to print, sharpest detail, huge colour range, plant-based and low-odour.',
+      limits: 'Softens from ±55°C — never for a car dashboard or dishwasher; brittle under sharp impact.',
+    },
+    {
+      match: (s) => s.startsWith('petg'),
+      name: 'PETG',
+      use: 'Functional parts that see real use: brackets, containers, outdoor fittings, mechanical parts.',
+      strengths: 'Tough, slightly flexible, water- and chemical-resistant, handles heat better than PLA.',
+      limits: 'Strings more when printing; fine detail is a little softer than PLA.',
+    },
+    {
+      match: (s) => s.startsWith('abs'),
+      name: 'ABS',
+      use: 'Heat-exposed and high-wear parts: automotive interior pieces, enclosures, clips.',
+      strengths: 'Impact-tough, handles ±95°C, sandable and acetone-smoothable for a moulded finish.',
+      limits: 'Needs an enclosed printer to avoid warping; prints with more odour.',
+    },
+    {
+      match: (s) => s === 'asa',
+      name: 'ASA',
+      use: 'Outdoor parts living in the South African sun: exterior vehicle trim, garden fittings, signage brackets.',
+      strengths: 'ABS toughness plus genuine UV resistance — colours and strength hold up outside.',
+      limits: 'Same enclosure requirement as ABS.',
+    },
+    {
+      match: (s) => s.startsWith('tpu'),
+      name: 'TPU (flexible)',
+      use: 'Anything that must bend or grip: phone cases, gaskets, protective bumpers, wheels.',
+      strengths: 'Rubber-like flex (95A softer, 98A firmer), extremely abrasion- and impact-resistant.',
+      limits: 'Prints slowly; fine detail and sharp corners are not its strength.',
+    },
+    {
+      match: (s) => s.startsWith('pro-cpe'),
+      name: 'CPE',
+      use: 'Demanding functional/engineering parts; the HT variant for higher heat.',
+      strengths: 'Chemically resistant, dimensionally stable, tougher than PETG under sustained load.',
+      limits: 'Costs more; overkill for decorative prints.',
+    },
+    {
+      match: (s) => s === 'sbs',
+      name: 'SBS',
+      use: 'Translucent decorative pieces and light guides.',
+      strengths: 'Glass-like translucency, slightly flexible, low odour.',
+      limits: 'Not for structural or heat-exposed parts.',
+    },
+  ];
+
+  const COMPARE_LABELS = ['Print Temp', 'Bed Temp', 'Heat Distortion Temp', 'Tensile Strength', 'Elongation at Break'];
+  const compareRows = filaments
+    .filter((f) => (f.specs || []).some((s) => COMPARE_LABELS.includes(s.label)))
+    .map((f) => {
+      const spec = (label) => (f.specs || []).find((s) => s.label === label)?.value || '—';
+      return `<tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/${f.slug}.html">${f.name}</a></td>
+        ${COMPARE_LABELS.map((l) => `<td class="px-3 py-2.5 text-espresso/70">${spec(l)}</td>`).join('')}
+      </tr>`;
+    })
+    .join('');
+
+  const familyBlocks = FAMILIES.filter((fam) => filaments.some((f) => fam.match(f.slug)))
+    .map((fam) => {
+      const members = filaments.filter((f) => fam.match(f.slug));
+      const links = members.map((f) => `<a class="text-terracotta font-semibold hover:underline" href="filament/${f.slug}.html">${f.name}</a>`).join(' · ');
+      return `<section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">${fam.name}</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">${fam.use}</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">${fam.strengths}</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">${fam.limits}</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: ${links}</p>
+      </section>`;
+    })
+    .join('');
+
+  const guidePagePath = 'materials-guide.html';
+  const html = `${head({
+    title: 'Which 3D Printing Material? — Lapanza 3D Creative Lab',
+    description: 'A practical guide to choosing between PLA, PETG, ABS, ASA, TPU and CPE filament — use cases, strengths, limits, and a full spec comparison.',
+    depth: 0,
+    pagePath: guidePagePath,
+    jsonLd: [breadcrumbJsonLd('Home / Materials Guide', guidePagePath)],
+  })}
+${shellStart({ depth: 0 })}
+    <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-3xl">
+      <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
+        <a href="index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">Materials Guide</span>
+      </nav>
+      <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Which Material Should I Print In?</h1>
+      <p class="text-espresso/70 leading-relaxed mb-10 max-w-xl">The honest short version: if it lives indoors and doesn't get hot, PLA. If it works for a living, PETG. If it lives in a car or outside, ABS or ASA. If it must bend, TPU. Details below — and if you're still unsure, <a class="text-terracotta font-semibold hover:underline" href="design-request.html">tell us what you're making</a> and we'll recommend.</p>
+      ${familyBlocks}
+      <h2 class="font-serif text-2xl tracking-tight mb-4 mt-14">Spec Comparison</h2>
+      <p class="text-sm text-espresso/60 mb-4">Figures come straight from each filament's own listed specifications — the same numbers on the product pages.</p>
+      <div class="overflow-x-auto border border-charcoal/10 rounded-sm">
+        <table class="w-full text-sm min-w-[640px]">
+          <thead class="bg-linen text-left"><tr><th class="px-3 py-2.5 font-semibold">Filament</th>${COMPARE_LABELS.map((l) => `<th class="px-3 py-2.5 font-semibold">${l}</th>`).join('')}</tr></thead>
+          <tbody>${compareRows}</tbody>
+        </table>
+      </div>
+      <div class="mt-12">${backToHomeButton({ depth: 0 })}</div>
+      </div>
+    </main>
+${footer({ depth: 0 })}`;
+  write(guidePagePath, html);
+}
+
 // ---- search index (#39 / SITE-005) ----
 // One compact entry per filament colour, category item, and navigable page;
 // consumed client-side by src/js/search.js. Anchors use the exact same
@@ -884,6 +1003,7 @@ if (fs.existsSync(legacyHome)) {
     }
   }
   for (const [n, h] of [
+    ['Materials Guide — which filament to choose', 'materials-guide.html'],
     ['Our Story', 'story.html'],
     ['Get in Touch', 'get-in-touch.html'],
     ['3D Resources', 'resources.html'],

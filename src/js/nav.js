@@ -45,6 +45,7 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
     ${filamentLinks}
   </div>
 </details>
+<a href="${p}materials-guide.html" class="side-link ${isActive('materials-guide.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Materials Guide</a>
 <details class="rot-open border-t border-charcoal/10 py-2" data-nav-key="Car Parts" ${carOpen ? 'open' : ''}>
   <summary class="flex items-center justify-between uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors py-1.5 font-semibold"><span>Car Parts</span><span class="chev transition-transform duration-200 text-terracotta">&#8250;</span></summary>
   <div class="pl-3 mt-1 space-y-0.5 border-l border-charcoal/10">

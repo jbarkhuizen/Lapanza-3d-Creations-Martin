@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Which 3D Printing Material? — Lapanza 3D Creative Lab</title>
+<meta name="description" content="A practical guide to choosing between PLA, PETG, ABS, ASA, TPU and CPE filament — use cases, strengths, limits, and a full spec comparison.">
+<meta name="theme-color" content="#f7f3eb">
+<link rel="canonical" href="https://www.lapanza3d.co.za/materials-guide.html">
+<meta property="og:title" content="Which 3D Printing Material? — Lapanza 3D Creative Lab">
+<meta property="og:description" content="A practical guide to choosing between PLA, PETG, ABS, ASA, TPU and CPE filament — use cases, strengths, limits, and a full spec comparison.">
+<meta property="og:url" content="https://www.lapanza3d.co.za/materials-guide.html">
+<meta property="og:type" content="website">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"https://www.lapanza3d.co.za/"},{"@type":"ListItem","position":2,"name":"Materials Guide","item":"https://www.lapanza3d.co.za/materials-guide.html"}]}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&display=swap" rel="stylesheet">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<script>
+(function(){try{var t=localStorage.getItem('lapanza-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
+</script>
+
+<script>window.__PAGE_DEPTH__=0;window.__PAGE_PATH__="materials-guide.html";</script>
+<script type="module" src="src/js/site.js"></script>
+</head>
+
+<body class="font-sans antialiased">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="site-grain" aria-hidden="true"></div>
+
+  <div class="md:hidden sticky top-0 z-30 nav-blur border-b border-charcoal/10 flex items-center justify-between px-4 py-3 gap-2">
+    <a href="index.html" class="brand-mark font-serif text-lg tracking-tight font-semibold">Lapanza <span class="mark-3d">3D</span></a>
+    <div class="flex items-center gap-2">
+      <button type="button" class="theme-toggle-btn" data-theme-toggle aria-label="Toggle dark mode">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"/></svg>
+      </button>
+      <button type="button" onclick="toggleDrawer()" class="border-2 border-charcoal/20 rounded-full px-3 py-1.5 text-xs uppercase tracking-wide font-semibold">Menu</button>
+    </div>
+  </div>
+  <div id="sidebar-drawer" class="hidden md:hidden bg-cream border-b border-charcoal/10 px-6 py-4">
+    <nav data-site-nav class="site-sidebar text-sm" aria-label="Catalogue"></nav>
+  </div>
+
+  <div class="md:flex">
+    <aside class="aside-panel hidden md:block w-72 shrink-0 min-h-screen sticky top-0 px-6 py-10 overflow-y-auto" aria-label="Catalogue">
+      <nav data-site-nav class="site-sidebar text-sm"></nav>
+    </aside>
+    <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-3xl">
+      <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
+        <a href="index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">Materials Guide</span>
+      </nav>
+      <h1 class="font-serif text-4xl md:text-5xl tracking-[-0.03em] mb-4">Which Material Should I Print In?</h1>
+      <p class="text-espresso/70 leading-relaxed mb-10 max-w-xl">The honest short version: if it lives indoors and doesn't get hot, PLA. If it works for a living, PETG. If it lives in a car or outside, ABS or ASA. If it must bend, TPU. Details below — and if you're still unsure, <a class="text-terracotta font-semibold hover:underline" href="design-request.html">tell us what you're making</a> and we'll recommend.</p>
+      <section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">PLA (all variants)</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">The everyday material: decor, toys, prototypes, organisers, anything indoors.</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">Easiest to print, sharpest detail, huge colour range, plant-based and low-odour.</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">Softens from ±55°C — never for a car dashboard or dishwasher; brittle under sharp impact.</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: <a class="text-terracotta font-semibold hover:underline" href="filament/pla.html">PLA</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/pla-hyper.html">PLA Hyper</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/pla-hyper-silk.html">PLA Hyper Silk</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/pla-premium.html">PLA Premium</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/silk-pla-plus.html">Silk PLA+</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/eco-pla.html">Eco PLA</a></p>
+      </section><section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">PETG</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">Functional parts that see real use: brackets, containers, outdoor fittings, mechanical parts.</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">Tough, slightly flexible, water- and chemical-resistant, handles heat better than PLA.</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">Strings more when printing; fine detail is a little softer than PLA.</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: <a class="text-terracotta font-semibold hover:underline" href="filament/petg.html">PETG</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/petg-speed.html">PETG Speed</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/petg-speed-cf.html">PETG Speed CF</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/petg-eco.html">PETG Eco</a></p>
+      </section><section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">ABS</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">Heat-exposed and high-wear parts: automotive interior pieces, enclosures, clips.</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">Impact-tough, handles ±95°C, sandable and acetone-smoothable for a moulded finish.</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">Needs an enclosed printer to avoid warping; prints with more odour.</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: <a class="text-terracotta font-semibold hover:underline" href="filament/abs-premium.html">ABS Premium</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/abs-eco.html">ABS Eco</a></p>
+      </section><section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">ASA</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">Outdoor parts living in the South African sun: exterior vehicle trim, garden fittings, signage brackets.</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">ABS toughness plus genuine UV resistance — colours and strength hold up outside.</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">Same enclosure requirement as ABS.</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: <a class="text-terracotta font-semibold hover:underline" href="filament/asa.html">ASA</a></p>
+      </section><section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">TPU (flexible)</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">Anything that must bend or grip: phone cases, gaskets, protective bumpers, wheels.</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">Rubber-like flex (95A softer, 98A firmer), extremely abrasion- and impact-resistant.</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">Prints slowly; fine detail and sharp corners are not its strength.</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: <a class="text-terracotta font-semibold hover:underline" href="filament/tpu-95a.html">TPU 95A</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/tpu-98a.html">TPU 98A</a></p>
+      </section><section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">CPE</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">Demanding functional/engineering parts; the HT variant for higher heat.</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">Chemically resistant, dimensionally stable, tougher than PETG under sustained load.</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">Costs more; overkill for decorative prints.</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: <a class="text-terracotta font-semibold hover:underline" href="filament/pro-cpe.html">PRO CPE</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/pro-cpe-plus.html">PRO CPE+</a> · <a class="text-terracotta font-semibold hover:underline" href="filament/pro-cpe-ht.html">PRO CPE-HT</a></p>
+      </section><section class="mb-10">
+        <h2 class="font-serif text-2xl tracking-tight mb-3">SBS</h2>
+        <dl class="stack gap-2 text-sm leading-relaxed">
+          <div><dt class="font-semibold inline">Best for:</dt> <dd class="inline text-espresso/75">Translucent decorative pieces and light guides.</dd></div>
+          <div><dt class="font-semibold inline">Strengths:</dt> <dd class="inline text-espresso/75">Glass-like translucency, slightly flexible, low odour.</dd></div>
+          <div><dt class="font-semibold inline">Limits:</dt> <dd class="inline text-espresso/75">Not for structural or heat-exposed parts.</dd></div>
+        </dl>
+        <p class="text-sm mt-2">In stock: <a class="text-terracotta font-semibold hover:underline" href="filament/sbs.html">SBS</a></p>
+      </section>
+      <h2 class="font-serif text-2xl tracking-tight mb-4 mt-14">Spec Comparison</h2>
+      <p class="text-sm text-espresso/60 mb-4">Figures come straight from each filament's own listed specifications — the same numbers on the product pages.</p>
+      <div class="overflow-x-auto border border-charcoal/10 rounded-sm">
+        <table class="w-full text-sm min-w-[640px]">
+          <thead class="bg-linen text-left"><tr><th class="px-3 py-2.5 font-semibold">Filament</th><th class="px-3 py-2.5 font-semibold">Print Temp</th><th class="px-3 py-2.5 font-semibold">Bed Temp</th><th class="px-3 py-2.5 font-semibold">Heat Distortion Temp</th><th class="px-3 py-2.5 font-semibold">Tensile Strength</th><th class="px-3 py-2.5 font-semibold">Elongation at Break</th></tr></thead>
+          <tbody><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/pla.html">PLA</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">190–220°C</td><td class="px-3 py-2.5 text-espresso/70">45–60°C</td><td class="px-3 py-2.5 text-espresso/70">55°C</td><td class="px-3 py-2.5 text-espresso/70">45 MPa</td><td class="px-3 py-2.5 text-espresso/70">9%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/pla-hyper.html">PLA Hyper</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">190–230°C</td><td class="px-3 py-2.5 text-espresso/70">60–65°C</td><td class="px-3 py-2.5 text-espresso/70">60°C</td><td class="px-3 py-2.5 text-espresso/70">50 MPa</td><td class="px-3 py-2.5 text-espresso/70">5%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/pla-hyper-silk.html">PLA Hyper Silk</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">190–220°C</td><td class="px-3 py-2.5 text-espresso/70">55–70°C</td><td class="px-3 py-2.5 text-espresso/70">—</td><td class="px-3 py-2.5 text-espresso/70">—</td><td class="px-3 py-2.5 text-espresso/70">—</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/silk-pla-plus.html">Silk PLA+</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">190–230°C</td><td class="px-3 py-2.5 text-espresso/70">50–65°C</td><td class="px-3 py-2.5 text-espresso/70">61°C</td><td class="px-3 py-2.5 text-espresso/70">35 MPa</td><td class="px-3 py-2.5 text-espresso/70">25%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/petg.html">PETG</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">235–255°C</td><td class="px-3 py-2.5 text-espresso/70">60–80°C</td><td class="px-3 py-2.5 text-espresso/70">70°C</td><td class="px-3 py-2.5 text-espresso/70">49 MPa</td><td class="px-3 py-2.5 text-espresso/70">250%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/petg-speed.html">PETG Speed</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">225–255°C</td><td class="px-3 py-2.5 text-espresso/70">70–80°C</td><td class="px-3 py-2.5 text-espresso/70">70°C</td><td class="px-3 py-2.5 text-espresso/70">49 MPa</td><td class="px-3 py-2.5 text-espresso/70">136%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/petg-speed-cf.html">PETG Speed CF</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">230–260°C</td><td class="px-3 py-2.5 text-espresso/70">75°C</td><td class="px-3 py-2.5 text-espresso/70">75°C</td><td class="px-3 py-2.5 text-espresso/70">58 MPa</td><td class="px-3 py-2.5 text-espresso/70">30%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/abs-premium.html">ABS Premium</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">230–250°C</td><td class="px-3 py-2.5 text-espresso/70">80–110°C</td><td class="px-3 py-2.5 text-espresso/70">—</td><td class="px-3 py-2.5 text-espresso/70">32 MPa</td><td class="px-3 py-2.5 text-espresso/70">30%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/sbs.html">SBS</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">190–230°C</td><td class="px-3 py-2.5 text-espresso/70">70–80°C</td><td class="px-3 py-2.5 text-espresso/70">67°C</td><td class="px-3 py-2.5 text-espresso/70">23 MPa</td><td class="px-3 py-2.5 text-espresso/70">200%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/pro-cpe.html">PRO CPE</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">235–265°C</td><td class="px-3 py-2.5 text-espresso/70">65–85°C</td><td class="px-3 py-2.5 text-espresso/70">81°C</td><td class="px-3 py-2.5 text-espresso/70">54 MPa</td><td class="px-3 py-2.5 text-espresso/70">230%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/pro-cpe-plus.html">PRO CPE+</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">235–265°C</td><td class="px-3 py-2.5 text-espresso/70">70–100°C</td><td class="px-3 py-2.5 text-espresso/70">83°C</td><td class="px-3 py-2.5 text-espresso/70">48 MPa</td><td class="px-3 py-2.5 text-espresso/70">250%</td>
+      </tr><tr class="border-t border-charcoal/10">
+        <td class="px-3 py-2.5 font-medium"><a class="text-terracotta hover:underline" href="filament/pro-cpe-ht.html">PRO CPE-HT</a></td>
+        <td class="px-3 py-2.5 text-espresso/70">235–275°C</td><td class="px-3 py-2.5 text-espresso/70">75–110°C</td><td class="px-3 py-2.5 text-espresso/70">97°C</td><td class="px-3 py-2.5 text-espresso/70">48 MPa</td><td class="px-3 py-2.5 text-espresso/70">150%</td>
+      </tr></tbody>
+        </table>
+      </div>
+      <div class="mt-12"><a href="index.html" class="inline-flex text-sm font-semibold border-2 border-charcoal rounded-full px-5 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">← Back to Home</a></div>
+      </div>
+    </main>
+
+  </div>
+
+  <footer class="border-t border-charcoal/10 py-10 md:pl-72">
+    <div class="mx-auto max-w-5xl px-6 sm:px-10 lg:px-16 xl:px-24 text-xs text-espresso/60 flex flex-wrap gap-4 justify-between">
+      <span>&copy; <span data-year>2026</span> Lapanza 3D Creative Lab</span>
+      <span>lapanzaonline@gmail.com &middot; 082 663 9608</span>
+    </div>
+    <div class="mx-auto max-w-5xl px-6 sm:px-10 lg:px-16 xl:px-24 mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-espresso/55">
+      <a href="terms.html" class="hover:text-terracotta transition-colors">Terms &amp; Conditions</a>
+      <a href="privacy.html" class="hover:text-terracotta transition-colors">Privacy Policy</a>
+      <a href="returns.html" class="hover:text-terracotta transition-colors">Returns &amp; Refunds</a>
+    </div>
+  </footer>
+</body>
+</html>
