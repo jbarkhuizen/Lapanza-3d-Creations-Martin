@@ -1,22 +1,10 @@
-import { FILAMENT_NAV } from '../data/site.js';
+import { attachSearch } from './search.js';
 
 /** Homepage-only header widgets: sidebar collapse, quick search, account panel.
- *  Guarded by element presence so this stays a no-op on every other page. */
-
-const SEARCH_INDEX = [
-  { title: 'Our Story', href: 'story.html' },
-  { title: 'Shop the range', href: '#range' },
-  { title: '3D Resources', href: 'resources.html' },
-  { title: 'Custom Design and Print Request', href: 'design-request.html' },
-  { title: 'My Account', href: 'account.html' },
-  { title: 'Contact', href: '#contact' },
-  { title: 'Car Parts — GWM', href: 'car-parts/gwm.html' },
-  { title: 'Car Parts — Landrover', href: 'car-parts/landrover.html' },
-  { title: 'Toys', href: 'toys.html' },
-  { title: 'Homeware', href: 'homeware.html' },
-  { title: 'Phone Accessories', href: 'phones.html' },
-  ...FILAMENT_NAV.map((f) => ({ title: `Filament — ${f.label}`, href: `filament/${f.slug}.html` })),
-];
+ *  Guarded by element presence so this stays a no-op on every other page.
+ *  Backlog #39: the quick search now runs on the shared store-wide index
+ *  (search.js / /search-index.json) -- every filament colour, category item
+ *  and page, not the old hardcoded 12-entry page list. */
 
 function openPanel(panel, btn) {
   panel.classList.remove('hidden');
@@ -52,29 +40,6 @@ function initSidebarCollapse() {
   });
 }
 
-function renderResults(container, query) {
-  container.textContent = '';
-  const q = query.trim().toLowerCase();
-  if (!q) return;
-
-  const matches = SEARCH_INDEX.filter((item) => item.title.toLowerCase().includes(q)).slice(0, 8);
-  if (!matches.length) {
-    const empty = document.createElement('p');
-    empty.className = 'text-espresso/50 px-2 py-2';
-    empty.textContent = 'No matches.';
-    container.appendChild(empty);
-    return;
-  }
-
-  matches.forEach((item) => {
-    const a = document.createElement('a');
-    a.href = item.href;
-    a.className = 'block px-2 py-2 rounded-lg hover:bg-charcoal/5 transition-colors';
-    a.textContent = item.title;
-    container.appendChild(a);
-  });
-}
-
 function initSiteSearch() {
   const btn = document.getElementById('site-search-btn');
   const panel = document.getElementById('site-search-panel');
@@ -91,15 +56,10 @@ function initSiteSearch() {
     }
   });
 
-  input.addEventListener('input', () => renderResults(results, input.value));
+  attachSearch(input, results);
 
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      const first = results.querySelector('a');
-      if (first) window.location.href = first.getAttribute('href');
-    } else if (e.key === 'Escape') {
-      closePanel(panel, btn);
-    }
+    if (e.key === 'Escape') closePanel(panel, btn);
   });
 
   document.addEventListener('click', (e) => {

@@ -820,6 +820,58 @@ if (fs.existsSync(legacyHome)) {
   console.log('removed premium.html (replaced by index.html)');
 }
 
+// ---- search index (#39 / SITE-005) ----
+// One compact entry per filament colour, category item, and navigable page;
+// consumed client-side by src/js/search.js. Anchors use the exact same
+// itemAnchorId scheme the cards themselves render with.
+{
+  const entries = [];
+  for (const f of filaments) {
+    entries.push({ t: 'Filament', n: `${f.name} filament`, s: '', k: 'filament', h: `filament/${f.slug}.html`, p: '' });
+    for (const c of (f.colours || []).filter((c) => c.listed !== false)) {
+      entries.push({
+        t: 'Filament',
+        n: `${f.name} — ${c.name}`,
+        s: c.sku || '',
+        k: `filament ${f.name}`,
+        h: `filament/${f.slug}.html#${itemAnchorId(c.sku, c.name)}`,
+        p: c.price || '',
+      });
+    }
+  }
+  for (const page of categoryPages) {
+    const category = categories[page.slug];
+    if (!category) continue;
+    const label = page.name || category.name;
+    for (const item of (category.items || []).filter((i) => i.listed !== false)) {
+      entries.push({
+        t: label,
+        n: item.name,
+        s: item.sku || '',
+        k: [item.material, item.creator, ...(Array.isArray(item.models) ? item.models : [])].filter(Boolean).join(' '),
+        h: `${page.pagePath}#${itemAnchorId(item.sku, item.name)}`,
+        p: item.price ? formatItemPrice(item.price) : '',
+      });
+    }
+  }
+  for (const [n, h] of [
+    ['Our Story', 'story.html'],
+    ['Get in Touch', 'get-in-touch.html'],
+    ['3D Resources', 'resources.html'],
+    ['Custom Design and Print Request', 'design-request.html'],
+    ['My Account', 'account.html'],
+    ['Toys', 'toys.html'],
+    ['Homeware', 'homeware.html'],
+    ['Phones', 'phones.html'],
+    ['Car Parts — GWM', 'car-parts/gwm.html'],
+    ['Car Parts — Landrover', 'car-parts/landrover.html'],
+  ]) {
+    entries.push({ t: 'Page', n, s: '', k: '', h, p: '' });
+  }
+  write('public/search-index.json', JSON.stringify(entries));
+  console.log(`search index: ${entries.length} entries`);
+}
+
 // ---- robots.txt + sitemap.xml (#109 / SITE-075) ----
 // The sitemap covers every page this run generated, plus the hand-written
 // public pages (kept in step with vite.config.js's htmlEntries list).

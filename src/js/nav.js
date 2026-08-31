@@ -33,6 +33,10 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
     <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5z"/></svg>
   </button>
 </div>
+<div class="mt-4 relative">
+  <input type="search" class="side-search-input w-full border border-charcoal/20 rounded-sm px-3 py-2 text-sm bg-transparent" placeholder="Search products…" aria-label="Search products" />
+  <div class="side-search-results absolute left-0 right-0 top-full mt-1 z-50 bg-cream border border-charcoal/15 rounded-sm shadow-lg empty:hidden max-h-80 overflow-y-auto"></div>
+</div>
 <a href="${p}story.html" class="side-link ${isActive('story.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10 mt-6">Our Story</a>
 <a href="${p}get-in-touch.html" class="side-link ${isActive('get-in-touch.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Get in Touch</a>
 <details class="rot-open border-t border-charcoal/10 py-2" data-nav-key="Filament" ${filamentOpen ? 'open' : ''}>

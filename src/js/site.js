@@ -5,6 +5,7 @@ import { initAppearance, toggleTheme, applyTheme } from './appearance.js';
 import { mountCartUI } from './cart-ui.js';
 import { trackVisit } from './analytics.js';
 import { mountCarPartsFilter } from './car-parts-filter.js';
+import { attachSearch } from './search.js';
 
 window.toggleDrawer = toggleDrawer;
 
@@ -235,6 +236,11 @@ function ensureDesktopThemeToggle() {
 document.addEventListener('DOMContentLoaded', async () => {
   await initAppearance();
   mountNav();
+  // Backlog #39: sidebar search on every page. Legal/static pages render
+  // the sidebar twice (mobile drawer + desktop aside) -- wire each instance.
+  document.querySelectorAll('[data-site-nav]').forEach((nav) => {
+    attachSearch(nav.querySelector('.side-search-input'), nav.querySelector('.side-search-results'));
+  });
   ensureDesktopThemeToggle();
   wireThemeButtons();
   mountWhatsAppFab();
