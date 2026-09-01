@@ -1589,3 +1589,27 @@ test('"Order this again" books a fresh order at the recorded quote price without
   const missingToken = await request(app).post('/api/design-request-status/reorder').send({ token: 'not-a-real-token' });
   assert.strictEqual(missingToken.status, 404);
 });
+
+test('GET /api/dashboard/sales requires admin auth, honors ?range, and rejects an unknown range', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const anon = await request(app).get('/api/dashboard/sales');
+  assert.strictEqual(anon.status, 401);
+
+  const defaultRange = await request(app).get('/api/dashboard/sales').set('Cookie', adminCookie);
+  assert.strictEqual(defaultRange.status, 200);
+  assert.strictEqual(defaultRange.body.range, '30d');
+  assert.strictEqual(defaultRange.body.revenue, 0);
+  assert.deepStrictEqual(defaultRange.body.statusBreakdown.map((s) => s.status), ['pending_payment', 'paid', 'shipped', 'completed', 'cancelled']);
+
+  const today = await request(app).get('/api/dashboard/sales?range=today').set('Cookie', adminCookie);
+  assert.strictEqual(today.status, 200);
+  assert.strictEqual(today.body.range, 'today');
+
+  const bad = await request(app).get('/api/dashboard/sales?range=nonsense').set('Cookie', adminCookie);
+  assert.strictEqual(bad.status, 400);
+});

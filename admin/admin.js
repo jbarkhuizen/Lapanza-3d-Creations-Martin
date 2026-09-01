@@ -649,11 +649,79 @@ async function renderAnalytics() {
   }, 20000);
 }
 
+const SALES_RANGE_LABELS = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', '90d': 'Last 90 days', all: 'All time' };
+
+// Dependency-free bar chart -- this admin ships as a plain ES module with no
+// build step and no chart library anywhere else, so a small inline SVG
+// matches the rest of the codebase rather than pulling one in for one panel.
+function renderRevenueChart(series) {
+  if (!series.length) return '<p class="muted">No revenue in this range yet.</p>';
+  const width = 640;
+  const height = 160;
+  const gap = series.length > 40 ? 1 : 4;
+  const barWidth = Math.max(1, (width - gap * (series.length - 1)) / series.length);
+  const max = Math.max(...series.map((d) => d.revenue), 1);
+  const bars = series.map((d, i) => {
+    const barHeight = Math.max(1, Math.round((d.revenue / max) * (height - 4)));
+    const x = (i * (barWidth + gap)).toFixed(1);
+    const y = height - barHeight;
+    return `<rect x="${x}" y="${y}" width="${barWidth.toFixed(1)}" height="${barHeight}" rx="1.5" class="chart-bar"><title>${escapeHtml(d.date)}: ${escapeHtml(formatRand(d.revenue))}</title></rect>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" class="revenue-chart" preserveAspectRatio="none" role="img" aria-label="Daily revenue for the selected range">${bars}</svg>`;
+}
+
 async function renderDashboard() {
-  const data = await api('/api/dashboard');
+  state.salesRange = state.salesRange || '30d';
+  const [data, sales] = await Promise.all([
+    api('/api/dashboard'),
+    api(`/api/dashboard/sales?range=${encodeURIComponent(state.salesRange)}`),
+  ]);
   state.dashboard = data;
+  state.sales = sales;
   const t = data.totals;
+
   $('#view-dashboard').innerHTML = `
+    <div class="section-head">
+      <h3>Sales</h3>
+      <select id="sales-range">
+        ${Object.entries(SALES_RANGE_LABELS).map(([value, label]) => `<option value="${value}" ${value === state.salesRange ? 'selected' : ''}>${label}</option>`).join('')}
+      </select>
+    </div>
+    <div class="stats">
+      <div class="stat-card"><div class="label">Revenue</div><div class="value">${formatRand(sales.revenue)}</div></div>
+      <div class="stat-card"><div class="label">Orders</div><div class="value">${sales.orderCount}</div></div>
+      <div class="stat-card"><div class="label">Avg Order Value</div><div class="value">${formatRand(sales.averageOrderValue)}</div></div>
+      <div class="stat-card"><div class="label">Pending Payment</div><div class="value">${formatRand(sales.pendingPayment.total)}</div><div class="muted" style="font-size:0.78rem">${sales.pendingPayment.count} order${sales.pendingPayment.count === 1 ? '' : 's'}</div></div>
+    </div>
+    <div class="grid-2">
+      <div class="panel">
+        <div class="section-head"><h3>Revenue Trend</h3></div>
+        ${renderRevenueChart(sales.series)}
+      </div>
+      <div class="panel table-wrap">
+        <div class="section-head"><h3>Top Products</h3></div>
+        <table class="catalog">
+          <thead><tr><th>Product</th><th>Units</th><th>Revenue</th></tr></thead>
+          <tbody>
+            ${sales.topProducts.map((p) => `
+              <tr><td>${escapeHtml(p.name || p.productId)}</td><td>${p.units}</td><td>${formatRand(p.revenue)}</td></tr>
+            `).join('') || '<tr><td colspan="3"><div class="empty">No sales in this range yet</div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel table-wrap">
+      <div class="section-head"><h3>Order Status</h3></div>
+      <table class="catalog">
+        <thead><tr><th>Status</th><th>Orders</th><th>Total</th></tr></thead>
+        <tbody>
+          ${sales.statusBreakdown.map((s) => `
+            <tr><td>${statusBadge(s.status)}</td><td>${s.count}</td><td>${formatRand(s.total)}</td></tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+
     <div class="stats">
       <div class="stat-card"><div class="label">Products</div><div class="value">${t.products}</div></div>
       <div class="stat-card"><div class="label">Filaments</div><div class="value">${t.filaments}</div></div>
@@ -683,6 +751,10 @@ async function renderDashboard() {
   `;
   $$('.recent-item', $('#view-dashboard')).forEach((row) => {
     row.addEventListener('click', () => openEditor(row.dataset.id, row.dataset.kind));
+  });
+  $('#sales-range').addEventListener('change', (e) => {
+    state.salesRange = e.target.value;
+    renderDashboard();
   });
 }
 

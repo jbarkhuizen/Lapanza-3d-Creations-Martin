@@ -127,6 +127,7 @@ import { listInventory, bulkUpdateInventory, getReorderReport } from './inventor
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, getDesignRequestByToken, listDesignRequestFiles, setDesignRequestQuote, acceptDesignRequestQuote } from './design-requests.js';
+import { getSalesSummary } from './sales.js';
 import {
   listPrintJobs,
   getPrintJob,
@@ -1113,6 +1114,16 @@ app.post('/api/admins/:id/reset-password', requireAuth, (req, res) => {
 app.get('/api/audit-log', requireAuth, (req, res) => {
   const { eventType, q, limit } = req.query;
   res.json({ entries: listAuditLog({ eventType, q, limit }) });
+});
+
+// Separate from /api/dashboard below on purpose -- switching the sales
+// range shouldn't re-fetch catalog totals, and vice versa.
+app.get('/api/dashboard/sales', requireAuth, (req, res) => {
+  try {
+    res.json(getSalesSummary(req.query.range || '30d'));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.get('/api/dashboard', requireAuth, (_req, res) => {
