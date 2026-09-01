@@ -8,6 +8,7 @@ import { mountCarPartsFilter } from './car-parts-filter.js';
 import { mountFilamentFilter } from './filament-filter.js';
 import { attachSearch } from './search.js';
 import { mountRestockNotify } from './restock-notify.js';
+import './product-gallery.js';
 
 window.toggleDrawer = toggleDrawer;
 
