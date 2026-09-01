@@ -8,6 +8,30 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 
+// C1: generate-pages.mjs's per-colour/per-item detail-page generator (#95)
+// also writes into filament/ and products/ using whatever
+// filaments.json/categories.json fixture a test below has temporarily
+// swapped in -- restoring the JSON backup alone does not remove detail
+// pages the fixture caused to be written (unlike the listing pages, which
+// get overwritten back to real content the moment something regenerates
+// with the real data restored). Real commits of this: 6e6429d left
+// products/toys-shown-item-0.html and products/toys-external-photo-item-0
+// .html tracked in git, and filament colour fixtures leaked the equivalent
+// filament/test-pla-<sku>.html files untracked into the working tree on
+// every run. Sweep by prefix so this can't recur regardless of which SKUs
+// a given test uses.
+function rmGeneratedDetailPages(dir, prefix) {
+  let names;
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    if (name.startsWith(prefix) && name.endsWith('.html')) fs.rmSync(path.join(dir, name), { force: true });
+  }
+}
+
 test('generate-pages renders an <img> for a colour whose imageUrl file actually exists, "Photo coming soon" for one with no imageUrl at all', () => {
   const filamentsPath = path.join(root, 'src', 'data', 'filaments.json');
   const backup = fs.readFileSync(filamentsPath, 'utf8');
@@ -41,6 +65,7 @@ test('generate-pages renders an <img> for a colour whose imageUrl file actually 
     fs.writeFileSync(filamentsPath, backup);
     fs.rmSync(fixtureImagePath, { force: true });
     fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+    rmGeneratedDetailPages(path.join(root, 'filament'), 'test-pla-');
   }
 });
 
@@ -75,6 +100,7 @@ test('generate-pages falls back to "Photo coming soon" when imageUrl is set but 
   } finally {
     fs.writeFileSync(filamentsPath, backup);
     fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+    rmGeneratedDetailPages(path.join(root, 'filament'), 'test-pla-');
   }
 });
 
@@ -97,6 +123,12 @@ test('generate-pages trusts an external http(s) imageUrl on a category item with
     const html = fs.readFileSync(path.join(root, 'toys.html'), 'utf8');
     assert.match(html, /<img src="https:\/\/example\.com\/photo\.jpg"/);
   } finally {
+    // Regenerating with the real data restored (below) already prunes the
+    // products/toys-external-photo-item-0.html this test's fixture caused
+    // to be written (see generate-pages.mjs's own I5 pruning), but remove
+    // it explicitly too so this test's own output never depends on that
+    // separate mechanism running correctly.
+    rmGeneratedDetailPages(path.join(root, 'products'), 'toys-external-photo-item-');
     fs.writeFileSync(categoriesPath, backup);
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
   }
@@ -146,6 +178,7 @@ test('generate-pages shows "In stock" above the low-stock threshold, "Only N lef
     if (settingsBackup === null) fs.rmSync(settingsPath, { force: true });
     else fs.writeFileSync(settingsPath, settingsBackup);
     fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+    rmGeneratedDetailPages(path.join(root, 'filament'), 'test-pla-');
   }
 });
 
@@ -178,6 +211,7 @@ test('generate-pages excludes a colour marked listed:false from the filament pag
   } finally {
     fs.writeFileSync(filamentsPath, backup);
     fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+    rmGeneratedDetailPages(path.join(root, 'filament'), 'test-pla-');
   }
 });
 
@@ -207,6 +241,7 @@ test('generate-pages falls back to the "on request" note when every colour is un
   } finally {
     fs.writeFileSync(filamentsPath, backup);
     fs.rmSync(path.join(root, 'filament', 'test-pla.html'), { force: true });
+    rmGeneratedDetailPages(path.join(root, 'filament'), 'test-pla-');
   }
 });
 
@@ -240,6 +275,10 @@ test('generate-pages excludes a category item marked listed:false from its categ
     // toys.html is a real, git-tracked file (unlike filament/test-pla.html
     // above) -- restoring categories.json alone leaves it holding this
     // test's fixture content, so regenerate it from the real data too.
+    // Same reasoning as the external-photo-item test above: remove the
+    // fixture's own products/toys-shown-item-0.html explicitly rather than
+    // relying solely on the regenerate call's I5 pruning to catch it.
+    rmGeneratedDetailPages(path.join(root, 'products'), 'toys-shown-item-');
     fs.writeFileSync(categoriesPath, backup);
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
   }
@@ -266,6 +305,14 @@ test('generate-pages skips category pages missing from categories.json instead o
       ['gwm', 'homeware', 'landrover', 'phones', 'toys'],
     );
   } finally {
+    // This fixture makes every category's items list empty for the run
+    // above (categories.json = {}) -- generate-pages.mjs's own I5 pruning
+    // (stale detail-page cleanup) sees zero items written to products/ that
+    // run and would otherwise treat every real products/*.html file as
+    // stale and delete it. Restoring categories.json alone leaves that
+    // deletion in place; regenerate with the real data restored so the
+    // real per-item detail pages come back before this test finishes.
     fs.writeFileSync(categoriesPath, backup);
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
   }
 });

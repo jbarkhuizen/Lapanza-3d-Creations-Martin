@@ -1003,7 +1003,7 @@ function renderFilamentSections(p) {
               <div class="flex items-center gap-3">
                 ${c._isNew
                   ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
-                  : galleryPanelHtml('colour', c.id, c.images || [])}
+                  : galleryPanelHtml('colour', c.id, c.images || [], c.imagePath)}
               </div>
               <button class="btn small btn-danger" data-remove-colour type="button">Remove</button>
             </div>
@@ -1106,7 +1106,7 @@ function renderCategorySections(p) {
               <button class="btn small btn-danger" data-remove-item type="button">Remove</button>
             </div>
             <div class="row-card-actions">
-              ${item._isNew ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>' : galleryPanelHtml('item', item.id, item.images || [])}
+              ${item._isNew ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>' : galleryPanelHtml('item', item.id, item.images || [], item.imageUrl)}
             </div>
             <div class="grid-2">
               <label class="field"><span>Item Name</span><input data-item="name" value="${escapeAttr(item.name || '')}" /></label>
@@ -1562,6 +1562,11 @@ function syncNestedFromDom() {
       // here -- matches the server's own toNumberOr()/`|| 0` fallback.
       stockQty: Number($('[data-colour="stockQty"]', row)?.value) || 0,
       imagePath: prev.imagePath ?? null,
+      // I2: this mapper rebuilds every row from DOM state on every keystroke
+      // (see the input listeners below) -- without carrying the gallery array
+      // forward, every redraw would visually zero the panel to 0/5 even
+      // though nothing was lost server-side.
+      images: prev.images || [],
       _isNew: prev._isNew ?? false,
     };
   });
@@ -1580,6 +1585,9 @@ function syncNestedFromDom() {
       // No longer a text field -- set only via the photo upload/remove
       // handlers below, so carry the current value forward unchanged here.
       imageUrl: prev.imageUrl || '',
+      // I2: same reasoning as the colour mapper above -- carry the gallery
+      // array forward through every redraw instead of dropping it.
+      images: prev.images || [],
       weight: Number($('[data-item="weight"]', row)?.value) || 0,
       shippingWeight: Number($('[data-item="shippingWeight"]', row)?.value) || 0,
       stockQty: Math.max(0, Number($('[data-item="stockQty"]', row)?.value) || 0),
@@ -2522,7 +2530,20 @@ function wireConfigurableListPanels() {
 // category items -- `kind` is 'colour' or 'item', used to build distinct
 // data-attributes so two panels on the same page never collide, and to
 // pick the right upload/delete/reorder endpoint in wireGalleryPanel below.
-function galleryPanelHtml(kind, ownerId, images) {
+// I1: `legacyImage` is the owning colour/item's pre-gallery single photo
+// (colour.imagePath / item.imageUrl) -- rendered read-only, ONLY when the
+// real gallery array is empty, so the ~208 items/110 colours that predate
+// this feature don't show a false "no photos" here while their legacy photo
+// is still live on the storefront (colourGalleryPaths()/itemGalleryPaths()
+// fall back to this exact field the same way -- this mirrors that check).
+// It intentionally does NOT get the .gallery-thumb class, draggable
+// attribute, data-gallery-image-id/-index, or a remove button: it is not
+// wired to wireGalleryPanel's remove/reorder handlers below at all, because
+// removeItemImage/removeColourImage filter the real images array (which
+// never contains this synthesized entry) -- a wired × here would silently
+// no-op that array update while the DELETE route still deleted the file
+// from disk, destroying the live photo.
+function galleryPanelHtml(kind, ownerId, images, legacyImage) {
   const thumbs = images
     .map(
       (img, i) => `
@@ -2532,10 +2553,18 @@ function galleryPanelHtml(kind, ownerId, images) {
         </div>`,
     )
     .join('');
+  const showLegacy = !images.length && legacyImage;
+  const legacyThumb = showLegacy
+    ? `<div class="gallery-thumb-legacy" title="Legacy photo — upload a new photo to replace">
+        <img src="${escapeAttr(legacyImage)}" alt="Legacy photo" />
+        <span class="gallery-thumb-legacy-badge">Legacy</span>
+      </div>`
+    : '';
   const canAddMore = images.length < 5;
   return `
     <div class="gallery-panel" data-gallery-kind="${kind}" data-gallery-owner="${escapeAttr(ownerId)}">
-      <div class="gallery-thumbs">${thumbs}</div>
+      <div class="gallery-thumbs">${legacyThumb}${thumbs}</div>
+      ${showLegacy ? '<p class="muted" style="font-size:0.72rem;margin:0">Legacy photo — upload a new photo to replace</p>' : ''}
       ${canAddMore
         ? `<button class="btn small" data-action="trigger-gallery-add" data-gallery-owner="${escapeAttr(ownerId)}" type="button">+ Add photo (${images.length}/5)</button>
            <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-gallery-add="${escapeAttr(ownerId)}" />`

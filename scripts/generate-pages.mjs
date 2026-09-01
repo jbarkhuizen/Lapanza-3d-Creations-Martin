@@ -122,6 +122,18 @@ const SITE = {
 // run from the pages actually generated this pass.
 const SITE_ORIGIN = 'https://www.lapanza3d.co.za';
 
+// I3: og:image for a product detail page, built from the page's own gallery
+// array (first photo) -- passed through head()'s existing `extra` slot for
+// arbitrary additional <head> markup. Local /uploads/... paths are made
+// absolute against SITE_ORIGIN the same way productDetailJsonLd's `image`
+// field already does; an external http(s) URL is trusted as-is.
+function ogImageTag(images) {
+  const url = images && images[0];
+  if (!url) return '';
+  const absolute = /^https?:\/\//i.test(url) ? url : `${SITE_ORIGIN}/${String(url).replace(/^\//, '')}`;
+  return `<meta property="og:image" content="${escapeAttr(absolute)}">`;
+}
+
 function jsonLdScript(data) {
   if (!data) return '';
   const list = Array.isArray(data) ? data : [data];
@@ -419,6 +431,21 @@ function imageFileExists(url) {
   }
 }
 
+// C2: gallery-first image resolution, shared by listing cards, cart button
+// thumbnails, and JSON-LD image fields -- mirrors the DB-backed
+// colourGalleryPaths()/itemGalleryPaths() fallback (real gallery photos
+// first, else the legacy single-photo field, else none) but operates on the
+// `images`/`imageUrl` fields this script reads straight from
+// filaments.json/categories.json (export.js already populated `images` from
+// those same DB helpers). Only the admin gallery panel's own read-only
+// fallback (I1, admin/admin.js) is a separate implementation, since it has
+// no filesystem to check against.
+function galleryFirstImages(entity) {
+  if (entity?.images?.length) return entity.images;
+  if (entity?.imageUrl && imageFileExists(entity.imageUrl)) return [entity.imageUrl];
+  return [];
+}
+
 // Meta descriptions used to be a hard .slice(0, 155) that cut mid-word,
 // mid-sentence ("…corn starch or sugarcane. It") on 12 of the 20 filament
 // pages -- prefer ending at the last complete sentence that fits, fall back
@@ -446,9 +473,10 @@ function colourCards(colours, filament) {
     .filter((c) => c.listed !== false)
     .map((c) => {
       const stock = stockMessage(c.stockQty);
+      const galleryImages = galleryFirstImages(c);
       return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}" data-price="${escapeAttr(String(parsePrice(c.price) || 0))}" data-instock="${Number(c.stockQty) > 0 ? 1 : 0}">
-                  <a href="${colourDetailSlug(filament.slug, c.sku)}.html" class="block mb-3" aria-label="View ${c.name} details">
-                    ${productGalleryHtml({ images: c.images && c.images.length ? c.images : (c.imageUrl && imageFileExists(c.imageUrl) ? [c.imageUrl] : []), alt: c.name, mode: 'compact' })}
+                  <a href="${colourDetailSlug(filament.slug, c.sku)}.html" class="block mb-3" aria-label="View ${escapeAttr(c.name)} details">
+                    ${productGalleryHtml({ images: galleryImages, alt: c.name, mode: 'compact' })}
                   </a>
                   <p class="font-medium mb-1 tracking-tight">${c.name}</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">${c.sku}</p>
@@ -459,7 +487,7 @@ function colourCards(colours, filament) {
                     productId: `filament:${filament.slug}:${c.sku}`,
                     name: `${filament.name} — ${c.name}`,
                     price: c.price,
-                    image: c.imageUrl,
+                    image: galleryImages[0] || '',
                     weight: c.shippingWeightG ?? c.weightG,
                   }) : ''}
                 </div>`;
@@ -519,7 +547,7 @@ function catalogueItems(label, items, categorySlug, depth = 0) {
       const fitment = [item.creator ? `Design: ${item.creator}` : '', item.models?.length ? `Fits: ${item.models.join(', ')}` : '']
         .filter(Boolean)
         .join(' · ');
-      const galleryImages = item.images && item.images.length ? item.images : (item.imageUrl && imageFileExists(item.imageUrl) ? [item.imageUrl] : []);
+      const galleryImages = galleryFirstImages(item);
       const img = productGalleryHtml({ images: galleryImages, alt: item.name, mode: 'compact' });
       const name = item.name || `${label} piece`;
       // Category items don't always have an admin-set sku (it's optional,
@@ -538,7 +566,7 @@ function catalogueItems(label, items, categorySlug, depth = 0) {
       const searchIndex = [item.name, item.details, item.creator].filter(Boolean).join(' ').toLowerCase();
       const modelList = (item.models || []).join('|');
       return `<article id="${itemAnchorId(item.sku, item.name || i)}" class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors" data-search="${escapeAttr(searchIndex)}" data-models="${escapeAttr(modelList)}">
-              <a href="${'../'.repeat(depth)}products/${itemDetailSlug(categorySlug, item, i)}.html" class="block aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden" aria-label="View ${item.name} details">
+              <a href="${'../'.repeat(depth)}products/${itemDetailSlug(categorySlug, item, i)}.html" class="block aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden" aria-label="View ${escapeAttr(item.name)} details">
                 ${img}
               </a>
               <div class="p-4">
@@ -555,7 +583,7 @@ function catalogueItems(label, items, categorySlug, depth = 0) {
                         productId: `category:${categorySlug}:${item.sku || i}`,
                         name,
                         price: item.price,
-                        image: item.imageUrl,
+                        image: galleryImages[0] || '',
                         weight: item.shippingWeight ?? item.weight,
                       })
                     : ''
@@ -595,6 +623,13 @@ function backToHomeButton({ depth, label = '← Back to Home' }) {
 }
 
 const writtenPages = [];
+// I5: separate sets of just this run's colour/item DETAIL page filenames
+// (populated by generateColourDetailPage/generateItemDetailPage below),
+// distinct from writtenPages above which also includes listing pages --
+// used at the end of the run to prune stale detail pages that are no
+// longer part of the catalogue (see pruneStaleDetailPages()).
+const writtenColourDetailFiles = new Set();
+const writtenItemDetailFiles = new Set();
 function write(file, content) {
   const abs = path.join(root, file);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
@@ -716,7 +751,7 @@ function generateFilamentPage(f) {
       productListJsonLd({
         pagePath: filamentPagePath,
         listName: `${f.name} filament colours`,
-        products: listedColours.map((c) => ({ name: `${f.name} — ${c.name}`, price: c.price, sku: c.sku, imageUrl: c.imageUrl, inStock: Number(c.stockQty) > 0 })),
+        products: listedColours.map((c) => ({ name: `${f.name} — ${c.name}`, price: c.price, sku: c.sku, imageUrl: galleryFirstImages(c)[0] || '', inStock: Number(c.stockQty) > 0 })),
       }),
     ].filter(Boolean),
   })}
@@ -770,6 +805,7 @@ function generateColourDetailPage(f, c) {
     description: escapeAttr(description),
     depth: 1,
     pagePath,
+    extra: ogImageTag(images),
     jsonLd: [
       breadcrumbJsonLd(`Home / Filament / ${f.name} / ${c.name}`, pagePath),
       productDetailJsonLd({
@@ -805,7 +841,7 @@ ${shellStart({ depth: 1 })}
             price: c.price,
             image: images[0] || '',
             weight: c.shippingWeightG ?? c.weightG,
-          }) : `<button type="button" class="restock-notify text-sm font-semibold text-terracotta hover:underline" data-restock-product="filament:${f.slug}:${c.sku}">Email me when it's back</button>`}
+          }) : `<button type="button" class="restock-notify text-sm font-semibold text-terracotta hover:underline" data-restock-product="filament:${escapeAttr(f.slug)}:${escapeAttr(c.sku)}">Email me when it's back</button>`}
         </div>
       </div>
       <div class="mt-14 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth: 1 })}</div>
@@ -813,6 +849,7 @@ ${shellStart({ depth: 1 })}
     </main>
 ${footer({ depth: 1 })}`;
   write(file, html);
+  writtenColourDetailFiles.add(file);
 }
 
 // #95: one real static page per category/car-parts item, all flattened
@@ -845,6 +882,7 @@ function generateItemDetailPage(categorySlug, categoryName, item, index) {
     description: escapeAttr(description),
     depth: 1,
     pagePath,
+    extra: ogImageTag(images),
     jsonLd: [
       breadcrumbJsonLd(`Home / ${categoryName} / ${item.name}`, pagePath),
       productDetailJsonLd({
@@ -891,6 +929,7 @@ ${shellStart({ depth: 1 })}
     </main>
 ${footer({ depth: 1 })}`;
   write(file, html);
+  writtenItemDetailFiles.add(file);
 }
 
 function generateCategoryPage({ file, depth, pagePath, crumbs, name, description, kind, items, slug }) {
@@ -1002,7 +1041,7 @@ ${footer({ depth: 0 })}`;
         listName: name,
         products: (items || [])
           .filter((i) => i.listed !== false)
-          .map((i) => ({ name: i.name, price: i.price, sku: i.sku, imageUrl: i.imageUrl, inStock: Number(i.stockQty) > 0 && i.available !== false })),
+          .map((i) => ({ name: i.name, price: i.price, sku: i.sku, imageUrl: galleryFirstImages(i)[0] || '', inStock: Number(i.stockQty) > 0 && i.available !== false })),
       }),
     ].filter(Boolean),
   })}
@@ -1104,6 +1143,53 @@ for (const page of categoryPages) {
   });
   (category.items || []).filter((item) => item.listed !== false).forEach((item, i) => generateItemDetailPage(page.slug, page.name || category.name, item, i));
 }
+
+// ---- I5: prune stale generated detail pages ----
+// Renaming an item, changing its SKU, or unlisting it left the old
+// products/*.html or filament/<slug>-<sku>.html file on disk forever --
+// still reachable, still with a live Add to Cart button, even though
+// nothing links to it any more. Compares this run's own written-detail-page
+// sets (populated by generateColourDetailPage/generateItemDetailPage above)
+// against what's actually on disk and removes the difference.
+// Deliberately conservative: products/ holds ONLY generated item-detail
+// pages -- no listing page or anything hand-written ever lives there -- so
+// any .html file not written this run is stale. filament/ also holds the
+// generated per-type LISTING pages (filament/pla.html) alongside detail
+// pages, so a file there is only ever pruned when its name matches the
+// `<filamentSlug>-<sku>` detail-page pattern for a filament that still
+// exists in the catalogue -- a listing page (no trailing `-<sku>`) never
+// matches that pattern and is never touched, and neither is any file this
+// script didn't itself generate.
+function pruneStaleDetailPages() {
+  const pruneDir = (dir, writtenSet, isDetailPageCandidate) => {
+    const abs = path.join(root, dir);
+    if (!fs.existsSync(abs)) return;
+    for (const name of fs.readdirSync(abs)) {
+      if (!name.endsWith('.html')) continue;
+      const rel = `${dir}/${name}`;
+      if (writtenSet.has(rel)) continue;
+      if (!isDetailPageCandidate(name)) continue;
+      fs.unlinkSync(path.join(abs, name));
+      console.log('pruned stale detail page', rel);
+    }
+  };
+
+  pruneDir('products', writtenItemDetailFiles, () => true);
+  // A plain `${f.slug}-` prefix check alone is not enough: two real
+  // filaments can have one slug be a genuine prefix of the other (e.g.
+  // "pla" and "pla-hyper" both exist in the live catalogue), so
+  // filament/pla-hyper.html -- pla-hyper's own current LISTING page --
+  // would otherwise look exactly like a stale detail page belonging to
+  // "pla" and get deleted. Exclude every currently-valid listing page name
+  // explicitly, before ever consulting the prefix check.
+  const filamentListingNames = new Set(filaments.map((f) => `${f.slug}.html`));
+  pruneDir('filament', writtenColourDetailFiles, (name) => {
+    if (filamentListingNames.has(name)) return false;
+    const base = name.replace(/\.html$/, '');
+    return filaments.some((f) => base.startsWith(`${f.slug}-`));
+  });
+}
+pruneStaleDetailPages();
 
 // Sidecar file so callers that spawn this script (e.g. POST /api/publish)
 // can report skipped categories to the admin instead of a silent 200 —

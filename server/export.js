@@ -63,7 +63,11 @@ function resolveFeaturedProducts(refs, filaments, categories) {
           productId: r.productId,
           name: `${filament.name} — ${colour.name}`,
           price: colour.price,
-          image: preferSmallVariant(colour.imageUrl),
+          // C2: gallery-first, not the legacy single photo -- `colour` here
+          // is the already-mapped public-shape object above, whose `images`
+          // field was populated by colourGalleryPaths() (real gallery photos
+          // first, else the legacy imagePath, else none) a few lines up.
+          image: preferSmallVariant(colour.images[0] || ''),
           href: `${filamentPagePath(slug)}#${itemAnchorId(colour.sku, colour.name)}`,
         };
       }
@@ -77,7 +81,10 @@ function resolveFeaturedProducts(refs, filaments, categories) {
           productId: r.productId,
           name: item.name,
           price: formatItemPrice(item.price),
-          image: preferSmallVariant(item.imageUrl),
+          // C2: gallery-first, same reasoning as the filament colour branch
+          // above -- `item.images` was populated by itemGalleryPaths() a few
+          // lines up in this same function.
+          image: preferSmallVariant(item.images[0] || ''),
           href: `${categoryPagePath(slug)}#${itemAnchorId(item.sku, item.name)}`,
         };
       }
