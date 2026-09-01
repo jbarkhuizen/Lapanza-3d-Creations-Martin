@@ -750,6 +750,74 @@ ${footer({ depth: 1 })}`;
   write(`filament/${f.slug}.html`, html);
 }
 
+// #95: one real static page per colour, flat inside filament/ (see this
+// plan's Global Constraints for why -- vite's htmlEntries() already
+// auto-discovers new files here with zero config changes, unlike a nested
+// path would need).
+function colourDetailSlug(filamentSlug, sku) {
+  const skuSlug = String(sku || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return `${filamentSlug}-${skuSlug}`;
+}
+
+function generateColourDetailPage(f, c) {
+  const file = `filament/${colourDetailSlug(f.slug, c.sku)}.html`;
+  const pagePath = file;
+  const images = c.images && c.images.length ? c.images : (c.imageUrl ? [c.imageUrl] : []);
+  const priceNum = parsePrice(c.price) || 0;
+  const inStock = Number(c.stockQty) > 0;
+  const title = `${f.name} — ${c.name} — Lapanza 3D Creative Lab`;
+  const description = `${f.name} filament in ${c.name}. ${c.price || ''} — ${inStock ? 'in stock' : 'made to order'}. ${f.description || ''}`.trim();
+
+  const html = `${head({
+    title,
+    description,
+    depth: 1,
+    pagePath,
+    jsonLd: [
+      breadcrumbJsonLd(`Home / Filament / ${f.name} / ${c.name}`, pagePath),
+      productDetailJsonLd({
+        name: `${f.name} — ${c.name}`,
+        images,
+        sku: c.sku,
+        price: priceNum,
+        inStock,
+        url: `${SITE_ORIGIN}/${pagePath}`,
+      }),
+    ].filter(Boolean),
+  })}
+${shellStart({ depth: 1 })}
+    <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-5xl">
+      <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
+        <a href="../index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span>
+        <a href="../filament/${f.slug}.html" class="hover:text-terracotta">${f.name}</a> <span class="mx-1.5 opacity-40">/</span>
+        <span class="text-espresso/70">${c.name}</span>
+      </nav>
+      <div class="mb-6">${backToHomeButton({ depth: 1 })}</div>
+      <div class="grid md:grid-cols-2 gap-10">
+        <div>${productGalleryHtml({ images, alt: `${f.name} — ${c.name}`, mode: 'full' })}</div>
+        <div>
+          <p class="eyebrow mb-2">Filament · ${f.name}</p>
+          <h1 class="font-serif text-3xl md:text-4xl tracking-[-0.03em] mb-3">${c.name}</h1>
+          <p class="text-2xl font-semibold text-terracotta mb-4">${c.price || ''}</p>
+          <p class="text-espresso/70 leading-relaxed mb-6">${f.description || ''}</p>
+          <p class="text-sm ${inStock ? 'text-espresso/60' : 'text-terracotta'} mb-6">${inStock ? 'In stock' : 'Made to order'}</p>
+          ${inStock ? addToCartButton({
+            productId: `filament:${f.slug}:${c.sku}`,
+            name: `${f.name} — ${c.name}`,
+            price: c.price,
+            image: images[0] || '',
+            weight: c.shippingWeightG ?? c.weightG,
+          }) : `<button type="button" class="restock-notify text-sm font-semibold text-terracotta hover:underline" data-restock-product="filament:${f.slug}:${c.sku}">Email me when it's back</button>`}
+        </div>
+      </div>
+      <div class="mt-14 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth: 1 })}</div>
+      </div>
+    </main>
+${footer({ depth: 1 })}`;
+  write(file, html);
+}
+
 function generateCategoryPage({ file, depth, pagePath, crumbs, name, description, kind, items, slug }) {
   const crumbHtml = crumbs
     .split(' / ')
@@ -910,6 +978,9 @@ ${footer({ depth: 0 })}`;
 
 // Handcrafted homepage lives in index.html — do not overwrite it here.
 filaments.forEach(generateFilamentPage);
+filaments.forEach((f) => {
+  (f.colours || []).filter((c) => c.listed !== false).forEach((c) => generateColourDetailPage(f, c));
+});
 generateCategoryPage({ file: 'story.html', depth: 0, pagePath: 'story.html', crumbs: 'Home / Our Story', name: 'Our Story', description: '', kind: 'story' });
 
 const LEGAL_LAST_UPDATED = '22 August 2026';
