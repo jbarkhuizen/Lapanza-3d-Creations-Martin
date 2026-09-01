@@ -85,4 +85,50 @@ export function deleteProduct(id, db = getDb()) {
   return true;
 }
 
+const MAX_ITEM_IMAGES = 5;
+
+export function addItemImage(productId, itemId, imagePath, db = getDb()) {
+  const product = getProduct(productId);
+  if (!product) return null;
+  const item = (product.items || []).find((i) => i.id === itemId);
+  if (!item) return null;
+  item.images = Array.isArray(item.images) ? item.images : [];
+  if (item.images.length >= MAX_ITEM_IMAGES) throw new Error(`A product can have at most ${MAX_ITEM_IMAGES} photos`);
+  item.images.push(imagePath);
+  upsertProduct(product, db);
+  return item.images;
+}
+
+export function removeItemImage(productId, itemId, imagePath, db = getDb()) {
+  const product = getProduct(productId);
+  if (!product) return null;
+  const item = (product.items || []).find((i) => i.id === itemId);
+  if (!item) return null;
+  item.images = (item.images || []).filter((p) => p !== imagePath);
+  upsertProduct(product, db);
+  return item.images;
+}
+
+// orderedPaths must be exactly the item's current images, in the new order.
+export function reorderItemImages(productId, itemId, orderedPaths, db = getDb()) {
+  const product = getProduct(productId);
+  if (!product) return null;
+  const item = (product.items || []).find((i) => i.id === itemId);
+  if (!item) return null;
+  const existing = item.images || [];
+  const valid = Array.isArray(orderedPaths) && orderedPaths.length === existing.length && orderedPaths.every((p) => existing.includes(p));
+  if (!valid) throw new Error('Reorder list must contain exactly the existing image paths');
+  item.images = orderedPaths;
+  upsertProduct(product, db);
+  return item.images;
+}
+
+// Read-time fallback (#95), pure function -- no db access, takes whatever
+// item object the caller already has in memory (generator, export.js, or a
+// freshly-read product from getProduct()).
+export function itemGalleryPaths(item) {
+  if (Array.isArray(item.images) && item.images.length) return item.images;
+  return item.imageUrl ? [item.imageUrl] : [];
+}
+
 export { now, randomUUID };
