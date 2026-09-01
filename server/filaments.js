@@ -266,3 +266,53 @@ export function setColourImage(filamentTypeId, colourId, imagePath, db = getDb()
   );
   return getFilament(filamentTypeId, db);
 }
+
+const MAX_GALLERY_IMAGES = 5;
+
+export function listColourImages(colourId, db = getDb()) {
+  return db
+    .prepare('SELECT id, image_path AS imagePath, sort_order AS sortOrder FROM filament_colour_images WHERE colour_id = ? ORDER BY sort_order ASC')
+    .all(colourId);
+}
+
+export function addColourImage(colourId, imagePath, db = getDb()) {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM filament_colour_images WHERE colour_id = ?').get(colourId).n;
+  if (count >= MAX_GALLERY_IMAGES) throw new Error(`A product can have at most ${MAX_GALLERY_IMAGES} photos`);
+  const maxSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM filament_colour_images WHERE colour_id = ?').get(colourId).m;
+  db.prepare('INSERT INTO filament_colour_images (id, colour_id, image_path, sort_order, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(randomUUID(), colourId, imagePath, maxSort + 1, new Date().toISOString());
+  return listColourImages(colourId, db);
+}
+
+export function removeColourImage(colourId, imageId, db = getDb()) {
+  const row = db.prepare('SELECT * FROM filament_colour_images WHERE id = ? AND colour_id = ?').get(imageId, colourId);
+  if (!row) return null;
+  deleteImageFile(row.image_path);
+  db.prepare('DELETE FROM filament_colour_images WHERE id = ?').run(imageId);
+  return listColourImages(colourId, db);
+}
+
+// orderedIds must be exactly the current image ids for this colour, in the
+// new order -- rejecting anything else (missing/extra/foreign ids) rather
+// than silently applying a partial reorder.
+export function reorderColourImages(colourId, orderedIds, db = getDb()) {
+  const existing = listColourImages(colourId, db);
+  const existingIds = new Set(existing.map((i) => i.id));
+  const valid = Array.isArray(orderedIds) && orderedIds.length === existing.length && orderedIds.every((id) => existingIds.has(id));
+  if (!valid) throw new Error('Reorder list must contain exactly the existing image ids');
+  const tx = db.transaction((ids) => {
+    ids.forEach((id, i) => db.prepare('UPDATE filament_colour_images SET sort_order = ? WHERE id = ?').run(i, id));
+  });
+  tx(orderedIds);
+  return listColourImages(colourId, db);
+}
+
+// Read-time fallback (#95): a colour with no gallery rows yet still shows
+// its single legacy photo as "photo #1" everywhere -- storefront cards,
+// detail pages, and the admin gallery panel all call this instead of
+// reading colour.imagePath or filament_colour_images directly.
+export function colourGalleryPaths(colour, db = getDb()) {
+  const images = listColourImages(colour.id, db);
+  if (images.length) return images.map((i) => i.imagePath);
+  return colour.imagePath ? [colour.imagePath] : [];
+}

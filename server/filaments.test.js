@@ -11,6 +11,11 @@ import {
   updateColour,
   deleteColour,
   setColourImage,
+  listColourImages,
+  addColourImage,
+  removeColourImage,
+  reorderColourImages,
+  colourGalleryPaths,
 } from './filaments.js';
 
 test('createFilament + getFilament round-trip', () => {
@@ -181,5 +186,79 @@ test('updateColour clearing SKU to blank falls back to a colourId-derived SKU in
   // constraint violation against the first colour's now-generated fallback.
   const blackId = afterClear.colours.find((c) => c.name === 'Black').id;
   assert.doesNotThrow(() => updateColour(f.id, blackId, { sku: '' }, db));
+  db.close();
+});
+
+test('addColourImage appends photos in order, up to the 5-photo cap', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1' }, db);
+  const colourId = withColour.colours[0].id;
+
+  addColourImage(colourId, '/uploads/filaments/a.jpg', db);
+  addColourImage(colourId, '/uploads/filaments/b.jpg', db);
+  const images = listColourImages(colourId, db);
+  assert.strictEqual(images.length, 2);
+  assert.strictEqual(images[0].imagePath, '/uploads/filaments/a.jpg');
+  assert.strictEqual(images[1].imagePath, '/uploads/filaments/b.jpg');
+  assert.strictEqual(images[0].sortOrder, 0);
+  assert.strictEqual(images[1].sortOrder, 1);
+
+  addColourImage(colourId, '/uploads/filaments/c.jpg', db);
+  addColourImage(colourId, '/uploads/filaments/d.jpg', db);
+  addColourImage(colourId, '/uploads/filaments/e.jpg', db);
+  assert.throws(() => addColourImage(colourId, '/uploads/filaments/f.jpg', db), /at most 5 photos/);
+  assert.strictEqual(listColourImages(colourId, db).length, 5);
+  db.close();
+});
+
+test('removeColourImage deletes the row and returns the remaining list; unknown id returns null', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1' }, db);
+  const colourId = withColour.colours[0].id;
+  addColourImage(colourId, '/uploads/filaments/a.jpg', db);
+  const afterSecond = addColourImage(colourId, '/uploads/filaments/b.jpg', db);
+  const added = afterSecond[afterSecond.length - 1];
+
+  const remaining = removeColourImage(colourId, added.id, db);
+  assert.strictEqual(remaining.length, 1);
+  assert.strictEqual(remaining[0].imagePath, '/uploads/filaments/a.jpg');
+
+  assert.strictEqual(removeColourImage(colourId, 'not-a-real-id', db), null);
+  db.close();
+});
+
+test('reorderColourImages persists a new sort order and rejects a mismatched id list', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1' }, db);
+  const colourId = withColour.colours[0].id;
+  addColourImage(colourId, '/uploads/filaments/a.jpg', db);
+  addColourImage(colourId, '/uploads/filaments/b.jpg', db);
+  const [first, second] = listColourImages(colourId, db);
+
+  const reordered = reorderColourImages(colourId, [second.id, first.id], db);
+  assert.strictEqual(reordered[0].imagePath, '/uploads/filaments/b.jpg');
+  assert.strictEqual(reordered[1].imagePath, '/uploads/filaments/a.jpg');
+
+  assert.throws(() => reorderColourImages(colourId, [first.id], db), /exactly the existing image ids/);
+  assert.throws(() => reorderColourImages(colourId, [first.id, 'bogus'], db), /exactly the existing image ids/);
+  db.close();
+});
+
+test('colourGalleryPaths falls back to the legacy image_path when no gallery rows exist', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-1' }, db);
+  const colourId = withColour.colours[0].id;
+
+  assert.deepStrictEqual(colourGalleryPaths(getFilament(f.id, db).colours[0], db), []);
+
+  setColourImage(f.id, colourId, '/uploads/filaments/legacy.jpg', db);
+  assert.deepStrictEqual(colourGalleryPaths(getFilament(f.id, db).colours[0], db), ['/uploads/filaments/legacy.jpg']);
+
+  addColourImage(colourId, '/uploads/filaments/gallery-1.jpg', db);
+  assert.deepStrictEqual(colourGalleryPaths(getFilament(f.id, db).colours[0], db), ['/uploads/filaments/gallery-1.jpg']);
   db.close();
 });

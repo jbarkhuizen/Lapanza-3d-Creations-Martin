@@ -529,6 +529,7 @@ export function ensureSchema(db) {
   ensureTodoColumns(db);
   ensureDesignRequestStatusColumns(db);
   ensureDesignRequestV2Columns(db);
+  ensureFilamentColourImagesTable(db);
   ensureShippingCategoryColumn(db);
   ensureClientDisabledColumn(db);
   seedTodoItems(db);
@@ -788,6 +789,23 @@ function ensureDesignRequestV2Columns(db) {
   // Backfill status tokens for pre-existing rows (crypto not imported here;
   // hex from randomblob is equivalent).
   db.exec("UPDATE design_requests SET status_token = lower(hex(randomblob(24))) WHERE status_token IS NULL");
+}
+
+// #95: gallery table for filament colour photos (up to 5, admin-ordered).
+// Same CASCADE/index shape as design_request_files -- a colour's photos are
+// deleted automatically when the colour itself is (filament_colours already
+// has ON DELETE CASCADE from filament_types, so this chains transitively).
+function ensureFilamentColourImagesTable(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS filament_colour_images (
+      id TEXT PRIMARY KEY,
+      colour_id TEXT NOT NULL REFERENCES filament_colours(id) ON DELETE CASCADE,
+      image_path TEXT NOT NULL,
+      sort_order INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_filament_colour_images_colour ON filament_colour_images (colour_id);
+  `);
 }
 
 // Stock Management "Listed on site" radio: lets an admin pull a filament

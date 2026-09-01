@@ -20,6 +20,7 @@ test('ensureSchema creates every expected table', () => {
     'clients',
     'design_request_files',
     'design_requests',
+    'filament_colour_images',
     'filament_colours',
     'filament_types',
     'in_house_filament',
