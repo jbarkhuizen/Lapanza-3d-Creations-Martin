@@ -769,8 +769,8 @@ function generateColourDetailPage(f, c) {
   const description = `${f.name} filament in ${c.name}. ${c.price || ''} — ${inStock ? 'in stock' : 'made to order'}. ${f.description || ''}`.trim();
 
   const html = `${head({
-    title,
-    description,
+    title: escapeAttr(title),
+    description: escapeAttr(description),
     depth: 1,
     pagePath,
     jsonLd: [
