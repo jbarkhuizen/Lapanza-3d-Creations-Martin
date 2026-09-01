@@ -1721,3 +1721,98 @@ test('GET /api/dashboard/sales requires admin auth, honors ?range, and rejects a
   const bad = await request(app).get('/api/dashboard/sales?range=nonsense').set('Cookie', adminCookie);
   assert.strictEqual(bad.status, 400);
 });
+
+test('filament colour gallery: upload up to 5, reject the 6th, delete, reorder', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/filaments').set('Cookie', adminCookie).send({ name: 'PLA95', slug: 'pla95' });
+  const colour = await request(app).post(`/api/filaments/${filament.body.filament.id}/colours`).set('Cookie', adminCookie).send({ name: 'Blue', sku: 'PLA95-BLUE' });
+  const colourId = colour.body.filament.colours[0].id;
+
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
+  let last;
+  for (let i = 0; i < 5; i++) {
+    last = await request(app)
+      .post(`/api/filaments/${filament.body.filament.id}/colours/${colourId}/images`)
+      .set('Cookie', adminCookie)
+      .attach('image', png1x1, `photo${i}.png`);
+    assert.strictEqual(last.status, 201);
+  }
+  assert.strictEqual(last.body.images.length, 5);
+
+  const sixth = await request(app)
+    .post(`/api/filaments/${filament.body.filament.id}/colours/${colourId}/images`)
+    .set('Cookie', adminCookie)
+    .attach('image', png1x1, 'photo5.png');
+  assert.strictEqual(sixth.status, 400);
+  assert.match(sixth.body.error, /at most 5 photos/);
+
+  const [first, second] = last.body.images;
+  const reordered = await request(app)
+    .put(`/api/filaments/${filament.body.filament.id}/colours/${colourId}/images/reorder`)
+    .set('Cookie', adminCookie)
+    .send({ order: [second.id, first.id, ...last.body.images.slice(2).map((i) => i.id)] });
+  assert.strictEqual(reordered.status, 200);
+  assert.strictEqual(reordered.body.images[0].id, second.id);
+
+  const removed = await request(app)
+    .delete(`/api/filaments/${filament.body.filament.id}/colours/${colourId}/images/${first.id}`)
+    .set('Cookie', adminCookie);
+  assert.strictEqual(removed.status, 200);
+  assert.strictEqual(removed.body.images.length, 4);
+
+  const missing = await request(app)
+    .delete(`/api/filaments/${filament.body.filament.id}/colours/${colourId}/images/not-a-real-id`)
+    .set('Cookie', adminCookie);
+  assert.strictEqual(missing.status, 404);
+});
+
+test('category item gallery: upload, delete by path, reorder; whole-item PUT cannot overwrite it', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const product = await request(app).post('/api/products').set('Cookie', adminCookie).send({ name: 'Toys', slug: 'toys95', items: [{ name: 'Dino' }] });
+  const itemId = product.body.product.items[0].id;
+
+  const png1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+
+  const first = await request(app)
+    .post(`/api/products/${product.body.product.id}/items/${itemId}/images`)
+    .set('Cookie', adminCookie)
+    .attach('image', png1x1, 'a.png');
+  assert.strictEqual(first.status, 201);
+  const second = await request(app)
+    .post(`/api/products/${product.body.product.id}/items/${itemId}/images`)
+    .set('Cookie', adminCookie)
+    .attach('image', png1x1, 'b.png');
+  assert.strictEqual(second.body.images.length, 2);
+
+  const putRes = await request(app)
+    .put(`/api/products/${product.body.product.id}/items/${itemId}`)
+    .set('Cookie', adminCookie)
+    .send({ name: 'Dino', images: ['/uploads/category-items/hacked.jpg'] });
+  assert.strictEqual(putRes.status, 200);
+  assert.deepStrictEqual(putRes.body.item.images, second.body.images);
+
+  const reordered = await request(app)
+    .put(`/api/products/${product.body.product.id}/items/${itemId}/images/reorder`)
+    .set('Cookie', adminCookie)
+    .send({ order: [second.body.images[1], second.body.images[0]] });
+  assert.strictEqual(reordered.status, 200);
+  assert.deepStrictEqual(reordered.body.images, [second.body.images[1], second.body.images[0]]);
+
+  const removed = await request(app)
+    .delete(`/api/products/${product.body.product.id}/items/${itemId}/images`)
+    .set('Cookie', adminCookie)
+    .send({ imagePath: second.body.images[1] });
+  assert.strictEqual(removed.status, 200);
+  assert.strictEqual(removed.body.images.length, 1);
+});

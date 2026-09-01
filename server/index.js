@@ -22,6 +22,10 @@ import {
   updateColour,
   deleteColour,
   setColourImage,
+  listColourImages,
+  addColourImage,
+  removeColourImage,
+  reorderColourImages,
 } from './filaments.js';
 import multer from 'multer';
 import {
@@ -37,11 +41,12 @@ import {
   deleteCategoryItemImage,
   uploadTestimonialImage,
   deleteTestimonialImage,
+  deleteImageFile,
 } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { formatRand } from './money.js';
 import { renderInvoiceHtml } from './invoice.js';
-import { saveCatalog, getProduct, upsertProduct, deleteProduct } from './store.js';
+import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, removeItemImage, reorderItemImages } from './store.js';
 import {
   listClients,
   getClient,
@@ -1309,6 +1314,60 @@ app.post(
   },
 );
 
+// #95: multi-photo gallery, up to 5, additive (each call appends one photo
+// rather than replacing) -- distinct from the single-photo /image route
+// above, which stays untouched for backward compatibility.
+app.post(
+  '/api/filaments/:filamentId/colours/:colourId/images',
+  requireAuth,
+  (req, res, next) => {
+    const filament = getFilament(req.params.filamentId);
+    const colour = filament?.colours.find((c) => c.id === req.params.colourId);
+    if (!colour) return res.status(404).json({ error: 'Colour not found' });
+    req.colourSku = colour.sku;
+    next();
+  },
+  uploadFilamentImage.single('image'),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const imagePath = `/uploads/filaments/${req.file.filename}`;
+    try {
+      const images = addColourImage(req.params.colourId, imagePath);
+      await generateImageVariants(req.file.path).catch(() => {});
+      const publishWarning = await publishCatalog();
+      recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added gallery photo to colour ${req.params.colourId}` });
+      res.status(201).json({ images, ...(publishWarning ? { publishWarning } : {}) });
+    } catch (err) {
+      // Cap exceeded -- the file already landed on disk via multer before
+      // this handler ran; remove it rather than leaving an orphan.
+      deleteImageFile(imagePath);
+      res.status(400).json({ error: err.message });
+    }
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
+    next(err);
+  },
+);
+
+app.delete('/api/filaments/:filamentId/colours/:colourId/images/:imageId', requireAuth, async (req, res) => {
+  const images = removeColourImage(req.params.colourId, req.params.imageId);
+  if (images === null) return res.status(404).json({ error: 'Image not found' });
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed gallery photo from colour ${req.params.colourId}` });
+  res.json({ images, ...(publishWarning ? { publishWarning } : {}) });
+});
+
+app.put('/api/filaments/:filamentId/colours/:colourId/images/reorder', requireAuth, async (req, res) => {
+  try {
+    const images = reorderColourImages(req.params.colourId, (req.body || {}).order || []);
+    const publishWarning = await publishCatalog();
+    res.json({ images, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.get('/api/products', requireAuth, (req, res) => {
   // Sourced from readCategoryProducts() (not loadCatalog()) so this route
   // can never surface a stray filament-kind row -- the write path already
@@ -1489,7 +1548,7 @@ app.put('/api/products/:productId/items/:itemId', requireAuth, async (req, res) 
   // imageUrl is deliberately never accepted from the body here -- same as
   // the whole-product PUT, it's only ever set by the dedicated
   // upload/remove-photo routes above.
-  const merged = normalizeItem({ ...existing, ...(req.body || {}), id: existing.id, imageUrl: existing.imageUrl }, idx);
+  const merged = normalizeItem({ ...existing, ...(req.body || {}), id: existing.id, imageUrl: existing.imageUrl, images: existing.images }, idx);
   product.items[idx] = merged;
   upsertProduct(product);
   const publishWarning = await publishCatalog();
@@ -1521,6 +1580,58 @@ app.delete('/api/products/:productId/items/:itemId/image', requireAuth, async (r
   const publishWarning = await publishCatalog();
   recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed photo for "${item.name}" on "${product.name}"` });
   res.json({ product, ...(publishWarning ? { publishWarning } : {}) });
+});
+
+// #95: multi-photo gallery for category/car-parts items -- same additive
+// shape as the filament colour routes above.
+app.post(
+  '/api/products/:productId/items/:itemId/images',
+  requireAuth,
+  uploadCategoryItemImage.single('image'),
+  async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const imagePath = `/uploads/category-items/${req.file.filename}`;
+    try {
+      const images = addItemImage(req.params.productId, req.params.itemId, imagePath);
+      if (images === null) {
+        deleteCategoryItemImage(imagePath);
+        return res.status(404).json({ error: 'Item not found' });
+      }
+      await generateImageVariants(req.file.path).catch(() => {});
+      const publishWarning = await publishCatalog();
+      recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added gallery photo to item ${req.params.itemId}` });
+      res.status(201).json({ images, ...(publishWarning ? { publishWarning } : {}) });
+    } catch (err) {
+      deleteCategoryItemImage(imagePath);
+      res.status(400).json({ error: err.message });
+    }
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
+    next(err);
+  },
+);
+
+app.delete('/api/products/:productId/items/:itemId/images', requireAuth, async (req, res) => {
+  const imagePath = (req.body || {}).imagePath;
+  if (!imagePath) return res.status(400).json({ error: 'imagePath is required' });
+  const images = removeItemImage(req.params.productId, req.params.itemId, imagePath);
+  if (images === null) return res.status(404).json({ error: 'Item not found' });
+  if (imagePath.startsWith('/uploads/category-items/')) deleteCategoryItemImage(imagePath);
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed gallery photo from item ${req.params.itemId}` });
+  res.json({ images, ...(publishWarning ? { publishWarning } : {}) });
+});
+
+app.put('/api/products/:productId/items/:itemId/images/reorder', requireAuth, async (req, res) => {
+  try {
+    const images = reorderItemImages(req.params.productId, req.params.itemId, (req.body || {}).order || []);
+    if (images === null) return res.status(404).json({ error: 'Item not found' });
+    const publishWarning = await publishCatalog();
+    res.json({ images, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ---- Clients (B) ----
@@ -2954,6 +3065,7 @@ function normalizeItem(item, i) {
     price: item.price || '',
     sku: item.sku || '',
     imageUrl: item.imageUrl || '',
+    images: Array.isArray(item.images) ? item.images.filter(Boolean).slice(0, 5) : [],
     // Car-parts only (GWM/Landrover) -- who designed the printable part, and
     // which vehicle model(s) it fits. Stored as plain name strings (not ids
     // into settings.carPartModelsLandrover/carPartModelsGwm), same
