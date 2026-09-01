@@ -1001,13 +1001,9 @@ function renderFilamentSections(p) {
           <div class="row-card" data-colour-index="${i}">
             <div class="row-card-actions">
               <div class="flex items-center gap-3">
-                ${c.imagePath
-                  ? `<img src="${escapeAttr(c.imagePath)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" onerror="this.style.display='none'" />`
-                  : `<div class="swatch-preview" style="background:${escapeAttr(c.hex || guessHex(c.name))}"></div>`}
                 ${c._isNew
                   ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
-                  : `<button class="btn small" data-action="trigger-colour-image" data-trigger-colour-image="${c.id}" type="button">Choose File</button>
-                     <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-colour-image="${c.id}" />`}
+                  : galleryPanelHtml('colour', c.id, c.images || [])}
               </div>
               <button class="btn small btn-danger" data-remove-colour type="button">Remove</button>
             </div>
@@ -1284,11 +1280,6 @@ function bindEditorEvents() {
       renderEditor();
     });
   });
-  $$('[data-trigger-colour-image]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      $(`[data-colour-image="${btn.dataset.triggerColourImage}"]`)?.click();
-    });
-  });
   $$('[data-trigger-item-image]').forEach((btn) => {
     btn.addEventListener('click', () => {
       $(`[data-item-image="${btn.dataset.triggerItemImage}"]`)?.click();
@@ -1350,40 +1341,19 @@ function bindEditorEvents() {
     cb.addEventListener('change', () => syncNestedFromDom());
   });
 
-  // Colour photo upload -- fires immediately on file selection (simplest UX,
-  // no separate "upload" button to forget to click). Only rendered for
-  // already-persisted colours (see renderFilamentSections), so p.id here is
-  // always the real, server-assigned filament id by the time this can fire.
-  // Uses fetch() directly rather than the api() helper: api() always sets
-  // Content-Type: application/json, which would stop the browser from
-  // attaching its own multipart/form-data boundary header.
-  $$('[data-colour-image]').forEach((input) => {
-    input.addEventListener('change', async () => {
-      const file = input.files[0];
-      if (!file) return;
-      const colourId = input.dataset.colourImage;
-      const formData = new FormData();
-      formData.append('image', file);
-      try {
-        const res = await fetch(`/api/filaments/${p.id}/colours/${colourId}/image`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
-        state.draft = { ...data.filament, kind: 'filament' };
-        toast('Photo uploaded');
-        renderEditor();
-      } catch (ex) {
-        toast(ex.message);
-      }
+  (p.colours || []).forEach((c) => {
+    if (c._isNew) return;
+    wireGalleryPanel('colour', c.id, { filamentId: p.id }, (images) => {
+      state.draft.colours = state.draft.colours.map((row) => (row.id === c.id ? { ...row, images } : row));
+      renderEditor();
     });
   });
 
-  // Catalog item photo upload/remove -- same immediate-fire pattern as the
-  // colour photo upload above. Only rendered for already-persisted items
-  // (see renderCategorySections), so p.id/item.id here are always the real,
+  // Catalog item photo upload/remove -- legacy single-photo control,
+  // pending its own gallery-panel migration in a later task (see #95).
+  // Fires immediately on file selection, no separate "upload" button to
+  // forget to click. Only rendered for already-persisted items (see
+  // renderCategorySections), so p.id/item.id here are always the real,
   // server-assigned ids by the time this can fire.
   $$('[data-item-image]').forEach((input) => {
     input.addEventListener('change', async () => {
@@ -2593,6 +2563,104 @@ function wireConfigurableListPanels() {
     panel.querySelector('[data-action="add-list-item"]').addEventListener('click', addItem);
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') addItem();
+    });
+  });
+}
+
+// #95: shared drag-reorder gallery panel for both filament colours and
+// category items -- `kind` is 'colour' or 'item', used to build distinct
+// data-attributes so two panels on the same page never collide, and to
+// pick the right upload/delete/reorder endpoint in wireGalleryPanel below.
+function galleryPanelHtml(kind, ownerId, images) {
+  const thumbs = images
+    .map(
+      (img, i) => `
+        <div class="gallery-thumb" draggable="true" data-gallery-image-id="${escapeAttr(img.id || img)}" data-gallery-index="${i}">
+          <img src="${escapeAttr(img.imagePath || img)}" alt="" />
+          <button class="gallery-thumb-remove" data-gallery-remove="${escapeAttr(img.id || img)}" type="button" title="Remove">&times;</button>
+        </div>`,
+    )
+    .join('');
+  const canAddMore = images.length < 5;
+  return `
+    <div class="gallery-panel" data-gallery-kind="${kind}" data-gallery-owner="${escapeAttr(ownerId)}">
+      <div class="gallery-thumbs">${thumbs}</div>
+      ${canAddMore
+        ? `<button class="btn small" data-action="trigger-gallery-add" data-gallery-owner="${escapeAttr(ownerId)}" type="button">+ Add photo (${images.length}/5)</button>
+           <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-gallery-add="${escapeAttr(ownerId)}" />`
+        : '<span class="muted" style="font-size:0.78rem">5/5 photos</span>'}
+    </div>`;
+}
+
+// One call wires exactly ONE panel (identified by kind+ownerId), not every
+// panel on the page -- callers loop over their own rows and call this once
+// per already-persisted row (see Task 5 Step 4 / Task 6 Step 2).
+function wireGalleryPanel(kind, ownerId, ownerContext, onUpdated) {
+  const panel = document.querySelector(`.gallery-panel[data-gallery-kind="${kind}"][data-gallery-owner="${ownerId}"]`);
+  if (!panel) return;
+  const basePath = kind === 'colour'
+    ? `/api/filaments/${ownerContext.filamentId}/colours/${ownerId}/images`
+    : `/api/products/${ownerContext.productId}/items/${ownerId}/images`;
+
+  panel.querySelector('[data-action="trigger-gallery-add"]')?.addEventListener('click', () => {
+    $(`[data-gallery-add="${ownerId}"]`)?.click();
+  });
+
+  $(`[data-gallery-add="${ownerId}"]`)?.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const res = await fetch(basePath, { method: 'POST', credentials: 'include', body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      toast('Photo added');
+      onUpdated(data.images);
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  panel.querySelectorAll('[data-gallery-remove]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const imageId = btn.dataset.galleryRemove;
+      try {
+        const res = kind === 'colour'
+          ? await api(`${basePath}/${imageId}`, { method: 'DELETE' })
+          : await api(basePath, { method: 'DELETE', body: JSON.stringify({ imagePath: imageId }) });
+        toast('Photo removed');
+        onUpdated(res.images);
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  // Native HTML5 drag-and-drop reorder -- no library. Dropping a thumb onto
+  // another thumb's position swaps it there and immediately PUTs the new
+  // order (matches this admin's existing "no separate Save step"
+  // convention for other reorderable lists, e.g. the deposit-tier panel).
+  let dragSourceIndex = null;
+  panel.querySelectorAll('.gallery-thumb').forEach((thumb) => {
+    thumb.addEventListener('dragstart', () => {
+      dragSourceIndex = Number(thumb.dataset.galleryIndex);
+    });
+    thumb.addEventListener('dragover', (e) => e.preventDefault());
+    thumb.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      const targetIndex = Number(thumb.dataset.galleryIndex);
+      if (dragSourceIndex === null || dragSourceIndex === targetIndex) return;
+      const thumbs = [...panel.querySelectorAll('.gallery-thumb')];
+      const ids = thumbs.map((t) => t.dataset.galleryImageId);
+      const [moved] = ids.splice(dragSourceIndex, 1);
+      ids.splice(targetIndex, 0, moved);
+      try {
+        const res = await api(`${basePath}/reorder`, { method: 'PUT', body: JSON.stringify({ order: ids }) });
+        onUpdated(res.images);
+      } catch (ex) {
+        toast(ex.message);
+      }
     });
   });
 }

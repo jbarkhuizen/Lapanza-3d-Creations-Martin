@@ -1195,14 +1195,22 @@ app.get('/api/dashboard', requireAuth, (_req, res) => {
   });
 });
 
+// #95: attaches each colour's gallery to the filament object the admin
+// editor receives -- kept out of filaments.js itself so that module's core
+// CRUD stays free of this cross-cutting concern (same reasoning #94's
+// withQuoteStage() used for design requests).
+function attachColourImages(filament) {
+  return { ...filament, colours: filament.colours.map((c) => ({ ...c, images: listColourImages(c.id) })) };
+}
+
 app.get('/api/filaments', requireAuth, (_req, res) => {
-  res.json({ filaments: listFilaments() });
+  res.json({ filaments: listFilaments().map(attachColourImages) });
 });
 
 app.get('/api/filaments/:id', requireAuth, (req, res) => {
   const filament = getFilament(req.params.id);
   if (!filament) return res.status(404).json({ error: 'Filament not found' });
-  res.json({ filament });
+  res.json({ filament: attachColourImages(filament) });
 });
 
 app.post('/api/filaments', requireAuth, async (req, res) => {
@@ -1210,7 +1218,7 @@ app.post('/api/filaments', requireAuth, async (req, res) => {
     const filament = createFilament(req.body || {});
     const publishWarning = await publishCatalog();
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created filament type "${filament.name}"` });
-    res.status(201).json({ filament, ...(publishWarning ? { publishWarning } : {}) });
+    res.status(201).json({ filament: attachColourImages(filament), ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
@@ -1223,7 +1231,7 @@ app.put('/api/filaments/:id', requireAuth, async (req, res) => {
     if (!filament) return res.status(404).json({ error: 'Filament not found' });
     const publishWarning = await publishCatalog();
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated filament type "${filament.name}"` });
-    res.json({ filament, ...(publishWarning ? { publishWarning } : {}) });
+    res.json({ filament: attachColourImages(filament), ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
@@ -1246,7 +1254,7 @@ app.post('/api/filaments/:id/colours', requireAuth, async (req, res) => {
     const publishWarning = await publishCatalog();
     const added = filament.colours[filament.colours.length - 1];
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added colour "${added?.name}" to "${filament.name}"` });
-    res.status(201).json({ filament, ...(publishWarning ? { publishWarning } : {}) });
+    res.status(201).json({ filament: attachColourImages(filament), ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
@@ -1260,7 +1268,7 @@ app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, async (req,
     const publishWarning = await publishCatalog();
     const colour = filament.colours.find((c) => c.id === req.params.colourId);
     recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated colour "${colour?.name}" on "${filament.name}"` });
-    res.json({ filament, ...(publishWarning ? { publishWarning } : {}) });
+    res.json({ filament: attachColourImages(filament), ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     if (isUniqueConstraintError(err)) return res.status(400).json({ error: uniqueConstraintMessage(err) });
     throw err;
