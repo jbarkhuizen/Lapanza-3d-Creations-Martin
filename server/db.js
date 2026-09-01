@@ -762,6 +762,12 @@ function ensureDesignRequestV2Columns(db) {
     ['quoted_at', 'TEXT'],
     ['quote_status', "TEXT NOT NULL DEFAULT ''"],
     ['quote_order_id', 'TEXT'], // the deposit/full-payment order, once accepted
+    // Locked in alongside quote_amount/quote_terms at quote time -- same
+    // reasoning as those two: settings.quoteDepositOptions could change
+    // between when a quote is sent and when it's accepted, and the customer
+    // must pay exactly what they were quoted, not whatever the setting says
+    // today. 100 = full payment.
+    ['quote_deposit_pct', 'INTEGER NOT NULL DEFAULT 100'],
   ];
   for (const [name, type] of cols) {
     if (!hasColumn(db, 'PRAGMA table_info(design_requests)', name)) {

@@ -2597,6 +2597,70 @@ function wireConfigurableListPanels() {
   });
 }
 
+// #94: same shape and UX as configurableListPanel above, but entries are
+// {id,pct,active} -- whole-number percentages, not free-text names -- so it
+// gets its own small panel + numeric input instead of reusing that one.
+// Picked per-quote on the Design Requests form (quoteDepositPct is locked
+// onto the request at quote time); this list is only the menu offered.
+function depositTierPanel(items) {
+  const sorted = [...(items || [])].sort((a, b) => a.pct - b.pct);
+  const rows = sorted
+    .map(
+      (item) => `
+        <div class="config-list-row" data-item-id="${escapeAttr(item.id)}">
+          <label class="field checkbox config-list-active" title="${item.active ? 'Active — click to retire' : 'Inactive — click to reactivate'}">
+            <input type="checkbox" data-action="toggle-active" ${item.active ? 'checked' : ''} />
+          </label>
+          <span class="config-list-name">${escapeHtml(String(item.pct))}%</span>
+          ${item.active ? '' : '<span class="badge draft">Inactive</span>'}
+        </div>`,
+    )
+    .join('');
+  return `
+    <div class="panel stack gap-3" id="deposit-tier-panel">
+      <div class="section-head"><h3>Quote Deposit Tiers</h3></div>
+      <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">The deposit percentages an admin can offer when quoting a design request (100 = full payment). Picked per quote, not sitewide — retiring a tier here only stops it appearing on NEW quotes; requests already quoted under it are unaffected.</p>
+      <div class="config-list">${rows || '<p class="muted" style="margin:0">No tiers yet.</p>'}</div>
+      <div class="row-card-actions">
+        <input type="number" id="deposit-tier-new-input" min="1" max="100" step="1" placeholder="e.g. 40" style="max-width:120px" />
+        <button class="btn small" id="deposit-tier-add" type="button">+ Add</button>
+      </div>
+    </div>`;
+}
+
+function wireDepositTierPanel() {
+  const panel = $('#deposit-tier-panel');
+  if (!panel) return;
+  const saveTiers = async (items) => {
+    try {
+      const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ quoteDepositOptions: items }) });
+      toast(res.publishWarning || 'Saved');
+      await renderSettings();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  };
+  panel.querySelectorAll('[data-action="toggle-active"]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const id = cb.closest('[data-item-id]').dataset.itemId;
+      const items = (state.settings.quoteDepositOptions || []).map((t) => (t.id === id ? { ...t, active: cb.checked } : t));
+      saveTiers(items);
+    });
+  });
+  const input = $('#deposit-tier-new-input');
+  const addTier = () => {
+    const pct = Math.round(Number(input.value));
+    if (!Number.isFinite(pct) || pct < 1 || pct > 100) return toast('Enter a whole number between 1 and 100');
+    const existing = state.settings.quoteDepositOptions || [];
+    if (existing.some((t) => t.pct === pct)) return toast(`${pct}% is already a tier`);
+    saveTiers([...existing, { id: String(pct), pct, active: true }]);
+  };
+  $('#deposit-tier-add').addEventListener('click', addTier);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') addTier();
+  });
+}
+
 // Unlike the {id,name,active} lists above, an entry here stores a
 // productId (same scheme the cart uses -- filament:{slug}:{sku} /
 // category:{slug}:{sku}), not a typed name -- server/export.js resolves the
@@ -2838,7 +2902,6 @@ async function renderSettings() {
       <div class="panel stack gap-3">
         <div class="section-head"><h3>Storefront Stock &amp; Delivery Messaging</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
-        <label class="field" style="max-width:220px"><span>Quote Deposit % (100 = Full Payment)</span><input data-setting="quoteDepositPct" type="number" min="1" max="100" step="1" value="${escapeAttr(String(s.quoteDepositPct ?? 50))}" /></label>
         <label class="field" style="max-width:260px"><span>Design-file Retention (Months After Finalized)</span><input data-setting="designFileRetentionMonths" type="number" min="1" step="1" value="${escapeAttr(String(s.designFileRetentionMonths ?? 12))}" /></label>
         <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
@@ -2885,6 +2948,7 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
       ${configurableListPanel('carPartBrands', 'Car-part brands', s.carPartBrands, 'The vehicle brands with their own car-parts page (name becomes the page URL — keep it simple, e.g. Toyota). After adding one: create its category via Product Catalog → + Category with parent car-parts and the matching slug, then Publish to site. Unticking hides the page and nav link on the next publish without touching existing items.')}
       ${configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
       ${configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
+      ${depositTierPanel(s.quoteDepositOptions)}
       ${featuredProductsPanel(s.featuredProducts)}
 
       <div class="panel stack gap-3">
@@ -2925,6 +2989,7 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
   $('[data-setting="useUniversalFont"]')?.addEventListener('change', syncFontModeUI);
   syncFontModeUI();
   wireConfigurableListPanels();
+  wireDepositTierPanel();
   wireFeaturedProductsPanel();
 
   // #60: tier add/remove -- static template, values typed by the admin.
@@ -5737,8 +5802,21 @@ function designRequestStatusSelectHtml(id, status) {
   return `<select class="dr-status-inline" data-id="${escapeAttr(id)}">${opts}</select>`;
 }
 
+// #94: derived (server-computed, never admin-set) -- tracks the quote's own
+// payment lifecycle independently of the New/In Progress/Finalized status
+// above, which tracks the design/print WORK instead. Order Paid needs no
+// admin action: it appears the instant the linked order's real status
+// becomes paid/shipped/completed.
+const QUOTE_STAGE_LABEL = { quoted: 'Quoted', order_placed: 'Order Placed', order_paid: 'Order Paid' };
+const QUOTE_STAGE_BADGE_CLASS = { quoted: 'draft', order_placed: 'draft', order_paid: 'published' };
+function quoteStageBadgeHtml(stage) {
+  if (!stage) return '<span class="muted">—</span>';
+  return `<span class="badge ${QUOTE_STAGE_BADGE_CLASS[stage]}">${QUOTE_STAGE_LABEL[stage]}</span>`;
+}
+
 async function renderDesignRequests() {
   state.editingDesignRequest = state.editingDesignRequest || null;
+  await ensureSettingsLoaded();
   const { designRequests } = await api('/api/design-requests');
 
   const rows = designRequests
@@ -5748,6 +5826,7 @@ async function renderDesignRequests() {
           <td>${escapeHtml(r.name || '—')}</td>
           <td>${escapeHtml(r.email)}</td>
           <td>${designRequestStatusSelectHtml(r.id, r.status)}</td>
+          <td>${quoteStageBadgeHtml(r.quoteStage)}</td>
           <td>${escapeHtml(formatDate(r.createdAt))}</td>
           <td>
             <button class="btn small" data-action="edit" type="button">View</button>
@@ -5760,6 +5839,10 @@ async function renderDesignRequests() {
   const form = state.editingDesignRequest;
   const statusOptions = form
     ? DESIGN_REQUEST_STATUSES.map((s) => `<option value="${s}" ${form.status === s ? 'selected' : ''}>${DESIGN_REQUEST_STATUS_LABEL[s]}</option>`).join('')
+    : '';
+  const activeDepositTiers = (state.settings.quoteDepositOptions || []).filter((t) => t.active).sort((a, b) => a.pct - b.pct);
+  const depositOptionsHtml = form
+    ? activeDepositTiers.map((t) => `<option value="${t.pct}" ${(form.quoteDepositPct ?? 100) === t.pct ? 'selected' : ''}>${t.pct}%${t.pct === 100 ? ' (full payment)' : ''}</option>`).join('')
     : '';
 
   $('#view-design-requests').innerHTML = `
@@ -5794,16 +5877,17 @@ async function renderDesignRequests() {
         ${form.finalizedAt ? `<p class="muted" style="font-size:0.85rem">Finalized ${escapeHtml(formatDate(form.finalizedAt))}</p>` : ''}
         <label class="field"><span>Admin Notes</span><textarea id="dr-notes">${escapeHtml(form.adminNotes || '')}</textarea></label>
         <div class="stack gap-2" style="padding-top:8px;border-top:1px solid var(--border)">
-          <strong style="font-size:0.92rem">Quote (#87)</strong>
+          <div class="row-card-actions"><strong style="font-size:0.92rem">Quote (#87)</strong>${quoteStageBadgeHtml(form.quoteStage)}</div>
           ${form.quoteStatus === 'accepted'
-            ? `<p class="muted" style="margin:0">Quote of R${escapeHtml(String(form.quoteAmount))} ACCEPTED ${form.quoteOrderId ? `— payment order <code>${escapeHtml(form.quoteOrderId.slice(0, 8))}</code> (see Invoice History)` : ''}</p>`
+            ? `<p class="muted" style="margin:0">R${escapeHtml(String(form.quoteAmount))} quote, ${escapeHtml(String(form.quoteDepositPct ?? 100))}% (R${escapeHtml(String(Math.round((form.quoteAmount * (form.quoteDepositPct ?? 100)) / 100)))}) taken up front ${form.quoteOrderId ? `— payment order <code>${escapeHtml(form.quoteOrderId.slice(0, 8))}</code> (see Invoice History)` : ''}</p>`
             : `
           <div class="row-card-actions">
             <label class="field" style="max-width:180px"><span>Amount (R)</span><input id="dr-quote-amount" type="number" min="1" step="1" value="${escapeAttr(form.quoteAmount ? String(form.quoteAmount) : '')}" /></label>
+            <label class="field" style="max-width:180px"><span>Deposit</span><select id="dr-quote-deposit-pct">${depositOptionsHtml}</select></label>
             <button class="btn small btn-primary" id="dr-send-quote" type="button">${form.quoteStatus === 'quoted' ? 'Update & Re-email Quote' : 'Save & Email Quote'}</button>
           </div>
           <label class="field"><span>Quote Terms (Shown to the Customer)</span><textarea id="dr-quote-terms" placeholder="e.g. Price includes design time and one revision. Balance due on collection.">${escapeHtml(form.quoteTerms || '')}</textarea></label>
-          ${form.quoteStatus === 'quoted' ? `<p class="muted" style="margin:0;font-size:0.85rem">Quoted R${escapeHtml(String(form.quoteAmount))} on ${escapeHtml((form.quotedAt || '').slice(0, 10))} — awaiting customer acceptance. Deposit on acceptance: set under Settings → Storefront (Quote Deposit %).</p>` : ''}
+          ${form.quoteStatus === 'quoted' ? `<p class="muted" style="margin:0;font-size:0.85rem">Quoted R${escapeHtml(String(form.quoteAmount))} (${escapeHtml(String(form.quoteDepositPct ?? 100))}% deposit) on ${escapeHtml((form.quotedAt || '').slice(0, 10))} — awaiting customer acceptance.</p>` : ''}
           `}
         </div>
         <div class="row-card-actions">
@@ -5813,8 +5897,8 @@ async function renderDesignRequests() {
       </div>` : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Received</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No design requests yet</div></td></tr>'}</tbody>
+        <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Quote Stage</th><th>Received</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No design requests yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -5862,7 +5946,7 @@ async function renderDesignRequests() {
     try {
       const { request, emailSent, emailError } = await api(`/api/design-requests/${form.id}/quote`, {
         method: 'PUT',
-        body: JSON.stringify({ amount: Number($('#dr-quote-amount').value), terms: $('#dr-quote-terms').value }),
+        body: JSON.stringify({ amount: Number($('#dr-quote-amount').value), terms: $('#dr-quote-terms').value, depositPct: Number($('#dr-quote-deposit-pct').value) }),
       });
       toast(emailSent ? 'Quote saved and emailed to the customer' : emailError || 'Quote saved (email failed)');
       state.editingDesignRequest = request;

@@ -1568,26 +1568,134 @@ test('"Order this again" books a fresh order at the recorded quote price without
   const early = await request(app).post('/api/design-request-status/reorder').send({ token: statusToken });
   assert.strictEqual(early.status, 400);
 
-  await request(app).post('/api/design-request-status/accept').send({ token: statusToken });
+  await request(app).post('/api/design-request-status/accept').send({ token: statusToken, shippingMethod: 'collect' });
+  const acceptedOrderId = (await request(app).get(`/api/design-requests/${id}`).set('Cookie', adminCookie)).body.designRequest.quoteOrderId;
   await request(app).patch(`/api/design-requests/${id}`).set('Cookie', adminCookie).send({ status: 'finalized' });
 
-  const reorder = await request(app).post('/api/design-request-status/reorder').send({ token: statusToken });
+  const reorder = await request(app).post('/api/design-request-status/reorder').send({ token: statusToken, shippingMethod: 'collect' });
   assert.strictEqual(reorder.status, 200);
   assert.strictEqual(reorder.body.ok, true);
   assert.strictEqual(reorder.body.redirect.actionUrl.includes('payfast.co.za'), true);
 
-  // Full recorded price, not the 50%-default deposit accept() would have taken.
+  // Full recorded price -- accept() above ALSO took the full R850 (no
+  // depositPct was sent, and setDesignRequestQuote defaults to 100), so
+  // this specifically confirms there are two distinct R850 orders, not one.
   const orders = await request(app).get('/api/orders').set('Cookie', adminCookie);
-  const repeatOrder = orders.body.orders.find((o) => o.total === 850 && o.id !== undefined);
-  assert.ok(repeatOrder, 'expected a second order at the full R850 quote price');
+  const fullPriceOrders = orders.body.orders.filter((o) => o.total === 850);
+  assert.strictEqual(fullPriceOrders.length, 2, 'expected the accepted-quote order AND the reorder, both at R850');
+  const repeatOrder = fullPriceOrders.find((o) => o.id !== acceptedOrderId);
+  assert.ok(repeatOrder, 'the reorder produced a genuinely separate order');
 
-  // The original request's quote/order link stays on the FIRST (deposit) order.
+  // The original request's quote/order link stays on the FIRST (accepted) order.
   const detail = await request(app).get(`/api/design-requests/${id}`).set('Cookie', adminCookie);
   assert.strictEqual(detail.body.designRequest.quoteStatus, 'accepted');
+  assert.strictEqual(detail.body.designRequest.quoteOrderId, acceptedOrderId);
   assert.notStrictEqual(detail.body.designRequest.quoteOrderId, repeatOrder.id);
 
   const missingToken = await request(app).post('/api/design-request-status/reorder').send({ token: 'not-a-real-token' });
   assert.strictEqual(missingToken.status, 404);
+});
+
+test('PUT quote/:id rejects a depositPct that is not one of the active configured tiers (#94)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const submit = await request(app).post('/api/design-requests').send({
+    name: 'Deposit Dana', email: 'dana@example.com', phone: '0821234567', description: 'A vase',
+  });
+  const { id } = submit.body.designRequest;
+
+  const rejected = await request(app).put(`/api/design-requests/${id}/quote`).set('Cookie', adminCookie).send({ amount: 400, depositPct: 40 });
+  assert.strictEqual(rejected.status, 400);
+  assert.match(rejected.body.error, /active tiers/);
+
+  const accepted = await request(app).put(`/api/design-requests/${id}/quote`).set('Cookie', adminCookie).send({ amount: 400, depositPct: 25 });
+  assert.strictEqual(accepted.status, 200);
+  assert.strictEqual(accepted.body.request.quoteDepositPct, 25);
+
+  // Retiring a tier (active: false) must stop it validating for NEW quotes,
+  // without touching this already-quoted request's own locked-in value.
+  const settings = await request(app).get('/api/settings').set('Cookie', adminCookie);
+  const tiers = settings.body.settings.quoteDepositOptions.map((t) => (t.pct === 25 ? { ...t, active: false } : t));
+  await request(app).put('/api/settings').set('Cookie', adminCookie).send({ quoteDepositOptions: tiers });
+  const nowRejected = await request(app).put(`/api/design-requests/${id}/quote`).set('Cookie', adminCookie).send({ amount: 400, depositPct: 25 });
+  assert.strictEqual(nowRejected.status, 400);
+});
+
+test('accept + reorder require a real shipping method and capture it on the order, no more hardcoded collect (#94)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+  const pudo = await request(app).post('/api/shipping-options').set('Cookie', adminCookie).send({ name: 'PUDO Locker', optionType: 'fixed', price: 65 });
+  const shippingOptionId = pudo.body.shippingOption.id;
+
+  const submit = await request(app).post('/api/design-requests').send({
+    name: 'Ship Sam', email: 'sam@example.com', phone: '0821234567', description: 'A bracket',
+  });
+  const { id, statusToken } = submit.body.designRequest;
+  await request(app).put(`/api/design-requests/${id}/quote`).set('Cookie', adminCookie).send({ amount: 500, depositPct: 100 });
+
+  // No shippingMethod at all -- must be rejected, not silently default to collect.
+  const noMethod = await request(app).post('/api/design-request-status/accept').send({ token: statusToken });
+  assert.strictEqual(noMethod.status, 400);
+  assert.match(noMethod.body.error, /shipping method/);
+
+  // 'fixed' without picking an actual option must also be rejected.
+  const fixedNoOption = await request(app).post('/api/design-request-status/accept').send({ token: statusToken, shippingMethod: 'fixed' });
+  assert.strictEqual(fixedNoOption.status, 400);
+
+  // A real fixed option + address -- order must carry the real shipping price and the client record the address.
+  const accept = await request(app).post('/api/design-request-status/accept').send({
+    token: statusToken, shippingMethod: 'fixed', shippingOptionId,
+    street: '1 Main Road', suburb: 'Centurion Central', city: 'Centurion', province: 'Gauteng', postalCode: '0157',
+  });
+  assert.strictEqual(accept.status, 200);
+
+  const orders = await request(app).get('/api/orders').set('Cookie', adminCookie);
+  const order = orders.body.orders.find((o) => o.total === 500 + 65);
+  assert.ok(order, 'order total should include the R65 fixed shipping price on top of the R500 quote');
+
+  const clients = await request(app).get('/api/clients').set('Cookie', adminCookie);
+  const client = clients.body.clients.find((c) => c.email === 'sam@example.com');
+  assert.strictEqual(client.street, '1 Main Road');
+  assert.strictEqual(client.city, 'Centurion');
+});
+
+test('quote stage progresses quoted -> order_placed -> order_paid, derived not stored (#94)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const submit = await request(app).post('/api/design-requests').send({
+    name: 'Stage Steve', email: 'steve@example.com', phone: '0821234567', description: 'A knob',
+  });
+  const { id, statusToken } = submit.body.designRequest;
+
+  const beforeQuote = await request(app).get(`/api/design-requests/${id}`).set('Cookie', adminCookie);
+  assert.strictEqual(beforeQuote.body.designRequest.quoteStage, null);
+
+  await request(app).put(`/api/design-requests/${id}/quote`).set('Cookie', adminCookie).send({ amount: 300, depositPct: 100 });
+  const quotedList = await request(app).get('/api/design-requests').set('Cookie', adminCookie);
+  assert.strictEqual(quotedList.body.designRequests.find((r) => r.id === id).quoteStage, 'quoted');
+
+  await request(app).post('/api/design-request-status/accept').send({ token: statusToken, shippingMethod: 'collect' });
+  const placed = await request(app).get(`/api/design-requests/${id}`).set('Cookie', adminCookie);
+  assert.strictEqual(placed.body.designRequest.quoteStage, 'order_placed');
+
+  const orderId = placed.body.designRequest.quoteOrderId;
+  await request(app).put(`/api/orders/${orderId}/status`).set('Cookie', adminCookie).send({ status: 'paid' });
+  const paid = await request(app).get(`/api/design-requests/${id}`).set('Cookie', adminCookie);
+  assert.strictEqual(paid.body.designRequest.quoteStage, 'order_paid');
+
+  const paidList = await request(app).get('/api/design-requests').set('Cookie', adminCookie);
+  assert.strictEqual(paidList.body.designRequests.find((r) => r.id === id).quoteStage, 'order_paid');
 });
 
 test('GET /api/dashboard/sales requires admin auth, honors ?range, and rejects an unknown range', async (t) => {

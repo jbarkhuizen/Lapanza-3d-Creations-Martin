@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, pruneExpiredDesignFiles, setDesignRequestQuote, acceptDesignRequestQuote, listDesignRequestFiles, getDesignRequestByToken } from './design-requests.js';
+import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, pruneExpiredDesignFiles, setDesignRequestQuote, acceptDesignRequestQuote, listDesignRequestFiles, getDesignRequestByToken, deriveQuoteStage } from './design-requests.js';
 
 function basePayload(overrides = {}) {
   return { email: 'customer@example.com', name: 'Customer', phone: '0821234567', description: 'A custom bracket for my car', ...overrides };
@@ -143,6 +143,33 @@ test('quote lifecycle: set -> accept (only from quoted), amounts validated (#87)
   // A second accept must fail -- no open quote anymore.
   assert.throws(() => acceptDesignRequestQuote(quoted.statusToken, 'order-2', db), /no open quote/);
   db.close();
+});
+
+test('setDesignRequestQuote locks in a deposit percent, defaulting to 100 and validating the range (#94)', () => {
+  const db = openDb(':memory:');
+  const r = createDesignRequest({ name: 'Q', email: 'q@example.com', phone: '082', description: 'widget' }, db);
+
+  const defaulted = setDesignRequestQuote(r.id, { amount: 500 }, db);
+  assert.strictEqual(defaulted.quoteDepositPct, 100);
+
+  const withTier = setDesignRequestQuote(r.id, { amount: 500, depositPct: 25 }, db);
+  assert.strictEqual(withTier.quoteDepositPct, 25);
+
+  assert.throws(() => setDesignRequestQuote(r.id, { amount: 500, depositPct: 0 }, db), /Deposit percent must be between 1 and 100/);
+  assert.throws(() => setDesignRequestQuote(r.id, { amount: 500, depositPct: 101 }, db), /Deposit percent must be between 1 and 100/);
+  db.close();
+});
+
+test('deriveQuoteStage: quoted -> order_placed -> order_paid, derived from quoteStatus + the linked order\'s real status (#94)', () => {
+  assert.strictEqual(deriveQuoteStage('', null), null);
+  assert.strictEqual(deriveQuoteStage('quoted', null), 'quoted');
+  assert.strictEqual(deriveQuoteStage('accepted', 'pending_payment'), 'order_placed');
+  assert.strictEqual(deriveQuoteStage('accepted', null), 'order_placed');
+  assert.strictEqual(deriveQuoteStage('accepted', 'paid'), 'order_paid');
+  assert.strictEqual(deriveQuoteStage('accepted', 'shipped'), 'order_paid');
+  assert.strictEqual(deriveQuoteStage('accepted', 'completed'), 'order_paid');
+  // Cancelled is still "not paid" for this purpose -- the order fell through.
+  assert.strictEqual(deriveQuoteStage('accepted', 'cancelled'), 'order_placed');
 });
 
 test('createDesignRequest stores structured fields, files, and a status token (#81/#82/#86)', () => {

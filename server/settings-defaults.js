@@ -179,10 +179,19 @@ export const DEFAULT_SETTINGS = {
   // stay -- only the binary files go). 12 months default; the privacy
   // policy states whatever this is set to, so change both together.
   designFileRetentionMonths: 12,
-  // #87 (SITE-053): what an accepted quote pays up front -- 100 = full
-  // amount, anything lower = that percentage as a deposit (balance settled
-  // per the quote's own terms). Whole-number percent.
-  quoteDepositPct: 50,
+  // #87/#94 (SITE-053): the deposit tiers an admin can offer when quoting a
+  // design request -- 100 = full payment, anything lower is that percentage
+  // upfront (balance settled per the quote's own terms). The chosen tier is
+  // locked onto the design_requests row itself at quote time (quote_deposit_pct),
+  // NOT read live from here -- this list is only the menu the admin picks
+  // from. 'active: false' retires a tier from new quotes without touching
+  // requests already quoted under it.
+  quoteDepositOptions: [
+    { id: '25', pct: 25, active: true },
+    { id: '50', pct: 50, active: true },
+    { id: '75', pct: 75, active: true },
+    { id: '100', pct: 100, active: true },
+  ],
 
   // SITE-010: real figures from the business owner (2026-08-27), not
   // invented -- shown on filament/category pages (generate-pages.mjs) and

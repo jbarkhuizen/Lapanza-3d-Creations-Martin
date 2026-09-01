@@ -34,6 +34,7 @@ function rowToDesignRequest(row) {
     quotedAt: row.quoted_at,
     quoteStatus: row.quote_status || '',
     quoteOrderId: row.quote_order_id,
+    quoteDepositPct: row.quote_deposit_pct ?? 100,
     status: row.status,
     adminNotes: row.admin_notes,
     finalizedAt: row.finalized_at,
@@ -119,6 +120,7 @@ export function getDesignRequestByToken(token, db = getDb()) {
     id: r.id, status: r.status, createdAt: r.createdAt, finalizedAt: r.finalizedAt,
     serviceType: r.serviceType, description: r.description,
     quoteAmount: r.quoteAmount, quoteTerms: r.quoteTerms, quoteStatus: r.quoteStatus, quotedAt: r.quotedAt,
+    quoteDepositPct: r.quoteDepositPct,
   };
 }
 
@@ -161,16 +163,33 @@ export function updateDesignRequest(id, data, db = getDb()) {
 // #87: the quote lifecycle. Setting a quote (re)stamps quoted_at and puts
 // quote_status at 'quoted'; accepting is only valid FROM 'quoted' and
 // records the order that payment now rides on. Amounts are whole rand,
-// same convention as orders.total.
-export function setDesignRequestQuote(id, { amount, terms }, db = getDb()) {
+// same convention as orders.total. depositPct is locked onto the row here
+// (not read live from settings later) -- which tier is actually valid to
+// pick from is a settings.quoteDepositOptions concern, checked by the
+// caller (server/index.js), not this module.
+export function setDesignRequestQuote(id, { amount, terms, depositPct }, db = getDb()) {
   const existing = getDesignRequest(id, db);
   if (!existing) return null;
   const value = Math.round(Number(amount));
   if (!Number.isFinite(value) || value <= 0) throw new Error('Quote amount must be a positive rand value');
+  const pct = depositPct === undefined ? 100 : Math.round(Number(depositPct));
+  if (!Number.isFinite(pct) || pct < 1 || pct > 100) throw new Error('Deposit percent must be between 1 and 100');
   db.prepare(
-    "UPDATE design_requests SET quote_amount = ?, quote_terms = ?, quoted_at = ?, quote_status = 'quoted', updated_at = ? WHERE id = ?",
-  ).run(value, String(terms || '').slice(0, 2000), new Date().toISOString(), new Date().toISOString(), id);
+    "UPDATE design_requests SET quote_amount = ?, quote_terms = ?, quote_deposit_pct = ?, quoted_at = ?, quote_status = 'quoted', updated_at = ? WHERE id = ?",
+  ).run(value, String(terms || '').slice(0, 2000), pct, new Date().toISOString(), new Date().toISOString(), id);
   return getDesignRequest(id, db);
+}
+
+// #94: derives the customer-visible payment stage from the quote lifecycle
+// plus the linked order's REAL status -- deliberately not a stored value,
+// so "Order Paid" becomes true the instant the Payfast ITN marks that order
+// paid, with no extra write-back step to keep in sync. orderStatus is
+// whatever the caller already looked up for quote_order_id (or null/undefined
+// if there's no linked order yet); this function does no DB access itself.
+export function deriveQuoteStage(quoteStatus, orderStatus) {
+  if (quoteStatus === 'quoted') return 'quoted';
+  if (quoteStatus !== 'accepted') return null;
+  return ['paid', 'shipped', 'completed'].includes(orderStatus) ? 'order_paid' : 'order_placed';
 }
 
 export function acceptDesignRequestQuote(token, orderId, db = getDb()) {

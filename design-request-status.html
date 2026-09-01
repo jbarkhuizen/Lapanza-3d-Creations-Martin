@@ -54,6 +54,34 @@
         <p id="drs-quote-error" class="hidden text-sm text-terracotta mt-2"></p>
       </div>
 
+      <!-- #94: shared by both Accept & Pay and Order This Again below -- only
+           one of those two actions is ever live at once, so one shipping
+           picker serves whichever fires. No weight-matched courier option
+           here (unlike checkout) -- a custom print job has no catalog
+           weight to rate a courier against. -->
+      <div id="drs-shipping" class="hidden panel p-6 border border-charcoal/10 rounded-sm">
+        <p class="font-serif text-xl mb-3">Shipping</p>
+        <div class="stack gap-2 text-sm mb-4">
+          <label class="flex items-center gap-2"><input type="radio" name="drsShippingMethod" value="collect" checked /> Collect from store</label>
+          <label class="flex items-center gap-2"><input type="radio" name="drsShippingMethod" value="own_courier" /> I'll arrange my own courier</label>
+          <label class="flex items-center gap-2"><input type="radio" name="drsShippingMethod" value="fixed" /> Delivery</label>
+        </div>
+        <div id="drs-shipping-fixed" class="hidden stack gap-3">
+          <select id="drs-shipping-option" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm"><option value="">Loading options…</option></select>
+          <div id="drs-address-fields" class="stack gap-3">
+            <input name="street" placeholder="Street Address" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm" />
+            <div class="grid sm:grid-cols-2 gap-3">
+              <input name="suburb" placeholder="Suburb" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm" />
+              <input name="city" placeholder="City" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm" />
+            </div>
+            <div class="grid sm:grid-cols-2 gap-3">
+              <input name="province" placeholder="Province" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm" />
+              <input name="postalCode" placeholder="Postal Code" class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="drs-reorder" class="hidden panel p-6 border border-charcoal/10 rounded-sm">
         <p class="font-serif text-2xl mb-2">Need another one?</p>
         <p class="text-sm text-espresso/70 leading-relaxed mb-4">Order this exact print again at the same recorded price of <strong id="drs-reorder-amount"></strong> — no need to re-quote.</p>

@@ -126,7 +126,7 @@ import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary,
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
-import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, getDesignRequestByToken, listDesignRequestFiles, setDesignRequestQuote, acceptDesignRequestQuote } from './design-requests.js';
+import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, getDesignRequestByToken, listDesignRequestFiles, setDesignRequestQuote, acceptDesignRequestQuote, deriveQuoteStage } from './design-requests.js';
 import { getSalesSummary } from './sales.js';
 import {
   listPrintJobs,
@@ -749,39 +749,73 @@ app.get('/api/client/design-requests', requireClientAuth, (req, res) => {
 // land in the ordinary audit/order trail.
 app.put('/api/design-requests/:id/quote', requireAuth, async (req, res) => {
   try {
-    const request = setDesignRequestQuote(req.params.id, req.body || {});
+    const body = req.body || {};
+    if (body.depositPct !== undefined) {
+      const activeTiers = (getSettings().quoteDepositOptions || []).filter((t) => t.active).map((t) => t.pct);
+      if (!activeTiers.includes(Number(body.depositPct))) {
+        return res.status(400).json({ error: 'Deposit percent must be one of the configured active tiers' });
+      }
+    }
+    const request = setDesignRequestQuote(req.params.id, body);
     if (!request) return res.status(404).json({ error: 'Request not found' });
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Design request ${request.id}: quoted R${request.quoteAmount}` });
     try {
       await sendDesignRequestQuoteEmail(request, `${siteUrlFor(req)}/design-request-status.html?token=${request.statusToken}`);
-      res.json({ request, emailSent: true });
+      res.json({ request: withQuoteStage(request), emailSent: true });
     } catch (err) {
       logEmailFailure(`Design request ${request.id} quote email`, err, req);
-      res.json({ request, emailSent: false, emailError: 'Quote saved, but the email failed to send — check SMTP settings.' });
+      res.json({ request: withQuoteStage(request), emailSent: false, emailError: 'Quote saved, but the email failed to send — check SMTP settings.' });
     }
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
+// #94: both the accept and reorder routes below used to hardcode
+// shippingMethod:'collect', so a design-request order NEVER captured a real
+// delivery address or method -- a customer wanting courier/PUDO delivery on
+// a custom print had no way to ask for it through this flow at all. Neither
+// route can weight-match a 'courier' rate the way checkout does (a custom
+// job has no catalog weight), so the choice is the same three
+// non-weight-based methods createManualOrder already supports.
+const DESIGN_REQUEST_SHIPPING_METHODS = ['collect', 'own_courier', 'fixed'];
+function shippingFromBody(body) {
+  const shippingMethod = body.shippingMethod;
+  if (!DESIGN_REQUEST_SHIPPING_METHODS.includes(shippingMethod)) {
+    throw new Error('Choose a shipping method: collect, own courier, or a delivery option');
+  }
+  if (shippingMethod === 'fixed' && !body.shippingOptionId) {
+    throw new Error('Choose a delivery option');
+  }
+  const address = {};
+  for (const key of ['street', 'suburb', 'city', 'province', 'postalCode']) {
+    if (body[key] !== undefined) address[key] = body[key];
+  }
+  return { shippingMethod, shippingOptionId: body.shippingOptionId, address };
+}
+
 app.post('/api/design-request-status/accept', publicFormLimiter, async (req, res) => {
   try {
-    const token = (req.body || {}).token;
+    const body = req.body || {};
+    const token = body.token;
     const request = getDesignRequestByToken(token);
     if (!request) return res.status(404).json({ error: 'Request not found' });
     if (request.quoteStatus !== 'quoted') return res.status(400).json({ error: 'This request has no open quote to accept' });
+    const { shippingMethod, shippingOptionId, address } = shippingFromBody(body);
 
-    const settings = getSettings();
-    const depositPct = Math.min(100, Math.max(1, Math.round(Number(settings.quoteDepositPct) || 100)));
+    // Locked in at quote time (#94) -- never re-read live from settings,
+    // same reasoning as quoteAmount itself.
+    const depositPct = request.quoteDepositPct;
     const payable = Math.max(1, Math.round((request.quoteAmount * depositPct) / 100));
     const label = depositPct < 100 ? `${depositPct}% deposit` : 'full payment';
 
     // Full request row (token lookup returns the customer-safe subset).
     const full = listDesignRequests({}).find((r) => r.statusToken === token);
     const order = createManualOrder({
-      client: { name: full.name, email: full.email, phone: full.phone },
+      client: { name: full.name, email: full.email, phone: full.phone, ...address },
       items: [{ description: `Custom print (request ${full.id.slice(0, 8)}) — ${label} on quote of R${request.quoteAmount}`, unitPrice: payable, quantity: 1 }],
-      shippingMethod: 'collect',
+      shippingMethod,
+      shippingOptionId,
       paymentMethod: 'payfast_card',
     });
     acceptDesignRequestQuote(token, order.id);
@@ -804,18 +838,21 @@ app.post('/api/design-request-status/accept', publicFormLimiter, async (req, res
 // that linkage stays pointed at the original job, not the repeat.
 app.post('/api/design-request-status/reorder', publicFormLimiter, async (req, res) => {
   try {
-    const token = (req.body || {}).token;
+    const body = req.body || {};
+    const token = body.token;
     const request = getDesignRequestByToken(token);
     if (!request) return res.status(404).json({ error: 'Request not found' });
     if (request.status !== 'finalized' || !request.quoteAmount) {
       return res.status(400).json({ error: 'This request has no recorded price to reorder at' });
     }
+    const { shippingMethod, shippingOptionId, address } = shippingFromBody(body);
 
     const full = listDesignRequests({}).find((r) => r.statusToken === token);
     const order = createManualOrder({
-      client: { name: full.name, email: full.email, phone: full.phone },
+      client: { name: full.name, email: full.email, phone: full.phone, ...address },
       items: [{ description: `Repeat order — Custom print (request ${full.id.slice(0, 8)}) at recorded price`, unitPrice: full.quoteAmount, quantity: 1 }],
-      shippingMethod: 'collect',
+      shippingMethod,
+      shippingOptionId,
       paymentMethod: 'payfast_card',
     });
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, detail: `Design request ${full.id}: repeat order ${order.id} (R${full.quoteAmount}) created via "Order this again"`, ...requestMeta(req) });
@@ -1900,16 +1937,24 @@ app.post(
   },
 );
 
+// #94: quoteStage is derived per row, not stored -- see deriveQuoteStage's
+// own comment for why (Order Paid needs no write-back, it's just read
+// through the linked order's live status).
+function withQuoteStage(request) {
+  const orderStatus = request.quoteOrderId ? getOrder(request.quoteOrderId)?.status : null;
+  return { ...request, quoteStage: deriveQuoteStage(request.quoteStatus, orderStatus) };
+}
+
 app.get('/api/design-requests', requireAuth, (req, res) => {
   // #82: multi-file uploads attached per request for the admin detail view.
-  const designRequests = listDesignRequests({ status: req.query.status }).map((r) => ({ ...r, files: listDesignRequestFiles(r.id) }));
+  const designRequests = listDesignRequests({ status: req.query.status }).map((r) => withQuoteStage({ ...r, files: listDesignRequestFiles(r.id) }));
   res.json({ designRequests });
 });
 
 app.get('/api/design-requests/:id', requireAuth, (req, res) => {
   const request = getDesignRequest(req.params.id);
   if (!request) return res.status(404).json({ error: 'Design request not found' });
-  res.json({ designRequest: request });
+  res.json({ designRequest: withQuoteStage(request) });
 });
 
 app.patch('/api/design-requests/:id', requireAuth, async (req, res) => {
@@ -1924,7 +1969,7 @@ app.patch('/api/design-requests/:id', requireAuth, async (req, res) => {
         logEmailFailure('Design request status email', err, req);
       }
     }
-    res.json({ designRequest: updated });
+    res.json({ designRequest: withQuoteStage(updated) });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -2495,7 +2540,12 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'volumeDiscounts',
     // SITE-056/057 / #90 -- design-file retention window
     'designFileRetentionMonths',
-    'quoteDepositPct',
+    // #94: replaces the old single quoteDepositPct number -- a list of
+    // {id,pct,active} tiers, same admin-editable-list treatment as
+    // inHouseFilamentBrands/carPartBrands below (no extra shape guard
+    // needed for the same reason those don't get one: it's admin-authored
+    // through the UI, not customer input).
+    'quoteDepositOptions',
     // SITE-010
     'printLeadTimeDays', 'filamentDispatchDays',
     // Configurable lists -- inHouseFilamentBrands existed before this (a

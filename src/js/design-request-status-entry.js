@@ -14,6 +14,15 @@ function formatRand(v) {
   return `R ${Number(v).toFixed(2)}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
 // Payfast owns the top-level navigation for its hosted payment page -- both
 // Accept & Pay and Order This Again land here on the same browser-navigated
 // POST the regular checkout uses.
@@ -30,6 +39,47 @@ function submitPayfastRedirect(redirect) {
   }
   document.body.appendChild(form);
   form.submit();
+}
+
+// #94: both Accept & Pay and Order This Again used to hardcode
+// shippingMethod:'collect' server-side -- no real delivery option ever
+// reached a design-request order. This is the one shared shipping picker
+// (see the HTML comment on #drs-shipping) both actions read from at submit
+// time. No weight-matched 'courier' here -- a custom print job has no
+// catalog weight to rate against, same reasoning as the server side.
+function initShipping() {
+  const panel = document.getElementById('drs-shipping');
+  const fixedWrap = document.getElementById('drs-shipping-fixed');
+  const optionSelect = document.getElementById('drs-shipping-option');
+  let fixedOptions = null;
+
+  async function onMethodChange() {
+    const method = panel.querySelector('input[name="drsShippingMethod"]:checked').value;
+    if (method !== 'fixed') return fixedWrap.classList.add('hidden');
+    fixedWrap.classList.remove('hidden');
+    if (fixedOptions) return;
+    try {
+      const res = await fetch('/api/shipping-options/public/fixed');
+      const data = await res.json();
+      fixedOptions = data.shippingOptions || [];
+      optionSelect.innerHTML = fixedOptions.length
+        ? `<option value="">Choose an option…</option>${fixedOptions.map((o) => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.name)} — ${escapeHtml(formatRand(o.price))}</option>`).join('')}`
+        : '<option value="">No delivery options available — choose another method</option>';
+    } catch {
+      optionSelect.innerHTML = '<option value="">Could not load delivery options</option>';
+    }
+  }
+  panel.querySelectorAll('input[name="drsShippingMethod"]').forEach((r) => r.addEventListener('change', onMethodChange));
+
+  return function collectShippingPayload() {
+    const method = panel.querySelector('input[name="drsShippingMethod"]:checked').value;
+    const payload = { shippingMethod: method };
+    if (method === 'fixed') {
+      payload.shippingOptionId = optionSelect.value;
+      for (const field of document.querySelectorAll('#drs-address-fields input')) payload[field.name] = field.value;
+    }
+    return payload;
+  };
 }
 
 async function init() {
@@ -53,13 +103,21 @@ async function init() {
   document.getElementById('drs-service').textContent = request.serviceType === 'design_for_me' ? 'Design & print' : 'Print my model';
   show('drs-found');
 
+  const collectShippingPayload = initShipping();
+  let needsShipping = false;
+
   if (request.quoteStatus === 'quoted' || request.quoteStatus === 'accepted') {
-    document.getElementById('drs-quote-amount').textContent = formatRand(request.quoteAmount || 0);
+    const depositPct = request.quoteDepositPct ?? 100;
+    const payable = Math.max(1, Math.round((request.quoteAmount * depositPct) / 100));
+    document.getElementById('drs-quote-amount').textContent =
+      depositPct < 100 ? `${formatRand(payable)} due now (${depositPct}% of ${formatRand(request.quoteAmount)})` : formatRand(request.quoteAmount);
     document.getElementById('drs-quote-terms').textContent = request.quoteTerms || '';
     show('drs-quote');
     if (request.quoteStatus === 'accepted') {
       hide('drs-accept-wrap');
       show('drs-accepted-note');
+    } else {
+      needsShipping = true;
     }
   }
 
@@ -68,7 +126,10 @@ async function init() {
   if (request.status === 'finalized' && request.quoteAmount) {
     document.getElementById('drs-reorder-amount').textContent = formatRand(request.quoteAmount);
     show('drs-reorder');
+    needsShipping = true;
   }
+
+  if (needsShipping) show('drs-shipping');
 
   document.getElementById('drs-accept')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
@@ -79,7 +140,7 @@ async function init() {
       const res = await fetch('/api/design-request-status/accept', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, ...collectShippingPayload() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Something went wrong');
@@ -102,7 +163,7 @@ async function init() {
       const res = await fetch('/api/design-request-status/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token }),
+        body: JSON.stringify({ token, ...collectShippingPayload() }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Something went wrong');

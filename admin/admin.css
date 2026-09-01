@@ -480,7 +480,7 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 .config-list-active { margin: 0; }
 .config-list-active input { width: auto; margin: 0; }
 .config-list-name { flex: 1; font-size: 0.9rem; }
-.config-list-panel .row-card-actions { justify-content: flex-start; }
+.config-list-panel .row-card-actions, #deposit-tier-panel .row-card-actions { justify-content: flex-start; }
 .config-list-new-input {
   border: 1px solid var(--line);
   background: var(--bg-elevated);
