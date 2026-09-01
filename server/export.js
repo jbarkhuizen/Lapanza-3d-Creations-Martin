@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { listFilaments } from './filaments.js';
+import { listFilaments, colourGalleryPaths } from './filaments.js';
+import { itemGalleryPaths } from './store.js';
 import { getSettings, publicSettings } from './settings.js';
 import { formatRand, formatItemPrice } from './money.js';
 import { itemAnchorId, categoryPagePath, filamentPagePath } from './item-anchor.js';
@@ -101,6 +102,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
       rollLengthM: c.rollLengthM,
       stockQty: c.stockQty,
       imageUrl: c.imagePath || '',
+      images: colourGalleryPaths(c, db),
       listed: c.listed !== false,
     })),
   }));
@@ -124,6 +126,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
           price: item.price,
           sku: item.sku,
           imageUrl: item.imageUrl,
+          images: itemGalleryPaths(item),
           // Car-parts fields (GWM/Landrover) -- sourceUrl deliberately
           // omitted, it's an admin-only reference, not customer-facing.
           creator: item.creator || '',

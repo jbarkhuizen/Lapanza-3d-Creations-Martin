@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { openDb } from './db.js';
-import { createFilament, addColour } from './filaments.js';
+import { createFilament, addColour, addColourImage } from './filaments.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { updateSettings } from './settings.js';
 
@@ -184,6 +184,45 @@ test('syncPublicJson resolves featuredProducts (filament + category) fresh from 
   assert.strictEqual(categoryEntry.price, 'R 150.00');
   assert.strictEqual(categoryEntry.href, 'toys.html#item-uno');
   assert.strictEqual(categoryEntry.image, '/uploads/category-items/uno.jpg');
+
+  Object.values(paths).forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
+  db.close();
+});
+
+test('syncPublicJson carries the photo gallery through for both colours and category items, falling back to the legacy single photo', () => {
+  const db = openDb(':memory:');
+  const f = createFilament({ name: 'PLA', description: 'Standard PLA' }, db);
+  const withColour = addColour(f.id, { name: 'White', sku: 'SKU-GAL', priceRand: 299, weightG: 1000, stockQty: 5 }, db);
+  const colourId = withColour.colours[0].id;
+  addColourImage(colourId, '/uploads/filaments/gallery-1.jpg', db);
+  addColourImage(colourId, '/uploads/filaments/gallery-2.jpg', db);
+
+  const paths = {
+    catalogJsonPath: tmpFile('catalog.json'),
+    filamentsSrc: tmpFile('filaments.json'),
+    categoriesSrc: tmpFile('categories.json'),
+    settingsSrc: tmpFile('settings.json'),
+    settingsPublic: tmpFile('site-settings.json'),
+  };
+  fs.writeFileSync(
+    paths.catalogJsonPath,
+    JSON.stringify({
+      products: [
+        {
+          id: 'p1', kind: 'category', slug: 'toys', name: 'Toys',
+          items: [{ id: 'i1', name: 'Dino', imageUrl: '/uploads/category-items/legacy.jpg', images: ['/uploads/category-items/new-1.jpg'] }],
+        },
+      ],
+    }),
+  );
+
+  syncPublicJson(db, paths);
+
+  const filaments = JSON.parse(fs.readFileSync(paths.filamentsSrc, 'utf8'));
+  assert.deepStrictEqual(filaments[0].colours[0].images, ['/uploads/filaments/gallery-1.jpg', '/uploads/filaments/gallery-2.jpg']);
+
+  const categories = JSON.parse(fs.readFileSync(paths.categoriesSrc, 'utf8'));
+  assert.deepStrictEqual(categories.toys.items[0].images, ['/uploads/category-items/new-1.jpg']);
 
   Object.values(paths).forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
   db.close();
