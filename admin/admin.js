@@ -2643,8 +2643,12 @@ function wireGalleryPanel(kind, ownerId, ownerContext, onUpdated) {
   // convention for other reorderable lists, e.g. the deposit-tier panel).
   let dragSourceIndex = null;
   panel.querySelectorAll('.gallery-thumb').forEach((thumb) => {
-    thumb.addEventListener('dragstart', () => {
+    thumb.addEventListener('dragstart', (e) => {
       dragSourceIndex = Number(thumb.dataset.galleryIndex);
+      // Some browsers (historically Firefox) require at least one
+      // setData() call in dragstart for the drag to actually initiate --
+      // without it, drop can silently never fire.
+      e.dataTransfer.setData('text/plain', thumb.dataset.galleryImageId);
     });
     thumb.addEventListener('dragover', (e) => e.preventDefault());
     thumb.addEventListener('drop', async (e) => {
@@ -2654,7 +2658,12 @@ function wireGalleryPanel(kind, ownerId, ownerContext, onUpdated) {
       const thumbs = [...panel.querySelectorAll('.gallery-thumb')];
       const ids = thumbs.map((t) => t.dataset.galleryImageId);
       const [moved] = ids.splice(dragSourceIndex, 1);
-      ids.splice(targetIndex, 0, moved);
+      // Insert at the target's slot, regardless of drag direction -- without
+      // this adjustment, splice() lands the moved item AFTER the target when
+      // dragging forward but BEFORE it when dragging backward (same "drop
+      // onto this thumb" gesture, opposite result depending on direction).
+      const insertIndex = dragSourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      ids.splice(insertIndex, 0, moved);
       try {
         const res = await api(`${basePath}/reorder`, { method: 'PUT', body: JSON.stringify({ order: ids }) });
         onUpdated(res.images);
