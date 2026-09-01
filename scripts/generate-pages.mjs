@@ -818,6 +818,84 @@ ${footer({ depth: 1 })}`;
   write(file, html);
 }
 
+// #95: one real static page per category/car-parts item, all flattened
+// into one new products/ directory (not nested under each category's own
+// page) -- keeps vite's htmlEntries() registration to the single line
+// added in Task 9 Step 1, regardless of how many categories exist.
+function itemDetailSlug(categorySlug, item, index) {
+  const namePart = String(item.name || `item-${index}`).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const skuPart = item.sku ? `-${String(item.sku).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}` : `-${index}`;
+  return `${categorySlug}-${namePart}${skuPart}`;
+}
+
+function generateItemDetailPage(categorySlug, categoryName, item, index) {
+  const file = `products/${itemDetailSlug(categorySlug, item, index)}.html`;
+  const pagePath = file;
+  const images = item.images && item.images.length ? item.images : (item.imageUrl ? [item.imageUrl] : []);
+  const priceNum = parsePrice(item.price) || 0;
+  const canAddToCart = item.price && item.available !== false && Number(item.stockQty) > 0;
+  const meta = [item.material, item.size, item.finish].filter(Boolean).join(' · ');
+  const fitment = [item.creator ? `Design: ${item.creator}` : '', item.models?.length ? `Fits: ${item.models.join(', ')}` : ''].filter(Boolean).join(' · ');
+  const title = `${item.name} — ${categoryName} — Lapanza 3D Creative Lab`;
+  const description = (item.details || `${item.name}, printed to order.`).slice(0, 300);
+
+  const html = `${head({
+    // Unlike filament/category copy (owner-controlled, no raw quotes seen so
+    // far), item.details is free-form admin text and can contain a literal
+    // " (e.g. a quoted testimonial) -- escapeAttr keeps head()'s
+    // content="..." meta/og attributes from breaking the HTML parse.
+    title: escapeAttr(title),
+    description: escapeAttr(description),
+    depth: 1,
+    pagePath,
+    jsonLd: [
+      breadcrumbJsonLd(`Home / ${categoryName} / ${item.name}`, pagePath),
+      productDetailJsonLd({
+        name: item.name,
+        images,
+        sku: item.sku,
+        price: priceNum,
+        inStock: Number(item.stockQty) > 0,
+        url: `${SITE_ORIGIN}/${pagePath}`,
+      }),
+    ].filter(Boolean),
+  })}
+${shellStart({ depth: 1 })}
+    <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
+      <div class="mx-auto w-full max-w-5xl">
+      <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
+        <a href="../index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span>
+        <span class="text-espresso/70">${categoryName}</span> <span class="mx-1.5 opacity-40">/</span>
+        <span class="text-espresso/70">${item.name}</span>
+      </nav>
+      <div class="mb-6">${backToHomeButton({ depth: 1 })}</div>
+      <div class="grid md:grid-cols-2 gap-10">
+        <div>${productGalleryHtml({ images, alt: item.name, mode: 'full' })}</div>
+        <div>
+          <p class="eyebrow mb-2">${categoryName}</p>
+          <h1 class="font-serif text-3xl md:text-4xl tracking-[-0.03em] mb-3">${item.name}</h1>
+          ${item.price ? `<p class="text-2xl font-semibold text-terracotta mb-4">${formatItemPrice(item.price)}</p>` : ''}
+          <p class="text-espresso/70 leading-relaxed mb-4">${item.details || 'Custom printed to order.'}</p>
+          ${meta ? `<p class="text-espresso/50 text-sm mb-2">${meta}</p>` : ''}
+          ${fitment ? `<p class="text-espresso/50 text-sm mb-6">${fitment}</p>` : ''}
+          ${fulfilmentLabel(item)}
+          <a href="${SITE.whatsapp}" class="block text-sm font-semibold text-terracotta hover:underline mb-4" target="_blank" rel="noopener noreferrer">Enquire</a>
+          ${canAddToCart ? addToCartButton({
+            productId: `category:${categorySlug}:${item.sku || index}`,
+            name: item.name,
+            price: item.price,
+            image: images[0] || '',
+            weight: item.shippingWeight ?? item.weight,
+          }) : ''}
+        </div>
+      </div>
+      <div class="mt-14 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth: 1 })}</div>
+      </div>
+    </main>
+${footer({ depth: 1 })}`;
+  write(file, html);
+}
+
 function generateCategoryPage({ file, depth, pagePath, crumbs, name, description, kind, items, slug }) {
   const crumbHtml = crumbs
     .split(' / ')
@@ -1027,6 +1105,7 @@ for (const page of categoryPages) {
     items: category.items,
     slug: page.slug,
   });
+  (category.items || []).filter((item) => item.listed !== false).forEach((item, i) => generateItemDetailPage(page.slug, page.name || category.name, item, i));
 }
 
 // Sidecar file so callers that spawn this script (e.g. POST /api/publish)

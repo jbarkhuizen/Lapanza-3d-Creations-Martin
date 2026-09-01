@@ -30,7 +30,7 @@ function htmlEntries() {
     returns: resolve(__dirname, 'returns.html'),
   };
 
-  for (const dir of ['filament', 'car-parts']) {
+  for (const dir of ['filament', 'car-parts', 'products']) {
     const abs = resolve(__dirname, dir);
     if (!existsSync(abs)) continue;
     for (const file of readdirSync(abs).filter((f) => f.endsWith('.html'))) {
