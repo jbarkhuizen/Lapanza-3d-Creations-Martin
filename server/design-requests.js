@@ -1,5 +1,6 @@
 import { randomUUID, randomBytes } from 'crypto';
 import { getDb } from './db.js';
+import { findOrCreateClientForCheckout, getClient } from './clients.js';
 
 const VALID_STATUSES = ['new', 'in_progress', 'finalized'];
 
@@ -61,47 +62,66 @@ export function createDesignRequest(data, db = getDb()) {
   if (!data.description || !String(data.description).trim()) throw new Error('Description is required');
   const id = randomUUID();
   const now = new Date().toISOString();
-  db.prepare(
-    `INSERT INTO design_requests (id, client_id, name, email, phone, description, budget_note,
-       service_type, intended_use, dimensions, quantity, material_pref, colour_pref, finish_pref, urgency, delivery_pref, status_token,
-       reference_image_path, reference_image_original_name, reference_file_path, reference_file_original_name, status, admin_notes, created_at, updated_at)
-     VALUES (@id, @client_id, @name, @email, @phone, @description, @budget_note,
-       @service_type, @intended_use, @dimensions, @quantity, @material_pref, @colour_pref, @finish_pref, @urgency, @delivery_pref, @status_token,
-       @reference_image_path, @reference_image_original_name, @reference_file_path, @reference_file_original_name, 'new', '', @created_at, @updated_at)`,
-  ).run({
-    id,
-    client_id: data.clientId || null,
-    name: data.name || '',
-    email: String(data.email).trim(),
-    phone: data.phone || '',
-    description: String(data.description).trim(),
-    budget_note: data.budgetNote || '',
-    service_type: data.serviceType === 'design_for_me' ? 'design_for_me' : 'print_my_model',
-    intended_use: String(data.intendedUse || '').slice(0, 300),
-    dimensions: String(data.dimensions || '').slice(0, 200),
-    quantity: Math.max(1, Math.round(Number(data.quantity) || 1)),
-    material_pref: String(data.materialPref || '').slice(0, 100),
-    colour_pref: String(data.colourPref || '').slice(0, 100),
-    finish_pref: String(data.finishPref || '').slice(0, 100),
-    urgency: String(data.urgency || '').slice(0, 100),
-    delivery_pref: String(data.deliveryPref || '').slice(0, 100),
-    status_token: randomBytes(24).toString('hex'),
-    reference_image_path: data.referenceImagePath || null,
-    reference_image_original_name: data.referenceImageOriginalName || null,
-    reference_file_path: data.referenceFilePath || null,
-    reference_file_original_name: data.referenceFileOriginalName || null,
-    created_at: now,
-    updated_at: now,
+  // Same client-resolution shape as orders.js's checkout path: a valid
+  // session wins outright, otherwise find-or-create a guest client by email
+  // -- so a design request always has a client behind it, letting the
+  // caller offer the same post-submit "create an account" upgrade checkout
+  // already offers post-purchase. Wrapped in one transaction alongside the
+  // insert for the same reason findOrCreateClientForCheckout's own doc
+  // comment gives: its code-generation SELECT MAX + INSERT can't race with
+  // a concurrent request picking the same next client_code.
+  const tx = db.transaction(() => {
+    const client = (data.clientId && getClient(data.clientId, db))
+      || findOrCreateClientForCheckout({ name: data.name, email: data.email, phone: data.phone }, db);
+    db.prepare(
+      `INSERT INTO design_requests (id, client_id, name, email, phone, description, budget_note,
+         service_type, intended_use, dimensions, quantity, material_pref, colour_pref, finish_pref, urgency, delivery_pref, status_token,
+         reference_image_path, reference_image_original_name, reference_file_path, reference_file_original_name, status, admin_notes, created_at, updated_at)
+       VALUES (@id, @client_id, @name, @email, @phone, @description, @budget_note,
+         @service_type, @intended_use, @dimensions, @quantity, @material_pref, @colour_pref, @finish_pref, @urgency, @delivery_pref, @status_token,
+         @reference_image_path, @reference_image_original_name, @reference_file_path, @reference_file_original_name, 'new', '', @created_at, @updated_at)`,
+    ).run({
+      id,
+      client_id: client.id,
+      name: data.name || '',
+      email: String(data.email).trim(),
+      phone: data.phone || '',
+      description: String(data.description).trim(),
+      budget_note: data.budgetNote || '',
+      service_type: data.serviceType === 'design_for_me' ? 'design_for_me' : 'print_my_model',
+      intended_use: String(data.intendedUse || '').slice(0, 300),
+      dimensions: String(data.dimensions || '').slice(0, 200),
+      quantity: Math.max(1, Math.round(Number(data.quantity) || 1)),
+      material_pref: String(data.materialPref || '').slice(0, 100),
+      colour_pref: String(data.colourPref || '').slice(0, 100),
+      finish_pref: String(data.finishPref || '').slice(0, 100),
+      urgency: String(data.urgency || '').slice(0, 100),
+      delivery_pref: String(data.deliveryPref || '').slice(0, 100),
+      status_token: randomBytes(24).toString('hex'),
+      reference_image_path: data.referenceImagePath || null,
+      reference_image_original_name: data.referenceImageOriginalName || null,
+      reference_file_path: data.referenceFilePath || null,
+      reference_file_original_name: data.referenceFileOriginalName || null,
+      created_at: now,
+      updated_at: now,
+    });
+    // #82: multi-file uploads land in the child table (legacy two-column
+    // storage stays readable for pre-existing rows).
+    const insertFile = db.prepare(
+      'INSERT INTO design_request_files (id, design_request_id, kind, file_path, original_name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    for (const f of Array.isArray(data.files) ? data.files : []) {
+      insertFile.run(randomUUID(), id, f.kind === 'image' ? 'image' : 'file', f.filePath, f.originalName || '', now);
+    }
+    return client;
   });
-  // #82: multi-file uploads land in the child table (legacy two-column
-  // storage stays readable for pre-existing rows).
-  const insertFile = db.prepare(
-    'INSERT INTO design_request_files (id, design_request_id, kind, file_path, original_name, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-  );
-  for (const f of Array.isArray(data.files) ? data.files : []) {
-    insertFile.run(randomUUID(), id, f.kind === 'image' ? 'image' : 'file', f.filePath, f.originalName || '', now);
-  }
-  return getDesignRequest(id, db);
+  const client = tx();
+  const result = getDesignRequest(id, db);
+  // Transient, non-persisted -- same convention as orders.js's order._lowStock
+  // / order._clientDataUpdated -- lets the route build a client.hasAccount
+  // response without a second query.
+  result._clientHasAccount = client.hasAccount;
+  return result;
 }
 
 export function listDesignRequestFiles(designRequestId, db = getDb()) {

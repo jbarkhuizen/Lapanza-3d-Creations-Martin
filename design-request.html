@@ -110,7 +110,7 @@
                 <span class="block mb-1.5 text-espresso/70">Material Preference</span>
                 <select name="materialPref" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent">
                   <option value="">Recommend for me</option>
-                  <option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option><option>TPU (flexible)</option><option>CPE</option>
+                  <option>PLA</option><option>PETG</option><option>ABS</option><option>ASA</option>
                 </select>
               </label>
               <label class="block text-sm">
@@ -131,17 +131,21 @@
                 <span class="block mb-1.5 text-espresso/70">How Urgent?</span>
                 <select name="urgency" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent">
                   <option value="">No rush</option>
-                  <option>Within 2 weeks</option>
-                  <option>Within a week</option>
-                  <option>ASAP — tell me what's possible</option>
+                  <option>Urgent (1 day)</option>
+                  <option>3 days</option>
+                  <option>1 week</option>
+                  <option>2 weeks</option>
+                  <option>1 month</option>
                 </select>
               </label>
               <label class="block text-sm">
                 <span class="block mb-1.5 text-espresso/70">Delivery / Collection</span>
                 <select name="deliveryPref" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent">
                   <option value="">Decide later</option>
-                  <option>Collect (Centurion)</option>
                   <option>PUDO Locker</option>
+                  <option>Our shipping (courier)</option>
+                  <option>I'll arrange my own courier</option>
+                  <option>Collect from store</option>
                   <option>Local Delivery</option>
                 </select>
               </label>
@@ -208,6 +212,10 @@
           <button type="submit" id="dr-review-btn" class="w-full sm:w-auto text-base font-bold uppercase tracking-[0.12em] bg-terracotta text-cream rounded-full px-8 py-4 ring-4 ring-terracotta/20 hover:bg-charcoal transition-colors">Review &amp; send</button>
           <p id="design-request-note" class="text-sm text-espresso/70" role="status"></p>
         </form>
+        <!-- Populated by design-request-entry.js after a successful submit,
+             when the submitter has no client account yet (mirrors checkout's
+             post-purchase "create an account" opt-in). -->
+        <div id="dr-account-panel"></div>
       </div>
     </main>
   </div>

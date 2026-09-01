@@ -1,5 +1,54 @@
 import './site.js';
 
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+// Offered only after the request has actually been sent, same reasoning as
+// checkout's post-purchase opt-in (src/js/checkout-entry.js): never adds
+// friction to submitting, and is skipped outright when the submitter
+// already has an account (data.client.hasAccount from the submit response).
+// The single `name` field this form collects is split into first/last word
+// to match /api/client/register's signature.
+function accountPanelHtml() {
+  return `<div class="border-t border-charcoal/10 pt-4 mt-4">
+    <p class="text-sm font-semibold mb-2">Create an account to track this request</p>
+    <form id="dr-account-form" class="flex flex-wrap gap-2 items-start">
+      <input name="password" type="password" minlength="8" placeholder="Password (8+ characters)" class="border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent text-sm flex-1 min-w-[200px]" />
+      <button type="submit" class="text-sm font-semibold bg-charcoal text-cream rounded-full px-4 py-2 hover:bg-terracotta transition-colors">Create account</button>
+    </form>
+    <p id="dr-account-note" class="text-sm text-espresso/70 mt-1"></p>
+  </div>`;
+}
+
+function wireAccountPanel(panel, { name, email }) {
+  const [firstName, ...rest] = String(name || '').trim().split(/\s+/);
+  const lastName = rest.join(' ');
+  const form = panel.querySelector('#dr-account-form');
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const note = panel.querySelector('#dr-account-note');
+    const password = new FormData(form).get('password');
+    try {
+      const { message } = await api('/api/client/register', {
+        method: 'POST',
+        body: JSON.stringify({ firstName, lastName, email, password }),
+      });
+      note.textContent = message || 'Account created — check your email to verify it.';
+      form.classList.add('hidden');
+    } catch (err) {
+      note.textContent = err.message;
+    }
+  });
+}
+
 // Native file inputs give no clear feedback once picked -- pairs each hidden
 // `data-file-input` with a styled trigger, a name display, and a clear
 // button. Phase-5 #82: inputs are `multiple` now; the display shows the
@@ -157,8 +206,9 @@ async function init() {
     const confirmBtn = document.getElementById('dr-confirm');
     confirmBtn.disabled = true;
     progressWrap.classList.remove('hidden');
+    const submittedFormData = new FormData(form);
     try {
-      await uploadWithProgress(new FormData(form), (pct) => {
+      const data = await uploadWithProgress(submittedFormData, (pct) => {
         progressBar.style.width = `${pct}%`;
         progressText.textContent = pct < 100 ? `Uploading… ${pct}%` : 'Processing…';
       });
@@ -166,6 +216,11 @@ async function init() {
       try {
         document.dispatchEvent(new CustomEvent('lapanza:track', { detail: { eventType: 'quote_submit' } }));
       } catch { /* tracking must never break the form */ }
+      if (data.client && !data.client.hasAccount) {
+        const panel = document.getElementById('dr-account-panel');
+        panel.innerHTML = accountPanelHtml();
+        wireAccountPanel(panel, { name: submittedFormData.get('name'), email: submittedFormData.get('email') });
+      }
       form.reset();
       form.querySelectorAll('[data-file-input]').forEach((i) => i.dispatchEvent(new Event('change')));
       review.classList.add('hidden');

@@ -2032,7 +2032,11 @@ app.post(
       const clientSession = clientToken && clientSessions.get(clientToken);
       const clientId = clientSession && Date.now() - clientSession.createdAt < SESSION_TTL_MS ? clientSession.clientId : null;
       const request = createDesignRequest({ ...(req.body || {}), files, clientId });
-      res.status(201).json({ ok: true, designRequest: { id: request.id, statusToken: request.statusToken } });
+      res.status(201).json({
+        ok: true,
+        designRequest: { id: request.id, statusToken: request.statusToken },
+        client: { hasAccount: request._clientHasAccount },
+      });
       // #86: acknowledgement email with the tokenized status link -- the
       // guest's way back to their request; account holders also see it on
       // the account page.

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, pruneExpiredDesignFiles, setDesignRequestQuote, acceptDesignRequestQuote, listDesignRequestFiles, getDesignRequestByToken, deriveQuoteStage } from './design-requests.js';
+import { getClient, registerClient } from './clients.js';
 
 function basePayload(overrides = {}) {
   return { email: 'customer@example.com', name: 'Customer', phone: '0821234567', description: 'A custom bracket for my car', ...overrides };
@@ -16,6 +17,42 @@ test('createDesignRequest defaults status to new and requires name + email + pho
   assert.throws(() => createDesignRequest(basePayload({ email: '' }), db), /Email is required/);
   assert.throws(() => createDesignRequest(basePayload({ phone: '' }), db), /Phone is required/);
   assert.throws(() => createDesignRequest(basePayload({ description: '' }), db), /Description is required/);
+  db.close();
+});
+
+test('createDesignRequest finds-or-creates a guest client for a submitter with no session, and reports hasAccount:false', () => {
+  const db = openDb(':memory:');
+  const request = createDesignRequest(basePayload({ email: 'guest@example.com' }), db);
+  assert.ok(request.clientId);
+  const client = getClient(request.clientId, db);
+  assert.strictEqual(client.email.toLowerCase(), 'guest@example.com');
+  assert.strictEqual(client.hasAccount, false);
+  assert.strictEqual(request._clientHasAccount, false);
+  db.close();
+});
+
+test('createDesignRequest reuses the same guest client across repeat submissions from the same email', () => {
+  const db = openDb(':memory:');
+  const first = createDesignRequest(basePayload({ email: 'repeat@example.com' }), db);
+  const second = createDesignRequest(basePayload({ email: 'repeat@example.com', description: 'A second request' }), db);
+  assert.strictEqual(first.clientId, second.clientId);
+  db.close();
+});
+
+test('createDesignRequest attaches an existing logged-in session client and reports hasAccount:true', () => {
+  const db = openDb(':memory:');
+  const { client } = registerClient({ firstName: 'Real', lastName: 'Customer', email: 'real@example.com', password: 'correcthorsebattery' }, db);
+  const request = createDesignRequest(basePayload({ email: 'real@example.com', clientId: client.id }), db);
+  assert.strictEqual(request.clientId, client.id);
+  assert.strictEqual(request._clientHasAccount, true);
+  db.close();
+});
+
+test('createDesignRequest falls back to find-or-create when a stale/invalid clientId is passed', () => {
+  const db = openDb(':memory:');
+  const request = createDesignRequest(basePayload({ email: 'stale-session@example.com', clientId: 'nonexistent-id' }), db);
+  assert.ok(request.clientId);
+  assert.notStrictEqual(request.clientId, 'nonexistent-id');
   db.close();
 });
 

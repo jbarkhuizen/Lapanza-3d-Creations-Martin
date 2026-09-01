@@ -1596,6 +1596,32 @@ test('"Order this again" books a fresh order at the recorded quote price without
   assert.strictEqual(missingToken.status, 404);
 });
 
+test('POST /api/design-requests reports client.hasAccount:false for a guest, offering the same post-submit account prompt checkout offers post-purchase', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  const submit = await request(app).post('/api/design-requests').send({
+    name: 'Guest Gwen', email: 'gwen@example.com', phone: '0821234567', description: 'A phone stand',
+  });
+  assert.strictEqual(submit.status, 201);
+  assert.strictEqual(submit.body.client.hasAccount, false);
+});
+
+test('POST /api/design-requests reports client.hasAccount:true for an already-logged-in submitter', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+  const { cookie: clientCookie } = await loggedInClientCookie(app, adminCookie, 'loggedin-designrequest@example.com');
+
+  const submit = await request(app)
+    .post('/api/design-requests')
+    .set('Cookie', clientCookie)
+    .send({ name: 'Test Client', email: 'loggedin-designrequest@example.com', phone: '0821234567', description: 'A bracket' });
+  assert.strictEqual(submit.status, 201);
+  assert.strictEqual(submit.body.client.hasAccount, true);
+});
+
 test('PUT quote/:id rejects a depositPct that is not one of the active configured tiers (#94)', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
