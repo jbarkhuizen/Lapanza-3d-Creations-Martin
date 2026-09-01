@@ -1549,3 +1549,43 @@ test('buy-again re-resolves own past orders at current prices; foreign orders 40
   const foreign = await request(app).get(`/api/client/orders/${orderId}/buy-again`).set('Cookie', other.cookie);
   assert.strictEqual(foreign.status, 404);
 });
+
+test('"Order this again" books a fresh order at the recorded quote price without touching the original quote link (#93)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const submit = await request(app).post('/api/design-requests').send({
+    name: 'Repeat Rita', email: 'rita@example.com', phone: '0821234567', description: 'A custom car-part bracket',
+  });
+  const { id, statusToken } = submit.body.designRequest;
+
+  await request(app).put(`/api/design-requests/${id}/quote`).set('Cookie', adminCookie).send({ amount: 850, terms: 'Same design, next batch' });
+
+  // Not reorderable yet -- only quoted, not finalized.
+  const early = await request(app).post('/api/design-request-status/reorder').send({ token: statusToken });
+  assert.strictEqual(early.status, 400);
+
+  await request(app).post('/api/design-request-status/accept').send({ token: statusToken });
+  await request(app).patch(`/api/design-requests/${id}`).set('Cookie', adminCookie).send({ status: 'finalized' });
+
+  const reorder = await request(app).post('/api/design-request-status/reorder').send({ token: statusToken });
+  assert.strictEqual(reorder.status, 200);
+  assert.strictEqual(reorder.body.ok, true);
+  assert.strictEqual(reorder.body.redirect.actionUrl.includes('payfast.co.za'), true);
+
+  // Full recorded price, not the 50%-default deposit accept() would have taken.
+  const orders = await request(app).get('/api/orders').set('Cookie', adminCookie);
+  const repeatOrder = orders.body.orders.find((o) => o.total === 850 && o.id !== undefined);
+  assert.ok(repeatOrder, 'expected a second order at the full R850 quote price');
+
+  // The original request's quote/order link stays on the FIRST (deposit) order.
+  const detail = await request(app).get(`/api/design-requests/${id}`).set('Cookie', adminCookie);
+  assert.strictEqual(detail.body.designRequest.quoteStatus, 'accepted');
+  assert.notStrictEqual(detail.body.designRequest.quoteOrderId, repeatOrder.id);
+
+  const missingToken = await request(app).post('/api/design-request-status/reorder').send({ token: 'not-a-real-token' });
+  assert.strictEqual(missingToken.status, 404);
+});

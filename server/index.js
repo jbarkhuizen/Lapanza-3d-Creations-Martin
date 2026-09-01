@@ -779,12 +779,45 @@ app.post('/api/design-request-status/accept', publicFormLimiter, async (req, res
     const full = listDesignRequests({}).find((r) => r.statusToken === token);
     const order = createManualOrder({
       client: { name: full.name, email: full.email, phone: full.phone },
-      items: [{ name: `Custom print (request ${full.id.slice(0, 8)}) — ${label} on quote of R${request.quoteAmount}`, price: payable, quantity: 1 }],
+      items: [{ description: `Custom print (request ${full.id.slice(0, 8)}) — ${label} on quote of R${request.quoteAmount}`, unitPrice: payable, quantity: 1 }],
       shippingMethod: 'collect',
       paymentMethod: 'payfast_card',
     });
     acceptDesignRequestQuote(token, order.id);
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, detail: `Design request ${full.id}: quote R${request.quoteAmount} accepted by customer; ${label} order ${order.id} (R${payable}) created`, ...requestMeta(req) });
+
+    const requestOrigin = `${req.protocol}://${req.get('host')}`;
+    const siteUrl = process.env.SITE_URL || requestOrigin;
+    const apiUrl = process.env.API_URL || requestOrigin;
+    const payfast = buildPayfastRedirect({ order, siteUrl, apiUrl, paymentMethod: 'payfast_card' });
+    res.json({ ok: true, redirect: payfast });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// #93 (SITE-059): "Order this again" on a FINALIZED request -- the print is
+// already proven and priced, so this books a fresh order at the recorded
+// quoteAmount in full (unlike accept above, which may only take a deposit)
+// and never touches the original request's quote_status/quote_order_id --
+// that linkage stays pointed at the original job, not the repeat.
+app.post('/api/design-request-status/reorder', publicFormLimiter, async (req, res) => {
+  try {
+    const token = (req.body || {}).token;
+    const request = getDesignRequestByToken(token);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'finalized' || !request.quoteAmount) {
+      return res.status(400).json({ error: 'This request has no recorded price to reorder at' });
+    }
+
+    const full = listDesignRequests({}).find((r) => r.statusToken === token);
+    const order = createManualOrder({
+      client: { name: full.name, email: full.email, phone: full.phone },
+      items: [{ description: `Repeat order — Custom print (request ${full.id.slice(0, 8)}) at recorded price`, unitPrice: full.quoteAmount, quantity: 1 }],
+      shippingMethod: 'collect',
+      paymentMethod: 'payfast_card',
+    });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, detail: `Design request ${full.id}: repeat order ${order.id} (R${full.quoteAmount}) created via "Order this again"`, ...requestMeta(req) });
 
     const requestOrigin = `${req.protocol}://${req.get('host')}`;
     const siteUrl = process.env.SITE_URL || requestOrigin;

@@ -14,6 +14,24 @@ function formatRand(v) {
   return `R ${Number(v).toFixed(2)}`;
 }
 
+// Payfast owns the top-level navigation for its hosted payment page -- both
+// Accept & Pay and Order This Again land here on the same browser-navigated
+// POST the regular checkout uses.
+function submitPayfastRedirect(redirect) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = redirect.actionUrl;
+  for (const [name, value] of redirect.fields) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = name;
+    input.value = value;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}
+
 async function init() {
   const token = new URLSearchParams(location.search).get('token');
   const show = (id) => document.getElementById(id).classList.remove('hidden');
@@ -45,6 +63,13 @@ async function init() {
     }
   }
 
+  // #93: repeat orders only make sense once the job is actually finished
+  // and there's a recorded price to reorder at.
+  if (request.status === 'finalized' && request.quoteAmount) {
+    document.getElementById('drs-reorder-amount').textContent = formatRand(request.quoteAmount);
+    show('drs-reorder');
+  }
+
   document.getElementById('drs-accept')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
@@ -58,25 +83,30 @@ async function init() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Something went wrong');
-      if (data.redirect) {
-        // Same browser-navigated POST the checkout uses -- Payfast owns the
-        // top-level navigation for its hosted payment page.
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = data.redirect.actionUrl;
-        for (const [name, value] of data.redirect.fields) {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = name;
-          input.value = value;
-          form.appendChild(input);
-        }
-        document.body.appendChild(form);
-        form.submit();
-        return;
-      }
+      if (data.redirect) return submitPayfastRedirect(data.redirect);
       hide('drs-accept-wrap');
       show('drs-accepted-note');
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('drs-reorder-btn')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    const errEl = document.getElementById('drs-reorder-error');
+    errEl.classList.add('hidden');
+    try {
+      const res = await fetch('/api/design-request-status/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Something went wrong');
+      if (data.redirect) return submitPayfastRedirect(data.redirect);
     } catch (err) {
       errEl.textContent = err.message;
       errEl.classList.remove('hidden');
