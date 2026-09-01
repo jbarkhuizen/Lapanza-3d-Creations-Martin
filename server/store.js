@@ -116,7 +116,7 @@ export function reorderItemImages(productId, itemId, orderedPaths, db = getDb())
   const item = (product.items || []).find((i) => i.id === itemId);
   if (!item) return null;
   const existing = item.images || [];
-  const valid = Array.isArray(orderedPaths) && orderedPaths.length === existing.length && orderedPaths.every((p) => existing.includes(p));
+  const valid = Array.isArray(orderedPaths) && orderedPaths.length === existing.length && new Set(orderedPaths).size === existing.length && orderedPaths.every((p) => existing.includes(p));
   if (!valid) throw new Error('Reorder list must contain exactly the existing image paths');
   item.images = orderedPaths;
   upsertProduct(product, db);

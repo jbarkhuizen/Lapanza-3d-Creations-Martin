@@ -132,3 +132,28 @@ test('reorderItemImages rejects a mismatched path list', async (t) => {
 
   assert.throws(() => reorderItemImages('p1', 'i1', ['/uploads/category-items/a.jpg']), /exactly the existing image paths/);
 });
+
+test('reorderItemImages rejects duplicate paths in the reorder list', async (t) => {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'store-test-'));
+  const originalCwd = process.cwd();
+  fs.mkdirSync(path.join(tmpRoot, 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'src', 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'public'), { recursive: true });
+  process.chdir(tmpRoot);
+
+  t.after(() => {
+    closeAllCachedDbs();
+    process.chdir(originalCwd);
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  const { upsertProduct, addItemImage, reorderItemImages } = await import(`./store.js?t=${Date.now()}`);
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', items: [{ id: 'i1', name: 'Dino' }] });
+  addItemImage('p1', 'i1', '/uploads/category-items/a.jpg');
+  addItemImage('p1', 'i1', '/uploads/category-items/b.jpg');
+  addItemImage('p1', 'i1', '/uploads/category-items/c.jpg');
+  addItemImage('p1', 'i1', '/uploads/category-items/d.jpg');
+  addItemImage('p1', 'i1', '/uploads/category-items/e.jpg');
+
+  assert.throws(() => reorderItemImages('p1', 'i1', ['/uploads/category-items/a.jpg', '/uploads/category-items/a.jpg', '/uploads/category-items/a.jpg', '/uploads/category-items/a.jpg', '/uploads/category-items/a.jpg']), /exactly the existing image paths/);
+});
