@@ -146,6 +146,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-testimonials'), route === 'testimonials');
   show($('#view-design-requests'), route === 'design-requests');
   show($('#view-newsletter'), route === 'newsletter');
+  show($('#view-potential-market'), route === 'potential-market');
   show($('#view-whatsapp-updates'), route === 'whatsapp-updates');
   show($('#view-invoice-history'), route === 'invoice-history');
   show($('#view-new-order'), route === 'new-order');
@@ -176,6 +177,7 @@ function setRoute(route, { id } = {}) {
     testimonials: ['Client Side', 'Testimonials'],
     'design-requests': ['Client Side', 'Design requests'],
     newsletter: ['Client Side', 'Newsletter'],
+    'potential-market': ['Client Side', 'Potential Market'],
     'whatsapp-updates': ['Client Side', 'WhatsApp Updates'],
     'invoice-history': ['Client Side', 'Invoice History'],
     'new-order': ['Client Side', 'New order'],
@@ -470,6 +472,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'newsletter') {
         setRoute('newsletter');
         await renderNewsletterCampaigns();
+      } else if (btn.dataset.route === 'potential-market') {
+        setRoute('potential-market');
+        await renderPotentialMarket();
       } else if (btn.dataset.route === 'whatsapp-updates') {
         setRoute('whatsapp-updates');
         await renderWhatsAppCampaigns();
@@ -2454,7 +2459,6 @@ async function renderAuditLog() {
 function operationalAlertsPanel(s) {
   return `
     <div class="panel stack gap-3">
-      <div class="section-head"><h3>Operational Alerts</h3></div>
       <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Automatic alerts for system problems (backup, payment, checkout failures) -- distinct from the customer/owner business-event emails above. Email alerts go to the "Order &amp; Design-request Notification Email" set above under Invoicing &amp; Bank Details.</p>
 
       <label class="field checkbox"><input type="checkbox" data-setting="alertBackupFailureEnabled" ${s.alertBackupFailureEnabled ? 'checked' : ''} /><span>Email me if a scheduled backup (local or offsite sync) fails</span></label>
@@ -2524,7 +2528,6 @@ function communicationsPanel(templates) {
   }).join('');
   return `
     <div class="panel stack gap-3">
-      <div class="section-head"><h3>Communications</h3></div>
       <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Subject and message copy for every automated email. Structural parts (buttons, links, order details, the reset-link expiry notice) always stay in place — only the wording here is editable, so a save here can't drop a link or a security notice.</p>
       ${rows}
     </div>`;
@@ -2556,7 +2559,6 @@ function configurableListPanel(key, label, items, helpText = '') {
     .join('');
   return `
     <div class="panel stack gap-3 config-list-panel" data-list-key="${escapeAttr(key)}">
-      <div class="section-head"><h3>${escapeHtml(label)}</h3></div>
       ${helpText ? `<p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">${helpText}</p>` : ''}
       <div class="config-list">${rows || '<p class="muted" style="margin:0">No items yet.</p>'}</div>
       <div class="row-card-actions">
@@ -2750,7 +2752,6 @@ function depositTierPanel(items) {
     .join('');
   return `
     <div class="panel stack gap-3" id="deposit-tier-panel">
-      <div class="section-head"><h3>Quote Deposit Tiers</h3></div>
       <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">The deposit percentages an admin can offer when quoting a design request (100 = full payment). Picked per quote, not sitewide — retiring a tier here only stops it appearing on NEW quotes; requests already quoted under it are unaffected.</p>
       <div class="config-list">${rows || '<p class="muted" style="margin:0">No tiers yet.</p>'}</div>
       <div class="row-card-actions">
@@ -2829,7 +2830,6 @@ function featuredProductsPanel(items) {
   const activeCount = list.filter((e) => e.active !== false).length;
   return `
     <div class="panel stack gap-3" id="featured-products-panel">
-      <div class="section-head"><h3>Featured Products (Homepage)</h3></div>
       <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Pick 4–6 products to feature on the homepage. Name and price are pulled live from the catalog on every publish, so a price change here never goes stale on the homepage.</p>
       <input type="text" id="featured-search-input" placeholder="Search products by name or SKU… (Enter to search)" value="${escapeAttr(search.query)}" />
       ${matchesHtml ? `<div class="config-list">${matchesHtml}</div>` : ''}
@@ -2893,7 +2893,88 @@ function wireFeaturedProductsPanel() {
   });
 }
 
+// Every settings section, in render order -- drives both the jump-link
+// menu and the collapsible <details> wrapper each section renders inside.
+// Same collapsible pattern as Stock Management/Product Catalog
+// (STOCK_GROUP_DEFS/CATALOG_GROUP_DEFS), reused here so all three admin
+// list-shaped pages behave consistently.
+const SETTINGS_SECTIONS = [
+  { key: 'typography', label: 'Typography' },
+  { key: 'appearance', label: 'Appearance' },
+  { key: 'homepage-tiles', label: 'Homepage Tiles' },
+  { key: 'admin-accounts', label: 'Admin Accounts' },
+  { key: 'public-contact', label: 'Public Site Contact' },
+  { key: 'storefront-delivery', label: 'Storefront Stock & Delivery' },
+  { key: 'invoicing', label: 'Invoicing & Bank Details' },
+  { key: 'communications', label: 'Communications' },
+  { key: 'operational-alerts', label: 'Operational Alerts' },
+  { key: 'filament-brands', label: 'In-house Filament Brands' },
+  { key: 'todo-categories', label: 'Todo Categories' },
+  { key: 'todo-priorities', label: 'Todo Priorities' },
+  { key: 'car-part-brands', label: 'Car-part Brands' },
+  { key: 'car-part-models-landrover', label: 'Landrover Part Models' },
+  { key: 'car-part-models-gwm', label: 'GWM Part Models' },
+  { key: 'deposit-tiers', label: 'Quote Deposit Tiers' },
+  { key: 'featured-products', label: 'Featured Products' },
+  { key: 'print-costing', label: 'Print Job Costing Rates' },
+];
+
+function settingsSectionWrap(key, label, innerHtml) {
+  const open = !state.settingsCollapsed.has(key);
+  return `
+    <details class="stock-section" data-group="${escapeAttr(key)}" id="settings-section-${escapeAttr(key)}" data-initial-open="${open}" ${open ? 'open' : ''}>
+      <summary>${escapeHtml(label)}</summary>
+      ${innerHtml}
+    </details>`;
+}
+
+function settingsJumpMenuHtml() {
+  return `
+    <div class="panel" style="padding:0.75rem 1rem">
+      <strong style="font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.6rem">Jump to section</strong>
+      <div style="display:flex;flex-wrap:wrap;gap:0.4rem">
+        ${SETTINGS_SECTIONS.map((s) => `<button type="button" class="btn small btn-ghost settings-jump" data-jump="${escapeAttr(s.key)}">${escapeHtml(s.label)}</button>`).join('')}
+      </div>
+    </div>`;
+}
+
+// Each scoped save button reads only the [data-setting] (and any
+// structured-field) inputs inside its own section container, so saving one
+// section can never touch another's fields -- PUT /api/settings only
+// merges the keys actually present in the request body (see server/
+// settings.js), which is what makes per-section saves safe in the first
+// place.
+function wireScopedSettingsSave(sectionKey, buttonId, buildPatch) {
+  $(`#${buttonId}`)?.addEventListener('click', async () => {
+    const btn = $(`#${buttonId}`);
+    const patch = buildPatch($(`#settings-section-${sectionKey}`));
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = 'Saving…';
+    try {
+      const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
+      toast(res.publishWarning || 'Saved');
+      await renderSettings();
+    } catch (ex) {
+      toast(ex.message);
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  });
+}
+
+function scopedSettingFieldsPatch(container) {
+  const patch = {};
+  container.querySelectorAll('[data-setting]').forEach((input) => {
+    if (input.dataset.setting === 'adminPassword' && !input.value) return;
+    if (input.type === 'checkbox') patch[input.dataset.setting] = input.checked;
+    else patch[input.dataset.setting] = input.value;
+  });
+  return patch;
+}
+
 async function renderSettings() {
+  state.settingsCollapsed = state.settingsCollapsed || new Set();
   const data = await api('/api/settings');
   state.settings = data.settings;
   // Same combined filament+category list New Order's product picker and
@@ -2927,8 +3008,9 @@ async function renderSettings() {
 
   $('#view-settings').innerHTML = `
     <div class="stack gap-4" style="max-width:820px">
+      ${settingsJumpMenuHtml()}
+      ${settingsSectionWrap('typography', 'Typography', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Typography</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
           Choose fonts for the public website. Enable <strong>universal font</strong> to use one typeface everywhere (body + headings).
         </p>
@@ -2951,10 +3033,11 @@ async function renderSettings() {
           </label>
         </div>
         <p class="hint" id="font-preview" style="font-size:1.05rem;padding:0.85rem 0 0;border-top:1px dashed var(--line)">Preview updates after save + refresh of the public site.</p>
-      </div>
+        <div><button class="btn btn-primary" id="save-settings-typography" type="button">Save Typography</button></div>
+      </div>`)}
 
+      ${settingsSectionWrap('appearance', 'Appearance', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Appearance</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
           Visitors can toggle light/dark on the website. This sets the default before they choose.
         </p>
@@ -2966,10 +3049,11 @@ async function renderSettings() {
             <option value="dark" ${s.defaultTheme === 'dark' ? 'selected' : ''}>Dark</option>
           </select>
         </label>
-      </div>
+        <div><button class="btn btn-primary" id="save-settings-appearance" type="button">Save Appearance</button></div>
+      </div>`)}
 
+      ${settingsSectionWrap('homepage-tiles', 'Homepage Tiles', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Homepage Tiles</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
           The 3 "Shop the range" cards on the homepage. Colours, links and layout stay fixed — only the copy below is editable.
         </p>
@@ -2982,10 +3066,11 @@ async function renderSettings() {
           </div>
           <label class="field"><span>Description</span><input data-tile-index="${i}" data-tile-field="description" value="${escapeAttr(t.description || '')}" /></label>
         </div>`).join('')}
-      </div>
+        <div><button class="btn btn-primary" id="save-settings-homepage-tiles" type="button">Save Homepage Tiles</button></div>
+      </div>`)}
 
+      ${settingsSectionWrap('admin-accounts', 'Admin Accounts', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Admin Accounts</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
           Everyone listed here has full access to this admin portal.
         </p>
@@ -3006,10 +3091,10 @@ async function renderSettings() {
           <label class="field"><span>New Admin Password</span><input id="new-admin-password" type="password" placeholder="8+ characters" /></label>
         </div>
         <div><button class="btn" id="add-admin" type="button">Add admin</button></div>
-      </div>
+      </div>`)}
 
+      ${settingsSectionWrap('public-contact', 'Public Site Contact', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Public Site Contact</h3></div>
         <div class="grid-2">
           <label class="field"><span>Site Name</span><input data-setting="siteName" value="${escapeAttr(s.siteName || '')}" /></label>
           <label class="field"><span>Tagline</span><input data-setting="tagline" value="${escapeAttr(s.tagline || '')}" /></label>
@@ -3029,10 +3114,11 @@ async function renderSettings() {
           <label class="field"><span>Instagram</span><input data-setting="instagram" value="${escapeAttr(s.instagram || '')}" /></label>
         </div>
         <label class="field"><span>Change Admin Password</span><input data-setting="adminPassword" type="password" placeholder="Leave blank to keep current" /></label>
-      </div>
+        <div><button class="btn btn-primary" id="save-settings-public-contact" type="button">Save Public Site Contact</button></div>
+      </div>`)}
 
+      ${settingsSectionWrap('storefront-delivery', 'Storefront Stock & Delivery', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Storefront Stock &amp; Delivery Messaging</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
         <label class="field" style="max-width:260px"><span>Design-file Retention (Months After Finalized)</span><input data-setting="designFileRetentionMonths" type="number" min="1" step="1" value="${escapeAttr(String(s.designFileRetentionMonths ?? 12))}" /></label>
         <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
@@ -3056,10 +3142,11 @@ async function renderSettings() {
             .join('')}
         </div>
         <div><button type="button" class="btn small" id="vd-add">+ Add Tier</button></div>
-      </div>
+        <div><button class="btn btn-primary" id="save-settings-storefront-delivery" type="button">Save Storefront Stock &amp; Delivery</button></div>
+      </div>`)}
 
+      ${settingsSectionWrap('invoicing', 'Invoicing & Bank Details', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Invoicing &amp; Bank Details</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on every printable invoice (Invoice History → Print).</p>
         <div class="grid-2">
           <label class="field"><span>Bank Name</span><input data-setting="bankName" value="${escapeAttr(s.bankName || '')}" /></label>
@@ -3071,20 +3158,23 @@ async function renderSettings() {
         </div>
         <label class="field" style="max-width:220px"><span>Next Invoice Number Seed</span><input data-setting="invoiceNumberSeed" type="number" min="1" step="1" value="${escapeAttr(String(s.invoiceNumberSeed ?? 1))}" /></label>
         <label class="field" style="max-width:320px"><span>Order &amp; Design-request Notification Email</span><input data-setting="orderNotificationEmail" type="email" value="${escapeAttr(s.orderNotificationEmail || '')}" /></label>
-      </div>
-${communicationsPanel(s.emailTemplates)}
-${operationalAlertsPanel(s)}
-${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.')}
-      ${configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.')}
-      ${configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.')}
-      ${configurableListPanel('carPartBrands', 'Car-part brands', s.carPartBrands, 'The vehicle brands with their own car-parts page (name becomes the page URL — keep it simple, e.g. Toyota). After adding one: create its category via Product Catalog → + Category with parent car-parts and the matching slug, then Publish to site. Unticking hides the page and nav link on the next publish without touching existing items.')}
-      ${configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
-      ${configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.')}
-      ${depositTierPanel(s.quoteDepositOptions)}
-      ${featuredProductsPanel(s.featuredProducts)}
+        <div><button class="btn btn-primary" id="save-settings-invoicing" type="button">Save Invoicing &amp; Bank Details</button></div>
+      </div>`)}
+      ${settingsSectionWrap('communications', 'Communications', `${communicationsPanel(s.emailTemplates)}
+        <div><button class="btn btn-primary" id="save-settings-communications" type="button">Save Communications</button></div>`)}
+      ${settingsSectionWrap('operational-alerts', 'Operational Alerts', `${operationalAlertsPanel(s)}
+        <div><button class="btn btn-primary" id="save-settings-operational-alerts" type="button">Save Operational Alerts</button></div>`)}
+      ${settingsSectionWrap('filament-brands', 'In-house Filament Brands', configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.'))}
+      ${settingsSectionWrap('todo-categories', 'Todo Categories', configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.'))}
+      ${settingsSectionWrap('todo-priorities', 'Todo Priorities', configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.'))}
+      ${settingsSectionWrap('car-part-brands', 'Car-part Brands', configurableListPanel('carPartBrands', 'Car-part brands', s.carPartBrands, 'The vehicle brands with their own car-parts page (name becomes the page URL — keep it simple, e.g. Toyota). After adding one: create its category via Product Catalog → + Category with parent car-parts and the matching slug, then Publish to site. Unticking hides the page and nav link on the next publish without touching existing items.'))}
+      ${settingsSectionWrap('car-part-models-landrover', 'Landrover Part Models', configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.'))}
+      ${settingsSectionWrap('car-part-models-gwm', 'GWM Part Models', configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.'))}
+      ${settingsSectionWrap('deposit-tiers', 'Quote Deposit Tiers', depositTierPanel(s.quoteDepositOptions))}
+      ${settingsSectionWrap('featured-products', 'Featured Products (Homepage)', featuredProductsPanel(s.featuredProducts))}
 
+      ${settingsSectionWrap('print-costing', 'Print Job Costing Rates', `
       <div class="panel stack gap-3">
-        <div class="section-head"><h3>Print Job Costing Rates</h3></div>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Drives the internal-only cost calculator (Print Job Costing) — never affects storefront prices. Markup/Running costs are fractions (0.25 = 25%).</p>
         <div class="grid-3">
           <label class="field"><span>Markup (Fraction)</span><input data-setting="markupPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.markupPct ?? 0))}" /></label>
@@ -3098,9 +3188,9 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
         </div>
         <label class="field" style="max-width:220px"><span>Post-processing Rate (R/hr)</span><input data-setting="postProcessingRate" type="number" min="0" step="1" value="${escapeAttr(String(s.postProcessingRate ?? 0))}" /></label>
         <div>
-          <button class="btn btn-primary" id="save-settings" type="button">Save settings</button>
+          <button class="btn btn-primary" id="save-settings-print-costing" type="button">Save Print Job Costing Rates</button>
         </div>
-      </div>
+      </div>`)}
     </div>
   `;
 
@@ -3124,6 +3214,73 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
   wireDepositTierPanel();
   wireFeaturedProductsPanel();
 
+  // Jump-link menu: expand the target section if collapsed, then scroll to
+  // it -- same collapse-state Set the section's own toggle listener below
+  // maintains, so a jump never fights a manually-collapsed section.
+  $$('.settings-jump').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.jump;
+      const details = $(`#settings-section-${key}`);
+      if (!details) return;
+      if (!details.open) {
+        details.open = true;
+        state.settingsCollapsed.delete(key);
+      }
+      details.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  $$('#view-settings details.stock-section').forEach((el) => {
+    el.addEventListener('toggle', () => {
+      // Same spurious-initial-fire guard as Stock Management/Product
+      // Catalog's identical listener -- see their comments for why.
+      if (el.dataset.initialOpen === String(el.open)) {
+        delete el.dataset.initialOpen;
+        return;
+      }
+      const key = el.dataset.group;
+      if (el.open) state.settingsCollapsed.delete(key);
+      else state.settingsCollapsed.add(key);
+    });
+  });
+
+  wireScopedSettingsSave('typography', 'save-settings-typography', scopedSettingFieldsPatch);
+  wireScopedSettingsSave('appearance', 'save-settings-appearance', scopedSettingFieldsPatch);
+  wireScopedSettingsSave('homepage-tiles', 'save-settings-homepage-tiles', (container) => {
+    const tiles = [];
+    container.querySelectorAll('[data-tile-index]').forEach((input) => {
+      const i = Number(input.dataset.tileIndex);
+      tiles[i] = tiles[i] || {};
+      tiles[i][input.dataset.tileField] = input.value;
+    });
+    return { homeTiles: tiles };
+  });
+  wireScopedSettingsSave('public-contact', 'save-settings-public-contact', scopedSettingFieldsPatch);
+  wireScopedSettingsSave('storefront-delivery', 'save-settings-storefront-delivery', (container) => {
+    const patch = scopedSettingFieldsPatch(container);
+    // #60: volume-discount tiers -- always sent (an empty list is a real
+    // "no discounts" choice, not an omission), same reasoning the previous
+    // single shared save carried.
+    patch.volumeDiscounts = [...container.querySelectorAll('#volume-discount-rows [data-vd-index]')].map((row) => ({
+      minQty: Number(row.querySelector('[data-vd="minQty"]').value) || 0,
+      pct: Number(row.querySelector('[data-vd="pct"]').value) || 0,
+      active: row.querySelector('[data-vd="active"]').checked,
+    }));
+    return patch;
+  });
+  wireScopedSettingsSave('invoicing', 'save-settings-invoicing', scopedSettingFieldsPatch);
+  wireScopedSettingsSave('communications', 'save-settings-communications', (container) => {
+    const emailTemplates = {};
+    container.querySelectorAll('[data-email-template]').forEach((input) => {
+      const key = input.dataset.emailTemplate;
+      emailTemplates[key] = emailTemplates[key] || {};
+      emailTemplates[key][input.dataset.emailTemplateField] = input.value;
+    });
+    return { emailTemplates };
+  });
+  wireScopedSettingsSave('operational-alerts', 'save-settings-operational-alerts', scopedSettingFieldsPatch);
+  wireScopedSettingsSave('print-costing', 'save-settings-print-costing', scopedSettingFieldsPatch);
+
   // #60: tier add/remove -- static template, values typed by the admin.
   $('#vd-add')?.addEventListener('click', () => {
     const rows = $('#volume-discount-rows');
@@ -3143,48 +3300,6 @@ ${configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.i
   $('#volume-discount-rows')?.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-vd-remove]');
     if (btn) btn.closest('[data-vd-index]').remove();
-  });
-
-  $('#save-settings').addEventListener('click', async () => {
-    const patch = {};
-    $$('[data-setting]').forEach((input) => {
-      if (input.dataset.setting === 'adminPassword' && !input.value) return;
-      if (input.type === 'checkbox') patch[input.dataset.setting] = input.checked;
-      else patch[input.dataset.setting] = input.value;
-    });
-    const tiles = [];
-    $$('[data-tile-index]').forEach((input) => {
-      const i = Number(input.dataset.tileIndex);
-      tiles[i] = tiles[i] || {};
-      tiles[i][input.dataset.tileField] = input.value;
-    });
-    if (tiles.length) patch.homeTiles = tiles;
-    const emailTemplates = {};
-    $$('[data-email-template]').forEach((input) => {
-      const key = input.dataset.emailTemplate;
-      emailTemplates[key] = emailTemplates[key] || {};
-      emailTemplates[key][input.dataset.emailTemplateField] = input.value;
-    });
-    if (Object.keys(emailTemplates).length) patch.emailTemplates = emailTemplates;
-    // #60: volume-discount tiers -- always sent (an empty list is a real
-    // "no discounts" choice, not an omission).
-    patch.volumeDiscounts = $$('#volume-discount-rows [data-vd-index]').map((row) => ({
-      minQty: Number(row.querySelector('[data-vd="minQty"]').value) || 0,
-      pct: Number(row.querySelector('[data-vd="pct"]').value) || 0,
-      active: row.querySelector('[data-vd="active"]').checked,
-    }));
-    const saveBtn = $('#save-settings');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving & publishing…';
-    try {
-      const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
-      toast(res.publishWarning || 'Settings saved and published live');
-      await renderSettings();
-    } catch (ex) {
-      toast(ex.message);
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save settings';
-    }
   });
 
   $('#add-admin').addEventListener('click', async () => {
@@ -5936,6 +6051,133 @@ async function renderTestimonials() {
       state.editingTestimonial = data.testimonial;
       toast('Uploaded');
       await renderTestimonials();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+}
+
+// ---- Potential market (marketing-lead contacts) ----
+
+const POTENTIAL_MARKET_STATUSES = ['Initial Load', 'Active', 'Inactive', 'Opt Out'];
+
+function blankPotentialMarketContact() {
+  return { id: null, name: '', surname: '', email: '', mobileNumber: '', status: 'Initial Load' };
+}
+
+function potentialMarketStatusSelectHtml(id, status) {
+  const opts = POTENTIAL_MARKET_STATUSES.map((s) => `<option value="${s}" ${status === s ? 'selected' : ''}>${s}</option>`).join('');
+  return `<select class="pm-status-inline" data-id="${escapeAttr(id)}">${opts}</select>`;
+}
+
+function potentialMarketViewHtml(contacts, form) {
+  const rows = contacts
+    .map(
+      (c) => `
+        <tr data-id="${escapeAttr(c.id)}">
+          <td>${escapeHtml(c.name)}</td>
+          <td>${escapeHtml(c.surname)}</td>
+          <td>${escapeHtml(c.email || '—')}</td>
+          <td>${escapeHtml(c.mobileNumber || '—')}</td>
+          <td>${potentialMarketStatusSelectHtml(c.id, c.status)}</td>
+          <td>
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  return `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-potential-market" type="button">+ Contact</button>
+      <span class="muted">${escapeHtml(String(contacts.length))} contacts</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:700px">
+        <div class="section-head"><h3>${form.id ? 'Edit contact' : 'New contact'}</h3></div>
+        <div class="grid-2">
+          <label class="field"><span>Name *</span><input id="pm-name" value="${escapeAttr(form.name)}" /></label>
+          <label class="field"><span>Surname *</span><input id="pm-surname" value="${escapeAttr(form.surname)}" /></label>
+        </div>
+        <div class="grid-2">
+          <label class="field"><span>Email</span><input id="pm-email" type="email" value="${escapeAttr(form.email || '')}" /></label>
+          <label class="field"><span>Mobile Number</span><input id="pm-mobile" value="${escapeAttr(form.mobileNumber || '')}" /></label>
+        </div>
+        <label class="field"><span>Status</span>
+          <select id="pm-status">${POTENTIAL_MARKET_STATUSES.map((s) => `<option value="${s}" ${form.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        </label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-potential-market" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-potential-market" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Name</th><th>Surname</th><th>Email</th><th>Mobile</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No potential market contacts yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+async function renderPotentialMarket() {
+  state.editingPotentialMarketContact = state.editingPotentialMarketContact || null;
+  const { contacts } = await api('/api/potential-market');
+
+  const form = state.editingPotentialMarketContact;
+  $('#view-potential-market').innerHTML = potentialMarketViewHtml(contacts, form);
+
+  $('#new-potential-market').addEventListener('click', async () => { state.editingPotentialMarketContact = blankPotentialMarketContact(); await renderPotentialMarket(); });
+  $$('#view-potential-market tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
+      const { contact } = await api(`/api/potential-market/${tr.dataset.id}`);
+      state.editingPotentialMarketContact = contact;
+      await renderPotentialMarket();
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm('Delete this contact?')) return;
+      try {
+        await api(`/api/potential-market/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Deleted');
+        await renderPotentialMarket();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  // Inline status update, same convention as design-requests' inline select
+  // -- no need to open "Edit" just to move a contact through the pipeline.
+  $$('.pm-status-inline').forEach((select) => {
+    select.addEventListener('change', async () => {
+      try {
+        const { contact } = await api(`/api/potential-market/${select.dataset.id}`, { method: 'PUT', body: JSON.stringify({ status: select.value }) });
+        toast('Status updated');
+        if (state.editingPotentialMarketContact?.id === contact.id) state.editingPotentialMarketContact = contact;
+        await renderPotentialMarket();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (!form) return;
+
+  $('#cancel-potential-market').addEventListener('click', async () => { state.editingPotentialMarketContact = null; await renderPotentialMarket(); });
+  $('#save-potential-market').addEventListener('click', async () => {
+    const payload = {
+      name: $('#pm-name').value,
+      surname: $('#pm-surname').value,
+      email: $('#pm-email').value,
+      mobileNumber: $('#pm-mobile').value,
+      status: $('#pm-status').value,
+    };
+    try {
+      if (form.id) await api(`/api/potential-market/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      else await api('/api/potential-market', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Contact saved');
+      state.editingPotentialMarketContact = null;
+      await renderPotentialMarket();
     } catch (ex) {
       toast(ex.message);
     }

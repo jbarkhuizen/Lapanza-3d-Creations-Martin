@@ -1274,6 +1274,45 @@ test('POST /api/testimonials without auth is rejected', async (t) => {
   assert.strictEqual(res.status, 401);
 });
 
+test('potential-market CRUD roundtrip: create, list, inline status update via PUT, delete', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app)
+    .post('/api/potential-market')
+    .set('Cookie', cookie)
+    .send({ name: 'Lead', surname: 'One', email: 'lead@example.com', mobileNumber: '0821234567' });
+  assert.strictEqual(created.status, 201);
+  assert.strictEqual(created.body.contact.status, 'Initial Load');
+
+  const list = await request(app).get('/api/potential-market').set('Cookie', cookie);
+  assert.strictEqual(list.body.contacts.length, 1);
+
+  const updated = await request(app)
+    .put(`/api/potential-market/${created.body.contact.id}`)
+    .set('Cookie', cookie)
+    .send({ status: 'Active' });
+  assert.strictEqual(updated.body.contact.status, 'Active');
+
+  const filtered = await request(app).get('/api/potential-market?status=Active').set('Cookie', cookie);
+  assert.strictEqual(filtered.body.contacts.length, 1);
+
+  const del = await request(app).delete(`/api/potential-market/${created.body.contact.id}`).set('Cookie', cookie);
+  assert.strictEqual(del.status, 200);
+  const getAfterDelete = await request(app).get(`/api/potential-market/${created.body.contact.id}`).set('Cookie', cookie);
+  assert.strictEqual(getAfterDelete.status, 404);
+});
+
+test('POST /api/potential-market without auth is rejected', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  const res = await request(app).post('/api/potential-market').send({ name: 'X', surname: 'Y' });
+  assert.strictEqual(res.status, 401);
+});
+
 test('deleting an admin and resetting a password are attributed to the acting admin and recorded', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

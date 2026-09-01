@@ -198,6 +198,20 @@ export function ensureSchema(db) {
       updated_at TEXT NOT NULL
     );
 
+    -- Marketing-lead contacts, not yet real clients -- status is a fixed,
+    -- owner-managed pipeline stage (Initial Load/Active/Inactive/Opt Out),
+    -- not the draft/published vocabulary testimonials/filament_types use.
+    CREATE TABLE IF NOT EXISTS potential_market_contacts (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      surname TEXT NOT NULL,
+      email TEXT NOT NULL DEFAULT '',
+      mobile_number TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'Initial Load',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     -- Phase 2: client accounts, newsletter, custom design requests.
 
     CREATE TABLE IF NOT EXISTS newsletter_subscribers (

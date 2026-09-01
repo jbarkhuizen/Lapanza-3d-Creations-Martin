@@ -131,6 +131,7 @@ import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary,
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
+import { listPotentialMarketContacts, getPotentialMarketContact, createPotentialMarketContact, updatePotentialMarketContact, deletePotentialMarketContact } from './potential-market.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, getDesignRequestByToken, listDesignRequestFiles, setDesignRequestQuote, acceptDesignRequestQuote, deriveQuoteStage } from './design-requests.js';
 import { getSalesSummary } from './sales.js';
 import {
@@ -2015,6 +2016,49 @@ app.post(
     next(err);
   },
 );
+
+// ---- Potential market contacts (marketing leads, not yet real clients) ----
+// Pure admin-internal data -- never surfaced on the public site, so unlike
+// testimonials/catalog these routes never call publishCatalog().
+
+app.get('/api/potential-market', requireAuth, (req, res) => {
+  res.json({ contacts: listPotentialMarketContacts(req.query.status ? { status: req.query.status } : {}) });
+});
+
+app.get('/api/potential-market/:id', requireAuth, (req, res) => {
+  const contact = getPotentialMarketContact(req.params.id);
+  if (!contact) return res.status(404).json({ error: 'Contact not found' });
+  res.json({ contact });
+});
+
+app.post('/api/potential-market', requireAuth, (req, res) => {
+  try {
+    const contact = createPotentialMarketContact(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Potential market contact created: ${contact.name} ${contact.surname}` });
+    res.status(201).json({ contact });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/potential-market/:id', requireAuth, (req, res) => {
+  try {
+    const contact = updatePotentialMarketContact(req.params.id, req.body || {});
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Potential market contact updated: ${contact.name} ${contact.surname} (${contact.status})` });
+    res.json({ contact });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/potential-market/:id', requireAuth, (req, res) => {
+  const existing = getPotentialMarketContact(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Contact not found' });
+  deletePotentialMarketContact(req.params.id);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Potential market contact deleted: ${existing.name} ${existing.surname}` });
+  res.json({ ok: true });
+});
 
 // ---- Custom 3D design requests (Phase 2) ----
 
