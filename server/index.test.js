@@ -1313,6 +1313,32 @@ test('POST /api/potential-market without auth is rejected', async (t) => {
   assert.strictEqual(res.status, 401);
 });
 
+test('POST /api/potential-market/import creates new rows and skips a duplicate against an existing contact', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  await request(app).post('/api/potential-market').set('Cookie', cookie).send({ name: 'Existing', surname: 'Contact', email: 'existing@example.com' });
+
+  const imported = await request(app)
+    .post('/api/potential-market/import')
+    .set('Cookie', cookie)
+    .send({
+      contacts: [
+        { name: 'Existing', surname: 'Contact', email: 'existing@example.com' },
+        { name: 'New', surname: 'Person', email: 'new@example.com' },
+      ],
+    });
+  assert.strictEqual(imported.status, 200);
+  assert.strictEqual(imported.body.created, 1);
+  assert.strictEqual(imported.body.skipped, 1);
+
+  const list = await request(app).get('/api/potential-market').set('Cookie', cookie);
+  assert.strictEqual(list.body.contacts.length, 2);
+});
+
 test('deleting an admin and resetting a password are attributed to the acting admin and recorded', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

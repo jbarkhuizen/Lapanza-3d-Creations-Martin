@@ -7,6 +7,7 @@ import {
   createPotentialMarketContact,
   updatePotentialMarketContact,
   deletePotentialMarketContact,
+  importPotentialMarketContacts,
   POTENTIAL_MARKET_STATUSES,
 } from './potential-market.js';
 
@@ -73,5 +74,63 @@ test('deletePotentialMarketContact removes the row and getPotentialMarketContact
   assert.strictEqual(deletePotentialMarketContact(c.id, db), true);
   assert.strictEqual(getPotentialMarketContact(c.id, db), null);
   assert.strictEqual(deletePotentialMarketContact(c.id, db), false);
+  db.close();
+});
+
+test('importPotentialMarketContacts creates new rows and reports the count', () => {
+  const db = openDb(':memory:');
+  const result = importPotentialMarketContacts(
+    [
+      { name: 'Alice', surname: 'A', email: 'alice@example.com' },
+      { name: 'Bob', surname: 'B', email: 'bob@example.com' },
+    ],
+    db,
+  );
+  assert.strictEqual(result.created, 2);
+  assert.strictEqual(result.skipped, 0);
+  assert.strictEqual(listPotentialMarketContacts({}, db).length, 2);
+  db.close();
+});
+
+test('importPotentialMarketContacts skips a row whose email already exists in the DB', () => {
+  const db = openDb(':memory:');
+  createPotentialMarketContact(basePayload({ email: 'jane@example.com' }), db);
+  const result = importPotentialMarketContacts([{ name: 'Jane', surname: 'Doe', email: 'JANE@EXAMPLE.COM' }], db);
+  assert.strictEqual(result.created, 0);
+  assert.strictEqual(result.skipped, 1);
+  assert.strictEqual(result.skippedRows[0].reason, 'Duplicate');
+  assert.strictEqual(listPotentialMarketContacts({}, db).length, 1);
+  db.close();
+});
+
+test('importPotentialMarketContacts skips a repeated row within the same file, keeping only the first', () => {
+  const db = openDb(':memory:');
+  const result = importPotentialMarketContacts(
+    [
+      { name: 'Sam', surname: 'S', email: 'sam@example.com' },
+      { name: 'Sam', surname: 'S', email: 'sam@example.com' },
+    ],
+    db,
+  );
+  assert.strictEqual(result.created, 1);
+  assert.strictEqual(result.skipped, 1);
+  db.close();
+});
+
+test('importPotentialMarketContacts matches on name+surname when a row has no email', () => {
+  const db = openDb(':memory:');
+  createPotentialMarketContact(basePayload({ name: 'No', surname: 'Email', email: '' }), db);
+  const result = importPotentialMarketContacts([{ name: 'no', surname: 'email' }], db);
+  assert.strictEqual(result.created, 0);
+  assert.strictEqual(result.skipped, 1);
+  db.close();
+});
+
+test('importPotentialMarketContacts skips a row missing name or surname with a clear reason, without throwing', () => {
+  const db = openDb(':memory:');
+  const result = importPotentialMarketContacts([{ name: '', surname: 'Only Surname' }, { name: 'Only Name', surname: '' }], db);
+  assert.strictEqual(result.created, 0);
+  assert.strictEqual(result.skipped, 2);
+  assert.match(result.skippedRows[0].reason, /Missing name or surname/);
   db.close();
 });

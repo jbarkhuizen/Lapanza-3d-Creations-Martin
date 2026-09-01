@@ -131,7 +131,7 @@ import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary,
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
-import { listPotentialMarketContacts, getPotentialMarketContact, createPotentialMarketContact, updatePotentialMarketContact, deletePotentialMarketContact } from './potential-market.js';
+import { listPotentialMarketContacts, getPotentialMarketContact, createPotentialMarketContact, updatePotentialMarketContact, deletePotentialMarketContact, importPotentialMarketContacts } from './potential-market.js';
 import { listDesignRequests, getDesignRequest, createDesignRequest, updateDesignRequest, deleteDesignRequest, getDesignRequestByToken, listDesignRequestFiles, setDesignRequestQuote, acceptDesignRequestQuote, deriveQuoteStage } from './design-requests.js';
 import { getSalesSummary } from './sales.js';
 import {
@@ -2058,6 +2058,19 @@ app.delete('/api/potential-market/:id', requireAuth, (req, res) => {
   deletePotentialMarketContact(req.params.id);
   recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Potential market contact deleted: ${existing.name} ${existing.surname}` });
   res.json({ ok: true });
+});
+
+// CSV parsing happens client-side (admin.js) -- this route just takes the
+// already-parsed row array as JSON, same as every other list-shaped
+// settings payload in this codebase (volumeDiscounts, homeTiles, etc.).
+app.post('/api/potential-market/import', requireAuth, (req, res) => {
+  try {
+    const result = importPotentialMarketContacts((req.body || {}).contacts);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Potential market CSV import: ${result.created} created, ${result.skipped} skipped` });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ---- Custom 3D design requests (Phase 2) ----

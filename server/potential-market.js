@@ -79,3 +79,43 @@ export function deletePotentialMarketContact(id, db = getDb()) {
   const result = db.prepare('DELETE FROM potential_market_contacts WHERE id = ?').run(id);
   return result.changes > 0;
 }
+
+// A row is a duplicate of an existing/earlier-in-file contact if its email
+// matches one already seen (case-insensitive) -- or, when the row has no
+// email at all, if its name+surname matches one already seen. Checked
+// against both the DB's existing contacts AND every row already accepted
+// earlier in the same import, so a repeated row within one file is caught
+// too, not just repeats of already-stored data.
+function dedupeKey(row) {
+  const email = String(row.email || '').trim().toLowerCase();
+  if (email) return `email:${email}`;
+  const name = String(row.name || '').trim().toLowerCase();
+  const surname = String(row.surname || '').trim().toLowerCase();
+  return `name:${name}:${surname}`;
+}
+
+export function importPotentialMarketContacts(rows, db = getDb()) {
+  const existing = listPotentialMarketContacts({}, db);
+  const seen = new Set(existing.map(dedupeKey));
+  let created = 0;
+  const skippedRows = [];
+
+  for (const [index, row] of (Array.isArray(rows) ? rows : []).entries()) {
+    const name = String(row.name || '').trim();
+    const surname = String(row.surname || '').trim();
+    if (!name || !surname) {
+      skippedRows.push({ row: index + 1, reason: 'Missing name or surname' });
+      continue;
+    }
+    const key = dedupeKey({ name, surname, email: row.email });
+    if (seen.has(key)) {
+      skippedRows.push({ row: index + 1, reason: 'Duplicate' });
+      continue;
+    }
+    seen.add(key);
+    createPotentialMarketContact({ name, surname, email: row.email, mobileNumber: row.mobileNumber, status: row.status }, db);
+    created += 1;
+  }
+
+  return { created, skipped: skippedRows.length, skippedRows };
+}

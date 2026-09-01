@@ -6065,6 +6065,61 @@ function blankPotentialMarketContact() {
   return { id: null, name: '', surname: '', email: '', mobileNumber: '', status: 'Initial Load' };
 }
 
+// Minimal RFC4180-ish CSV parser -- handles quoted fields (embedded commas/
+// newlines/escaped "") without a new dependency, matching this admin's
+// zero-dependency convention. Header row maps loosely to our field names
+// (case/space-insensitive: "Mobile Number" or "mobile" both work) so an
+// export from a spreadsheet doesn't need exact column names.
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"' && text[i + 1] === '"') { field += '"'; i += 1; }
+      else if (c === '"') inQuotes = false;
+      else field += c;
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ',') {
+      row.push(field); field = '';
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i += 1;
+      row.push(field); field = '';
+      rows.push(row); row = [];
+    } else {
+      field += c;
+    }
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.some((v) => v.trim() !== ''));
+}
+
+const CSV_FIELD_ALIASES = {
+  name: 'name',
+  firstname: 'name',
+  surname: 'surname',
+  lastname: 'surname',
+  email: 'email',
+  emailaddress: 'email',
+  mobile: 'mobileNumber',
+  mobilenumber: 'mobileNumber',
+  phone: 'mobileNumber',
+  status: 'status',
+};
+
+function csvRowsToContacts(rows) {
+  if (!rows.length) return [];
+  const headerKeys = rows[0].map((h) => CSV_FIELD_ALIASES[h.trim().toLowerCase().replace(/[^a-z]/g, '')] || null);
+  return rows.slice(1).map((r) => {
+    const contact = {};
+    headerKeys.forEach((key, i) => { if (key) contact[key] = (r[i] || '').trim(); });
+    return contact;
+  });
+}
+
 function potentialMarketStatusSelectHtml(id, status) {
   const opts = POTENTIAL_MARKET_STATUSES.map((s) => `<option value="${s}" ${status === s ? 'selected' : ''}>${s}</option>`).join('');
   return `<select class="pm-status-inline" data-id="${escapeAttr(id)}">${opts}</select>`;
@@ -6091,8 +6146,11 @@ function potentialMarketViewHtml(contacts, form) {
   return `
     <div class="toolbar">
       <button class="btn btn-primary" id="new-potential-market" type="button">+ Contact</button>
+      <label class="btn" for="pm-csv-upload">+ Upload CSV</label>
+      <input type="file" class="hidden" id="pm-csv-upload" accept=".csv,text/csv" />
       <span class="muted">${escapeHtml(String(contacts.length))} contacts</span>
     </div>
+    <p class="muted" style="margin:0 0 1rem;font-size:0.85rem">CSV columns: Name, Surname, Email, Mobile Number, Status (Status optional, defaults to Initial Load). Rows matching an existing contact by email (or by name+surname if no email) are skipped, not overwritten.</p>
     ${form ? `
       <div class="panel stack gap-3" style="max-width:700px">
         <div class="section-head"><h3>${form.id ? 'Edit contact' : 'New contact'}</h3></div>
@@ -6128,6 +6186,24 @@ async function renderPotentialMarket() {
   $('#view-potential-market').innerHTML = potentialMarketViewHtml(contacts, form);
 
   $('#new-potential-market').addEventListener('click', async () => { state.editingPotentialMarketContact = blankPotentialMarketContact(); await renderPotentialMarket(); });
+
+  $('#pm-csv-upload').addEventListener('change', async () => {
+    const input = $('#pm-csv-upload');
+    const file = input.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const contacts = csvRowsToContacts(parseCsv(text));
+      if (!contacts.length) { toast('No rows found in that file'); return; }
+      const result = await api('/api/potential-market/import', { method: 'POST', body: JSON.stringify({ contacts }) });
+      toast(`${result.created} added, ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'} skipped`);
+      await renderPotentialMarket();
+    } catch (ex) {
+      toast(ex.message);
+    } finally {
+      input.value = '';
+    }
+  });
   $$('#view-potential-market tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { contact } = await api(`/api/potential-market/${tr.dataset.id}`);
