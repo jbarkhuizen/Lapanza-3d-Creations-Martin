@@ -61,6 +61,45 @@ test('syncPublicJson writes filaments.json with colour photo, price and stock fi
   db.close();
 });
 
+test('the public site-settings.json is an allowlist — no banking, cost model, alert, or admin-only keys (launch-audit #3)', () => {
+  const db = openDb(':memory:');
+  updateSettings({ facebook: 'https://www.facebook.com/profile.php?id=61591435717039' }, db);
+
+  const paths = {
+    catalogJsonPath: tmpFile('catalog.json'),
+    filamentsSrc: tmpFile('filaments.json'),
+    categoriesSrc: tmpFile('categories.json'),
+    settingsSrc: tmpFile('settings.json'),
+    settingsPublic: tmpFile('site-settings.json'),
+  };
+  fs.writeFileSync(paths.catalogJsonPath, JSON.stringify({ products: [] }));
+
+  syncPublicJson(db, paths);
+  const publicJson = JSON.parse(fs.readFileSync(paths.settingsPublic, 'utf8'));
+
+  // The regression that motivated this: publicSettings() was a pass-through.
+  const forbidden = [
+    'bankName', 'bankAccountName', 'bankAccountNumber', 'bankBranchCode',
+    'invoiceNumberSeed', 'markupPct', 'electricityRate', 'printerPowerDraw',
+    'runningCostsPct', 'designRate', 'setupRate', 'postProcessingRate',
+    'orderNotificationEmail', 'emailTemplates', 'todoCategories', 'todoPriorities',
+    'inHouseFilamentBrands',
+    'alertBackupFailureEnabled', 'alertSecuritySpikeEnabled', 'alertSecuritySpikeThreshold',
+    'alertSecuritySpikeWindowMinutes', 'alertEmailFallbackWhatsappNumber',
+  ];
+  for (const key of forbidden) {
+    assert.strictEqual(key in publicJson, false, `${key} must never reach the public settings file`);
+  }
+  // What the storefront actually reads still comes through.
+  assert.strictEqual(publicJson.siteName, 'Lapanza 3D Creative Lab');
+  assert.strictEqual(publicJson.facebook, 'https://www.facebook.com/profile.php?id=61591435717039');
+  assert.ok('printLeadTimeDays' in publicJson);
+  assert.ok(Array.isArray(publicJson.testimonials), 'published testimonials must still be appended after the allowlist');
+
+  Object.values(paths).forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
+  db.close();
+});
+
 test('syncPublicJson carries the Stock Management "listed" flag through to categories.json', () => {
   const db = openDb(':memory:');
 

@@ -134,24 +134,23 @@ function wireOptInPanel(client) {
   });
 }
 
-async function bankingDetailsHtml() {
-  try {
-    const res = await fetch('/site-settings.json', { cache: 'no-store' });
-    if (!res.ok) return '';
-    const s = await res.json();
-    if (!s.bankName) return '';
-    return `
+// Renders from the checkout response's own bankingDetails, not from
+// /site-settings.json -- the public settings file deliberately no longer
+// carries the bank account (launch-audit #3); the server attaches the
+// details only to the manual-EFT order response, and the invoice email
+// carries them independently, so a missing/null value here just omits the
+// panel rather than blocking the success screen.
+function bankingDetailsHtml(bankingDetails) {
+  if (!bankingDetails || !bankingDetails.bankName) return '';
+  return `
           <p class="mt-3 mb-1"><strong>Banking details</strong></p>
-          <p>Bank: ${escapeHtml(s.bankName)}</p>
-          <p>Account name: ${escapeHtml(s.bankAccountName)}</p>
-          <p>Account number: ${escapeHtml(s.bankAccountNumber)}</p>
-          <p>Branch code: ${escapeHtml(s.bankBranchCode)}</p>`;
-  } catch {
-    return ''; // Banking details were also emailed -- this panel is a convenience, not the only place to find them.
-  }
+          <p>Bank: ${escapeHtml(bankingDetails.bankName)}</p>
+          <p>Account name: ${escapeHtml(bankingDetails.accountName)}</p>
+          <p>Account number: ${escapeHtml(bankingDetails.accountNumber)}</p>
+          <p>Branch code: ${escapeHtml(bankingDetails.branchCode)}</p>`;
 }
 
-async function showOrderPlacedSuccess(order, paymentMethod) {
+function showOrderPlacedSuccess(order, paymentMethod, bankingDetails) {
   document.getElementById('checkout-form').classList.add('hidden');
   const box = document.getElementById('checkout-success');
   box.classList.remove('hidden');
@@ -162,7 +161,7 @@ async function showOrderPlacedSuccess(order, paymentMethod) {
           <p><strong>Order reference:</strong> ${escapeHtml(reference)}</p>
           <p><strong>Amount:</strong> ${escapeHtml(formatPrice(order.total))}</p>
           <p class="mt-2 text-espresso/60">Please pay via EFT using your order reference.</p>
-          ${await bankingDetailsHtml()}
+          ${bankingDetailsHtml(bankingDetails)}
         </div>`
       : `<div class="border border-charcoal/10 rounded-sm p-4 bg-linen text-sm mb-4">
           <p><strong>Order reference:</strong> ${escapeHtml(reference)}</p>
@@ -465,7 +464,7 @@ async function init() {
       // single backend 'fixed' shipping method (see FIXED_BUCKETS below) --
       // the server only knows about 'fixed' plus a shippingOptionId.
       const backendShippingMethod = shippingMethod.startsWith('fixed') ? 'fixed' : shippingMethod;
-      const { order, redirect, clientDataUpdated } = await api('/api/checkout', {
+      const { order, redirect, clientDataUpdated, bankingDetails } = await api('/api/checkout', {
         method: 'POST',
         body: JSON.stringify({
           client,
@@ -488,7 +487,7 @@ async function init() {
       if (paymentMethod === 'manual_eft' || paymentMethod === 'cash_on_collection') {
         clearCart();
         clearCheckoutPrefs();
-        await showOrderPlacedSuccess(order, paymentMethod);
+        showOrderPlacedSuccess(order, paymentMethod, bankingDetails);
       } else {
         // Cart is cleared on the return_url page (checkout-complete.html),
         // not here -- clearing it before the customer has actually reached

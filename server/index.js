@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
-import { getSettings, updateSettings, publicSettings } from './settings.js';
+import { getSettings, updateSettings } from './settings.js';
 import { FONT_OPTIONS, DEFAULT_SETTINGS } from './settings-defaults.js';
 import { hasAnyAdmin, listAdmins, createAdmin, deleteAdmin, resetPassword, verifyLogin } from './admins.js';
 import { AUDIT_EVENTS, recordAuditEvent, listAuditLog } from './audit-log.js';
@@ -2263,7 +2263,25 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     }
 
     if (body.paymentMethod === 'manual_eft' || body.paymentMethod === 'cash_on_collection') {
-      return res.status(201).json({ order, emailSent, redirect: null, clientDataUpdated });
+      // Manual EFT needs the banking details on the success panel, but they
+      // are no longer in the public /site-settings.json (launch-audit
+      // blocker #3: publicSettings() now allowlists, and the bank account is
+      // deliberately excluded) -- so they ride along here, only on the one
+      // response where a customer who just placed an EFT order needs them.
+      // The invoice email carries them independently.
+      let bankingDetails = null;
+      if (body.paymentMethod === 'manual_eft') {
+        const s = getSettings();
+        if (s.bankName) {
+          bankingDetails = {
+            bankName: s.bankName,
+            accountName: s.bankAccountName,
+            accountNumber: s.bankAccountNumber,
+            branchCode: s.bankBranchCode,
+          };
+        }
+      }
+      return res.status(201).json({ order, emailSent, redirect: null, clientDataUpdated, bankingDetails });
     }
 
     const requestOrigin = `${req.protocol}://${req.get('host')}`;
@@ -2362,8 +2380,14 @@ app.post(
   },
 );
 
+// Full settings, not publicSettings(): this is the authenticated admin
+// panel's own read -- it edits bank details, cost rates, email templates and
+// alert thresholds, all of which publicSettings() now (deliberately) strips
+// from the public site-settings.json export. publicSettings() was a
+// pass-through when these routes first used it, so the distinction never
+// mattered until the launch-audit #3 allowlist made it real.
 app.get('/api/settings', requireAuth, (_req, res) => {
-  res.json({ settings: publicSettings(getSettings()), fonts: FONT_OPTIONS });
+  res.json({ settings: getSettings(), fonts: FONT_OPTIONS });
 });
 
 app.put('/api/settings', requireAuth, async (req, res) => {
@@ -2535,7 +2559,9 @@ app.put('/api/settings', requireAuth, async (req, res) => {
   } catch (err) {
     publishWarning = `Saved, but publishing to the live site failed: ${err.message}. Try "Publish to site" from the dashboard.`;
   }
-  res.json({ settings: publicSettings(settings), ...(publishWarning ? { publishWarning } : {}) });
+  // Same reasoning as GET /api/settings above: the admin needs the full
+  // object back, publicSettings() is only for the public JSON export.
+  res.json({ settings, ...(publishWarning ? { publishWarning } : {}) });
 });
 
 app.post('/api/publish', requireAuth, async (_req, res) => {

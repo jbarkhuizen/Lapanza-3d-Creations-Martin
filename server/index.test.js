@@ -1033,6 +1033,17 @@ test('Payfast checkout does not send the order confirmation immediately -- only 
   const manualRes = await request(app).post('/api/checkout').send(checkoutPayload('manual_eft'));
   assert.strictEqual(manualRes.status, 201);
 
+  // Launch-audit #3: banking details ride only on the manual-EFT order
+  // response (the success panel's one consumer) -- never the Payfast
+  // response, and never the public settings file (covered in export.test.js).
+  assert.strictEqual(manualRes.body.bankingDetails.bankName, 'Absa');
+  assert.ok(manualRes.body.bankingDetails.accountNumber);
+  assert.strictEqual(payfastRes.body.bankingDetails, undefined);
+
+  const cocRes = await request(app).post('/api/checkout').send(checkoutPayload('cash_on_collection'));
+  assert.strictEqual(cocRes.status, 201);
+  assert.strictEqual(cocRes.body.bankingDetails, null, 'cash on collection needs no banking details');
+
   // GMAIL_APP_PASSWORD is deliberately unset in the test env, so a real send
   // attempt fails and is logged as email_failure -- that's how this test
   // distinguishes "attempted a confirmation email" from "correctly skipped

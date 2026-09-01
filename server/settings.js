@@ -42,6 +42,36 @@ export function updateSettings(patch, db = getDb()) {
   return getSettings(db);
 }
 
+// Explicit allowlist of what the public storefront is allowed to see.
+// This function's output is written verbatim to /site-settings.json on the
+// public web root (server/export.js) -- before this list existed it was a
+// pass-through, publishing the bank account number, the entire print-cost
+// model (markup/electricity/design/setup rates), operational-alert
+// thresholds, and admin email templates to anyone with curl (launch-audit
+// blocker #3). Every key here is verified in use by src/js/* or the
+// generated pages' client-side hydration; anything new must be ADDED
+// deliberately, never inherited. Banking details are deliberately absent:
+// the one public consumer (checkout's manual-EFT success panel) now gets
+// them from the checkout response itself, and the invoice email carries
+// them too.
+const PUBLIC_SETTINGS_KEYS = [
+  // Identity + contact (site.js, nav.js, checkout, get-in-touch hydration)
+  'siteName', 'tagline', 'phoneDisplay', 'phoneTel', 'email', 'address', 'hours',
+  'whatsapp', 'whatsappResponseNote', 'escalationContactsNote', 'facebook', 'instagram',
+  // Appearance (appearance.js)
+  'useUniversalFont', 'universalFont', 'fontSans', 'fontSerif', 'defaultTheme',
+  // Public content (site.js hydration)
+  'homeTiles', 'featuredProducts', 'testimonials',
+  // Commerce display (cart-ui.js delivery note, checkout volume discount,
+  // generate-pages' "Only N left" stock labels and car-part brand pages --
+  // the same filtered object feeds src/data/settings.json at build time)
+  'printLeadTimeDays', 'filamentDispatchDays', 'volumeDiscounts', 'lowStockThreshold', 'carPartBrands',
+];
+
 export function publicSettings(settings) {
-  return { ...settings };
+  const publicView = {};
+  for (const key of PUBLIC_SETTINGS_KEYS) {
+    if (settings[key] !== undefined) publicView[key] = settings[key];
+  }
+  return publicView;
 }
