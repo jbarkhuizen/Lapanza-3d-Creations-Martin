@@ -802,6 +802,37 @@ test('PUT /api/products/:id only persists allowlisted fields, not arbitrary requ
   assert.strictEqual(refetched.body.product.evilKey, undefined);
 });
 
+test('POST /api/products defaults status/featured/sortOrder to real values, not undefined (#8 launch audit)', async (t) => {
+  // Regression: this route used to build the new category from a fixed
+  // {id, kind, slug, name, description, crumbs, parent, items} object,
+  // silently dropping status/featured/sortOrder/SEO fields even though the
+  // admin client sends status:'draft' on every create -- upsertProduct()
+  // does a full-record replacement, so the field was simply never written,
+  // and printed as literal "undefined" in the admin catalog badge.
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const defaulted = await request(app).post('/api/products').set('Cookie', cookie).send({ name: 'Category B' });
+  assert.strictEqual(defaulted.body.product.status, 'draft');
+  assert.strictEqual(defaulted.body.product.featured, false);
+  assert.strictEqual(defaulted.body.product.sortOrder, 0);
+
+  const explicit = await request(app)
+    .post('/api/products')
+    .set('Cookie', cookie)
+    .send({ name: 'Category C', status: 'published', featured: true, sortOrder: 5, seoTitle: 'Custom title' });
+  assert.strictEqual(explicit.body.product.status, 'published');
+  assert.strictEqual(explicit.body.product.featured, true);
+  assert.strictEqual(explicit.body.product.sortOrder, 5);
+  assert.strictEqual(explicit.body.product.seoTitle, 'Custom title');
+
+  const refetched = await request(app).get(`/api/products/${explicit.body.product.id}`).set('Cookie', cookie);
+  assert.strictEqual(refetched.body.product.status, 'published');
+});
+
 test('PUT /api/products/:id touching only one field preserves status/featured/sortOrder/SEO fields', async (t) => {
   // Regression test: upsertProduct() in store.js does a full-record
   // replacement, not a merge, so any field the PUT allowlist omits is
@@ -817,8 +848,8 @@ test('PUT /api/products/:id touching only one field preserves status/featured/so
   const created = await request(app).post('/api/products').set('Cookie', cookie).send({ name: 'Category A' });
   const productId = created.body.product.id;
 
-  // Seed all the fields under test via a PUT (POST /api/products doesn't
-  // accept them yet), then confirm they actually landed.
+  // Seed all the fields under test via a PUT (isolates this test from
+  // whatever POST /api/products defaults to), then confirm they actually landed.
   const seeded = await request(app)
     .put(`/api/products/${productId}`)
     .set('Cookie', cookie)

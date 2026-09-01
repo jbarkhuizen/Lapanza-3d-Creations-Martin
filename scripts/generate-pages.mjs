@@ -865,13 +865,18 @@ function itemDetailSlug(categorySlug, item, index) {
 function generateItemDetailPage(categorySlug, categoryName, item, index) {
   const file = `products/${itemDetailSlug(categorySlug, item, index)}.html`;
   const pagePath = file;
+  // #8 launch audit: item.name can be missing on data that bypassed
+  // server/index.js's normalizeItem() (which always defaults it the same
+  // way) -- fall back here too so a gap never renders literal "undefined"
+  // as a customer-visible page title/heading.
+  const itemName = item.name || `Item ${index + 1}`;
   const images = item.images && item.images.length ? item.images : (item.imageUrl ? [item.imageUrl] : []);
   const priceNum = parsePrice(item.price) || 0;
   const canAddToCart = item.price && item.available !== false && Number(item.stockQty) > 0;
   const meta = [item.material, item.size, item.finish].filter(Boolean).join(' · ');
   const fitment = [item.creator ? `Design: ${item.creator}` : '', item.models?.length ? `Fits: ${item.models.join(', ')}` : ''].filter(Boolean).join(' · ');
-  const title = `${item.name} — ${categoryName} — Lapanza 3D Creative Lab`;
-  const description = (item.details || `${item.name}, printed to order.`).slice(0, 300);
+  const title = `${itemName} — ${categoryName} — Lapanza 3D Creative Lab`;
+  const description = (item.details || `${itemName}, printed to order.`).slice(0, 300);
 
   const html = `${head({
     // Unlike filament/category copy (owner-controlled, no raw quotes seen so
@@ -884,9 +889,9 @@ function generateItemDetailPage(categorySlug, categoryName, item, index) {
     pagePath,
     extra: ogImageTag(images),
     jsonLd: [
-      breadcrumbJsonLd(`Home / ${categoryName} / ${item.name}`, pagePath),
+      breadcrumbJsonLd(`Home / ${categoryName} / ${itemName}`, pagePath),
       productDetailJsonLd({
-        name: item.name,
+        name: itemName,
         images,
         sku: item.sku,
         price: priceNum,
@@ -901,14 +906,14 @@ ${shellStart({ depth: 1 })}
       <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
         <a href="../index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span>
         <span class="text-espresso/70">${categoryName}</span> <span class="mx-1.5 opacity-40">/</span>
-        <span class="text-espresso/70">${item.name}</span>
+        <span class="text-espresso/70">${itemName}</span>
       </nav>
       <div class="mb-6">${backToHomeButton({ depth: 1 })}</div>
       <div class="grid md:grid-cols-2 gap-10">
-        <div>${productGalleryHtml({ images, alt: item.name, mode: 'full' })}</div>
+        <div>${productGalleryHtml({ images, alt: itemName, mode: 'full' })}</div>
         <div>
           <p class="eyebrow mb-2">${categoryName}</p>
-          <h1 class="font-serif text-3xl md:text-4xl tracking-[-0.03em] mb-3">${item.name}</h1>
+          <h1 class="font-serif text-3xl md:text-4xl tracking-[-0.03em] mb-3">${itemName}</h1>
           ${item.price ? `<p class="text-2xl font-semibold text-terracotta mb-4">${formatItemPrice(item.price)}</p>` : ''}
           <p class="text-espresso/70 leading-relaxed mb-4">${item.details || 'Custom printed to order.'}</p>
           ${meta ? `<p class="text-espresso/50 text-sm mb-2">${meta}</p>` : ''}
@@ -917,7 +922,7 @@ ${shellStart({ depth: 1 })}
           <a href="${SITE.whatsapp}" class="block text-sm font-semibold text-terracotta hover:underline mb-4" target="_blank" rel="noopener noreferrer">Enquire</a>
           ${canAddToCart ? addToCartButton({
             productId: `category:${categorySlug}:${item.sku || index}`,
-            name: item.name,
+            name: itemName,
             price: item.price,
             image: images[0] || '',
             weight: item.shippingWeight ?? item.weight,

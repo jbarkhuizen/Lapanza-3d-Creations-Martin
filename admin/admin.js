@@ -772,7 +772,7 @@ async function renderCatalog() {
           <div class="muted" style="font-size:0.8rem">/${escapeHtml(p.slug)}</div>
         </td>
         <td><span class="badge ${p.kind}">${p.kind}</span></td>
-        <td><span class="badge ${p.status}">${p.status}</span></td>
+        <td><span class="badge ${p.status || 'draft'}">${p.status || 'draft'}</span></td>
         <td class="muted">${meta}</td>
         <td class="muted">${formatDate(p.updatedAt)}</td>
         <td>

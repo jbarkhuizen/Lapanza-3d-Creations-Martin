@@ -1451,6 +1451,16 @@ app.post('/api/products', requireAuth, async (req, res) => {
     crumbs: body.crumbs || '',
     parent: body.parent || null,
     items: normalizeItems(body.items),
+    // Same fields PUT already carries forward (see its comment) -- omitted
+    // here too meant every new category silently had no status/etc. on
+    // disk, printing literally "undefined" in the admin badge (#8 launch
+    // audit finding).
+    status: body.status || 'draft',
+    featured: Boolean(body.featured),
+    sortOrder: Number(body.sortOrder) || 0,
+    seoTitle: body.seoTitle || '',
+    seoDescription: body.seoDescription || '',
+    internalNotes: body.internalNotes || '',
   };
   upsertProduct(product);
   const publishWarning = await publishCatalog();

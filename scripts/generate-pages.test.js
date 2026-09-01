@@ -284,6 +284,41 @@ test('generate-pages excludes a category item marked listed:false from its categ
   }
 });
 
+test('generate-pages falls back to "Item N" instead of literal "undefined" for an item with no name (#8 launch audit)', () => {
+  // Regression: an item that bypassed server/index.js's normalizeItem()
+  // (e.g. direct data-file edit) can have a missing name -- the item
+  // detail-page generator used to interpolate item.name with no fallback
+  // anywhere (title, h1, JSON-LD), rendering the literal text "undefined"
+  // as the page's own title and heading.
+  const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
+  const backup = fs.readFileSync(categoriesPath, 'utf8');
+
+  try {
+    fs.writeFileSync(
+      categoriesPath,
+      JSON.stringify({
+        toys: {
+          slug: 'toys',
+          name: 'Toys',
+          description: 'Toys',
+          crumbs: 'Home / Toys',
+          items: [{ price: 'R150', listed: true }],
+        },
+      }),
+    );
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    const html = fs.readFileSync(path.join(root, 'products', 'toys-item-0-0.html'), 'utf8');
+    assert.match(html, /Item 1/);
+    assert.doesNotMatch(html, /undefined/);
+  } finally {
+    rmGeneratedDetailPages(path.join(root, 'products'), 'toys-item-');
+    fs.writeFileSync(categoriesPath, backup);
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+  }
+});
+
 test('generate-pages skips category pages missing from categories.json instead of crashing', () => {
   const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
   const warningsPath = path.join(root, 'data', 'publish-warnings.json');
