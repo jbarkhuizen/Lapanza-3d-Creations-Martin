@@ -447,11 +447,9 @@ function colourCards(colours, filament) {
     .map((c) => {
       const stock = stockMessage(c.stockQty);
       return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}" data-price="${escapeAttr(String(parsePrice(c.price) || 0))}" data-instock="${Number(c.stockQty) > 0 ? 1 : 0}">
-                  ${
-                    imageFileExists(c.imageUrl)
-                      ? responsiveImg(c.imageUrl, c.name, 'w-full aspect-square object-cover rounded-sm mb-3')
-                      : `<div class="w-full aspect-square rounded-sm mb-3 bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>`
-                  }
+                  <a href="${colourDetailSlug(filament.slug, c.sku)}.html" class="block mb-3" aria-label="View ${c.name} details">
+                    ${productGalleryHtml({ images: c.images && c.images.length ? c.images : (c.imageUrl && imageFileExists(c.imageUrl) ? [c.imageUrl] : []), alt: c.name, mode: 'compact' })}
+                  </a>
                   <p class="font-medium mb-1 tracking-tight">${c.name}</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">${c.sku}</p>
                   <p class="text-terracotta font-semibold">${c.price}</p>
@@ -508,7 +506,7 @@ function partFilterBar(items) {
       </div>`;
 }
 
-function catalogueItems(label, items, categorySlug) {
+function catalogueItems(label, items, categorySlug, depth = 0) {
   const all = Array.isArray(items) ? items : [];
   const list = all.filter((item) => item.listed !== false);
   if (!list.length) return cataloguePlaceholders(label);
@@ -521,9 +519,8 @@ function catalogueItems(label, items, categorySlug) {
       const fitment = [item.creator ? `Design: ${item.creator}` : '', item.models?.length ? `Fits: ${item.models.join(', ')}` : '']
         .filter(Boolean)
         .join(' · ');
-      const img = imageFileExists(item.imageUrl)
-        ? responsiveImg(item.imageUrl, item.name, 'w-full h-full object-cover')
-        : `<span class="text-espresso/35 text-xs uppercase tracking-[0.2em]">Photo coming soon</span>`;
+      const galleryImages = item.images && item.images.length ? item.images : (item.imageUrl && imageFileExists(item.imageUrl) ? [item.imageUrl] : []);
+      const img = productGalleryHtml({ images: galleryImages, alt: item.name, mode: 'compact' });
       const name = item.name || `${label} piece`;
       // Category items don't always have an admin-set sku (it's optional,
       // unlike filament colour skus which are unique in the DB) — fall back
@@ -541,9 +538,9 @@ function catalogueItems(label, items, categorySlug) {
       const searchIndex = [item.name, item.details, item.creator].filter(Boolean).join(' ').toLowerCase();
       const modelList = (item.models || []).join('|');
       return `<article id="${itemAnchorId(item.sku, item.name || i)}" class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors" data-search="${escapeAttr(searchIndex)}" data-models="${escapeAttr(modelList)}">
-              <div class="aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden">
+              <a href="${'../'.repeat(depth)}products/${itemDetailSlug(categorySlug, item, i)}.html" class="block aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden" aria-label="View ${item.name} details">
                 ${img}
-              </div>
+              </a>
               <div class="p-4">
                 <h3 class="font-serif text-lg mb-1">${name}</h3>
                 <p class="text-espresso/60 text-sm mb-2">${item.details || 'Custom printed to order.'}</p>
@@ -924,7 +921,7 @@ function generateCategoryPage({ file, depth, pagePath, crumbs, name, description
       ? null
       : `${deliveryNote('made-to-order')}
       ${isCarParts ? partFilterBar(items) : ''}
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-5 catalogue-grid">${catalogueItems(name, items, slug)}</div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-5 catalogue-grid">${catalogueItems(name, items, slug, depth)}</div>
       ${isCarParts ? `<p id="part-filter-empty" class="hidden text-espresso/50 text-sm py-10 text-center">No parts match your search/filter.</p>` : ''}
       ${valueProps(kind === 'catalog' ? 'category' : kind)}
       ${purchaseFaq('category')}
