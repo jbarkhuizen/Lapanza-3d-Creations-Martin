@@ -334,6 +334,33 @@ function responsiveImg(url, alt, className) {
   return `<picture><source type="image/webp" srcset="${srcset}" sizes="(min-width: 768px) 300px, 45vw">${plain}</picture>`;
 }
 
+// #95: renders 1-5 photos as a scroll-snap strip with dot indicators.
+// 'compact' (card carousel, no thumbnail strip) vs 'full' (detail-page
+// hero, adds a clickable thumbnail strip below the dots). The actual
+// swipe/drag behavior is pure CSS scroll-snap; src/js/product-gallery.js
+// only keeps the dots in sync via IntersectionObserver and handles
+// dot/thumbnail clicks -- see that file for the JS half.
+function productGalleryHtml({ images, alt, mode = 'compact' }) {
+  const list = (images && images.length ? images : []).slice(0, 5);
+  if (!list.length) {
+    return `<div class="w-full aspect-square rounded-sm bg-gradient-to-br from-linen to-cream flex items-center justify-center border border-charcoal/10"><span class="text-espresso/35 text-[0.65rem] uppercase tracking-[0.2em]">Photo coming soon</span></div>`;
+  }
+  const slides = list
+    .map((url, i) => `<div class="gallery-slide" data-gallery-slide="${i}">${responsiveImg(url, alt, 'w-full aspect-square object-cover')}</div>`)
+    .join('');
+  const dots = list.length > 1
+    ? `<div class="gallery-dots" role="tablist">${list.map((_, i) => `<button type="button" class="gallery-dot" data-gallery-dot="${i}" aria-label="Photo ${i + 1} of ${list.length}"></button>`).join('')}</div>`
+    : '';
+  const thumbs = mode === 'full' && list.length > 1
+    ? `<div class="gallery-thumb-strip">${list.map((url, i) => `<button type="button" class="gallery-thumb-btn" data-gallery-thumb="${i}">${responsiveImg(url, alt, 'w-full h-full object-cover')}</button>`).join('')}</div>`
+    : '';
+  return `<div class="product-gallery" data-gallery data-gallery-mode="${mode}">
+            <div class="gallery-track">${slides}</div>
+            ${dots}
+            ${thumbs}
+          </div>`;
+}
+
 // Backlog #66 (SITE-032): standardized fulfilment label per category item.
 // Vocabulary is fixed here, not admin-editable (same enum discipline as
 // order/todo statuses): stocked units ship fast; an available item without
@@ -626,6 +653,27 @@ function productListJsonLd({ pagePath, listName, products }) {
         },
       },
     })),
+  };
+}
+
+// #95: single-product JSON-LD for a detail page, same field names/casing
+// as the 'item' object inside productListJsonLd's ItemList above, just not
+// wrapped in one.
+function productDetailJsonLd({ name, images, sku, price, inStock, url }) {
+  if (!name || !(price > 0)) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name,
+    ...(images && images.length ? { image: images.map((i) => `${SITE_ORIGIN}/${String(i).replace(/^\//, '')}`) } : {}),
+    ...(sku ? { sku } : {}),
+    offers: {
+      '@type': 'Offer',
+      price: String(Number(price)),
+      priceCurrency: 'ZAR',
+      availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/MadeToOrder',
+      url,
+    },
   };
 }
 
