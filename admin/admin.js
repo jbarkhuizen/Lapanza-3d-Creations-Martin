@@ -1106,16 +1106,7 @@ function renderCategorySections(p) {
               <button class="btn small btn-danger" data-remove-item type="button">Remove</button>
             </div>
             <div class="row-card-actions">
-              <div class="flex items-center gap-3">
-                ${item.imageUrl
-                  ? `<img src="${escapeAttr(item.imageUrl)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid var(--line)" onerror="this.style.display='none'" />`
-                  : '<span class="muted" style="font-size:0.78rem">No Photo</span>'}
-                ${item._isNew
-                  ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
-                  : `<button class="btn small" data-action="trigger-item-image" data-trigger-item-image="${item.id}" type="button">Choose File</button>
-                     <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" data-item-image="${item.id}" />`}
-              </div>
-              ${item.imageUrl && !item._isNew ? `<button class="btn small btn-danger" data-remove-item-image="${item.id}" type="button">Remove photo</button>` : ''}
+              ${item._isNew ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>' : galleryPanelHtml('item', item.id, item.images || [])}
             </div>
             <div class="grid-2">
               <label class="field"><span>Item Name</span><input data-item="name" value="${escapeAttr(item.name || '')}" /></label>
@@ -1280,11 +1271,6 @@ function bindEditorEvents() {
       renderEditor();
     });
   });
-  $$('[data-trigger-item-image]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      $(`[data-item-image="${btn.dataset.triggerItemImage}"]`)?.click();
-    });
-  });
   $$('[data-save-colour]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       syncNestedFromDom();
@@ -1349,46 +1335,11 @@ function bindEditorEvents() {
     });
   });
 
-  // Catalog item photo upload/remove -- legacy single-photo control,
-  // pending its own gallery-panel migration in a later task (see #95).
-  // Fires immediately on file selection, no separate "upload" button to
-  // forget to click. Only rendered for already-persisted items (see
-  // renderCategorySections), so p.id/item.id here are always the real,
-  // server-assigned ids by the time this can fire.
-  $$('[data-item-image]').forEach((input) => {
-    input.addEventListener('change', async () => {
-      const file = input.files[0];
-      if (!file) return;
-      const itemId = input.dataset.itemImage;
-      const formData = new FormData();
-      formData.append('image', file);
-      try {
-        const res = await fetch(`/api/products/${p.id}/items/${itemId}/image`, {
-          method: 'POST',
-          credentials: 'include',
-          body: formData,
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
-        state.draft = data.product;
-        toast('Photo uploaded');
-        renderEditor();
-      } catch (ex) {
-        toast(ex.message);
-      }
-    });
-  });
-  $$('[data-remove-item-image]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const itemId = btn.dataset.removeItemImage;
-      try {
-        const res = await api(`/api/products/${p.id}/items/${itemId}/image`, { method: 'DELETE' });
-        state.draft = res.product;
-        toast('Photo removed');
-        renderEditor();
-      } catch (ex) {
-        toast(ex.message);
-      }
+  (p.items || []).forEach((item) => {
+    if (item._isNew) return;
+    wireGalleryPanel('item', item.id, { productId: p.id }, (images) => {
+      state.draft.items = state.draft.items.map((row) => (row.id === item.id ? { ...row, images } : row));
+      renderEditor();
     });
   });
 
