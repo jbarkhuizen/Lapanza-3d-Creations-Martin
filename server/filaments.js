@@ -298,7 +298,7 @@ export function removeColourImage(colourId, imageId, db = getDb()) {
 export function reorderColourImages(colourId, orderedIds, db = getDb()) {
   const existing = listColourImages(colourId, db);
   const existingIds = new Set(existing.map((i) => i.id));
-  const valid = Array.isArray(orderedIds) && orderedIds.length === existing.length && orderedIds.every((id) => existingIds.has(id));
+  const valid = Array.isArray(orderedIds) && orderedIds.length === existing.length && new Set(orderedIds).size === existing.length && orderedIds.every((id) => existingIds.has(id));
   if (!valid) throw new Error('Reorder list must contain exactly the existing image ids');
   const tx = db.transaction((ids) => {
     ids.forEach((id, i) => db.prepare('UPDATE filament_colour_images SET sort_order = ? WHERE id = ?').run(i, id));

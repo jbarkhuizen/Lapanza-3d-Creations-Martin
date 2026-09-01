@@ -244,6 +244,7 @@ test('reorderColourImages persists a new sort order and rejects a mismatched id 
 
   assert.throws(() => reorderColourImages(colourId, [first.id], db), /exactly the existing image ids/);
   assert.throws(() => reorderColourImages(colourId, [first.id, 'bogus'], db), /exactly the existing image ids/);
+  assert.throws(() => reorderColourImages(colourId, [first.id, first.id], db), /exactly the existing image ids/);
   db.close();
 });
 
