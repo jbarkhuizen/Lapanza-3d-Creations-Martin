@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:all"],
       "port": 5173
+    },
+    {
+      "name": "lapanza-dev-site",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:site"],
+      "port": 5173
+    },
+    {
+      "name": "lapanza-dev-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:admin"],
+      "port": 8787
     }
   ]
 }

@@ -758,14 +758,33 @@ async function renderDashboard() {
   });
 }
 
-async function renderCatalog() {
-  await refreshProducts();
-  const rows = state.products.map((p) => {
-    const meta =
-      p.kind === 'filament'
-        ? `${p.colours?.length || 0} colours · ${p.specs?.length || 0} specs`
-        : `${p.items?.length || 0} items${p.parent ? ` · ${p.parent}` : ''}`;
-    return `
+// Same grouping shape as Stock Management's STOCK_GROUP_DEFS (see its own
+// comment for why Car Parts nests GWM/Landrover rather than matching
+// directly) -- kept consistent across both admin pages. Filament rows have
+// no single category product/name in common (PLA, ABS, etc. are each their
+// own top-level row), so that group matches on kind alone; every other
+// group matches a category product's name.
+const CATALOG_GROUP_DEFS = [
+  { key: 'filament', label: 'Filament', match: (p) => p.kind === 'filament' },
+  { key: 'toys', label: 'Toys', match: (p) => p.kind === 'category' && p.name === 'Toys' },
+  { key: 'phones', label: 'Phones', match: (p) => p.kind === 'category' && p.name === 'Phones' },
+  { key: 'homeware', label: 'Homeware', match: (p) => p.kind === 'category' && p.name === 'Homeware' },
+  {
+    key: 'car-parts',
+    label: 'Car Parts',
+    children: [
+      { key: 'car-parts-gwm', label: 'GWM', match: (p) => p.kind === 'category' && p.name === 'GWM' },
+      { key: 'car-parts-landrover', label: 'Landrover', match: (p) => p.kind === 'category' && p.name === 'Landrover' },
+    ],
+  },
+];
+
+function catalogRowHtml(p) {
+  const meta =
+    p.kind === 'filament'
+      ? `${p.colours?.length || 0} colours · ${p.specs?.length || 0} specs`
+      : `${p.items?.length || 0} items${p.parent ? ` · ${p.parent}` : ''}`;
+  return `
       <tr data-id="${p.id}" data-kind="${p.kind}">
         <td>
           <strong>${escapeHtml(p.name)}</strong>
@@ -779,7 +798,64 @@ async function renderCatalog() {
           <button class="btn small" data-action="edit" type="button">Edit</button>
         </td>
       </tr>`;
+}
+
+const CATALOG_TABLE_HEAD = '<thead><tr><th>Product</th><th>Kind</th><th>Status</th><th>Details</th><th>Updated</th><th></th></tr></thead>';
+
+// Mirrors stockSectionHtml -- see its own comment for the forceOpen/
+// data-initial-open reasoning.
+function catalogSectionHtml(key, label, list, forceOpen) {
+  const open = forceOpen || !state.catalogCollapsed.has(key);
+  const rows = list.map(catalogRowHtml).join('');
+  return `
+    <details class="stock-section" data-group="${escapeAttr(key)}" data-initial-open="${open}" ${open ? 'open' : ''}>
+      <summary>${escapeHtml(label)} <span class="muted">(${list.length})</span></summary>
+      <div class="panel table-wrap">
+        <table class="catalog">
+          ${CATALOG_TABLE_HEAD}
+          <tbody>${rows || '<tr><td colspan="6"><div class="empty">No products</div></td></tr>'}</tbody>
+        </table>
+      </div>
+    </details>`;
+}
+
+async function renderCatalog() {
+  state.catalogCollapsed = state.catalogCollapsed || new Set();
+  await refreshProducts();
+
+  // state.products is already filtered by the search/kind/status toolbar
+  // (see refreshProducts) -- a group is only hidden while a filter is
+  // active, same as Stock Management, so browsing unfiltered always shows
+  // every group even if currently empty.
+  const filtering = Boolean(state.filters.q || state.filters.kind || state.filters.status);
+  const claimed = new Set();
+  const sectionsHtml = CATALOG_GROUP_DEFS.map((def) => {
+    if (def.children) {
+      const childrenHtml = def.children
+        .map((child) => {
+          const childItems = state.products.filter((p) => child.match(p));
+          childItems.forEach((p) => claimed.add(p.id));
+          if (filtering && !childItems.length) return '';
+          return catalogSectionHtml(child.key, child.label, childItems, filtering);
+        })
+        .join('');
+      const totalCount = def.children.reduce((n, child) => n + state.products.filter((p) => child.match(p)).length, 0);
+      if (filtering && !totalCount) return '';
+      const open = filtering || !state.catalogCollapsed.has(def.key);
+      return `
+    <details class="stock-section stock-section-parent" data-group="${escapeAttr(def.key)}" data-initial-open="${open}" ${open ? 'open' : ''}>
+      <summary>${escapeHtml(def.label)} <span class="muted">(${totalCount})</span></summary>
+      ${childrenHtml}
+    </details>`;
+    }
+    const groupItems = state.products.filter((p) => def.match(p));
+    groupItems.forEach((p) => claimed.add(p.id));
+    if (filtering && !groupItems.length) return '';
+    return catalogSectionHtml(def.key, def.label, groupItems, filtering);
   }).join('');
+
+  const otherItems = state.products.filter((p) => !claimed.has(p.id));
+  const otherHtml = otherItems.length || !filtering ? catalogSectionHtml('other', 'Other', otherItems, filtering) : '';
 
   $('#view-catalog').innerHTML = `
     <div class="toolbar">
@@ -796,23 +872,7 @@ async function renderCatalog() {
       </select>
       <span class="muted">${state.products.length} results</span>
     </div>
-    <div class="panel table-wrap">
-      <table class="catalog">
-        <thead>
-          <tr>
-            <th>Product</th>
-            <th>Kind</th>
-            <th>Status</th>
-            <th>Details</th>
-            <th>Updated</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows || '<tr><td colspan="6"><div class="empty">No products match your filters</div></td></tr>'}
-        </tbody>
-      </table>
-    </div>
+    <div class="stack gap-3">${sectionsHtml}${otherHtml}</div>
   `;
 
   const applyFilters = async () => {
@@ -826,6 +886,21 @@ async function renderCatalog() {
   });
   $('#filter-kind').addEventListener('change', applyFilters);
   $('#filter-status').addEventListener('change', applyFilters);
+
+  $$('#view-catalog details.stock-section').forEach((el) => {
+    el.addEventListener('toggle', () => {
+      // Same spurious-initial-fire guard as Stock Management's identical
+      // listener -- see its comment for why this can't just trust the
+      // first 'toggle' event.
+      if (el.dataset.initialOpen === String(el.open)) {
+        delete el.dataset.initialOpen;
+        return;
+      }
+      const key = el.dataset.group;
+      if (el.open) state.catalogCollapsed.delete(key);
+      else state.catalogCollapsed.add(key);
+    });
+  });
 
   $$('#view-catalog tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', (e) => {
@@ -3456,6 +3531,7 @@ async function renderClients() {
           <td><button class="btn-expand" data-action="toggle-orders" type="button" aria-expanded="${expanded}" aria-label="Toggle orders">${expanded ? '▾' : '▸'}</button></td>
           <td><code>${escapeHtml(c.clientCode)}</code></td>
           <td>${escapeHtml(c.name || '—')}</td>
+          <td>${escapeHtml(c.businessName || '—')}</td>
           <td>${escapeHtml(c.email)}</td>
           <td>${escapeHtml(c.phone || '—')}</td>
           <td>
@@ -3464,7 +3540,7 @@ async function renderClients() {
             <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
           </td>
         </tr>`;
-      const extra = (expanded ? ordersNestedRowHtml(c.id, 6) : '') + (state.mergingClient?.sourceId === c.id ? mergeRowHtml(state.mergingClient, 6) : '');
+      const extra = (expanded ? ordersNestedRowHtml(c.id, 7) : '') + (state.mergingClient?.sourceId === c.id ? mergeRowHtml(state.mergingClient, 7) : '');
       return row + extra;
     })
     .join('');
@@ -3529,8 +3605,8 @@ async function renderClients() {
       </div>` : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th></th><th>Code</th><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No clients yet</div></td></tr>'}</tbody>
+        <thead><tr><th></th><th>Code</th><th>Name</th><th>Company</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No clients yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -5382,16 +5458,23 @@ function stockSectionHtml(key, label, items, forceOpen) {
 
 async function renderStock() {
   state.stockQ = state.stockQ || '';
+  state.stockPriceMin = state.stockPriceMin ?? '';
+  state.stockPriceMax = state.stockPriceMax ?? '';
   state.stockEdits = state.stockEdits || {}; // id -> { stockQty?, price? }
   state.stockCollapsed = state.stockCollapsed || new Set(); // group keys currently collapsed -- survives re-render (e.g. after Save)
   const { items } = await api('/api/inventory');
   state.stockItems = items;
 
   const needle = state.stockQ.trim().toLowerCase();
-  const searching = needle.length > 0;
-  const filtered = searching
-    ? items.filter((i) => [i.sku, i.name, i.category].filter(Boolean).some((v) => v.toLowerCase().includes(needle)))
-    : items;
+  const priceMin = state.stockPriceMin === '' ? null : Number(state.stockPriceMin);
+  const priceMax = state.stockPriceMax === '' ? null : Number(state.stockPriceMax);
+  const searching = needle.length > 0 || priceMin !== null || priceMax !== null;
+  const filtered = items.filter((i) => {
+    if (needle && ![i.sku, i.name, i.category].filter(Boolean).some((v) => v.toLowerCase().includes(needle))) return false;
+    if (priceMin !== null && Number(i.price) < priceMin) return false;
+    if (priceMax !== null && Number(i.price) > priceMax) return false;
+    return true;
+  });
 
   const claimed = new Set();
   const sectionsHtml = STOCK_GROUP_DEFS.map((def) => {
@@ -5458,6 +5541,8 @@ async function renderStock() {
     ${reorderHtml}
     <div class="toolbar">
       <input id="stock-q" type="search" placeholder="Search SKU, name, category…" value="${escapeAttr(state.stockQ)}" />
+      <input id="stock-price-min" type="number" min="0" step="1" placeholder="Min R" style="max-width:100px" value="${escapeAttr(String(state.stockPriceMin))}" />
+      <input id="stock-price-max" type="number" min="0" step="1" placeholder="Max R" style="max-width:100px" value="${escapeAttr(String(state.stockPriceMax))}" />
       <span class="muted">${escapeHtml(String(filtered.length))} items</span>
       <button class="btn btn-primary" id="save-stock" type="button" ${dirtyCount ? '' : 'disabled'}>Save Changes${dirtyCount ? ` (${escapeHtml(String(dirtyCount))})` : ''}</button>
     </div>
@@ -5483,6 +5568,18 @@ async function renderStock() {
   $('#stock-q').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
     state.stockQ = $('#stock-q').value.trim();
+    await renderStock();
+  });
+
+  $('#stock-price-min').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    state.stockPriceMin = $('#stock-price-min').value.trim();
+    await renderStock();
+  });
+
+  $('#stock-price-max').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    state.stockPriceMax = $('#stock-price-max').value.trim();
     await renderStock();
   });
 
