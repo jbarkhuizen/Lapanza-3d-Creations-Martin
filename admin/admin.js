@@ -5340,7 +5340,10 @@ async function renderStock() {
     if (!ids.length) return;
     const updates = ids.map((id) => {
       const item = state.stockItems.find((i) => i.id === id);
-      return { kind: item.kind, id: item.id, parentId: item.parentId, ...state.stockEdits[id] };
+      // expectedStockQty = what this grid displayed at load; the server
+      // rejects the row (instead of clobbering) if an order or another
+      // admin changed it in the meantime.
+      return { kind: item.kind, id: item.id, parentId: item.parentId, expectedStockQty: item.stockQty, ...state.stockEdits[id] };
     });
     const saveBtn = $('#save-stock');
     saveBtn.disabled = true;
@@ -5348,7 +5351,7 @@ async function renderStock() {
     try {
       const { results } = await api('/api/inventory', { method: 'PUT', body: JSON.stringify({ updates }) });
       const failed = results.filter((r) => !r.ok);
-      toast(failed.length ? `${failed.length} item(s) failed to save` : 'Stock updated');
+      toast(failed.length ? `${failed.length} item(s) failed to save — ${failed[0].error}` : 'Stock updated');
       for (const r of results) {
         if (r.ok) delete state.stockEdits[r.id];
       }

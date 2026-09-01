@@ -86,11 +86,26 @@ function updateCategoryItemStock(productId, itemId, { stockQty, price, listed })
 // caller gets a per-row result list so the UI can show exactly what failed.
 export function bulkUpdateInventory(updates, db = getDb()) {
   const results = [];
+  // Optimistic concurrency for stock edits: the grid posts absolute
+  // quantities captured when the page rendered, so a save from a panel left
+  // open all day silently reverted every order placed in between (the one
+  // place the careful transactional stock model was bypassed). The client
+  // sends expectedStockQty (the value it displayed); a row whose live stock
+  // no longer matches is rejected with the current number instead of
+  // clobbered. Older clients that don't send it keep the old last-write-wins.
+  const liveStock = new Map(listInventory(db).map((row) => [row.id, row.stockQty]));
   for (const update of updates) {
-    const { kind, id, parentId, stockQty, price, listed } = update;
+    const { kind, id, parentId, stockQty, price, listed, expectedStockQty } = update;
     if (stockQty !== undefined && Number(stockQty) < 0) {
       results.push({ id, ok: false, error: 'Stock cannot be negative' });
       continue;
+    }
+    if (stockQty !== undefined && expectedStockQty !== undefined) {
+      const current = liveStock.get(id);
+      if (current !== undefined && current !== Number(expectedStockQty)) {
+        results.push({ id, ok: false, error: `Stock is now ${current} (changed by an order or another admin since this page loaded) — refresh and re-apply` });
+        continue;
+      }
     }
     if (price !== undefined && Number(price) < 0) {
       results.push({ id, ok: false, error: 'Price cannot be negative' });

@@ -246,7 +246,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   ensureDesktopThemeToggle();
   wireThemeButtons();
   mountWhatsAppFab();
-  mountCartUI();
+  // No cart drawer on the checkout page (launch-audit blocker #5): checkout
+  // reads the cart ONCE at init and renders its own summary -- the drawer
+  // would let the customer change quantities/clear the cart there while the
+  // displayed lines, totals, weight-matched shipping AND the submitted
+  // items[] all stayed frozen at load time. Cart edits happen via
+  // "Continue shopping"; a fresh checkout load re-reads everything.
+  if (window.__PAGE_PATH__ !== 'checkout.html') mountCartUI();
   enhanceColourCards();
   mountCarPartsFilter();
   mountFilamentFilter();

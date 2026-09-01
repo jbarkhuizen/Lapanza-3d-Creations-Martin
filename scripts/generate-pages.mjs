@@ -342,7 +342,12 @@ function responsiveImg(url, alt, className) {
 function fulfilmentLabel(item) {
   if (item.available === false) return `<p class="text-[0.65rem] uppercase tracking-[0.12em] font-bold text-espresso/40 mb-3">Currently Unavailable</p>`;
   if (Number(item.stockQty) > 0) return `<p class="text-[0.65rem] uppercase tracking-[0.12em] font-bold text-forest mb-3" style="color:#2e6e46">Ready to Ship</p>`;
-  return `<p class="text-[0.65rem] uppercase tracking-[0.12em] font-bold text-espresso/50 mb-3">Printed to Order</p>`;
+  // Zero stock reads "Out of Stock", not the old "Printed to Order": the
+  // server reserves stock at order creation for EVERY item kind and hard-
+  // rejects a zero-stock line, so a buyable-looking made-to-order card was a
+  // dead end the customer only discovered after filling in the whole
+  // checkout form (launch-audit blocker #4). The Enquire link stays.
+  return `<p class="text-[0.65rem] uppercase tracking-[0.12em] font-bold text-terracotta mb-3">Out of Stock</p>`;
 }
 
 // Backlog #50 (SITE-016): reusable "why buy from Lapanza" strip, placed on
@@ -387,6 +392,20 @@ function imageFileExists(url) {
   }
 }
 
+// Meta descriptions used to be a hard .slice(0, 155) that cut mid-word,
+// mid-sentence ("…corn starch or sugarcane. It") on 12 of the 20 filament
+// pages -- prefer ending at the last complete sentence that fits, fall back
+// to the last whole word plus an ellipsis.
+function metaDescription(text, max = 155) {
+  const clean = String(text || '').replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  const window = clean.slice(0, max);
+  const sentenceEnd = Math.max(window.lastIndexOf('. '), window.lastIndexOf('! '), window.lastIndexOf('? '));
+  if (sentenceEnd > max * 0.5) return window.slice(0, sentenceEnd + 1);
+  const wordEnd = window.lastIndexOf(' ');
+  return `${window.slice(0, wordEnd > 0 ? wordEnd : max).replace(/[,;:.\s]+$/, '')}…`;
+}
+
 function stockMessage(stockQty) {
   const qty = Number(stockQty) || 0;
   if (qty <= 0) return { label: 'Out of stock', className: 'text-terracotta font-semibold' };
@@ -411,13 +430,13 @@ function colourCards(colours, filament) {
                   <p class="text-terracotta font-semibold">${c.price}</p>
                   <p class="text-[0.72rem] mt-0.5 ${stock.className}">${stock.label}</p>
                   ${Number(c.stockQty) <= 0 ? `<button type="button" class="restock-notify text-xs font-semibold text-terracotta hover:underline mt-1" data-restock-product="filament:${escapeAttr(filament.slug)}:${escapeAttr(c.sku)}">Email me when it's back</button>` : ''}
-                  ${addToCartButton({
+                  ${Number(c.stockQty) > 0 ? addToCartButton({
                     productId: `filament:${filament.slug}:${c.sku}`,
                     name: `${filament.name} — ${c.name}`,
                     price: c.price,
                     image: c.imageUrl,
                     weight: c.shippingWeightG ?? c.weightG,
-                  })}
+                  }) : ''}
                 </div>`;
     })
     .join('\n');
@@ -483,7 +502,11 @@ function catalogueItems(label, items, categorySlug) {
       // unlike filament colour skus which are unique in the DB) — fall back
       // to a build-time index so the productId is still stable across a
       // regen as long as item order doesn't change.
-      const canAddToCart = item.price && item.available !== false;
+      // Stock gates the button (launch-audit #4): the server's
+      // reserveStockForOrder throws on a zero-stock line no matter what the
+      // page showed, so rendering Add to Cart for it just moves the
+      // rejection to the worst possible moment.
+      const canAddToCart = item.price && item.available !== false && Number(item.stockQty) > 0;
       // Read by src/js/car-parts-filter.js -- only meaningful on GWM/Landrover
       // pages (the only ones with a search/model filter bar rendered), but
       // harmless to include everywhere: cheap, and keeps this function from
@@ -640,7 +663,7 @@ function generateFilamentPage(f) {
   const filamentPagePath = `filament/${f.slug}.html`;
   const html = `${head({
     title: `${f.name} — Lapanza 3D Creative Lab`,
-    description: f.description.slice(0, 155),
+    description: metaDescription(f.description),
     depth: 1,
     pagePath: filamentPagePath,
     jsonLd: [
@@ -656,7 +679,7 @@ ${shellStart({ depth: 1 })}
     <main id="main" class="flex-1 min-w-0 px-6 sm:px-10 lg:px-16 xl:px-24 py-12 md:py-20">
       <div class="mx-auto w-full max-w-3xl lg:max-w-4xl xl:max-w-5xl">
       <nav class="text-[0.7rem] uppercase tracking-[0.14em] text-espresso/45 mb-6" aria-label="Breadcrumb">
-        <a href="../index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <a href="../index.html#range" class="hover:text-terracotta">Filament</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">${f.name}</span>
+        <a href="../index.html" class="hover:text-terracotta">Home</a> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">Filament</span> <span class="mx-1.5 opacity-40">/</span> <span class="text-espresso/70">${f.name}</span>
       </nav>
       <div class="mb-6">${backToHomeButton({ depth: 1 })}</div>
 

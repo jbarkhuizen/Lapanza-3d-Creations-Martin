@@ -10,8 +10,22 @@ export function listAdmins(db = getDb()) {
   return db.prepare('SELECT id, username, created_at FROM admins ORDER BY created_at ASC').all();
 }
 
+// One password rule for every path that sets an admin password. The 8+
+// minimum previously existed only on the first-run /api/setup route, so
+// "add admin" and "reset password" happily accepted a 1-character password
+// on the account guarding the entire back office (launch-audit finding).
+// Matches resetClientPassword's customer-side rule.
+const MIN_PASSWORD_LENGTH = 8;
+function assertPasswordAllowed(password) {
+  if (!password) throw new Error('Password required');
+  if (String(password).length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`);
+  }
+}
+
 export function createAdmin({ username, password }, db = getDb()) {
-  if (!username || !password) throw new Error('Username and password required');
+  if (!username) throw new Error('Username and password required');
+  assertPasswordAllowed(password);
   const existing = db.prepare('SELECT id FROM admins WHERE username = ?').get(username);
   if (existing) throw new Error('Username already taken');
   const admin = {
@@ -34,7 +48,7 @@ export function deleteAdmin(id, db = getDb()) {
 }
 
 export function resetPassword(id, password, db = getDb()) {
-  if (!password) throw new Error('Password required');
+  assertPasswordAllowed(password);
   const hash = bcrypt.hashSync(password, 10);
   const result = db.prepare('UPDATE admins SET password_hash = ? WHERE id = ?').run(hash, id);
   return result.changes > 0;

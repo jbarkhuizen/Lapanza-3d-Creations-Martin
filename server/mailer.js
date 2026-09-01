@@ -249,6 +249,27 @@ export async function sendClientVerificationEmail(client, verifyUrl) {
   });
 }
 
+// Anti-enumeration companion to the register route: when someone submits a
+// registration for an address that ALREADY has an account, the API returns
+// the same generic "check your email" success as a fresh signup (so the
+// response can't be used to probe which emails are registered) and this
+// email tells the real account owner what happened instead. Deliberately
+// not admin-editable: security-relevant wording.
+export async function sendDuplicateRegistrationEmail(client, siteUrl) {
+  const settings = getSettings();
+  const bodyHtml = `<p style="margin:0 0 16px;">Hi ${escapeHtml(client.name || 'there')},</p>
+    <p style="margin:0 0 16px;">Someone just tried to create a new ${escapeHtml(settings.siteName || 'Lapanza 3D')} account with this email address — but you already have one.</p>
+    <p style="margin:0 0 16px;">If this was you, simply log in with your existing password, or reset it if you've forgotten it.</p>
+    ${renderButton('Log In', `${siteUrl}/account.html`)}
+    <p style="margin:0;font-size:13px;color:#3b322b;">If this wasn't you, no action is needed — no new account was created and nothing about yours has changed.</p>`;
+  await getTransporter().sendMail({
+    from: FROM_ADDRESS,
+    to: client.email,
+    subject: 'Your account is already set up',
+    html: renderEmailShell({ settings, preheader: 'A registration was attempted with your email', bodyHtml }),
+  });
+}
+
 // Password recovery: link is single-use (server/clients.js clears
 // reset_token on success) and expires in 1h -- see requestPasswordReset.
 // Editable via Settings -> Communications -> "Password reset". Tokens:

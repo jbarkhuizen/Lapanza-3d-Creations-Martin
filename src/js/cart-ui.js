@@ -221,7 +221,11 @@ export function mountCartUI() {
     openDrawer();
   });
   overlay.addEventListener('click', closeDrawer);
-  document.getElementById('cart-clear').addEventListener('click', clearCart);
+  // Confirmation matches checkout's own cancel flow -- one accidental tap
+  // previously wiped the whole cart with no way back.
+  document.getElementById('cart-clear').addEventListener('click', () => {
+    if (getCartCount() === 0 || window.confirm('Clear your whole cart?')) clearCart();
+  });
 
   linesEl.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-cart-action]');

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Page Not Found — Lapanza 3D Creative Lab</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<!-- Deliberately self-contained (inline styles, no bundled assets): nginx
+     serves this via error_page as an internal redirect, so the browser URL
+     can be any depth (/filament/typo, /car-parts/xyz) and relative asset
+     paths would break. Inline everything and it renders identically from
+     anywhere. Palette mirrors src/styles/main.css (cream/charcoal/terracotta). -->
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    background: #f7f3eb; color: #1a1612; text-align: center; padding: 24px;
+    font-family: "DM Sans", -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { color-scheme: dark; }
+    body { background: #12100e; color: #f0e9dd; }
+    p { color: rgba(240, 233, 221, 0.65) !important; }
+  }
+  .eyebrow { font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; color: #c24b28; font-weight: 700; margin-bottom: 14px; }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 6vw, 3rem); letter-spacing: -0.03em; margin-bottom: 14px; }
+  p { color: rgba(26, 22, 18, 0.65); line-height: 1.6; max-width: 34rem; margin: 0 auto 26px; }
+  a.btn {
+    display: inline-block; background: #1a1612; color: #f7f3eb; text-decoration: none;
+    font-size: 0.85rem; font-weight: 600; border-radius: 999px; padding: 12px 26px;
+  }
+  a.btn:hover { background: #c24b28; }
+</style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">404</p>
+    <h1>That page isn't here.</h1>
+    <p>The link may be old, or the address mistyped. Everything we sell — filament, car parts, toys and custom prints — is one click away.</p>
+    <a class="btn" href="/index.html">Back to the shop</a>
+  </main>
+</body>
+</html>

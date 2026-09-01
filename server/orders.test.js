@@ -195,6 +195,37 @@ test('createOrder reserves (decrements) stock immediately at creation, not just 
   db.close();
 });
 
+test('un-cancelling an order re-reserves its stock (and delete after un-cancel restores it exactly once)', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'Revive', sku: 'PLA-REVIVE-1KG', priceRand: 299, weightG: 1000, stockQty: 5 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    { client: { name: 'Test Customer', email: 'revive@example.com', phone: '0123456789' }, items: [{ productId, quantity: 2 }], paymentMethod: 'payfast_card' },
+    db,
+  );
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3); // reserved at creation
+
+  updateOrderStatus(order.id, 'cancelled', db);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5); // released
+
+  // Regression: this transition previously re-activated the order while the
+  // stock stayed restored -- and a later delete restored it a second time.
+  updateOrderStatus(order.id, 'pending_payment', db);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3, 'un-cancel must re-reserve');
+
+  deleteOrder(order.id, db);
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5, 'delete after un-cancel restores exactly once');
+  db.close();
+});
+
 test('closes the overselling race: a second order for the same last unit is rejected before payment, not after', () => {
   const db = openDb(':memory:');
   createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);

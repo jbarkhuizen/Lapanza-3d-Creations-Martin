@@ -24,6 +24,7 @@ function htmlEntries() {
     seoFilamentSa: resolve(__dirname, 'filament-south-africa.html'),
     seoVehicleParts: resolve(__dirname, 'vehicle-3d-printed-parts.html'),
     account: resolve(__dirname, 'account.html'),
+    notFound: resolve(__dirname, '404.html'),
     terms: resolve(__dirname, 'terms.html'),
     privacy: resolve(__dirname, 'privacy.html'),
     returns: resolve(__dirname, 'returns.html'),

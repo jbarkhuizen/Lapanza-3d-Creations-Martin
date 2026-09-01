@@ -14,7 +14,20 @@ test('hasAnyAdmin is false on an empty db, true after createAdmin', () => {
 test('createAdmin rejects a duplicate username', () => {
   const db = openDb(':memory:');
   createAdmin({ username: 'johan', password: 'correcthorse' }, db);
-  assert.throws(() => createAdmin({ username: 'johan', password: 'other' }, db), /already taken/);
+  assert.throws(() => createAdmin({ username: 'johan', password: 'otherpassword' }, db), /already taken/);
+  db.close();
+});
+
+test('every admin-password path enforces the 8-character minimum, not just first-run setup', () => {
+  // Regression (launch-audit): the 8+ rule lived only on /api/setup, so
+  // "add admin" and "reset password" accepted a 1-character password on the
+  // account guarding the whole back office.
+  const db = openDb(':memory:');
+  assert.throws(() => createAdmin({ username: 'weak', password: 'short' }, db), /at least 8 characters/);
+  const admin = createAdmin({ username: 'strong', password: 'correcthorse' }, db);
+  assert.throws(() => resetPassword(admin.id, 'tiny', db), /at least 8 characters/);
+  assert.strictEqual(resetPassword(admin.id, 'longenoughpassword', db), true);
+  assert.ok(verifyLogin('strong', 'longenoughpassword', db));
   db.close();
 });
 

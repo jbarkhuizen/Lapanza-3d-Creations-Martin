@@ -977,6 +977,22 @@ test('a failed outbound email is recorded to the audit log instead of only conso
   assert.match(res.body.entries[0].detail, /GMAIL_APP_PASSWORD/);
 });
 
+test('registering an already-registered email returns the same generic success as a fresh signup (no enumeration)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  const payload = { firstName: 'First', lastName: 'Owner', email: 'enum-probe@example.com', password: 'correcthorsebattery' };
+
+  const first = await request(app).post('/api/client/register').send(payload);
+  assert.strictEqual(first.status, 201);
+
+  // Regression (launch-audit SEC-003): this used to answer 400 "already
+  // exists", letting anyone probe which emails hold accounts -- login and
+  // forgot-password were already generic, this was the one gap left.
+  const second = await request(app).post('/api/client/register').send({ ...payload, firstName: 'Someone', lastName: 'Else', password: 'differentpassword' });
+  assert.strictEqual(second.status, 201);
+  assert.strictEqual(second.body.message, first.body.message);
+});
+
 test('POST /api/client/register requires first name and surname, and stores company name', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

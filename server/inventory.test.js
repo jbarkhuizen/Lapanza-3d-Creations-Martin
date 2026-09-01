@@ -124,3 +124,34 @@ test('getReorderReport lists at/below-threshold items with 30-day sales, cancell
   assert.strictEqual(row.soldLast30Days, 4);
   assert.ok(!report.find((r) => r.sku === 'PLA-FINE'), 'healthy stock excluded');
 });
+
+test('bulkUpdateInventory rejects a stock write whose expectedStockQty no longer matches live stock', async (t) => {
+  // Regression (launch-audit): the grid posts absolute quantities captured
+  // at page load -- a save from a panel left open all day silently reverted
+  // every order placed in between.
+  await withTempCwd(t);
+  const { createFilament, addColour, getFilament } = await import(`./filaments.js?t=${Date.now()}`);
+  const { listInventory, bulkUpdateInventory } = await import(`./inventory.js?t=${Date.now()}`);
+
+  const f = createFilament({ name: 'PLA', slug: 'pla' });
+  addColour(f.id, { name: 'White', sku: 'SKU-1', stockQty: 5, weightG: 1000, priceRand: 299 });
+  const row = listInventory().find((r) => r.kind === 'filament');
+
+  // Concurrent change after the "page loaded": an order takes 2 units.
+  bulkUpdateInventory([{ kind: 'filament', id: row.id, parentId: row.parentId, stockQty: 3 }]);
+
+  // The stale grid (still showing 5) tries to save 10.
+  const results = bulkUpdateInventory([
+    { kind: 'filament', id: row.id, parentId: row.parentId, stockQty: 10, expectedStockQty: 5 },
+  ]);
+  assert.strictEqual(results[0].ok, false);
+  assert.match(results[0].error, /Stock is now 3/);
+  assert.strictEqual(getFilament(f.id).colours[0].stockQty, 3, 'the stale write must not be applied');
+
+  // A save whose expectation matches goes through.
+  const okResults = bulkUpdateInventory([
+    { kind: 'filament', id: row.id, parentId: row.parentId, stockQty: 10, expectedStockQty: 3 },
+  ]);
+  assert.strictEqual(okResults[0].ok, true);
+  assert.strictEqual(getFilament(f.id).colours[0].stockQty, 10);
+});

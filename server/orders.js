@@ -606,6 +606,17 @@ export function updateOrderStatus(id, status, db = getDb()) {
     if (status === 'cancelled' && existing.status !== 'cancelled') {
       restoreStockForOrder(getOrder(id, db), db);
     }
+    // The inverse transition needs the inverse stock move: un-cancelling
+    // (cancelled -> any active status, reachable from Invoice History's
+    // status picker) previously re-activated the order while its stock
+    // stayed restored -- and deleteOrder would then restore it a SECOND
+    // time. Re-reserve with the admin-trusted floor-at-0 semantics
+    // (decrementStockForOrder, same as manual orders) rather than the
+    // hard-blocking checkout path: an admin deliberately reviving an order
+    // shouldn't be refused because something sold in the meantime.
+    if (existing.status === 'cancelled' && status !== 'cancelled') {
+      decrementStockForOrder(getOrder(id, db), db);
+    }
     // Keep payment_status in lockstep with the workflow status for manual
     // admin transitions (Invoice History's "Pending / Payment received"
     // picker sets status through this same function) -- paid/shipped/

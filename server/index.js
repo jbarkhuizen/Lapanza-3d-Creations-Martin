@@ -59,6 +59,7 @@ import {
   regenerateVerificationToken,
   deleteOrRevokeClient,
   mergeClients,
+  findClientByEmail,
 } from './clients.js';
 import {
   listShippingOptions,
@@ -93,6 +94,7 @@ import {
   sendLowStockAlert,
   sendClientVerificationEmail,
   sendClientPasswordResetEmail,
+  sendDuplicateRegistrationEmail,
   sendNewsletterConfirmationEmail,
   sendDesignRequestStatusEmail,
   sendNewOrderNotificationEmail,
@@ -205,7 +207,29 @@ app.use((req, res, next) => {
   if (req.secure) res.set('Strict-Transport-Security', 'max-age=31536000');
   next();
 });
-app.use(cors({ origin: true, credentials: true }));
+// Explicit origin allowlist (launch-audit H2): `origin: true` reflected ANY
+// caller's Origin with Access-Control-Allow-Credentials, so any website
+// could script credentialed requests against the whole API and read the
+// responses -- only the cookies' sameSite attribute stood in the way, a
+// single point of failure with no CSRF tokens behind it. A disallowed
+// origin gets no CORS headers at all (the browser then blocks the read);
+// requests WITHOUT an Origin header -- same-origin pages, curl, Payfast's
+// server-to-server ITN post -- never needed CORS and are unaffected.
+const CORS_ORIGINS = [
+  process.env.SITE_URL,
+  process.env.API_URL,
+  'https://lapanza3d.co.za',
+  'https://www.lapanza3d.co.za',
+].filter(Boolean);
+app.use(cors({
+  origin(origin, cb) {
+    const allowed = !origin
+      || CORS_ORIGINS.includes(origin)
+      || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin); // vite/local dev
+    cb(null, allowed);
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(root, 'public', 'uploads')));
@@ -428,6 +452,20 @@ app.post('/api/client/register', authLimiter, async (req, res) => {
     }
     res.status(201).json({ ok: true, message: 'Account created — check your email to verify it before logging in.' });
   } catch (err) {
+    // Anti-enumeration (launch-audit SEC-003): "already exists" must not be
+    // observable from the response -- login and forgot-password are already
+    // generic, and this error was the one place left that confirmed which
+    // emails hold accounts. Return the exact same success as a fresh signup
+    // and tell the real account owner by email instead.
+    if (/already exists/.test(err.message)) {
+      try {
+        const existing = findClientByEmail(String((req.body || {}).email || '').trim());
+        if (existing) await sendDuplicateRegistrationEmail(existing, siteUrlFor(req));
+      } catch (mailErr) {
+        logEmailFailure('Duplicate-registration notice', mailErr, req);
+      }
+      return res.status(201).json({ ok: true, message: 'Account created — check your email to verify it before logging in.' });
+    }
     res.status(400).json({ error: err.message });
   }
 });
@@ -1687,7 +1725,10 @@ app.get('/api/resources/public/list', (_req, res) => {
 // would otherwise serve these inline based on extension/mimetype guessing.
 app.get('/api/resources/:id/download', (req, res) => {
   const resource = getResource(req.params.id);
-  if (!resource?.filePath) return res.status(404).send('File not found');
+  // Deactivated resources must be as gone as unlisted ones -- the public
+  // listing filters activeOnly, but this route previously served any UUID,
+  // so an unpublished STL stayed downloadable to anyone holding the old link.
+  if (!resource?.filePath || resource.active === false || resource.active === 0) return res.status(404).send('File not found');
   const abs = path.join(root, 'public', resource.filePath.replace(/^\//, ''));
   if (!fs.existsSync(abs)) return res.status(404).send('File not found');
   const downloadName = `${slugify(resource.title)}${path.extname(abs)}`;
@@ -2893,6 +2934,23 @@ function runBuild() {
     });
   });
 }
+
+// Final error middleware -- without it, Express's default handler answered
+// every next(err) with an HTML error page, which the admin SPA's api()
+// helper could only degrade to a bare "Request failed (500)". The most
+// common real case is multer's fileSize limit: the admin picked a too-big
+// file and was never told that's what happened.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'That file is too large — the upload limit is 50MB.'
+      : `Upload failed: ${err.message}`;
+    return res.status(400).json({ error: message });
+  }
+  console.error('Unhandled request error:', err);
+  res.status(500).json({ error: 'Something went wrong on the server — please try again.' });
+});
 
 getDb();
 
