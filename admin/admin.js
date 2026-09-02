@@ -677,7 +677,14 @@ function renderRevenueChart(series) {
     const y = height - barHeight;
     return `<rect x="${x}" y="${y}" width="${barWidth.toFixed(1)}" height="${barHeight}" rx="1.5" class="chart-bar"><title>${escapeHtml(d.date)}: ${escapeHtml(formatRand(d.revenue))}</title></rect>`;
   }).join('');
-  return `<svg viewBox="0 0 ${width} ${height}" class="revenue-chart" preserveAspectRatio="none" role="img" aria-label="Daily revenue for the selected range">${bars}</svg>`;
+  // Review #9 (todo #148): the chart needs to explain itself -- axis
+  // endpoints, the scale ceiling, and what a bar IS, not just hover titles.
+  const first = series[0]?.date || '';
+  const last = series[series.length - 1]?.date || '';
+  const peak = series.reduce((a, b) => (b.revenue > a.revenue ? b : a), series[0]);
+  return `<svg viewBox="0 0 ${width} ${height}" class="revenue-chart" preserveAspectRatio="none" role="img" aria-label="Daily revenue for the selected range">${bars}</svg>
+    <div class="muted" style="display:flex;justify-content:space-between;font-size:0.75rem;margin-top:0.25rem"><span>${escapeHtml(first)}</span><span>${escapeHtml(last)}</span></div>
+    <p class="muted" style="font-size:0.78rem;margin:0.4rem 0 0">Each bar is one day's revenue from paid, shipped and completed orders (tallest bar: ${escapeHtml(formatRand(peak.revenue))} on ${escapeHtml(peak.date)}). Hover a bar for the exact figure. Pending-payment orders are not counted.</p>`;
 }
 
 async function renderDashboard() {
@@ -1879,7 +1886,7 @@ async function renderDocumentation() {
       <div class="documentation-list">
         ${documents.map((document) => `
           <article class="documentation-card">
-            <div><h4>${escapeHtml(document.title)}</h4><p class="muted">${escapeHtml(document.description || document.path)}</p><code>${escapeHtml(document.path)}</code></div>
+            <div><h4>${escapeHtml(document.title)}</h4><p class="muted">${escapeHtml(document.description || document.path)}</p><code>${escapeHtml(document.path)}</code><p class="muted" style="margin:0.3rem 0 0;font-size:0.78rem">Last updated: ${document.updatedAt ? escapeHtml(new Date(document.updatedAt).toLocaleString()) : 'unknown'}</p></div>
             <a class="btn btn-secondary" href="/api/documentation/${encodeURIComponent(document.id)}" target="_blank" rel="noopener">Open</a>
           </article>`).join('') || '<div class="empty">No documentation files are available.</div>'}
       </div>
@@ -6746,10 +6753,40 @@ document.addEventListener('click', (e) => {
   rtSync(wrap);
 });
 
-// Panels re-render by replacing innerHTML, so editors appear at arbitrary
-// times -- watch for them instead of threading an init call through every
-// render site.
-new MutationObserver(() => initRichTextEditors(document)).observe(document.body, { childList: true, subtree: true });
+// Review #27 (todo #166): show/hide toggle on every password field --
+// deliberate twin of the public bundle's attachPasswordToggles (admin/ is a
+// separately served bundle, same reasoning as money.js).
+function attachPasswordToggles(root = document) {
+  root.querySelectorAll('input[type="password"]:not([data-pw-eye])').forEach((input) => {
+    input.dataset.pwEye = '1';
+    const wrap = document.createElement('span');
+    wrap.className = 'pw-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-eye';
+    btn.setAttribute('aria-label', 'Show password');
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    btn.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.classList.toggle('pw-eye-on', show);
+      input.focus();
+    });
+    wrap.appendChild(btn);
+  });
+}
+
+// Panels re-render by replacing innerHTML, so editors and password fields
+// appear at arbitrary times -- watch for them instead of threading an init
+// call through every render site.
+new MutationObserver(() => {
+  initRichTextEditors(document);
+  attachPasswordToggles(document);
+}).observe(document.body, { childList: true, subtree: true });
 
 boot();
 initRichTextEditors(document);
+attachPasswordToggles(document);

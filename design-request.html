@@ -152,7 +152,10 @@
             </div>
             <label class="block text-sm">
               <span class="block mb-1.5 text-espresso/70">Budget (Optional)</span>
-              <input name="budgetNote" type="text" placeholder="e.g. under R500" class="w-full border border-charcoal/15 rounded-sm px-3 py-2 bg-transparent" />
+              <div class="flex items-center border border-charcoal/15 rounded-sm focus-within:border-terracotta">
+                <span class="pl-3 pr-1 text-espresso/60 select-none" aria-hidden="true">R</span>
+                <input name="budgetNote" type="text" inputmode="numeric" placeholder="e.g. 500" class="w-full border-0 rounded-sm px-2 py-2 bg-transparent focus:outline-none" />
+              </div>
             </label>
           </fieldset>
           <fieldset class="space-y-4">

@@ -20,6 +20,10 @@ function metadata(root, relativePath) {
     path: relativePath.split(path.sep).join('/'),
     title,
     description,
+    // Review #3 (todo #142): file mtime -- on the VPS this is when the file
+    // last changed on THAT server (a git pull stamps pull time), which is
+    // exactly the "how fresh is what I'm reading here" question being asked.
+    updatedAt: fs.statSync(path.join(root, relativePath)).mtime.toISOString(),
   };
 }
 

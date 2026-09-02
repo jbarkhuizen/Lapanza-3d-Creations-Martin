@@ -182,8 +182,14 @@ async function init() {
   const progressText = document.getElementById('dr-progress-text');
   let confirmed = false;
 
+  // Review #17 (todo #156): while the review panel is up, the original
+  // "Review and send" button below it reads as a second, competing action —
+  // hide it so "Confirm and send" (or "Edit details") is the only next step.
+  const reviewBtn = document.getElementById('dr-review-btn');
+
   document.getElementById('dr-edit')?.addEventListener('click', () => {
     review.classList.add('hidden');
+    reviewBtn?.classList.remove('hidden');
     confirmed = false;
   });
 
@@ -199,6 +205,7 @@ async function init() {
     if (!confirmed) {
       buildReview(form);
       review.classList.remove('hidden');
+      reviewBtn?.classList.add('hidden');
       review.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }

@@ -265,3 +265,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   hydrateContactInfo();
   trackVisit();
 });
+
+// Review #27 (todo #166): show/hide toggle on every password field. Fields
+// appear dynamically too (checkout's create-account form, design-request's
+// post-submit form), so a MutationObserver picks up late arrivals. The
+// button lives INSIDE a wrapper so it never shifts the surrounding layout.
+function attachPasswordToggles(root = document) {
+  root.querySelectorAll('input[type="password"]:not([data-pw-eye])').forEach((input) => {
+    input.dataset.pwEye = '1';
+    const wrap = document.createElement('span');
+    wrap.className = 'pw-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'pw-eye';
+    btn.setAttribute('aria-label', 'Show password');
+    btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+    btn.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.classList.toggle('pw-eye-on', show);
+      input.focus();
+    });
+    wrap.appendChild(btn);
+  });
+}
+attachPasswordToggles();
+new MutationObserver(() => attachPasswordToggles()).observe(document.body, { childList: true, subtree: true });

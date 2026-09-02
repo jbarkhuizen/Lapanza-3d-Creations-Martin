@@ -515,3 +515,17 @@
 .rich-text li { margin: 0.15em 0; }
 .rich-text a { color: var(--color-terracotta, #c24b28); font-weight: 600; text-decoration: underline; }
 .rich-text blockquote { border-left: 3px solid color-mix(in srgb, var(--color-terracotta, #c24b28) 45%, transparent); margin: 0.6em 0; padding-left: 0.8em; }
+
+/* Review #15 (todo #154): native <select> popups on Windows Chrome can
+   paint a light popup while the options inherit the page's dark-mode light
+   text — white-on-white. Explicit option colors are the standard fix; the
+   closed control also gets a solid surface so it reads on any background. */
+[data-theme="dark"] select { background-color: var(--surface-soft, #1c1815); color: #f3eee6; }
+[data-theme="dark"] select option { background-color: #1c1815; color: #f3eee6; }
+select option { background-color: #fffdf8; color: #1a1612; }
+
+/* Review #27 (todo #166): password show/hide toggle */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { width: 100%; padding-right: 2.4rem; }
+.pw-eye { position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%); border: 0; background: none; padding: 0.3rem; cursor: pointer; color: color-mix(in srgb, currentColor 55%, transparent); line-height: 0; }
+.pw-eye:hover, .pw-eye.pw-eye-on { color: var(--color-terracotta, #c24b28); }

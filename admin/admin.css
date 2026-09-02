@@ -618,3 +618,9 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 .rt-editor ol { list-style: decimal; }
 .rt-editor a { color: var(--accent, #c24b28); text-decoration: underline; }
 .rt-editor blockquote { border-left: 3px solid var(--line); margin: 0.5em 0; padding-left: 0.7em; }
+
+/* Review #27 (todo #166): password show/hide toggle */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { width: 100%; padding-right: 2.4rem; }
+.pw-eye { position: absolute; right: 0.45rem; top: 50%; transform: translateY(-50%); border: 0; background: none; padding: 0.3rem; cursor: pointer; color: color-mix(in srgb, currentColor 55%, transparent); line-height: 0; }
+.pw-eye:hover, .pw-eye.pw-eye-on { color: var(--accent, #c24b28); }
