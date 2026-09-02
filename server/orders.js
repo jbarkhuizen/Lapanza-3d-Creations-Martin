@@ -505,15 +505,35 @@ function reserveStockForOrder(order, db) {
   const filamentRows = new Map(); // productId -> fresh row, so phase 2 skips re-querying
   const categoryEntries = new Map(); // productId -> { product, item }
 
+  // Aggregate by productId first. The cart UI always merges duplicate
+  // lines, but POST /api/checkout itself never dedupes body.items, so a
+  // hand-crafted or malformed request can still submit two lines for the
+  // same product. Two lines for the same product are one combined demand,
+  // not two independent ones each checked against the same undecremented
+  // snapshot -- validating/reserving line-by-line against a once-cached
+  // row let a single order for 2 units oversell the last 1 unit in stock:
+  // both 1-unit lines "fit" individually against the 1 unit available, and
+  // the second write clobbered the first's decrement (both read the same
+  // cached, never-remutated row) instead of building on it. Aggregating
+  // first makes each product's TOTAL requested quantity the thing that
+  // gets validated and reserved, exactly once, regardless of how many
+  // lines asked for it.
+  const requested = new Map(); // productId -> { quantity, productName }
   for (const item of order.items) {
     const productId = String(item.productId || '');
+    const entry = requested.get(productId);
+    if (entry) entry.quantity += item.quantity;
+    else requested.set(productId, { quantity: item.quantity, productName: item.productName });
+  }
+
+  for (const [productId, { quantity, productName }] of requested) {
     if (productId.startsWith('filament:')) {
       const sku = productId.split(':').slice(2).join(':');
       const row = db.prepare('SELECT id, sku, stock_qty FROM filament_colours WHERE sku = ?').get(sku);
       if (!row) continue;
-      filamentRows.set(item.productId, row);
-      if (item.quantity > row.stock_qty) {
-        insufficient.push({ name: item.productName, requested: item.quantity, available: row.stock_qty });
+      filamentRows.set(productId, row);
+      if (quantity > row.stock_qty) {
+        insufficient.push({ name: productName, requested: quantity, available: row.stock_qty });
       }
     } else if (productId.startsWith('category:')) {
       const rest = productId.split(':').slice(1);
@@ -525,10 +545,10 @@ function reserveStockForOrder(order, db) {
         ? items.find((i) => i.sku === skuOrIndex)
         : items[Number(skuOrIndex)];
       if (!catItem) continue;
-      categoryEntries.set(item.productId, { product, item: catItem });
+      categoryEntries.set(productId, { product, item: catItem });
       const available = Number(catItem.stockQty) || 0;
-      if (item.quantity > available) {
-        insufficient.push({ name: item.productName, requested: item.quantity, available });
+      if (quantity > available) {
+        insufficient.push({ name: productName, requested: quantity, available });
       }
     }
   }
@@ -539,20 +559,20 @@ function reserveStockForOrder(order, db) {
   }
 
   const lowStock = [];
-  for (const item of order.items) {
-    const row = filamentRows.get(item.productId);
+  for (const [productId, { quantity, productName }] of requested) {
+    const row = filamentRows.get(productId);
     if (row) {
-      const newQty = row.stock_qty - item.quantity;
+      const newQty = row.stock_qty - quantity;
       db.prepare('UPDATE filament_colours SET stock_qty = ? WHERE id = ?').run(newQty, row.id);
-      if (newQty <= 1) lowStock.push({ id: row.id, name: item.productName, sku: row.sku, stockQty: newQty });
+      if (newQty <= 1) lowStock.push({ id: row.id, name: productName, sku: row.sku, stockQty: newQty });
       continue;
     }
-    const cat = categoryEntries.get(item.productId);
+    const cat = categoryEntries.get(productId);
     if (cat) {
-      const newQty = (Number(cat.item.stockQty) || 0) - item.quantity;
+      const newQty = (Number(cat.item.stockQty) || 0) - quantity;
       cat.item.stockQty = newQty;
       upsertProduct(cat.product);
-      if (newQty <= 1) lowStock.push({ id: cat.item.id, name: item.productName, sku: cat.item.sku, stockQty: newQty });
+      if (newQty <= 1) lowStock.push({ id: cat.item.id, name: productName, sku: cat.item.sku, stockQty: newQty });
     }
   }
   return lowStock;

@@ -252,6 +252,64 @@ test('closes the overselling race: a second order for the same last unit is reje
   db.close();
 });
 
+test('a single order with two lines for the same product cannot oversell the last unit (duplicate-line regression)', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'DupeRoll', sku: 'PLA-DUPEROLL-1KG', priceRand: 299, weightG: 1000, stockQty: 1 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  // Not reachable through the cart UI (it always merges by productId), but
+  // reachable via a hand-crafted/malformed POST /api/checkout body, which
+  // doesn't dedupe items -- two 1-unit lines for the same last unit in
+  // stock. Combined demand (2) exceeds what's available (1); this must be
+  // rejected exactly like a single line requesting quantity 2 would be.
+  const cartItems = {
+    client: { name: 'Customer', email: 'dupe@example.com', phone: '0123456789' },
+    items: [{ productId, quantity: 1 }, { productId, quantity: 1 }],
+    paymentMethod: 'payfast_card',
+  };
+
+  assert.throws(() => createOrder(cartItems, db), /Out of stock: PLA — DupeRoll \(requested 2, 1 available\)/);
+  // Stock must be untouched -- the whole order was rejected, not partially applied.
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 1);
+  db.close();
+});
+
+test('a single order with duplicate lines that DO fit combined stock reserves the full combined quantity', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const filamentWithColour = addColour(
+    filament.id,
+    { name: 'DupeFit', sku: 'PLA-DUPEFIT-1KG', priceRand: 299, weightG: 1000, stockQty: 5 },
+    db,
+  );
+  const colour = filamentWithColour.colours[0];
+  const productId = `filament:pla:${colour.sku}`;
+
+  const order = createOrder(
+    {
+      client: { name: 'Customer', email: 'dupefit@example.com', phone: '0123456789' },
+      items: [{ productId, quantity: 2 }, { productId, quantity: 1 }],
+      paymentMethod: 'payfast_card',
+    },
+    db,
+  );
+
+  assert.strictEqual(order.status, 'pending_payment');
+  // Combined demand across both lines (2 + 1 = 3) must be reserved once --
+  // not just the last line's quantity (the pre-fix bug: stock would have
+  // ended at 4, only the second line's decrement, clobbering the first).
+  assert.strictEqual(colourStock(filament.id, colour.sku, db), 2);
+  db.close();
+});
+
 test('paying an order does not decrement stock again -- it was already reserved at creation', () => {
   const db = openDb(':memory:');
   createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
