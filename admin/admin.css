@@ -390,8 +390,8 @@ table.catalog tbody tr:hover { background: var(--bg-soft); }
 table.todo-table th, table.todo-table td { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
 table.todo-table .todo-inline-control { padding: 0.28rem 0.4rem; font-size: 0.82rem; }
 table.todo-table th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; }
-table.todo-table th[data-sort]:hover { color: var(--text); }
-table.todo-table th.sort-active { color: var(--text); }
+table.todo-table th[data-sort]:hover { color: var(--brand); }
+table.todo-table th.sort-active { color: var(--brand); }
 table.todo-table .sort-arrow { font-size: 0.65em; opacity: 0.7; }
 
 /* Description starts clamped to one line so a long entry doesn't blow out

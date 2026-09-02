@@ -4718,7 +4718,7 @@ async function renderPrintJobs() {
             <div><button type="button" class="btn small" id="pj-new-roll-save">Save Roll</button></div>
           </div>
         </div>
-        <p class="muted" style="font-size:0.85rem">Totals (Per Copy): <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
+        <p id="pj-totals" class="muted" style="font-size:0.85rem">Totals (Per Copy): <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
 
         <div class="grid-4">
           <label class="field"><span>Print Time</span>
@@ -4794,10 +4794,15 @@ async function renderPrintJobs() {
     // Cheap live-total update without a full re-render on every keystroke;
     // a full renderPrintJobs() still happens on blur-triggering actions
     // (filament pick, validate, log) so the totals never drift stale.
+    // A real id, not the first '.muted' element in the view -- that
+    // selector used to grab whatever happened to be first, which would
+    // silently start updating the wrong element the moment any other
+    // '.muted' text was added above this one (this page has already grown
+    // several fields across recent features).
     const g = draft.slots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0);
     const m = draft.slots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0);
-    const el = document.querySelector('#view-print-jobs .muted');
-    if (el) el.innerHTML = `Totals: <strong>${escapeHtml(g.toFixed(1))}g</strong> · <strong>${escapeHtml(m.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
+    const el = document.getElementById('pj-totals');
+    if (el) el.innerHTML = `Totals (Per Copy): <strong>${escapeHtml(g.toFixed(1))}g</strong> · <strong>${escapeHtml(m.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
   }
 
   function syncFormIntoDraft() {
