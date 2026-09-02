@@ -131,6 +131,7 @@ export function syncPublicJson(db, paths = defaultPaths()) {
         items: (p.items || []).map((item) => ({
           name: item.name,
           details: item.details,
+          videoUrl: item.videoUrl || '', // review #25 (todo #164)
           material: item.material,
           size: item.size,
           finish: item.finish,

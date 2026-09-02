@@ -2,7 +2,10 @@ import { randomUUID, randomBytes } from 'crypto';
 import { getDb } from './db.js';
 import { findOrCreateClientForCheckout, getClient } from './clients.js';
 
-const VALID_STATUSES = ['new', 'in_progress', 'finalized'];
+// Review #19 (todo #158): 'quoted' is a first-class workflow status.
+// Sending a quote sets it automatically (see setDesignRequestQuote);
+// accepting moves to in_progress (existing behaviour).
+const VALID_STATUSES = ['new', 'quoted', 'in_progress', 'finalized'];
 
 function rowToDesignRequest(row) {
   if (!row) return null;
@@ -195,7 +198,7 @@ export function setDesignRequestQuote(id, { amount, terms, depositPct }, db = ge
   const pct = depositPct === undefined ? 100 : Math.round(Number(depositPct));
   if (!Number.isFinite(pct) || pct < 1 || pct > 100) throw new Error('Deposit percent must be between 1 and 100');
   db.prepare(
-    "UPDATE design_requests SET quote_amount = ?, quote_terms = ?, quote_deposit_pct = ?, quoted_at = ?, quote_status = 'quoted', updated_at = ? WHERE id = ?",
+    "UPDATE design_requests SET quote_amount = ?, quote_terms = ?, quote_deposit_pct = ?, quoted_at = ?, quote_status = 'quoted', status = 'quoted', updated_at = ? WHERE id = ?",
   ).run(value, String(terms || '').slice(0, 2000), pct, new Date().toISOString(), new Date().toISOString(), id);
   return getDesignRequest(id, db);
 }

@@ -6,6 +6,7 @@ import '../styles/main.css';
 
 const STATUS_LABELS = {
   new: ['Received', "We have your request and it's waiting for review — we'll be in touch with questions or a quote."],
+  quoted: ['Quoted', 'Your quote is ready below — accept it to get your print started.'],
   in_progress: ['In Progress', "We're on it — reviewing, designing or already printing. A quote appears here the moment there is one."],
   finalized: ['Finalized', 'This request is wrapped up. Need something more? Send a new request any time.'],
 };

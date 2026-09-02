@@ -924,7 +924,14 @@ ${shellStart({ depth: 1 })}
       </nav>
       <div class="mb-6">${backToHomeButton({ depth: 1 })}</div>
       <div class="grid md:grid-cols-2 gap-10">
-        <div>${productGalleryHtml({ images, alt: itemName, mode: 'full' })}</div>
+        <div>
+          ${productGalleryHtml({ images, alt: itemName, mode: 'full' })}
+          ${item.videoUrl ? `
+          <video controls preload="metadata" playsinline class="w-full rounded-sm mt-4 border border-charcoal/10" aria-label="Product video for ${escapeAttr(itemName)}">
+            <source src="${'../'.repeat(1)}${String(item.videoUrl).replace(/^\//, '')}">
+            Your browser does not support embedded video.
+          </video>` : ''}
+        </div>
         <div>
           <p class="eyebrow mb-2">${categoryName}</p>
           <h1 class="font-serif text-3xl md:text-4xl tracking-[-0.03em] mb-3">${itemName}</h1>

@@ -330,6 +330,7 @@ export async function sendNewsletterCampaignEmail(subject, bodyText, bodyHtml, t
 
 const DESIGN_REQUEST_STATUS_LABELS = {
   new: 'received',
+  quoted: 'quoted',
   in_progress: 'in progress',
   finalized: 'finalized',
 };

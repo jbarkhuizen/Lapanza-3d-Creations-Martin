@@ -1,4 +1,4 @@
-import { FILAMENT_NAV, CAR_BRANDS_NAV, SITE } from '../data/site.js';
+import { FILAMENT_NAV, CAR_BRANDS_NAV, CORE_CATEGORY_NAV, SITE } from '../data/site.js';
 
 function depthPrefix() {
   const depth = (window.__PAGE_DEPTH__ ?? 0) | 0;
@@ -60,9 +60,7 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
     ${carBrandLinks}
   </div>
 </details>
-<a href="${p}toys.html" class="side-link ${isActive('toys.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Toys</a>
-<a href="${p}homeware.html" class="side-link ${isActive('homeware.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Homeware</a>
-<a href="${p}phones.html" class="side-link ${isActive('phones.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Phones</a>
+${CORE_CATEGORY_NAV.map((c) => `<a href="${p}${c.slug}.html" class="side-link ${isActive(`${c.slug}.html`, current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">${c.label}</a>`).join('')}
 <a href="${p}resources.html" class="side-link ${isActive('resources.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">3D Resources</a>
 <a href="${p}design-request.html" class="side-link ${isActive('design-request.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Custom Design and Print Request</a>
 <a href="${p}account.html" class="side-link ${isActive('account.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-b border-charcoal/10">My Account</a>

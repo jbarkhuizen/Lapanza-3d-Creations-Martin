@@ -286,3 +286,24 @@ export function deleteCategoryItemImage(imagePath) {
   const abs = path.join(CATEGORY_ITEM_UPLOAD_DIR, filename);
   if (fs.existsSync(abs)) fs.unlinkSync(abs);
 }
+
+// Review #25 (todo #164): short product videos on category items. Same
+// random-name/extension-from-validated-mimetype discipline as the image
+// uploaders above; 50MB cap matches nginx's client_max_body_size. MP4 and
+// WebM only — both play natively in every current browser via <video>.
+const VIDEO_MIME_EXTENSIONS = {
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+};
+
+export const uploadCategoryItemVideo = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureCategoryItemUploadDir();
+      cb(null, CATEGORY_ITEM_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => cb(null, randomCategoryItemFilename(VIDEO_MIME_EXTENSIONS[file.mimetype] || '.mp4')),
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, Boolean(VIDEO_MIME_EXTENSIONS[file.mimetype])),
+});

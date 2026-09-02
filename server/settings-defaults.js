@@ -179,6 +179,11 @@ export const DEFAULT_SETTINGS = {
   // stay -- only the binary files go). 12 months default; the privacy
   // policy states whatever this is set to, so change both together.
   designFileRetentionMonths: 12,
+  // Review #20 (todo #159): pre-fills the admin's Quote Terms box (editable
+  // per quote before sending). {{depositPct}} is replaced with the chosen
+  // deposit percentage at quote time.
+  quoteTermsDefault:
+    'Price includes materials, print time and one round of minor adjustments. A {{depositPct}}% deposit confirms the job; the balance is due before dispatch or collection. Quote valid for 14 days. Lead time is typically 3–5 business days after payment, depending on the queue.',
   // #87/#94 (SITE-053): the deposit tiers an admin can offer when quoting a
   // design request -- 100 = full payment, anything lower is that percentage
   // upfront (balance settled per the quote's own terms). The chosen tier is

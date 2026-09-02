@@ -38,6 +38,7 @@ import {
   uploadPrintJobImage,
   uploadPrintJobFile,
   uploadCategoryItemImage,
+  uploadCategoryItemVideo,
   deleteCategoryItemImage,
   uploadTestimonialImage,
   deleteTestimonialImage,
@@ -1543,6 +1544,44 @@ app.post(
   },
 );
 
+// Review #25 (todo #164): one optional video per item (MP4/WebM, 50MB --
+// nginx's body cap). Shown on the item's detail page under the gallery.
+app.post(
+  '/api/products/:productId/items/:itemId/video',
+  requireAuth,
+  uploadCategoryItemVideo.single('video'),
+  async (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No video uploaded (MP4 or WebM only)' });
+    const product = getProduct(req.params.productId);
+    if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
+    const item = (product.items || []).find((i) => i.id === req.params.itemId);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.videoUrl && item.videoUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.videoUrl);
+    item.videoUrl = `/uploads/category-items/${req.file.filename}`;
+    upsertProduct(product);
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated video for "${item.name}" on "${product.name}"` });
+    res.json({ product, ...(publishWarning ? { publishWarning } : {}) });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Video must be under 50MB' });
+    next(err);
+  },
+);
+
+app.delete('/api/products/:productId/items/:itemId/video', requireAuth, async (req, res) => {
+  const product = getProduct(req.params.productId);
+  if (!product || product.kind !== 'category') return res.status(404).json({ error: 'Product not found' });
+  const item = (product.items || []).find((i) => i.id === req.params.itemId);
+  if (!item) return res.status(404).json({ error: 'Item not found' });
+  if (item.videoUrl && item.videoUrl.startsWith('/uploads/category-items/')) deleteCategoryItemImage(item.videoUrl);
+  item.videoUrl = '';
+  upsertProduct(product);
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed video for "${item.name}" on "${product.name}"` });
+  res.json({ product, ...(publishWarning ? { publishWarning } : {}) });
+});
+
 // Per-item save/remove for category products (GWM/Landrover/Toys/Homeware/
 // Phones etc), mirroring the filament colour endpoints above: lets the
 // admin's "Save item" / "Remove" buttons on a single row persist
@@ -1572,7 +1611,7 @@ app.put('/api/products/:productId/items/:itemId', requireAuth, async (req, res) 
   // imageUrl is deliberately never accepted from the body here -- same as
   // the whole-product PUT, it's only ever set by the dedicated
   // upload/remove-photo routes above.
-  const merged = normalizeItem({ ...existing, ...(req.body || {}), id: existing.id, imageUrl: existing.imageUrl, images: existing.images }, idx);
+  const merged = normalizeItem({ ...existing, ...(req.body || {}), id: existing.id, imageUrl: existing.imageUrl, images: existing.images, videoUrl: existing.videoUrl }, idx);
   product.items[idx] = merged;
   upsertProduct(product);
   const publishWarning = await publishCatalog();
@@ -2790,6 +2829,7 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'volumeDiscounts',
     // SITE-056/057 / #90 -- design-file retention window
     'designFileRetentionMonths',
+    'quoteTermsDefault',
     // #94: replaces the old single quoteDepositPct number -- a list of
     // {id,pct,active} tiers, same admin-editable-list treatment as
     // inHouseFilamentBrands/carPartBrands below (no extra shape guard
@@ -3215,6 +3255,7 @@ function normalizeItem(item, i) {
     price: item.price || '',
     sku: item.sku || '',
     imageUrl: item.imageUrl || '',
+    videoUrl: item.videoUrl || '', // review #25 (todo #164)
     images: Array.isArray(item.images) ? item.images.filter(Boolean).slice(0, 5) : [],
     // Car-parts only (GWM/Landrover) -- who designed the printable part, and
     // which vehicle model(s) it fits. Stored as plain name strings (not ids

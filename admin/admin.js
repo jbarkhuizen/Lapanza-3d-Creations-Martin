@@ -211,6 +211,47 @@ function setRoute(route, { id } = {}) {
   show($('.topbar-actions'), route === 'catalog' || route === 'editor');
 }
 
+
+// Review #26 (todo #165): shared XHR upload with a visible progress bar --
+// fetch() can't report upload progress. One overlay serves every admin
+// upload (they're one-at-a-time interactions).
+function uploadFormData(url, formData) {
+  return new Promise((resolve, reject) => {
+    let bar = document.getElementById('upload-progress-overlay');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'upload-progress-overlay';
+      bar.innerHTML = '<div class="upl-label"></div><div class="upl-track"><span class="upl-fill"></span></div>';
+      document.body.appendChild(bar);
+    }
+    const label = bar.querySelector('.upl-label');
+    const fill = bar.querySelector('.upl-fill');
+    const done = () => { bar.classList.remove('visible'); };
+    bar.classList.add('visible');
+    label.textContent = 'Uploading… 0%';
+    fill.style.width = '0%';
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    xhr.upload.addEventListener('progress', (e) => {
+      if (!e.lengthComputable) return;
+      const pct = Math.round((e.loaded / e.total) * 100);
+      fill.style.width = pct + '%';
+      label.textContent = pct < 100 ? 'Uploading… ' + pct + '%' : 'Processing…';
+    });
+    xhr.addEventListener('load', () => {
+      done();
+      let data = {};
+      try { data = JSON.parse(xhr.responseText || '{}'); } catch { /* non-JSON error body */ }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+      else reject(new Error(data.error || 'Upload failed (' + xhr.status + ')'));
+    });
+    xhr.addEventListener('error', () => { done(); reject(new Error('Upload failed — network error')); });
+    xhr.addEventListener('abort', () => { done(); reject(new Error('Upload cancelled')); });
+    xhr.send(formData);
+  });
+}
+
 async function boot() {
   initTheme();
   bindChrome();
@@ -1229,6 +1270,12 @@ function renderCategorySections(p) {
             <div class="row-card-actions">
               ${item._isNew ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>' : galleryPanelHtml('item', item.id, item.images || [], item.imageUrl)}
             </div>
+            ${item._isNew ? '' : `
+            <div class="row-card-actions" data-video-panel="${escapeAttr(item.id)}">
+              ${item.videoUrl ? `<a class="btn small btn-ghost" href="${escapeAttr(item.videoUrl)}" target="_blank" rel="noopener">View video</a><button class="btn small btn-danger" data-action="video-remove" type="button">Remove video</button>` : ''}
+              <button class="btn small" data-action="video-add" type="button">${item.videoUrl ? 'Replace video' : '+ Add video (MP4/WebM, max 50MB)'}</button>
+              <input type="file" class="hidden" accept="video/mp4,video/webm" data-video-input="${escapeAttr(item.id)}" />
+            </div>`}
             <div class="grid-2">
               <label class="field"><span>Item Name</span><input data-item="name" value="${escapeAttr(item.name || '')}" /></label>
               <label class="field"><span>SKU</span><input data-item="sku" value="${escapeAttr(item.sku || '')}" /></label>
@@ -1462,6 +1509,39 @@ function bindEditorEvents() {
       state.draft.items = state.draft.items.map((row) => (row.id === item.id ? { ...row, images } : row));
       renderEditor();
     });
+
+    // Review #25 (todo #164): per-item product video.
+    const videoPanel = document.querySelector(`[data-video-panel="${item.id}"]`);
+    if (videoPanel) {
+      videoPanel.querySelector('[data-action="video-add"]')?.addEventListener('click', () => {
+        videoPanel.querySelector(`[data-video-input="${item.id}"]`)?.click();
+      });
+      videoPanel.querySelector(`[data-video-input="${item.id}"]`)?.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append('video', file);
+        try {
+          const data = await uploadFormData(`/api/products/${p.id}/items/${item.id}/video`, formData);
+          toast('Video uploaded');
+          state.draft = { ...state.draft, items: data.product.items };
+          renderEditor();
+        } catch (ex) {
+          toast(ex.message);
+        }
+      });
+      videoPanel.querySelector('[data-action="video-remove"]')?.addEventListener('click', async () => {
+        if (!confirm('Remove this video?')) return;
+        try {
+          const data = await api(`/api/products/${p.id}/items/${item.id}/video`, { method: 'DELETE' });
+          toast('Video removed');
+          state.draft = { ...state.draft, items: data.product.items };
+          renderEditor();
+        } catch (ex) {
+          toast(ex.message);
+        }
+      });
+    }
   });
 
   $('#back-catalog').addEventListener('click', async () => {
@@ -1709,6 +1789,10 @@ function syncNestedFromDom() {
       // I2: same reasoning as the colour mapper above -- carry the gallery
       // array forward through every redraw instead of dropping it.
       images: prev.images || [],
+      // Review #25 (todo #164): set only by the video upload/remove
+      // handlers -- carry forward like imageUrl or a whole-product save
+      // would wipe it.
+      videoUrl: prev.videoUrl || '',
       weight: Number($('[data-item="weight"]', row)?.value) || 0,
       shippingWeight: Number($('[data-item="shippingWeight"]', row)?.value) || 0,
       stockQty: Math.max(0, Number($('[data-item="stockQty"]', row)?.value) || 0),
@@ -2710,9 +2794,7 @@ function wireGalleryPanel(kind, ownerId, ownerContext, onUpdated) {
     const formData = new FormData();
     formData.append('image', file);
     try {
-      const res = await fetch(basePath, { method: 'POST', credentials: 'include', body: formData });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      const data = await uploadFormData(basePath, formData);
       toast('Photo added');
       onUpdated(data.images);
     } catch (ex) {
@@ -3162,6 +3244,7 @@ async function renderSettings() {
       <div class="panel stack gap-3">
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Filament colour swatches show "Only N left" once stock drops to or below this number, instead of the raw count. Takes effect on the next Publish to site.</p>
         <label class="field" style="max-width:260px"><span>Design-file Retention (Months After Finalized)</span><input data-setting="designFileRetentionMonths" type="number" min="1" step="1" value="${escapeAttr(String(s.designFileRetentionMonths ?? 12))}" /></label>
+        <label class="field"><span>Default Quote Terms ({{depositPct}} Is Replaced at Quote Time)</span><textarea data-setting="quoteTermsDefault" rows="3">${escapeHtml(s.quoteTermsDefault || '')}</textarea></label>
         <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
         <div class="grid-2">
@@ -4938,9 +5021,7 @@ async function uploadPrintJobAsset(jobId, field, file) {
   formData.append(field, file);
   const endpoint = field === 'image' ? 'image' : 'file';
   try {
-    const res = await fetch(`/api/print-jobs/${jobId}/${endpoint}`, { method: 'POST', credentials: 'include', body: formData });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    await uploadFormData(`/api/print-jobs/${jobId}/${endpoint}`, formData);
   } catch (ex) {
     toast(ex.message);
   }
@@ -5285,8 +5366,8 @@ async function renderNewsletterCampaigns() {
   $$('.nb-remove', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.splice(Number(button.closest('[data-block-index]').dataset.blockIndex), 1); await renderNewsletterCampaigns(); }));
   $('#nc-template').addEventListener('change', async (event) => { const template = templates.find((item) => item.id === event.target.value); if (template) { state.newsletterBlocks = template.blocks; state.newsletterImportedTemplate = template.blocks.length ? null : template; state.newsletterSubject = template.subject; await renderNewsletterCampaigns(); } });
   $$('.newsletter-asset', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: button.dataset.assetUrl, alt: button.dataset.assetAlt }); await renderNewsletterCampaigns(); }));
-  $('#nc-image-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('image', file); const res = await fetch('/api/newsletter-assets', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: data.asset.url, alt: data.asset.altText }); await renderNewsletterCampaigns(); });
-  $('#nc-template-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('template', file); form.append('name', file.name.replace(/\.html?$/i, '')); form.append('subject', $('#nc-subject').value); const res = await fetch('/api/newsletter-templates/import', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); state.newsletterImportedTemplate = data.template; state.newsletterBlocks = []; state.newsletterSubject = data.template.subject; toast('HTML template imported'); await renderNewsletterCampaigns(); });
+  $('#nc-image-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('image', file); let data; try { data = await uploadFormData('/api/newsletter-assets', form); } catch (ex) { return toast(ex.message); } saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: data.asset.url, alt: data.asset.altText }); await renderNewsletterCampaigns(); });
+  $('#nc-template-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('template', file); form.append('name', file.name.replace(/\.html?$/i, '')); form.append('subject', $('#nc-subject').value); let data; try { data = await uploadFormData('/api/newsletter-templates/import', form); } catch (ex) { return toast(ex.message); } state.newsletterImportedTemplate = data.template; state.newsletterBlocks = []; state.newsletterSubject = data.template.subject; toast('HTML template imported'); await renderNewsletterCampaigns(); });
   $('#nc-save-template').addEventListener('click', async () => { const name = prompt('Template name:'); if (!name) return; try { await api('/api/newsletter-templates', { method: 'POST', body: JSON.stringify({ name, subject: $('#nc-subject').value, blocks: collectNewsletterBlocks() }) }); toast('Template saved'); await renderNewsletterCampaigns(); } catch (error) { toast(error.message); } });
   $('#nc-preview').addEventListener('click', () => { const blocks = collectNewsletterBlocks(); const html = state.newsletterImportedTemplate?.bodyHtml || blocks.map((block) => block.type === 'heading' ? `<h1>${escapeHtml(block.text)}</h1>` : block.type === 'text' ? `<p>${escapeHtml(block.text).replace(/\n/g, '<br>')}</p>` : block.type === 'image' ? `<img src="${escapeAttr(block.url)}" alt="${escapeAttr(block.alt)}" style="max-width:100%">` : block.type === 'button' ? `<p><a href="${escapeAttr(block.url)}">${escapeHtml(block.text)}</a></p>` : '<hr>').join(''); const frame = $('#nc-preview-frame'); frame.srcdoc = `<main style="max-width:640px;margin:auto;font:16px Arial;padding:24px">${html}</main>`; frame.classList.remove('hidden'); });
   $('#nc-select-all').addEventListener('change', (event) => $$('.nc-recipient', $('#view-newsletter')).forEach((input) => { input.checked = event.target.checked; }));
@@ -6036,9 +6117,7 @@ async function renderResources() {
       const formData = new FormData();
       formData.append(field, file);
       try {
-        const res = await fetch(`/api/resources/${form.id}/${endpoint}`, { method: 'POST', credentials: 'include', body: formData });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || 'Upload failed');
+        const data = await uploadFormData(`/api/resources/${form.id}/${endpoint}`, formData);
         state.editingResource = data.resource;
         toast('Uploaded');
         await renderResources();
@@ -6192,9 +6271,7 @@ async function renderTestimonials() {
     const formData = new FormData();
     formData.append('image', file);
     try {
-      const res = await fetch(`/api/testimonials/${form.id}/image`, { method: 'POST', credentials: 'include', body: formData });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      const data = await uploadFormData(`/api/testimonials/${form.id}/image`, formData);
       state.editingTestimonial = data.testimonial;
       toast('Uploaded');
       await renderTestimonials();
@@ -6409,9 +6486,10 @@ async function renderPotentialMarket() {
 
 // ---- Custom 3D design requests (Phase 2) ----
 
-const DESIGN_REQUEST_STATUSES = ['new', 'in_progress', 'finalized'];
+const DESIGN_REQUEST_STATUSES = ['new', 'quoted', 'in_progress', 'finalized'];
 const DESIGN_REQUEST_STATUS_LABEL = {
   new: 'New',
+  quoted: 'Quoted',
   in_progress: 'In progress',
   finalized: 'Finalized',
 };
@@ -6521,7 +6599,8 @@ async function renderDesignRequests() {
             <label class="field" style="max-width:180px"><span>Deposit</span><select id="dr-quote-deposit-pct">${depositOptionsHtml}</select></label>
             <button class="btn small btn-primary" id="dr-send-quote" type="button">${form.quoteStatus === 'quoted' ? 'Update & Re-email Quote' : 'Save & Email Quote'}</button>
           </div>
-          <label class="field"><span>Quote Terms (Shown to the Customer)</span><textarea id="dr-quote-terms" placeholder="e.g. Price includes design time and one revision. Balance due on collection.">${escapeHtml(form.quoteTerms || '')}</textarea></label>
+          <label class="field"><span>Quote Terms (Shown to the Customer)</span><textarea id="dr-quote-terms" placeholder="e.g. Price includes design time and one revision. Balance due on collection.">${escapeHtml(form.quoteTerms || (state.settings.quoteTermsDefault || '').replace('{{depositPct}}', String(form.quoteDepositPct ?? activeDepositTiers[0]?.pct ?? 50)))}</textarea></label>
+          <p class="muted" style="margin:0;font-size:0.78rem">Pre-filled from Settings → Storefront → Default Quote Terms — edit freely before sending.</p>
           ${form.quoteStatus === 'quoted' ? `<p class="muted" style="margin:0;font-size:0.85rem">Quoted R${escapeHtml(String(form.quoteAmount))} (${escapeHtml(String(form.quoteDepositPct ?? 100))}% deposit) on ${escapeHtml((form.quotedAt || '').slice(0, 10))} — awaiting customer acceptance.</p>` : ''}
           `}
         </div>

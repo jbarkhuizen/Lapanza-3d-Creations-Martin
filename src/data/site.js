@@ -81,6 +81,15 @@ const rawBrands = Array.isArray(siteSettings.carPartBrands) && siteSettings.carP
 // category exists -- a Settings-only brand (no +Category yet) used to
 // render a link straight to a 404. The generator skips the page for the
 // same reason; this keeps nav and pages in lockstep.
+// Review #14 (todo #153): the three core category links carry the
+// category's CURRENT name (admin-editable, e.g. Homeware -> Home & School)
+// while the page slug/file stays stable -- renaming a category updates the
+// sidebar on the next publish, no code change.
+export const CORE_CATEGORY_NAV = ['toys', 'homeware', 'phones'].map((slug) => ({
+  slug,
+  label: categories[slug]?.name || slug.charAt(0).toUpperCase() + slug.slice(1),
+}));
+
 export const CAR_BRANDS_NAV = rawBrands
   .map((b) => ({
     slug: String(b.name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
