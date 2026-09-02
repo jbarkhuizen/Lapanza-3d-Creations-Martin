@@ -270,6 +270,55 @@ test('PUT /api/inventory publishes after a stock/price edit, same as every other
   assert.strictEqual(rejected.body.publishWarning, undefined);
 });
 
+// Regression: the documented backup-restore procedure (deploy/DEPLOY.md
+// §10) only ever restored data/lapanza.db -- it never mentioned the
+// paired data/catalog.json snapshot every backup already takes (category
+// items live only in that file, not SQLite), so a real restore silently
+// left the catalog at whatever it was moments before, with no publish
+// afterward either. POST /api/backups/:filename/restore-catalog closes
+// that gap for the half of a restore that doesn't require stopping the
+// service.
+test('POST /api/backups/:filename/restore-catalog restores the pre-backup catalog state and republishes (#backup-restore-gap)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app)
+    .post('/api/products')
+    .set('Cookie', cookie)
+    .send({ name: 'Original Name', slug: 'toy', items: [{ name: 'Item A' }] });
+  assert.strictEqual(created.status, 201);
+  const productId = created.body.product.id;
+
+  const backup = await request(app).post('/api/backups').set('Cookie', cookie);
+  assert.strictEqual(backup.status, 201);
+  assert.strictEqual(backup.body.backup.catalogIncluded, true);
+
+  // Catalog changes after the backup -- what the restore must undo.
+  const renamed = await request(app).put(`/api/products/${productId}`).set('Cookie', cookie).send({ name: 'Changed After Backup' });
+  assert.strictEqual(renamed.body.product.name, 'Changed After Backup');
+
+  const restore = await request(app).post(`/api/backups/${backup.body.backup.filename}/restore-catalog`).set('Cookie', cookie);
+  assert.strictEqual(restore.status, 200);
+  assert.strictEqual(restore.body.ok, true);
+  assert.ok(typeof restore.body.publishWarning === 'string' && restore.body.publishWarning.length > 0, 'publishCatalog() must run after a catalog restore, same as every other catalog-mutating route');
+
+  const afterRestore = await request(app).get(`/api/products/${productId}`).set('Cookie', cookie);
+  assert.strictEqual(afterRestore.body.product.name, 'Original Name', 'the pre-backup catalog state must be restored');
+
+  const audit = await request(app).get('/api/audit-log').set('Cookie', cookie);
+  assert.ok(
+    audit.body.entries.some((e) => e.eventType === 'catalog_updated' && e.detail?.includes('Restored category-item catalog')),
+    'the restore must be audit-logged',
+  );
+
+  const missing = await request(app).post('/api/backups/does-not-exist.db/restore-catalog').set('Cookie', cookie);
+  assert.strictEqual(missing.status, 400);
+  assert.match(missing.body.error, /No catalog snapshot found/);
+});
+
 test('admins panel: list, add, refuse removing the last admin', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

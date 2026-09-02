@@ -29,11 +29,6 @@ function backupFilename(date = new Date()) {
   return `lapanza-backup-${date.toISOString().replace(/[:.]/g, '-')}.db`;
 }
 
-function statBackup(dir, filename) {
-  const stats = fs.statSync(path.join(dir, filename));
-  return { filename, sizeBytes: stats.size, createdAt: stats.mtime.toISOString() };
-}
-
 // A bare filename only -- no path separators or traversal segments. Every
 // function below that takes a filename (not one it generated itself) must
 // go through this before touching the filesystem.
@@ -54,6 +49,23 @@ function catalogSnapshotName(dbFilename) {
   return dbFilename.replace(/\.db$/, '.catalog.json');
 }
 
+// catalogIncluded is derived fresh from whether the paired snapshot file is
+// actually on disk right now (not just "was the source there at backup
+// time") -- this is what the admin Backups view reads to show/enable a
+// "Restore catalog" action per row, so it must reflect current on-disk
+// reality (e.g. a host where DATA_DIR diverges from where store.js keeps
+// catalog.json would otherwise show a green "included" for a backup that
+// silently has no usable snapshot at all).
+function statBackup(dir, filename) {
+  const stats = fs.statSync(path.join(dir, filename));
+  return {
+    filename,
+    sizeBytes: stats.size,
+    createdAt: stats.mtime.toISOString(),
+    catalogIncluded: fs.existsSync(path.join(dir, catalogSnapshotName(filename))),
+  };
+}
+
 // better-sqlite3's db.backup() uses SQLite's own online backup API -- safe
 // to run against a live database in WAL mode, no need to stop the app or
 // lock out writers for the duration.
@@ -62,11 +74,40 @@ export async function createBackup(db = getDb()) {
   const filename = backupFilename();
   await db.backup(path.join(dir, filename));
   const catalogSource = path.join(dataDir(), 'catalog.json');
-  const catalogIncluded = fs.existsSync(catalogSource);
-  if (catalogIncluded) {
+  if (fs.existsSync(catalogSource)) {
     fs.copyFileSync(catalogSource, path.join(dir, catalogSnapshotName(filename)));
   }
-  return { ...statBackup(dir, filename), catalogIncluded };
+  return statBackup(dir, filename);
+}
+
+// Inverse of createBackup()'s catalog-snapshot side: copies a backup's
+// paired data/backups/<name>.catalog.json back over the LIVE
+// data/catalog.json. The .db half of a real restore still requires
+// stopping the service (SQLite file swap) and is a manual SSH step -- see
+// deploy/DEPLOY.md §10 -- but the catalog half doesn't touch the DB file
+// or need the process stopped, so it's safe to do through a running admin
+// session. This is what actually closes the "restore never restores the
+// paired snapshot" gap: the pairing existed on disk, but the documented
+// restore procedure never mentioned it and nothing made it hard to skip --
+// a manual `cp` typed by hand during a stressful real incident is exactly
+// the kind of step that gets forgotten.
+export function restoreCatalogSnapshot(dbFilename) {
+  assertSafeFilename(dbFilename);
+  const dir = ensureBackupsDir();
+  const snapshotName = catalogSnapshotName(dbFilename);
+  const snapshotPath = path.join(dir, snapshotName);
+  if (!fs.existsSync(snapshotPath)) {
+    throw new Error(`No catalog snapshot found for ${dbFilename} — this backup predates catalog pairing, or catalog.json didn't exist yet when it was taken.`);
+  }
+  const catalogPath = path.join(dataDir(), 'catalog.json');
+  // Same "undo button" precaution the documented .db swap already takes --
+  // never overwrite the live file without a copy of what it was, in case
+  // the chosen backup turns out to be the wrong one.
+  if (fs.existsSync(catalogPath)) {
+    fs.copyFileSync(catalogPath, `${catalogPath}.before-restore`);
+  }
+  fs.copyFileSync(snapshotPath, catalogPath);
+  return { restoredFrom: snapshotName, catalogPath };
 }
 
 export function listBackups() {

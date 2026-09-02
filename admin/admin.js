@@ -1703,8 +1703,10 @@ async function renderBackups() {
           <td><code>${escapeHtml(b.filename)}</code></td>
           <td>${escapeHtml(formatDate(b.createdAt))}</td>
           <td>${escapeHtml(formatBytes(b.sizeBytes))}</td>
+          <td>${b.catalogIncluded ? '<span class="badge published">Yes</span>' : '<span class="badge draft">No</span>'}</td>
           <td>
             <a class="btn small" href="/api/backups/${encodeURIComponent(b.filename)}/download">Download</a>
+            ${b.catalogIncluded ? '<button class="btn small" data-action="restore-catalog" type="button">Restore catalog</button>' : ''}
             <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
           </td>
         </tr>`,
@@ -1718,12 +1720,12 @@ async function renderBackups() {
       <span class="muted">${escapeHtml(String(backups.length))} backup(s) &middot; ${escapeHtml(formatBytes(totalBytes))} total</span>
     </div>
     <p class="muted" style="margin: -0.5rem 0 1rem; font-size: 0.85rem;">
-      A backup of the full database runs automatically once a day; the most recent 30 are kept and older ones are pruned automatically. Manual backups count toward that same limit. Every daily run also mirrors this folder to an offsite remote (Google Drive via rclone) so backups survive a disk/VPS failure, not just bad data or a bad deploy -- see docs/DEPLOY.md if "Sync offsite now" errors with "not set".
+      A backup of the full database runs automatically once a day; the most recent 30 are kept and older ones are pruned automatically. Manual backups count toward that same limit. Every daily run also mirrors this folder to an offsite remote (Google Drive via rclone) so backups survive a disk/VPS failure, not just bad data or a bad deploy -- see docs/DEPLOY.md if "Sync offsite now" errors with "not set". "Restore catalog" restores toys/homeware/phones/car-parts data (which lives outside the database) to this backup's state and republishes the site -- it does not touch orders, clients, or filaments; restoring those needs the database swap in deploy/DEPLOY.md §10.
     </p>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="4"><div class="empty">No backups yet</div></td></tr>'}</tbody>
+        <thead><tr><th>Filename</th><th>Created</th><th>Size</th><th>Catalog snapshot</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No backups yet</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -1766,6 +1768,21 @@ async function renderBackups() {
         await renderBackups();
       } catch (ex) {
         toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="restore-catalog"]')?.addEventListener('click', async (e) => {
+      if (!confirm(`Restore the catalog (toys/homeware/phones/car-parts) to its state in ${tr.dataset.filename}? This overwrites the current catalog and republishes the site. Orders, clients, and filaments are NOT affected.`)) return;
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Restoring…';
+      try {
+        await api(`/api/backups/${encodeURIComponent(tr.dataset.filename)}/restore-catalog`, { method: 'POST' });
+        toast('Catalog restored and republished');
+      } catch (ex) {
+        toast(ex.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Restore catalog';
       }
     });
   });

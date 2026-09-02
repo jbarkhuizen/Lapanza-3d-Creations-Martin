@@ -218,7 +218,16 @@ rm /tmp/restore-test.db
 ```
 
 **To actually restore** (real outage -- e.g. recovering from bad data or a
-failed migration), this needs a brief service stop:
+failed migration), this is TWO separate halves, because the category-item
+catalog (toys/homeware/phones/car-parts -- prices, SKUs, stock) lives only
+in `data/catalog.json`, not in SQLite (same split §4's `scp` step above
+already deals with). A restore that only swaps the
+`.db` file leaves the catalog at whatever it was moments before, silently
+inconsistent with the rest of the restored data, and never republishes the
+static site either -- this is exactly the gap that used to exist here.
+
+*Half 1 — the database* (needs a brief service stop, since it's a live
+SQLite file swap):
 ```bash
 sudo systemctl stop lapanza-admin
 cd /opt/lapanza/app
@@ -232,10 +241,32 @@ data/lapanza.db` and restart again to undo. Once you're confident the
 restore is good, delete `data/lapanza.db.before-restore` -- it's a plain
 file copy, not tracked or pruned automatically.
 
+*Half 2 — the catalog* (does NOT need a service stop -- it's a JSON file
+the running app already reads/writes on demand, no SQLite file lock
+involved). Once the service is back up from Half 1, log into the admin as
+normal and, on the same Backups page, use **Restore catalog** on the
+*same* backup filename you restored the database from -- shown only for
+backups whose "Catalog snapshot" column reads Yes. This copies
+`data/backups/<filename>.catalog.json` back over the live
+`data/catalog.json` (keeping its own `data/catalog.json.before-restore`
+undo copy, same precaution as Half 1) and republishes the site
+immediately, so `dist/` (what nginx serves) actually reflects the
+restored state rather than staying stale until an unrelated catalog edit
+happens to trigger a publish. If admin access itself is what's down,
+`POST /api/backups/<filename>/restore-catalog` (an authenticated admin
+session, same as any other admin route) does the same thing without the
+UI.
+
+Skip Half 2 if the specific incident only affects order/client/filament
+data (Half 1 alone is a complete fix in that case) -- but for a full
+disaster-recovery restore, both halves are required to actually match
+what the backup captured.
+
 This has not yet been rehearsed as a full live cutover (stop → swap →
-restart → verify) on this server -- only the read-only integrity path
-above has. Worth doing once during a real maintenance window if you want
-the whole procedure proven end-to-end, not just the backup file itself.
+restart → verify, both halves) on this server -- only the read-only
+integrity path above has. Worth doing once during a real maintenance
+window if you want the whole procedure proven end-to-end, not just the
+backup file itself.
 
 ## 11. Responding to an operational alert (backlog #120)
 

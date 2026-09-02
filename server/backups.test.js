@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { openDb } from './db.js';
-import { createBackup, listBackups, deleteBackup, getBackupPath, pruneOldBackups, syncOffsite } from './backups.js';
+import { createBackup, listBackups, deleteBackup, getBackupPath, pruneOldBackups, syncOffsite, restoreCatalogSnapshot } from './backups.js';
 
 // Isolates BACKUPS_DIR to a fresh temp directory per test (same override
 // mechanism paths.js documents for production disk-mount overrides) so
@@ -76,6 +76,77 @@ test('createBackup still succeeds when no catalog.json exists, and says so', asy
   });
 });
 
+test('restoreCatalogSnapshot copies a backup\'s paired snapshot back over the live catalog.json', async () => {
+  await withTempBackupsDir(async () => {
+    await withTempDataDir(async (data) => {
+      fs.writeFileSync(path.join(data, 'catalog.json'), JSON.stringify({ version: 1, products: [{ id: 'original' }] }));
+      const db = openDb(':memory:');
+      const backup = await createBackup(db); // snapshots the "original" state
+      db.close();
+
+      // Catalog changes after the backup -- this is what a restore should undo.
+      fs.writeFileSync(path.join(data, 'catalog.json'), JSON.stringify({ version: 1, products: [{ id: 'changed-after-backup' }] }));
+
+      const result = restoreCatalogSnapshot(backup.filename);
+      assert.strictEqual(result.restoredFrom, backup.filename.replace(/\.db$/, '.catalog.json'));
+      const restored = JSON.parse(fs.readFileSync(path.join(data, 'catalog.json'), 'utf8'));
+      assert.strictEqual(restored.products[0].id, 'original');
+    });
+  });
+});
+
+test('restoreCatalogSnapshot backs up the live catalog.json before overwriting it -- the same "undo button" precaution the .db swap step takes', async () => {
+  await withTempBackupsDir(async () => {
+    await withTempDataDir(async (data) => {
+      fs.writeFileSync(path.join(data, 'catalog.json'), JSON.stringify({ version: 1, products: [{ id: 'backup-snapshot' }] }));
+      const db = openDb(':memory:');
+      const backup = await createBackup(db);
+      db.close();
+
+      fs.writeFileSync(path.join(data, 'catalog.json'), JSON.stringify({ version: 1, products: [{ id: 'live-before-restore' }] }));
+      restoreCatalogSnapshot(backup.filename);
+
+      const preRestoreCopy = JSON.parse(fs.readFileSync(path.join(data, 'catalog.json.before-restore'), 'utf8'));
+      assert.strictEqual(preRestoreCopy.products[0].id, 'live-before-restore', 'the pre-restore live catalog must be preserved, not silently lost');
+    });
+  });
+});
+
+test('restoreCatalogSnapshot succeeds even with no existing live catalog.json to back up', async () => {
+  await withTempBackupsDir(async () => {
+    await withTempDataDir(async (data) => {
+      fs.writeFileSync(path.join(data, 'catalog.json'), JSON.stringify({ version: 1, products: [{ id: 'from-backup' }] }));
+      const db = openDb(':memory:');
+      const backup = await createBackup(db);
+      db.close();
+      fs.rmSync(path.join(data, 'catalog.json')); // simulate a fresh box with no live catalog yet
+
+      restoreCatalogSnapshot(backup.filename);
+      const restored = JSON.parse(fs.readFileSync(path.join(data, 'catalog.json'), 'utf8'));
+      assert.strictEqual(restored.products[0].id, 'from-backup');
+      assert.strictEqual(fs.existsSync(path.join(data, 'catalog.json.before-restore')), false);
+    });
+  });
+});
+
+test('restoreCatalogSnapshot throws a clear error for a backup with no paired snapshot (predates pairing, or had no catalog.json)', async () => {
+  await withTempBackupsDir(async () => {
+    await withTempDataDir(async () => {
+      const db = openDb(':memory:');
+      const backup = await createBackup(db); // no catalog.json exists -- catalogIncluded: false
+      db.close();
+      assert.throws(() => restoreCatalogSnapshot(backup.filename), /No catalog snapshot found/);
+    });
+  });
+});
+
+test('restoreCatalogSnapshot rejects unsafe filenames', async () => {
+  await withTempBackupsDir(async () => {
+    assert.throws(() => restoreCatalogSnapshot('../../etc/passwd'), /Invalid backup filename/);
+    assert.throws(() => restoreCatalogSnapshot('sub/dir.db'), /Invalid backup filename/);
+  });
+});
+
 test('deleteBackup removes the paired catalog snapshot, and pruning strands no orphans', async () => {
   await withTempBackupsDir(async (dir) => {
     await withTempDataDir(async (data) => {
@@ -94,6 +165,29 @@ test('deleteBackup removes the paired catalog snapshot, and pruning strands no o
       const remaining = fs.readdirSync(dir);
       assert.strictEqual(remaining.filter((f) => f.endsWith('.db')).length, 1);
       assert.strictEqual(remaining.filter((f) => f.endsWith('.catalog.json')).length, 1, 'pruned .db files must take their catalog snapshots with them');
+    });
+  });
+});
+
+test('listBackups reports catalogIncluded per backup, derived from the snapshot actually being on disk (not just createBackup\'s return value)', async () => {
+  await withTempBackupsDir(async () => {
+    await withTempDataDir(async (data) => {
+      fs.writeFileSync(path.join(data, 'catalog.json'), '{"version":1,"products":[]}');
+      const db = openDb(':memory:');
+      const withCatalog = await createBackup(db);
+      db.close();
+
+      const [listed] = listBackups();
+      assert.strictEqual(listed.filename, withCatalog.filename);
+      assert.strictEqual(listed.catalogIncluded, true, 'listBackups() must surface catalogIncluded too -- previously only createBackup()\'s own return value carried it, so historical backups always looked "unknown" in any view built on listBackups()');
+
+      // If the paired snapshot is later removed from disk by anything other
+      // than deleteBackup (e.g. manual cleanup), catalogIncluded must
+      // reflect that -- it's derived from present reality, not a frozen
+      // flag from whenever the backup was first created.
+      const dir = path.dirname(getBackupPath(withCatalog.filename));
+      fs.rmSync(path.join(dir, withCatalog.filename.replace(/\.db$/, '.catalog.json')));
+      assert.strictEqual(listBackups()[0].catalogIncluded, false);
     });
   });
 });

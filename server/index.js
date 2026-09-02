@@ -126,7 +126,7 @@ import {
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
-import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
+import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite, restoreCatalogSnapshot } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary } from './analytics.js';
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
@@ -2997,6 +2997,31 @@ app.delete('/api/backups/:filename', requireAuth, (req, res) => {
     const deleted = deleteBackup(req.params.filename);
     if (!deleted) return res.status(404).json({ error: 'Backup not found' });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Restores the category-item catalog (toys/homeware/phones/car-parts --
+// lives only in data/catalog.json, not SQLite) from a chosen backup's
+// paired snapshot, then republishes so the live site actually reflects it.
+// This is the half of a real restore that DOESN'T need the service
+// stopped -- the .db half still does (a live SQLite file swap), and stays
+// a manual SSH step per deploy/DEPLOY.md §10. Doing this half through the
+// admin UI instead of a hand-typed `cp` during a real incident is what
+// closes the "restore never restores the paired catalog snapshot" gap.
+app.post('/api/backups/:filename/restore-catalog', requireAuth, async (req, res) => {
+  try {
+    const result = restoreCatalogSnapshot(req.params.filename);
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.CATALOG_UPDATED,
+      adminId: req.adminId,
+      username: req.adminUsername,
+      ...requestMeta(req),
+      detail: `Restored category-item catalog from backup snapshot ${result.restoredFrom}`,
+    });
+    res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
