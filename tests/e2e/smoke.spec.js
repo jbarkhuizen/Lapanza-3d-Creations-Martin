@@ -146,3 +146,31 @@ test('admin: Settings scoped save preserves keyboard focus and scroll position (
   expect(scrollAfter).toBeGreaterThan(0);
   expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(50);
 });
+
+// Covers the OTHER wrap shape the focus-preservation fix uses --
+// withFocusPreserved(() => renderOrderDetail(order.id)), an arrow-wrapped
+// call passing an argument, as opposed to the bare-function-reference form
+// (withFocusPreserved(renderSettings)) the test above exercises. Order
+// Detail re-renders itself after several in-place actions (save, resend
+// email, cancel); resending the confirmation email is the simplest one to
+// trigger (no confirm() dialog, no data mutation to undo).
+test('admin: Order Detail action (resend email) preserves keyboard focus (#admin-focus-preservation)', async ({ page }) => {
+  await page.goto('http://localhost:8787/admin/');
+  await page.fill('#login-form input[name="username"]', ADMIN.username);
+  await page.fill('#login-form input[name="password"]', ADMIN.password);
+  await page.click('#login-form button[type="submit"]');
+  await expect(page.locator('#view-dashboard')).toBeVisible({ timeout: 15_000 });
+
+  await page.click('[data-route="orders"]');
+  await expect(page.locator('#view-orders')).toBeVisible();
+  // The manual-EFT order the first spec in this file placed -- the only
+  // order in this scratch DB at this point in the suite.
+  await page.locator('#view-orders tbody tr[data-id]').first().click();
+  await expect(page.locator('#view-order-detail')).toBeVisible();
+
+  const resendBtn = page.locator('#resend-email');
+  await resendBtn.click();
+  await expect(page.locator('#toast')).not.toHaveClass(/hidden/);
+
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('resend-email');
+});

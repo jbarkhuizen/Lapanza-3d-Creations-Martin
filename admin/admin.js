@@ -955,7 +955,7 @@ async function renderCatalog() {
     state.filters.q = $('#filter-q').value.trim();
     state.filters.kind = $('#filter-kind').value;
     state.filters.status = $('#filter-status').value;
-    await renderCatalog();
+    await withFocusPreserved(renderCatalog);
   };
   $('#filter-q').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') applyFilters();
@@ -1807,7 +1807,7 @@ async function renderBackups() {
     try {
       await api('/api/backups', { method: 'POST' });
       toast('Backup created');
-      await renderBackups();
+      await withFocusPreserved(renderBackups);
     } catch (ex) {
       toast(ex.message);
       btn.disabled = false;
@@ -1836,7 +1836,7 @@ async function renderBackups() {
       try {
         await api(`/api/backups/${encodeURIComponent(tr.dataset.filename)}`, { method: 'DELETE' });
         toast('Backup deleted');
-        await renderBackups();
+        await withFocusPreserved(renderBackups);
       } catch (ex) {
         toast(ex.message);
       }
@@ -2011,7 +2011,7 @@ async function renderTestCases() {
   const start = async (body) => {
     const { run } = await api('/api/test-runs', { method: 'POST', body: JSON.stringify(body) });
     toast('Test run started');
-    await renderTestCases();
+    await withFocusPreserved(renderTestCases);
     testRunPollTimer = setInterval(async () => {
       const current = await api(`/api/test-runs/${encodeURIComponent(run.id)}`);
       if (current.run.status !== 'running') {
@@ -2532,11 +2532,11 @@ async function renderAuditLog() {
   $('#audit-q').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
     state.auditQ = $('#audit-q').value.trim();
-    await renderAuditLog();
+    await withFocusPreserved(renderAuditLog);
   });
   $('#audit-event-filter').addEventListener('change', async () => {
     state.auditEventFilter = $('#audit-event-filter').value;
-    await renderAuditLog();
+    await withFocusPreserved(renderAuditLog);
   });
 }
 
@@ -3486,7 +3486,7 @@ async function renderOrders() {
   const applyFilters = async () => {
     state.orderFilters.q = $('#order-filter-q').value.trim();
     state.orderFilters.status = $('#order-filter-status').value;
-    await renderOrders();
+    await withFocusPreserved(renderOrders);
   };
   $('#order-filter-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
   $('#order-filter-status').addEventListener('change', applyFilters);
@@ -3609,7 +3609,7 @@ async function renderOrderDetail(id) {
         await api(`/api/orders/${order.id}/tracking`, { method: 'PUT', body: JSON.stringify({ trackingNumber }) });
       }
       toast('Order updated');
-      await renderOrderDetail(order.id);
+      await withFocusPreserved(() => renderOrderDetail(order.id));
     } catch (ex) {
       toast(ex.message);
     }
@@ -3619,7 +3619,7 @@ async function renderOrderDetail(id) {
     try {
       await api(`/api/orders/${order.id}/send-confirmation`, { method: 'POST' });
       toast('Confirmation email sent');
-      await renderOrderDetail(order.id);
+      await withFocusPreserved(() => renderOrderDetail(order.id));
     } catch (ex) {
       toast(ex.message);
     }
@@ -3637,7 +3637,7 @@ async function renderOrderDetail(id) {
     try {
       await api(`/api/orders/${order.id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'cancelled' }) });
       toast('Order cancelled');
-      await renderOrderDetail(order.id);
+      await withFocusPreserved(() => renderOrderDetail(order.id));
     } catch (ex) {
       toast(ex.message);
     }
@@ -3816,20 +3816,20 @@ async function renderClients() {
   $('#client-q').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
     state.clientQ = $('#client-q').value.trim();
-    await renderClients();
+    await withFocusPreserved(renderClients);
   });
-  $('#new-client').addEventListener('click', async () => { state.editingClient = blankClient(); await renderClients(); });
+  $('#new-client').addEventListener('click', async () => { state.editingClient = blankClient(); await withFocusPreserved(renderClients); });
   $$('#view-clients tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { client } = await api(`/api/clients/${tr.dataset.id}`);
       state.editingClient = client;
-      await renderClients();
+      await withFocusPreserved(renderClients);
     });
     tr.querySelector('[data-action="toggle-orders"]').addEventListener('click', async () => {
       const id = tr.dataset.id;
       if (state.expandedClients.has(id)) {
         state.expandedClients.delete(id);
-        await renderClients();
+        await withFocusPreserved(renderClients);
         return;
       }
       state.expandedClients.add(id);
@@ -3837,23 +3837,23 @@ async function renderClients() {
         // Render immediately with a "Loading…" nested row, then fetch and
         // re-render once orders arrive, rather than blocking the toggle on
         // the network round-trip.
-        await renderClients();
+        await withFocusPreserved(renderClients);
         const { orders } = await api(`/api/clients/${id}`);
         state.clientOrders[id] = orders;
       }
-      await renderClients();
+      await withFocusPreserved(renderClients);
     });
     tr.querySelector('[data-action="merge"]').addEventListener('click', async () => {
       const c = clients.find((x) => x.id === tr.dataset.id);
       state.mergingClient = { sourceId: c.id, sourceLabel: c.name || c.email, query: '', results: [] };
-      await renderClients();
+      await withFocusPreserved(renderClients);
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this client? If they have order history, only their login/account is removed (orders are kept) — otherwise the record is deleted entirely.')) return;
       try {
         const result = await api(`/api/clients/${tr.dataset.id}`, { method: 'DELETE' });
         toast(result.deleted ? 'Client deleted' : 'Account removed (order history kept)');
-        await renderClients();
+        await withFocusPreserved(renderClients);
       } catch (ex) {
         toast(ex.message);
       }
@@ -3867,9 +3867,9 @@ async function renderClients() {
       if (!state.mergingClient.query) { state.mergingClient.results = []; return renderClients(); }
       const { clients: results } = await api(`/api/clients?${new URLSearchParams({ q: state.mergingClient.query })}`);
       state.mergingClient.results = results;
-      await renderClients();
+      await withFocusPreserved(renderClients);
     });
-    $('[data-action="cancel-merge"]')?.addEventListener('click', async () => { state.mergingClient = null; await renderClients(); });
+    $('[data-action="cancel-merge"]')?.addEventListener('click', async () => { state.mergingClient = null; await withFocusPreserved(renderClients); });
     $$('[data-merge-target-id]').forEach((row) => {
       row.querySelector('[data-action="confirm-merge"]').addEventListener('click', async () => {
         const targetId = row.dataset.mergeTargetId;
@@ -3879,7 +3879,7 @@ async function renderClients() {
           await api(`/api/clients/${state.mergingClient.sourceId}/merge`, { method: 'POST', body: JSON.stringify({ intoClientId: targetId }) });
           toast('Clients merged');
           state.mergingClient = null;
-          await renderClients();
+          await withFocusPreserved(renderClients);
         } catch (ex) {
           toast(ex.message);
         }
@@ -3888,8 +3888,8 @@ async function renderClients() {
   }
 
   if (form) {
-    $('#cancel-client').addEventListener('click', async () => { state.editingClient = null; await renderClients(); });
-    $('#back-to-clients').addEventListener('click', async () => { state.editingClient = null; await renderClients(); });
+    $('#cancel-client').addEventListener('click', async () => { state.editingClient = null; await withFocusPreserved(renderClients); });
+    $('#back-to-clients').addEventListener('click', async () => { state.editingClient = null; await withFocusPreserved(renderClients); });
     $('#save-client').addEventListener('click', async () => {
       const firstName = $('#cf-first-name').value;
       const lastName = $('#cf-last-name').value;
@@ -3923,7 +3923,7 @@ async function renderClients() {
         else await api('/api/clients', { method: 'POST', body: JSON.stringify(payload) });
         toast('Client saved');
         state.editingClient = null;
-        await renderClients();
+        await withFocusPreserved(renderClients);
       } catch (ex) {
         toast(ex.message);
       }
@@ -3992,22 +3992,22 @@ async function renderRegisteredUsers() {
     tr.querySelector('[data-action="toggle-orders"]').addEventListener('click', async () => {
       if (state.expandedRegisteredUsers.has(id)) {
         state.expandedRegisteredUsers.delete(id);
-        await renderRegisteredUsers();
+        await withFocusPreserved(renderRegisteredUsers);
         return;
       }
       state.expandedRegisteredUsers.add(id);
       if (!state.clientOrders[id]) {
-        await renderRegisteredUsers();
+        await withFocusPreserved(renderRegisteredUsers);
         const { orders } = await api(`/api/clients/${id}`);
         state.clientOrders[id] = orders;
       }
-      await renderRegisteredUsers();
+      await withFocusPreserved(renderRegisteredUsers);
     });
     tr.querySelector('[data-action="verify"]')?.addEventListener('click', async () => {
       try {
         await api(`/api/clients/${id}/verify`, { method: 'PATCH' });
         toast('Marked as verified');
-        await renderRegisteredUsers();
+        await withFocusPreserved(renderRegisteredUsers);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4033,7 +4033,7 @@ async function renderRegisteredUsers() {
       try {
         await api(`/api/clients/${id}/disabled`, { method: 'PATCH', body: JSON.stringify({ disabled: true }) });
         toast('Account disabled');
-        await renderRegisteredUsers();
+        await withFocusPreserved(renderRegisteredUsers);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4042,7 +4042,7 @@ async function renderRegisteredUsers() {
       try {
         await api(`/api/clients/${id}/disabled`, { method: 'PATCH', body: JSON.stringify({ disabled: false }) });
         toast('Account re-enabled');
-        await renderRegisteredUsers();
+        await withFocusPreserved(renderRegisteredUsers);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4052,7 +4052,7 @@ async function renderRegisteredUsers() {
       try {
         const result = await api(`/api/clients/${id}`, { method: 'DELETE' });
         toast(result.deleted ? 'Client deleted' : 'Account removed (order history kept)');
-        await renderRegisteredUsers();
+        await withFocusPreserved(renderRegisteredUsers);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4125,7 +4125,7 @@ async function renderInvoiceHistory() {
   const applyFilters = async () => {
     state.invoiceFilters.q = $('#invoice-filter-q').value.trim();
     state.invoiceFilters.status = $('#invoice-filter-status').value;
-    await renderInvoiceHistory();
+    await withFocusPreserved(renderInvoiceHistory);
   };
   $('#invoice-filter-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') applyFilters(); });
   $('#invoice-filter-status').addEventListener('change', applyFilters);
@@ -4140,7 +4140,7 @@ async function renderInvoiceHistory() {
       try {
         await api(`/api/orders/${tr.dataset.id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'cancelled' }) });
         toast('Order cancelled');
-        await renderInvoiceHistory();
+        await withFocusPreserved(renderInvoiceHistory);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4150,7 +4150,7 @@ async function renderInvoiceHistory() {
       try {
         await api(`/api/orders/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Order deleted');
-        await renderInvoiceHistory();
+        await withFocusPreserved(renderInvoiceHistory);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4162,7 +4162,7 @@ async function renderInvoiceHistory() {
       try {
         await api(`/api/orders/${select.dataset.id}/status`, { method: 'PUT', body: JSON.stringify({ status: select.value }) });
         toast(select.value === 'paid' ? 'Marked as payment received' : 'Marked as pending');
-        await renderInvoiceHistory();
+        await withFocusPreserved(renderInvoiceHistory);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4175,7 +4175,7 @@ async function renderInvoiceHistory() {
       try {
         await api(`/api/orders/${checkbox.dataset.id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
         toast(checkbox.checked ? 'Marked completed (printed & shipped)' : 'Reverted to paid');
-        await renderInvoiceHistory();
+        await withFocusPreserved(renderInvoiceHistory);
       } catch (ex) {
         toast(ex.message);
       }
@@ -4420,9 +4420,9 @@ async function renderNewOrder() {
       </div>
     </div>`;
 
-  $('[data-action="mode-search"]')?.addEventListener('click', async () => { order.clientMode = 'search'; await renderNewOrder(); });
-  $('[data-action="mode-new"]')?.addEventListener('click', async () => { order.clientMode = 'new'; await renderNewOrder(); });
-  $('[data-action="clear-client"]')?.addEventListener('click', async () => { order.selectedClient = null; order.clientResults = []; await renderNewOrder(); });
+  $('[data-action="mode-search"]')?.addEventListener('click', async () => { order.clientMode = 'search'; await withFocusPreserved(renderNewOrder); });
+  $('[data-action="mode-new"]')?.addEventListener('click', async () => { order.clientMode = 'new'; await withFocusPreserved(renderNewOrder); });
+  $('[data-action="clear-client"]')?.addEventListener('click', async () => { order.selectedClient = null; order.clientResults = []; await withFocusPreserved(renderNewOrder); });
 
   $('#no-client-q')?.addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
@@ -4430,29 +4430,29 @@ async function renderNewOrder() {
     if (!order.clientQuery) { order.clientResults = []; return renderNewOrder(); }
     const { clients } = await api(`/api/clients?${new URLSearchParams({ q: order.clientQuery })}`);
     order.clientResults = clients;
-    await renderNewOrder();
+    await withFocusPreserved(renderNewOrder);
   });
   $$('[data-client-id]').forEach((row) => {
     row.querySelector('[data-action="pick-client"]').addEventListener('click', async () => {
       order.selectedClient = order.clientResults.find((c) => c.id === row.dataset.clientId);
       order.discountPct = order.selectedClient?.discountPct || 0;
-      await renderNewOrder();
+      await withFocusPreserved(renderNewOrder);
     });
   });
 
   $('#add-item')?.addEventListener('click', async () => {
     order.items.push(blankNewOrderItem());
-    await renderNewOrder();
+    await withFocusPreserved(renderNewOrder);
   });
   $$('[data-item-idx]').forEach((row) => {
     const idx = Number(row.dataset.itemIdx);
     const item = order.items[idx];
-    row.querySelector('[data-action="item-mode-product"]')?.addEventListener('click', async () => { item.mode = 'product'; await renderNewOrder(); });
-    row.querySelector('[data-action="item-mode-custom"]')?.addEventListener('click', async () => { item.mode = 'custom'; await renderNewOrder(); });
+    row.querySelector('[data-action="item-mode-product"]')?.addEventListener('click', async () => { item.mode = 'product'; await withFocusPreserved(renderNewOrder); });
+    row.querySelector('[data-action="item-mode-custom"]')?.addEventListener('click', async () => { item.mode = 'custom'; await withFocusPreserved(renderNewOrder); });
     row.querySelector('[data-action="item-clear-product"]')?.addEventListener('click', async () => {
       item.productId = ''; item.productLabel = ''; item.productPrice = 0; item.productWeight = 0; item.productStock = null;
       item.productQuery = ''; item.productMatches = [];
-      await renderNewOrder();
+      await withFocusPreserved(renderNewOrder);
     });
     row.querySelector('.ip-product-q')?.addEventListener('keydown', async (e) => {
       if (e.key !== 'Enter') return;
@@ -4461,7 +4461,7 @@ async function renderNewOrder() {
       item.productMatches = q
         ? state.productCatalog.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0, 8)
         : [];
-      await renderNewOrder();
+      await withFocusPreserved(renderNewOrder);
     });
     row.querySelectorAll('[data-product-id]').forEach((matchRow) => {
       matchRow.querySelector('[data-action="pick-product"]').addEventListener('click', async () => {
@@ -4473,7 +4473,7 @@ async function renderNewOrder() {
         item.productWeight = p.weight || 0;
         item.productStock = p.stockQty;
         item.productMatches = [];
-        await renderNewOrder();
+        await withFocusPreserved(renderNewOrder);
       });
     });
     row.querySelector('.ni-desc')?.addEventListener('input', (e) => { item.description = e.target.value; });
@@ -4481,7 +4481,7 @@ async function renderNewOrder() {
     row.querySelector('.ni-price')?.addEventListener('input', (e) => { item.unitPrice = e.target.value; });
     row.querySelector('[data-action="remove-item"]')?.addEventListener('click', async () => {
       order.items.splice(idx, 1);
-      await renderNewOrder();
+      await withFocusPreserved(renderNewOrder);
     });
   });
 
@@ -4490,10 +4490,10 @@ async function renderNewOrder() {
       order.shippingMethod = radio.value;
       order.shippingOptionId = '';
       order.manualShippingPrice = '';
-      await renderNewOrder();
+      await withFocusPreserved(renderNewOrder);
     });
   });
-  $('#no-shipping-fixed')?.addEventListener('change', async (e) => { order.shippingOptionId = e.target.value; await renderNewOrder(); });
+  $('#no-shipping-fixed')?.addEventListener('change', async (e) => { order.shippingOptionId = e.target.value; await withFocusPreserved(renderNewOrder); });
   $('#no-shipping-manual')?.addEventListener('input', (e) => { order.manualShippingPrice = e.target.value; });
   $('#no-discount')?.addEventListener('input', (e) => { order.discountPct = e.target.value; });
   $('#no-payment-method')?.addEventListener('change', (e) => { order.paymentMethod = e.target.value; });
@@ -4853,7 +4853,7 @@ async function renderPrintJobs() {
     try {
       const { preview } = await api('/api/print-jobs/validate', { method: 'POST', body: JSON.stringify(readPrintJobPayload(draft)) });
       draft.preview = preview;
-      await renderPrintJobs();
+      await withFocusPreserved(renderPrintJobs);
     } catch (ex) {
       toast(ex.message);
     }
@@ -4875,7 +4875,7 @@ async function renderPrintJobs() {
       if (imageInput.files[0]) await uploadPrintJobAsset(printJob.id, 'image', imageInput.files[0]);
 
       state.newPrintJob = blankPrintJob();
-      await renderPrintJobs();
+      await withFocusPreserved(renderPrintJobs);
     } catch (ex) {
       toast(ex.message);
     }
@@ -4887,7 +4887,7 @@ async function renderPrintJobs() {
     tr.querySelector('[data-action="delete-job"]').addEventListener('click', async () => {
       if (!confirm('Delete this print job?')) return;
       await api(`/api/print-jobs/${jobId}`, { method: 'DELETE' });
-      await renderPrintJobs();
+      await withFocusPreserved(renderPrintJobs);
     });
 
     // Attach/replace the model file or reference photo on an already-logged
@@ -4897,7 +4897,7 @@ async function renderPrintJobs() {
     fileInputCell.addEventListener('change', async () => {
       if (!fileInputCell.files[0]) return;
       await uploadPrintJobAsset(jobId, 'file', fileInputCell.files[0]);
-      await renderPrintJobs();
+      await withFocusPreserved(renderPrintJobs);
     });
 
     const imageInputCell = tr.querySelector('[data-role="image-input"]');
@@ -4905,7 +4905,7 @@ async function renderPrintJobs() {
     imageInputCell.addEventListener('change', async () => {
       if (!imageInputCell.files[0]) return;
       await uploadPrintJobAsset(jobId, 'image', imageInputCell.files[0]);
-      await renderPrintJobs();
+      await withFocusPreserved(renderPrintJobs);
     });
 
     // Auto-saves on interaction (no separate Save button per row) --
@@ -4917,7 +4917,7 @@ async function renderPrintJobs() {
         toast('Status updated');
       } catch (ex) {
         toast(ex.message);
-        await renderPrintJobs();
+        await withFocusPreserved(renderPrintJobs);
       }
     });
     tr.querySelector('.pj-final-price-cell').addEventListener('blur', async (e) => {
@@ -4940,7 +4940,7 @@ async function renderPrintJobs() {
         }
         state.editingListingJobId = jobId;
         state.listingItemSnapshot = null;
-        await renderPrintJobs();
+        await withFocusPreserved(renderPrintJobs);
       });
     }
     const updateBtn = tr.querySelector('[data-action="update-listing"]');
@@ -4951,7 +4951,7 @@ async function renderPrintJobs() {
         const item = product.items.find((i) => i.id === job.listingItemId);
         state.editingListingJobId = jobId;
         state.listingItemSnapshot = item ? { stockQty: item.stockQty, price: item.price } : { stockQty: 0, price: 0 };
-        await renderPrintJobs();
+        await withFocusPreserved(renderPrintJobs);
       });
     }
   });
@@ -4960,7 +4960,7 @@ async function renderPrintJobs() {
     $('#cancel-listing').addEventListener('click', async () => {
       state.editingListingJobId = null;
       state.listingItemSnapshot = null;
-      await renderPrintJobs();
+      await withFocusPreserved(renderPrintJobs);
     });
     $('#save-listing').addEventListener('click', async () => {
       const stockQty = Number($('#lst-stock').value) || 0;
@@ -4975,7 +4975,7 @@ async function renderPrintJobs() {
         }
         state.editingListingJobId = null;
         state.listingItemSnapshot = null;
-        await renderPrintJobs();
+        await withFocusPreserved(renderPrintJobs);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5075,21 +5075,21 @@ async function renderInHouseFilament() {
       </table>
     </div>`;
 
-  $('#new-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = blankInHouseFilament(); await renderInHouseFilament(); });
-  $('#ihf-filter-q').addEventListener('input', async () => { state.inHouseFilters.q = $('#ihf-filter-q').value; await renderInHouseFilament(); });
-  $('#ihf-filter-brand').addEventListener('change', async () => { state.inHouseFilters.brand = $('#ihf-filter-brand').value; await renderInHouseFilament(); });
+  $('#new-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = blankInHouseFilament(); await withFocusPreserved(renderInHouseFilament); });
+  $('#ihf-filter-q').addEventListener('input', async () => { state.inHouseFilters.q = $('#ihf-filter-q').value; await withFocusPreserved(renderInHouseFilament); });
+  $('#ihf-filter-brand').addEventListener('change', async () => { state.inHouseFilters.brand = $('#ihf-filter-brand').value; await withFocusPreserved(renderInHouseFilament); });
   $$('#view-in-house-filament tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { filament } = await api(`/api/in-house-filament/${tr.dataset.id}`);
       state.editingInHouseFilament = filament;
-      await renderInHouseFilament();
+      await withFocusPreserved(renderInHouseFilament);
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this in-house filament?')) return;
       try {
         await api(`/api/in-house-filament/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
-        await renderInHouseFilament();
+        await withFocusPreserved(renderInHouseFilament);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5100,13 +5100,13 @@ async function renderInHouseFilament() {
       try {
         await api(`/api/in-house-filament/${tr.dataset.id}/transfer-roll`, { method: 'POST', body: JSON.stringify({ stockItemId }) });
         toast('Roll transferred to in-house stock');
-        await renderInHouseFilament();
+        await withFocusPreserved(renderInHouseFilament);
       } catch (ex) { toast(ex.message); }
     });
   });
 
   if (form) {
-    $('#cancel-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = null; await renderInHouseFilament(); });
+    $('#cancel-in-house-filament').addEventListener('click', async () => { state.editingInHouseFilament = null; await withFocusPreserved(renderInHouseFilament); });
     $('#save-in-house-filament').addEventListener('click', async () => {
       const payload = {
         brand: $('#ihf-brand').value,
@@ -5122,7 +5122,7 @@ async function renderInHouseFilament() {
         else await api('/api/in-house-filament', { method: 'POST', body: JSON.stringify(payload) });
         toast('Filament saved');
         state.editingInHouseFilament = null;
-        await renderInHouseFilament();
+        await withFocusPreserved(renderInHouseFilament);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5190,19 +5190,19 @@ async function renderPurchases() {
       </table>
     </div>`;
 
-  $('#new-purchase').addEventListener('click', async () => { state.editingPurchase = blankPurchase(); await renderPurchases(); });
+  $('#new-purchase').addEventListener('click', async () => { state.editingPurchase = blankPurchase(); await withFocusPreserved(renderPurchases); });
   $$('#view-purchases tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { purchase } = await api(`/api/purchases/${tr.dataset.id}`);
       state.editingPurchase = purchase;
-      await renderPurchases();
+      await withFocusPreserved(renderPurchases);
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this purchase?')) return;
       try {
         await api(`/api/purchases/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
-        await renderPurchases();
+        await withFocusPreserved(renderPurchases);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5210,7 +5210,7 @@ async function renderPurchases() {
   });
 
   if (form) {
-    $('#cancel-purchase').addEventListener('click', async () => { state.editingPurchase = null; await renderPurchases(); });
+    $('#cancel-purchase').addEventListener('click', async () => { state.editingPurchase = null; await withFocusPreserved(renderPurchases); });
     $('#save-purchase').addEventListener('click', async () => {
       const payload = {
         supplier: $('#pu-supplier').value,
@@ -5224,7 +5224,7 @@ async function renderPurchases() {
         else await api('/api/purchases', { method: 'POST', body: JSON.stringify(payload) });
         toast('Purchase saved');
         state.editingPurchase = null;
-        await renderPurchases();
+        await withFocusPreserved(renderPurchases);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5308,7 +5308,7 @@ async function renderNewsletterCampaigns() {
     try {
       await api('/api/newsletter-campaigns', { method: 'POST', body: JSON.stringify({ subject, blocks, recipientKeys, importedHtml: state.newsletterImportedTemplate?.bodyHtml || '' }) });
       toast('Campaign saved as draft');
-      await renderNewsletterCampaigns();
+      await withFocusPreserved(renderNewsletterCampaigns);
     } catch (ex) {
       toast(ex.message);
     }
@@ -5317,13 +5317,13 @@ async function renderNewsletterCampaigns() {
     return $$('#newsletter-block-editor [data-block-index]', $('#view-newsletter')).map((row) => ({ type: $('.nb-type', row).value, text: $('.nb-text', row)?.value || '', url: $('.nb-url', row)?.value || '', alt: $('.nb-alt', row)?.value || '' }));
   }
   function saveDraftState() { state.newsletterSubject = $('#nc-subject').value; state.newsletterBlocks = collectNewsletterBlocks(); }
-  $('#nc-add-block').addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.push({ type: 'text', text: '' }); await renderNewsletterCampaigns(); });
-  $$('.nb-remove', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.splice(Number(button.closest('[data-block-index]').dataset.blockIndex), 1); await renderNewsletterCampaigns(); }));
-  $('#nc-template').addEventListener('change', async (event) => { const template = templates.find((item) => item.id === event.target.value); if (template) { state.newsletterBlocks = template.blocks; state.newsletterImportedTemplate = template.blocks.length ? null : template; state.newsletterSubject = template.subject; await renderNewsletterCampaigns(); } });
-  $$('.newsletter-asset', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: button.dataset.assetUrl, alt: button.dataset.assetAlt }); await renderNewsletterCampaigns(); }));
-  $('#nc-image-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('image', file); const res = await fetch('/api/newsletter-assets', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: data.asset.url, alt: data.asset.altText }); await renderNewsletterCampaigns(); });
-  $('#nc-template-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('template', file); form.append('name', file.name.replace(/\.html?$/i, '')); form.append('subject', $('#nc-subject').value); const res = await fetch('/api/newsletter-templates/import', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); state.newsletterImportedTemplate = data.template; state.newsletterBlocks = []; state.newsletterSubject = data.template.subject; toast('HTML template imported'); await renderNewsletterCampaigns(); });
-  $('#nc-save-template').addEventListener('click', async () => { const name = prompt('Template name:'); if (!name) return; try { await api('/api/newsletter-templates', { method: 'POST', body: JSON.stringify({ name, subject: $('#nc-subject').value, blocks: collectNewsletterBlocks() }) }); toast('Template saved'); await renderNewsletterCampaigns(); } catch (error) { toast(error.message); } });
+  $('#nc-add-block').addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.push({ type: 'text', text: '' }); await withFocusPreserved(renderNewsletterCampaigns); });
+  $$('.nb-remove', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.splice(Number(button.closest('[data-block-index]').dataset.blockIndex), 1); await withFocusPreserved(renderNewsletterCampaigns); }));
+  $('#nc-template').addEventListener('change', async (event) => { const template = templates.find((item) => item.id === event.target.value); if (template) { state.newsletterBlocks = template.blocks; state.newsletterImportedTemplate = template.blocks.length ? null : template; state.newsletterSubject = template.subject; await withFocusPreserved(renderNewsletterCampaigns); } });
+  $$('.newsletter-asset', $('#view-newsletter')).forEach((button) => button.addEventListener('click', async () => { saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: button.dataset.assetUrl, alt: button.dataset.assetAlt }); await withFocusPreserved(renderNewsletterCampaigns); }));
+  $('#nc-image-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('image', file); const res = await fetch('/api/newsletter-assets', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); saveDraftState(); state.newsletterBlocks.push({ type: 'image', url: data.asset.url, alt: data.asset.altText }); await withFocusPreserved(renderNewsletterCampaigns); });
+  $('#nc-template-upload').addEventListener('change', async (event) => { const file = event.target.files[0]; if (!file) return; const form = new FormData(); form.append('template', file); form.append('name', file.name.replace(/\.html?$/i, '')); form.append('subject', $('#nc-subject').value); const res = await fetch('/api/newsletter-templates/import', { method: 'POST', credentials: 'include', body: form }); const data = await res.json(); if (!res.ok) return toast(data.error); state.newsletterImportedTemplate = data.template; state.newsletterBlocks = []; state.newsletterSubject = data.template.subject; toast('HTML template imported'); await withFocusPreserved(renderNewsletterCampaigns); });
+  $('#nc-save-template').addEventListener('click', async () => { const name = prompt('Template name:'); if (!name) return; try { await api('/api/newsletter-templates', { method: 'POST', body: JSON.stringify({ name, subject: $('#nc-subject').value, blocks: collectNewsletterBlocks() }) }); toast('Template saved'); await withFocusPreserved(renderNewsletterCampaigns); } catch (error) { toast(error.message); } });
   $('#nc-preview').addEventListener('click', () => { const blocks = collectNewsletterBlocks(); const html = state.newsletterImportedTemplate?.bodyHtml || blocks.map((block) => block.type === 'heading' ? `<h1>${escapeHtml(block.text)}</h1>` : block.type === 'text' ? `<p>${escapeHtml(block.text).replace(/\n/g, '<br>')}</p>` : block.type === 'image' ? `<img src="${escapeAttr(block.url)}" alt="${escapeAttr(block.alt)}" style="max-width:100%">` : block.type === 'button' ? `<p><a href="${escapeAttr(block.url)}">${escapeHtml(block.text)}</a></p>` : '<hr>').join(''); const frame = $('#nc-preview-frame'); frame.srcdoc = `<main style="max-width:640px;margin:auto;font:16px Arial;padding:24px">${html}</main>`; frame.classList.remove('hidden'); });
   $('#nc-select-all').addEventListener('change', (event) => $$('.nc-recipient', $('#view-newsletter')).forEach((input) => { input.checked = event.target.checked; }));
 
@@ -5332,7 +5332,7 @@ async function renderNewsletterCampaigns() {
       try {
         await api(`/api/newsletter-campaigns/${tr.dataset.id}/approve`, { method: 'PATCH' });
         toast('Campaign approved');
-        await renderNewsletterCampaigns();
+        await withFocusPreserved(renderNewsletterCampaigns);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5342,7 +5342,7 @@ async function renderNewsletterCampaigns() {
       try {
         const { campaign } = await api(`/api/newsletter-campaigns/${tr.dataset.id}/send`, { method: 'POST' });
         toast(`Campaign is sending to ${campaign.selectedCount} selected recipient(s)`);
-        await renderNewsletterCampaigns();
+        await withFocusPreserved(renderNewsletterCampaigns);
         setTimeout(() => renderNewsletterCampaigns().catch(() => {}), 3000);
       } catch (ex) {
         toast(ex.message);
@@ -5420,7 +5420,7 @@ async function renderWhatsAppCampaigns() {
     try {
       await api('/api/whatsapp-campaigns', { method: 'POST', body: JSON.stringify({ templateName, templateParams }) });
       toast('Campaign saved as draft');
-      await renderWhatsAppCampaigns();
+      await withFocusPreserved(renderWhatsAppCampaigns);
     } catch (ex) {
       toast(ex.message);
     }
@@ -5431,7 +5431,7 @@ async function renderWhatsAppCampaigns() {
       try {
         await api(`/api/whatsapp-campaigns/${tr.dataset.id}/approve`, { method: 'PATCH' });
         toast('Campaign approved');
-        await renderWhatsAppCampaigns();
+        await withFocusPreserved(renderWhatsAppCampaigns);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5446,7 +5446,7 @@ async function renderWhatsAppCampaigns() {
         // the background send actually finishes.
         const { campaign } = await api(`/api/whatsapp-campaigns/${tr.dataset.id}/send`, { method: 'POST' });
         toast(`Sending to ${campaign.pendingCount} recipient(s)`);
-        await renderWhatsAppCampaigns();
+        await withFocusPreserved(renderWhatsAppCampaigns);
         setTimeout(() => renderWhatsAppCampaigns().catch(() => {}), 3000);
       } catch (ex) {
         toast(ex.message);
@@ -5543,7 +5543,7 @@ async function renderShipping() {
       </table>
     </div>`;
 
-  $('#new-shipping').addEventListener('click', async () => { state.editingShipping = blankShippingOption(); await renderShipping(); });
+  $('#new-shipping').addEventListener('click', async () => { state.editingShipping = blankShippingOption(); await withFocusPreserved(renderShipping); });
   $$('#view-shipping tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
       const o = shippingOptions.find((x) => x.id === tr.dataset.id);
@@ -5555,7 +5555,7 @@ async function renderShipping() {
       try {
         await api(`/api/shipping-options/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
-        await renderShipping();
+        await withFocusPreserved(renderShipping);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5567,7 +5567,7 @@ async function renderShipping() {
       state.editingShipping = { ...form, optionType: $('#sf-type').value };
       renderShipping();
     });
-    $('#cancel-shipping').addEventListener('click', async () => { state.editingShipping = null; await renderShipping(); });
+    $('#cancel-shipping').addEventListener('click', async () => { state.editingShipping = null; await withFocusPreserved(renderShipping); });
     $('#save-shipping').addEventListener('click', async () => {
       const optionType = $('#sf-type').value;
       const payload = {
@@ -5584,7 +5584,7 @@ async function renderShipping() {
         else await api('/api/shipping-options', { method: 'POST', body: JSON.stringify(payload) });
         toast('Shipping option saved');
         state.editingShipping = null;
-        await renderShipping();
+        await withFocusPreserved(renderShipping);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5782,19 +5782,19 @@ async function renderStock() {
   $('#stock-q').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
     state.stockQ = $('#stock-q').value.trim();
-    await renderStock();
+    await withFocusPreserved(renderStock);
   });
 
   $('#stock-price-min').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
     state.stockPriceMin = $('#stock-price-min').value.trim();
-    await renderStock();
+    await withFocusPreserved(renderStock);
   });
 
   $('#stock-price-max').addEventListener('keydown', async (e) => {
     if (e.key !== 'Enter') return;
     state.stockPriceMax = $('#stock-price-max').value.trim();
-    await renderStock();
+    await withFocusPreserved(renderStock);
   });
 
   $$('#view-stock .stock-input').forEach((input) => {
@@ -5860,7 +5860,7 @@ async function renderStock() {
       for (const r of results) {
         if (r.ok) delete state.stockEdits[r.id];
       }
-      await renderStock();
+      await withFocusPreserved(renderStock);
     } catch (ex) {
       toast(ex.message);
       saveBtn.disabled = false;
@@ -5938,19 +5938,19 @@ async function renderResources() {
       </table>
     </div>`;
 
-  $('#new-resource').addEventListener('click', async () => { state.editingResource = blankResource(); await renderResources(); });
+  $('#new-resource').addEventListener('click', async () => { state.editingResource = blankResource(); await withFocusPreserved(renderResources); });
   $$('#view-resources tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { resource } = await api(`/api/resources/${tr.dataset.id}`);
       state.editingResource = resource;
-      await renderResources();
+      await withFocusPreserved(renderResources);
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this resource?')) return;
       try {
         await api(`/api/resources/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
-        await renderResources();
+        await withFocusPreserved(renderResources);
       } catch (ex) {
         toast(ex.message);
       }
@@ -5959,7 +5959,7 @@ async function renderResources() {
 
   if (!form) return;
 
-  $('#cancel-resource').addEventListener('click', async () => { state.editingResource = null; await renderResources(); });
+  $('#cancel-resource').addEventListener('click', async () => { state.editingResource = null; await withFocusPreserved(renderResources); });
   $('#save-resource').addEventListener('click', async () => {
     const payload = {
       title: $('#rf-title').value,
@@ -5974,7 +5974,7 @@ async function renderResources() {
       else await api('/api/resources', { method: 'POST', body: JSON.stringify(payload) });
       toast('Resource saved');
       state.editingResource = null;
-      await renderResources();
+      await withFocusPreserved(renderResources);
     } catch (ex) {
       toast(ex.message);
     }
@@ -5993,7 +5993,7 @@ async function renderResources() {
         if (!res.ok) throw new Error(data.error || 'Upload failed');
         state.editingResource = data.resource;
         toast('Uploaded');
-        await renderResources();
+        await withFocusPreserved(renderResources);
       } catch (ex) {
         toast(ex.message);
       }
@@ -6092,19 +6092,19 @@ async function renderTestimonials() {
   const form = state.editingTestimonial;
   $('#view-testimonials').innerHTML = testimonialsViewHtml(testimonials, form);
 
-  $('#new-testimonial').addEventListener('click', async () => { state.editingTestimonial = blankTestimonial(); await renderTestimonials(); });
+  $('#new-testimonial').addEventListener('click', async () => { state.editingTestimonial = blankTestimonial(); await withFocusPreserved(renderTestimonials); });
   $$('#view-testimonials tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { testimonial } = await api(`/api/testimonials/${tr.dataset.id}`);
       state.editingTestimonial = testimonial;
-      await renderTestimonials();
+      await withFocusPreserved(renderTestimonials);
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this testimonial?')) return;
       try {
         await api(`/api/testimonials/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
-        await renderTestimonials();
+        await withFocusPreserved(renderTestimonials);
       } catch (ex) {
         toast(ex.message);
       }
@@ -6113,7 +6113,7 @@ async function renderTestimonials() {
 
   if (!form) return;
 
-  $('#cancel-testimonial').addEventListener('click', async () => { state.editingTestimonial = null; await renderTestimonials(); });
+  $('#cancel-testimonial').addEventListener('click', async () => { state.editingTestimonial = null; await withFocusPreserved(renderTestimonials); });
   $('#save-testimonial').addEventListener('click', async () => {
     const payload = {
       customerName: $('#tf-customer-name').value,
@@ -6131,7 +6131,7 @@ async function renderTestimonials() {
       else await api('/api/testimonials', { method: 'POST', body: JSON.stringify(payload) });
       toast('Testimonial saved');
       state.editingTestimonial = null;
-      await renderTestimonials();
+      await withFocusPreserved(renderTestimonials);
     } catch (ex) {
       toast(ex.message);
     }
@@ -6149,7 +6149,7 @@ async function renderTestimonials() {
       if (!res.ok) throw new Error(data.error || 'Upload failed');
       state.editingTestimonial = data.testimonial;
       toast('Uploaded');
-      await renderTestimonials();
+      await withFocusPreserved(renderTestimonials);
     } catch (ex) {
       toast(ex.message);
     }
