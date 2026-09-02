@@ -139,12 +139,17 @@ export function startPageViewsPruneJob(intervalMs = PAGE_VIEWS_PRUNE_INTERVAL_MS
 // for requests finalized longer ago than settings.designFileRetentionMonths
 // (admin-editable; the privacy policy states the same figure). Same
 // in-process shape as every other job here; audit-logged per batch so the
-// deletion trail is inspectable.
-export function startDesignFilePruneJob(intervalMs = 24 * 60 * 60 * 1000) {
+// deletion trail is inspectable. deleteFile is injectable (defaults to the
+// real deleteDesignRequestFile) so tests can verify the sweep without
+// touching the real public/uploads/design-requests directory -- that
+// path is a module-level constant resolved from cwd at import time
+// (uploads.js), so it can't be redirected by a test's own process.chdir()
+// after the fact the way DB-backed state can.
+export function startDesignFilePruneJob(intervalMs = 24 * 60 * 60 * 1000, deleteFile = deleteDesignRequestFile) {
   function run() {
     try {
       const months = getSettings().designFileRetentionMonths;
-      const pruned = pruneExpiredDesignFiles(months, deleteDesignRequestFile);
+      const pruned = pruneExpiredDesignFiles(months, deleteFile);
       if (pruned.length > 0) {
         console.log(`Design-file prune: removed uploads for ${pruned.length} finalized request(s) older than ${months} months`);
         recordAuditEvent({

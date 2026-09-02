@@ -22,6 +22,18 @@ function getTransporter() {
   return transporter;
 }
 
+// Test-only seam: lets tests swap in a fake transport (anything with a
+// .sendMail(options) method -- the only method any send* function below
+// ever calls on it) instead of the real Gmail one, so every send*
+// function's actual subject/HTML construction can be exercised end to end
+// without GMAIL_APP_PASSWORD or a real SMTP connection. Mirrors this
+// project's existing injectable-I/O convention (restock.js's sendFn,
+// backups.js's syncOffsite({ run })) -- one seam at the real point of I/O,
+// not threaded through all 17 send functions individually.
+export function useTransporterForTests(fake) {
+  transporter = fake;
+}
+
 // Reads one template's admin-edited {subject, message} from Settings ->
 // Communications, falling back to its default if the key is somehow absent
 // (shouldn't happen -- getSettings() always merges DEFAULT_SETTINGS.emailTemplates
@@ -170,7 +182,7 @@ export async function sendRestockEmail({ email, token }, { name: productName, pr
   const vars = { productName };
   const bodyHtml = `<p style="margin:0 0 16px;">Hi there,</p>
     ${messageHtmlFor(settings, 'restockAlert', vars)}
-    <p style="margin:0 0 16px;"><strong>${escapeHtml(productName)}</strong>${price ? ` — R ${escapeHtml((price / 1).toFixed(2))}` : ''}</p>
+    <p style="margin:0 0 16px;"><strong>${escapeHtml(productName)}</strong>${price ? ` — ${escapeHtml(formatRand(price))}` : ''}</p>
     ${renderButton('View product', productHref)}
     <p style="margin:16px 0 0;font-size:12px;color:#6b6257;">You asked us to tell you when this item was back. This is a once-off alert — you won't hear from us about it again. <a href="https://www.lapanza3d.co.za/api/restock/unsubscribe?token=${encodeURIComponent(token)}" style="color:#6b6257;">Remove this alert</a>.</p>`;
   await getTransporter().sendMail({
