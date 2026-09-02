@@ -639,3 +639,15 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 
 /* Hourly traffic chart (2026-09-02): second series tint */
 .chart-bar-alt { fill: color-mix(in srgb, var(--accent, #c24b28) 40%, var(--line)); }
+
+/* Communications template cards (2026-09-02): catalog-style collapsibles */
+.comm-template { border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elevated); }
+.comm-template > summary { display: flex; align-items: baseline; gap: 0.75rem; padding: 0.6rem 0.9rem; cursor: pointer; list-style: none; }
+.comm-template > summary::-webkit-details-marker { display: none; }
+.comm-template > summary::before { content: "›"; color: var(--accent, #c24b28); transition: transform 0.15s ease; }
+.comm-template[open] > summary::before { transform: rotate(90deg); }
+.comm-template .comm-name { font-weight: 600; font-size: 0.92rem; white-space: nowrap; }
+.comm-template .comm-subject-preview { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+.comm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.comm-chip { border: 1px solid var(--line); background: color-mix(in srgb, var(--accent, #c24b28) 8%, var(--bg-elevated)); border-radius: 999px; padding: 2px 10px; font-size: 0.78rem; font-family: ui-monospace, Consolas, monospace; cursor: pointer; color: inherit; }
+.comm-chip:hover { border-color: var(--accent, #c24b28); }

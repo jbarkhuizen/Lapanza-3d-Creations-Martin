@@ -2663,44 +2663,68 @@ function operationalAlertsPanel(s) {
 // sends (see its per-function comments for the authoritative token list --
 // kept in sync here). Structural HTML (buttons, order tables, security
 // disclaimers) is code-controlled, not editable here, on purpose.
+// Owner request (2026-09-02): Communications gets the Product Catalog
+// treatment -- templates grouped into collapsible sections (customer vs
+// owner mail), one collapsible card per template with a subject preview in
+// its summary, a "when it sends" line, and clickable token chips that
+// insert at the cursor.
 const EMAIL_TEMPLATE_META = [
-  { key: 'passwordReset', label: 'Password reset', tokens: '{{name}}' },
-  { key: 'emailVerification', label: 'Verify email', tokens: '{{name}}' },
-  { key: 'orderConfirmation', label: 'Order confirmation', tokens: '{{name}}, {{orderRef}}' },
-  { key: 'orderShipped', label: 'Order shipped (tracking number set)', tokens: '{{name}}, {{orderRef}}, {{trackingNumber}}' },
-  { key: 'restockAlert', label: 'Back-in-stock alert', tokens: '{{productName}}' },
-  { key: 'designRequestReceived', label: 'Design request received (acknowledgement)', tokens: '{{name}}' },
-  { key: 'designRequestQuoted', label: 'Design request quoted (accept & pay link)', tokens: '{{name}}, {{amount}}' },
-  { key: 'designRequestStatus', label: 'Design request status', tokens: '{{name}}, {{status}}' },
-  { key: 'newsletterConfirm', label: 'Newsletter confirmation', tokens: '(none)' },
-  { key: 'lowStockAlert', label: 'Low stock alert (to owner)', tokens: '{{itemName}}, {{stockQty}}, {{sku}}' },
-  { key: 'newOrderNotification', label: 'New order notification (to owner)', tokens: '{{orderRef}}, {{total}}, {{clientName}}, {{clientEmail}}, {{paymentMethod}}, {{itemCount}}' },
-  { key: 'orderCancelledNotification', label: 'Order cancelled notification (to owner)', tokens: '{{orderRef}}, {{total}}, {{clientName}}, {{clientEmail}}, {{reason}}' },
-  { key: 'newDesignRequestNotification', label: 'New design request notification (to owner)', tokens: '{{name}}, {{email}}, {{phone}}' },
+  { key: 'orderConfirmation', label: 'Order confirmation', group: 'customer', when: 'Sent the moment an order is placed.', tokens: ['{{name}}', '{{orderRef}}'] },
+  { key: 'orderShipped', label: 'Order shipped', group: 'customer', when: 'Sent the first time a tracking number is set on an order.', tokens: ['{{name}}', '{{orderRef}}', '{{trackingNumber}}'] },
+  { key: 'restockAlert', label: 'Back-in-stock alert', group: 'customer', when: 'Sent to waiting subscribers when an out-of-stock product is restocked.', tokens: ['{{productName}}'] },
+  { key: 'designRequestReceived', label: 'Design request received', group: 'customer', when: 'Acknowledgement with the status-tracking link, sent on every design request.', tokens: ['{{name}}'] },
+  { key: 'designRequestQuoted', label: 'Design request quoted', group: 'customer', when: 'Sent when you save & email a quote — carries the accept-and-pay link.', tokens: ['{{name}}', '{{amount}}'] },
+  { key: 'designRequestStatus', label: 'Design request status change', group: 'customer', when: 'Sent whenever you change a design request\u2019s status.', tokens: ['{{name}}', '{{status}}'] },
+  { key: 'passwordReset', label: 'Password reset', group: 'customer', when: 'Sent when a customer asks to reset their password.', tokens: ['{{name}}'] },
+  { key: 'emailVerification', label: 'Verify email', group: 'customer', when: 'Sent after registration to confirm the address.', tokens: ['{{name}}'] },
+  { key: 'newsletterConfirm', label: 'Newsletter confirmation', group: 'customer', when: 'Sent when someone subscribes to the newsletter.', tokens: [] },
+  { key: 'newOrderNotification', label: 'New order', group: 'owner', when: 'Sent to you when an order comes in.', tokens: ['{{orderRef}}', '{{total}}', '{{clientName}}', '{{clientEmail}}', '{{paymentMethod}}', '{{itemCount}}'] },
+  { key: 'orderCancelledNotification', label: 'Order cancelled', group: 'owner', when: 'Sent to you when an order is cancelled.', tokens: ['{{orderRef}}', '{{total}}', '{{clientName}}', '{{clientEmail}}', '{{reason}}'] },
+  { key: 'newDesignRequestNotification', label: 'New design request', group: 'owner', when: 'Sent to you when a design request arrives.', tokens: ['{{name}}', '{{email}}', '{{phone}}'] },
+  { key: 'lowStockAlert', label: 'Low stock alert', group: 'owner', when: 'Sent to you when an item falls to the low-stock threshold.', tokens: ['{{itemName}}', '{{stockQty}}', '{{sku}}'] },
 ];
 
 // Panel content saves via the page's main "Save settings" button (like
 // homeTiles) rather than saving itself immediately (like configurableListPanel
 // below) -- editing several templates' wording in one sitting shouldn't mean
 // several separate round-trips.
+function communicationsTemplateCard(meta, entry) {
+  const chips = meta.tokens.length
+    ? `<div class="comm-chips">${meta.tokens.map((tok) => `<button type="button" class="comm-chip" data-comm-token="${escapeAttr(tok)}" data-comm-target="${escapeAttr(meta.key)}" title="Insert ${escapeAttr(tok)} at the cursor">${escapeHtml(tok)}</button>`).join('')}<span class="muted" style="font-size:0.75rem;align-self:center">click to insert</span></div>`
+    : '<p class="muted" style="margin:0;font-size:0.78rem">No placeholders for this email.</p>';
+  return `
+    <details class="comm-template">
+      <summary>
+        <span class="comm-name">${escapeHtml(meta.label)}</span>
+        <span class="muted comm-subject-preview">${escapeHtml(entry.subject || 'No subject set')}</span>
+      </summary>
+      <div class="stack gap-2" style="padding:0.75rem 0.9rem 0.9rem">
+        <p class="muted" style="margin:0;font-size:0.82rem">${escapeHtml(meta.when)}</p>
+        <label class="field"><span>Subject</span><input data-email-template="${escapeAttr(meta.key)}" data-email-template-field="subject" value="${escapeAttr(entry.subject || '')}" /></label>
+        <label class="field"><span>Message</span><textarea data-email-template="${escapeAttr(meta.key)}" data-email-template-field="message" rows="5">${escapeHtml(entry.message || '')}</textarea></label>
+        ${chips}
+      </div>
+    </details>`;
+}
+
 function communicationsPanel(templates) {
   const t = templates || {};
-  const rows = EMAIL_TEMPLATE_META.map(({ key, label, tokens }) => {
-    const entry = t[key] || {};
+  const groupHtml = (groupKey, heading, note) => {
+    const cards = EMAIL_TEMPLATE_META.filter((m) => m.group === groupKey)
+      .map((m) => communicationsTemplateCard(m, t[m.key] || {}))
+      .join('');
     return `
-      <div class="stack gap-2" style="padding:14px 0;border-top:1px solid var(--border)">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap">
-          <strong style="font-size:0.92rem">${escapeHtml(label)}</strong>
-          <span class="muted" style="font-size:0.78rem">Available: ${escapeHtml(tokens)}</span>
-        </div>
-        <label class="field"><span>Subject</span><input data-email-template="${escapeAttr(key)}" data-email-template-field="subject" value="${escapeAttr(entry.subject || '')}" /></label>
-        <label class="field"><span>Message</span><textarea data-email-template="${escapeAttr(key)}" data-email-template-field="message" rows="3">${escapeHtml(entry.message || '')}</textarea></label>
-      </div>`;
-  }).join('');
+      <details class="stock-section" open>
+        <summary>${escapeHtml(heading)} <span class="muted">(${EMAIL_TEMPLATE_META.filter((m) => m.group === groupKey).length})</span></summary>
+        <p class="muted" style="margin:0.4rem 0 0.6rem;font-size:0.82rem">${escapeHtml(note)}</p>
+        <div class="stack gap-2">${cards}</div>
+      </details>`;
+  };
   return `
     <div class="panel stack gap-3">
-      <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Subject and message copy for every automated email. Structural parts (buttons, links, order details, the reset-link expiry notice) always stay in place — only the wording here is editable, so a save here can't drop a link or a security notice.</p>
-      ${rows}
+      <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Subject and message copy for every automated email. Structural parts (buttons, links, order details, the reset-link expiry notice) always stay in place — only the wording here is editable, so a save here can't drop a link or a security notice. Open a card to edit; the grey text next to each name is its current subject line.</p>
+      ${groupHtml('customer', 'Customer Emails', 'What your customers receive. Placeholders like {{name}} are replaced with the real value when the email sends.')}
+      ${groupHtml('owner', 'Notifications to You', 'Operational alerts sent to the order-notification address in Storefront settings.')}
     </div>`;
 }
 
@@ -6995,6 +7019,22 @@ new MutationObserver(() => {
   initRichTextEditors(document);
   attachPasswordToggles(document);
 }).observe(document.body, { childList: true, subtree: true });
+
+// Communications token chips: insert the placeholder at the cursor of the
+// matching message textarea (falls back to appending).
+document.addEventListener('click', (e) => {
+  const chip = e.target.closest?.('[data-comm-token]');
+  if (!chip) return;
+  const box = document.querySelector(`textarea[data-email-template="${chip.dataset.commTarget}"][data-email-template-field="message"]`);
+  if (!box) return;
+  const tok = chip.dataset.commToken;
+  const start = box.selectionStart ?? box.value.length;
+  const end = box.selectionEnd ?? box.value.length;
+  box.value = box.value.slice(0, start) + tok + box.value.slice(end);
+  box.focus();
+  box.selectionStart = box.selectionEnd = start + tok.length;
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+});
 
 boot();
 initRichTextEditors(document);
