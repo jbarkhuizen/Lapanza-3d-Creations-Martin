@@ -63,6 +63,44 @@ test('getSalesSummary today range matches only orders from the current calendar 
   db.close();
 });
 
+test('getSalesSummary "today" and the daily series use the server\'s local timezone (SAST/UTC+2), not UTC, for calendar-day boundaries', async () => {
+  const originalTz = process.env.TZ;
+  process.env.TZ = 'Africa/Johannesburg'; // UTC+2, no DST -- same offset the production server runs in
+  try {
+    const db = openDb(':memory:');
+    const { getSalesSummary } = await import(`./sales.js?t=${Date.now()}`);
+
+    // An order placed at local (SAST) 00:30 -- just after local midnight --
+    // is stored as a UTC instant on the PREVIOUS UTC calendar day (00:30
+    // SAST = 22:30 UTC the day before). Anchored on 'now' in LOCAL time,
+    // not UTC, so this holds no matter what real instant the test runs at.
+    const order = paidOrder(db, { total: 777 });
+    db.prepare("UPDATE orders SET created_at = datetime(date('now', 'localtime'), '-90 minutes') WHERE id = ?").run(order.id);
+
+    const fixture = db
+      .prepare("SELECT date(created_at) AS utcDate, date(created_at, 'localtime') AS localDate FROM orders WHERE id = ?")
+      .get(order.id);
+    const localToday = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
+    // Prerequisite for this test to mean anything at all: the fixture must
+    // genuinely straddle a UTC/local calendar-day boundary.
+    assert.notStrictEqual(fixture.utcDate, fixture.localDate, 'fixture must straddle a UTC/SAST day boundary, or this test proves nothing');
+    assert.strictEqual(fixture.localDate, localToday, 'fixture must land on local "today"');
+
+    const summary = getSalesSummary('today', db);
+    assert.strictEqual(summary.revenue, 777, 'an order from just after local midnight must count as today\'s sale -- a UTC-only comparison pushes it to "yesterday" instead');
+    assert.strictEqual(summary.orderCount, 1);
+    assert.ok(
+      summary.series.some((day) => day.date === localToday && day.revenue === 777),
+      'the daily trend series must group the order under its LOCAL calendar date, not the UTC one',
+    );
+
+    db.close();
+  } finally {
+    if (originalTz === undefined) delete process.env.TZ;
+    else process.env.TZ = originalTz;
+  }
+});
+
 test('getSalesSummary rejects an unknown range', async () => {
   const db = openDb(':memory:');
   const { getSalesSummary } = await import(`./sales.js?t=${Date.now()}`);

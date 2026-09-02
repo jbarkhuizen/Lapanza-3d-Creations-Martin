@@ -9,10 +9,17 @@ const ALL_STATUSES = ['pending_payment', 'paid', 'shipped', 'completed', 'cancel
 
 const RANGE_DAYS = { today: 0, '7d': 7, '30d': 30, '90d': 90, all: null };
 
+// 'localtime' on every calendar-date grouping/comparison here matters: the
+// server runs in SAST (UTC+2), and SQLite's date()/datetime() default to
+// UTC -- an order placed 00:00-02:00 SAST falls in the PREVIOUS UTC
+// calendar day, so without this modifier it's excluded from "Today's
+// Sales" while the owner is looking at it that morning, then permanently
+// reattributed to "yesterday" in the daily trend once UTC rolls over.
+// Same fix already applied in analytics.js; see that file's own comment.
 function rangeWhereClause(range) {
   if (!Object.hasOwn(RANGE_DAYS, range)) throw new Error(`Unknown range: ${range}`);
   if (range === 'all') return '';
-  if (range === 'today') return "AND date(o.created_at) = date('now')";
+  if (range === 'today') return "AND date(o.created_at, 'localtime') = date('now', 'localtime')";
   return `AND o.created_at >= datetime('now', '-${RANGE_DAYS[range]} days')`;
 }
 
@@ -31,10 +38,10 @@ export function getSalesSummary(range = '30d', db = getDb()) {
   // paid-only scope as the headline revenue figure above.
   const series = db
     .prepare(
-      `SELECT date(o.created_at) AS date, COALESCE(SUM(o.total), 0) AS revenue
+      `SELECT date(o.created_at, 'localtime') AS date, COALESCE(SUM(o.total), 0) AS revenue
        FROM orders o
        WHERE o.status IN ${REVENUE_STATUSES} ${rangeClause}
-       GROUP BY date(o.created_at)
+       GROUP BY date(o.created_at, 'localtime')
        ORDER BY date ASC`,
     )
     .all();
