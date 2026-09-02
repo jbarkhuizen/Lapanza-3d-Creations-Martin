@@ -34,6 +34,77 @@ function toast(message) {
   toast._t = setTimeout(() => el.classList.add('hidden'), 2800);
 }
 
+// Builds a CSS selector that should still find `el` after its view's whole
+// container has been replaced (every renderX() below rebuilds its view
+// from a fresh template string, not incremental DOM patching). Prefers the
+// element's own id, then its own data-* attributes combined (this file's
+// existing convention for row/field identity: data-setting, data-id,
+// data-filename, etc -- usually unique within one view), then a name
+// attribute. Returns null rather than guessing when none of those are
+// present, so withFocusPreserved below can fail safe (just not restore
+// focus) instead of ever focusing the wrong element.
+function elementSelector(el) {
+  if (!el || !el.tagName) return null;
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const tag = el.tagName.toLowerCase();
+  const dataAttrs = [...el.attributes].filter((a) => a.name.startsWith('data-'));
+  if (dataAttrs.length) return `${tag}${dataAttrs.map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join('')}`;
+  if (el.name) return `${tag}[name="${CSS.escape(el.name)}"]`;
+  return null;
+}
+
+// Tracked in the CAPTURING phase of every click -- fires before any
+// bubbling-phase listener registered directly on the clicked element
+// itself (`$('#btn').addEventListener('click', handler)`, how every save/
+// edit/delete button in this file is wired). This matters because a very
+// common first line in those handlers is `btn.disabled = true` (shows a
+// "Saving…" state) -- and disabling an element immediately blurs it, so
+// by the time the handler's own code (and any withFocusPreserved call
+// inside it) runs, document.activeElement has already reverted to <body>,
+// too late to know what was focused. Falling back to this instead of
+// document.activeElement when it's <body> recovers the real answer.
+let lastClickedElement = null;
+document.addEventListener(
+  'click',
+  (e) => { lastClickedElement = e.target?.closest?.('button, a, input, select, textarea, [tabindex]') || e.target || null; },
+  true,
+);
+
+// Every admin view replaces its ENTIRE container's innerHTML on every
+// render, including a re-render triggered by the user's OWN save/edit/
+// delete action -- this destroys keyboard focus (reverts to <body>) and
+// resets scroll to the top of the page, worst on Settings' 18-section
+// page, where saving the last section snaps back to the top and a
+// keyboard/screen-reader user has to tab through everything above it
+// again to get back. Wrap an action-triggered re-render call with this
+// (`await withFocusPreserved(renderSettings)` instead of
+// `await renderSettings()`) to capture focus/cursor position and scroll
+// beforehand and restore the equivalent afterward. Do NOT wrap a route
+// NAVIGATION render (setRoute(...) then renderX()) -- there is no
+// in-view focus worth preserving across a move to a different view.
+async function withFocusPreserved(renderFn) {
+  const active = document.activeElement && document.activeElement !== document.body ? document.activeElement : lastClickedElement;
+  const scrollY = window.scrollY;
+  const restoreSelector = active ? elementSelector(active) : null;
+  const hasSelection = restoreSelector && typeof active.selectionStart === 'number';
+  const selectionStart = hasSelection ? active.selectionStart : null;
+  const selectionEnd = hasSelection ? active.selectionEnd : null;
+
+  await renderFn();
+
+  if (restoreSelector) {
+    let target = null;
+    try { target = document.querySelector(restoreSelector); } catch { /* not a valid selector for this element -- skip */ }
+    if (target) {
+      target.focus({ preventScroll: true }); // preventScroll: window.scrollTo below is the single source of truth for scroll position
+      if (selectionStart !== null && typeof target.setSelectionRange === 'function') {
+        try { target.setSelectionRange(selectionStart, selectionEnd); } catch { /* not every input type supports it (e.g. type=number) */ }
+      }
+    }
+  }
+  window.scrollTo(0, scrollY);
+}
+
 // Sessions are in-memory server-side, so EVERY deploy/restart signs all
 // admins out and the 12h TTL expires them daily. This is the one place all
 // panels' requests pass through, so the 401 handling lives here: return the
@@ -2267,7 +2338,7 @@ async function renderTodos() {
     state.todoFilters.category = $('#todo-filter-category').value;
     state.todoFilters.status = $('#todo-filter-status').value;
     state.todoFilters.plannedFixDate = $('#todo-filter-planned').value;
-    await renderTodos();
+    await withFocusPreserved(renderTodos);
   };
 
   $('#todo-filter-q').addEventListener('keydown', (event) => {
@@ -2278,14 +2349,14 @@ async function renderTodos() {
   $('#todo-filter-planned').addEventListener('change', applyTodoFilters);
   $('#clear-todo-filters').addEventListener('click', async () => {
     state.todoFilters = { q: '', category: '', status: '', plannedFixDate: '' };
-    await renderTodos();
+    await withFocusPreserved(renderTodos);
   });
 
   const saveInlineTodo = async (id, payload) => {
     try {
       await api(`/api/todos/${id}`, { method: 'PUT', body: JSON.stringify(payload) });
       toast('Saved');
-      await renderTodos();
+      await withFocusPreserved(renderTodos);
     } catch (ex) {
       toast(ex.message);
     }
@@ -2296,7 +2367,7 @@ async function renderTodos() {
       const key = th.dataset.sort;
       if (state.todoSort.key === key) state.todoSort.dir = state.todoSort.dir === 'asc' ? 'desc' : 'asc';
       else state.todoSort = { key, dir: 'asc' };
-      await renderTodos();
+      await withFocusPreserved(renderTodos);
     });
   });
 
@@ -2324,17 +2395,17 @@ async function renderTodos() {
     input.addEventListener('change', () => saveInlineTodo(input.closest('tr').dataset.id, { actualFixDate: input.value || null }));
   });
 
-  $('#new-todo').addEventListener('click', async () => { state.editingTodo = blankTodo(); await renderTodos(); });
+  $('#new-todo').addEventListener('click', async () => { state.editingTodo = blankTodo(); await withFocusPreserved(renderTodos); });
   $$('#view-todos tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const t = todos.find((x) => x.id === tr.dataset.id);
       state.editingTodo = { ...t };
-      await renderTodos();
+      await withFocusPreserved(renderTodos);
     });
   });
 
   if (form) {
-    $('#cancel-todo').addEventListener('click', async () => { state.editingTodo = null; await renderTodos(); });
+    $('#cancel-todo').addEventListener('click', async () => { state.editingTodo = null; await withFocusPreserved(renderTodos); });
     $('#save-todo').addEventListener('click', async () => {
       const payload = {
         category: $('#td-category').value,
@@ -2350,7 +2421,7 @@ async function renderTodos() {
         else await api('/api/todos', { method: 'POST', body: JSON.stringify(payload) });
         toast('Saved');
         state.editingTodo = null;
-        await renderTodos();
+        await withFocusPreserved(renderTodos);
       } catch (ex) {
         toast(ex.message);
       }
@@ -2590,7 +2661,7 @@ function wireConfigurableListPanels() {
     try {
       const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ [key]: items }) });
       toast(res.publishWarning || 'Saved');
-      await renderSettings();
+      await withFocusPreserved(renderSettings);
     } catch (ex) {
       toast(ex.message);
     }
@@ -2785,7 +2856,7 @@ function wireDepositTierPanel() {
     try {
       const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ quoteDepositOptions: items }) });
       toast(res.publishWarning || 'Saved');
-      await renderSettings();
+      await withFocusPreserved(renderSettings);
     } catch (ex) {
       toast(ex.message);
     }
@@ -2864,7 +2935,7 @@ function wireFeaturedProductsPanel() {
       const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ featuredProducts: items }) });
       toast(res.publishWarning || 'Saved');
       state.featuredSearch = { query: '', matches: [] };
-      await renderSettings();
+      await withFocusPreserved(renderSettings);
     } catch (ex) {
       toast(ex.message);
     }
@@ -2878,7 +2949,7 @@ function wireFeaturedProductsPanel() {
       query: q,
       matches: q ? state.productCatalog.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || (p.sku || '').toLowerCase().includes(q.toLowerCase())).slice(0, 8) : [],
     };
-    await renderSettings();
+    await withFocusPreserved(renderSettings);
   });
 
   panel.querySelectorAll('[data-action="add-featured"]').forEach((btn) => {
@@ -2971,7 +3042,7 @@ function wireScopedSettingsSave(sectionKey, buttonId, buildPatch) {
     try {
       const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify(patch) });
       toast(res.publishWarning || 'Saved');
-      await renderSettings();
+      await withFocusPreserved(renderSettings);
     } catch (ex) {
       toast(ex.message);
       btn.disabled = false;
@@ -3325,7 +3396,7 @@ async function renderSettings() {
     try {
       await api('/api/admins', { method: 'POST', body: JSON.stringify({ username, password }) });
       toast('Admin added');
-      await renderSettings();
+      await withFocusPreserved(renderSettings);
     } catch (ex) {
       toast(ex.message);
     }
@@ -3351,7 +3422,7 @@ async function renderSettings() {
       try {
         await api(`/api/admins/${btn.dataset.removeAdmin}`, { method: 'DELETE' });
         toast('Admin removed');
-        await renderSettings();
+        await withFocusPreserved(renderSettings);
       } catch (ex) {
         toast(ex.message);
       }
@@ -6202,7 +6273,7 @@ async function renderPotentialMarket() {
   const form = state.editingPotentialMarketContact;
   $('#view-potential-market').innerHTML = potentialMarketViewHtml(contacts, form);
 
-  $('#new-potential-market').addEventListener('click', async () => { state.editingPotentialMarketContact = blankPotentialMarketContact(); await renderPotentialMarket(); });
+  $('#new-potential-market').addEventListener('click', async () => { state.editingPotentialMarketContact = blankPotentialMarketContact(); await withFocusPreserved(renderPotentialMarket); });
 
   $('#pm-csv-upload').addEventListener('change', async () => {
     const input = $('#pm-csv-upload');
@@ -6214,7 +6285,7 @@ async function renderPotentialMarket() {
       if (!contacts.length) { toast('No rows found in that file'); return; }
       const result = await api('/api/potential-market/import', { method: 'POST', body: JSON.stringify({ contacts }) });
       toast(`${result.created} added, ${result.skipped} duplicate${result.skipped === 1 ? '' : 's'} skipped`);
-      await renderPotentialMarket();
+      await withFocusPreserved(renderPotentialMarket);
     } catch (ex) {
       toast(ex.message);
     } finally {
@@ -6225,14 +6296,14 @@ async function renderPotentialMarket() {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { contact } = await api(`/api/potential-market/${tr.dataset.id}`);
       state.editingPotentialMarketContact = contact;
-      await renderPotentialMarket();
+      await withFocusPreserved(renderPotentialMarket);
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this contact?')) return;
       try {
         await api(`/api/potential-market/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
-        await renderPotentialMarket();
+        await withFocusPreserved(renderPotentialMarket);
       } catch (ex) {
         toast(ex.message);
       }
@@ -6247,7 +6318,7 @@ async function renderPotentialMarket() {
         const { contact } = await api(`/api/potential-market/${select.dataset.id}`, { method: 'PUT', body: JSON.stringify({ status: select.value }) });
         toast('Status updated');
         if (state.editingPotentialMarketContact?.id === contact.id) state.editingPotentialMarketContact = contact;
-        await renderPotentialMarket();
+        await withFocusPreserved(renderPotentialMarket);
       } catch (ex) {
         toast(ex.message);
       }
@@ -6256,7 +6327,7 @@ async function renderPotentialMarket() {
 
   if (!form) return;
 
-  $('#cancel-potential-market').addEventListener('click', async () => { state.editingPotentialMarketContact = null; await renderPotentialMarket(); });
+  $('#cancel-potential-market').addEventListener('click', async () => { state.editingPotentialMarketContact = null; await withFocusPreserved(renderPotentialMarket); });
   $('#save-potential-market').addEventListener('click', async () => {
     const payload = {
       name: $('#pm-name').value,
@@ -6270,7 +6341,7 @@ async function renderPotentialMarket() {
       else await api('/api/potential-market', { method: 'POST', body: JSON.stringify(payload) });
       toast('Contact saved');
       state.editingPotentialMarketContact = null;
-      await renderPotentialMarket();
+      await withFocusPreserved(renderPotentialMarket);
     } catch (ex) {
       toast(ex.message);
     }
@@ -6395,14 +6466,14 @@ async function renderDesignRequests() {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { designRequest } = await api(`/api/design-requests/${tr.dataset.id}`);
       state.editingDesignRequest = designRequest;
-      await renderDesignRequests();
+      await withFocusPreserved(renderDesignRequests);
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this design request?')) return;
       try {
         await api(`/api/design-requests/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
-        await renderDesignRequests();
+        await withFocusPreserved(renderDesignRequests);
       } catch (ex) {
         toast(ex.message);
       }
@@ -6418,7 +6489,7 @@ async function renderDesignRequests() {
         const { designRequest } = await api(`/api/design-requests/${select.dataset.id}`, { method: 'PATCH', body: JSON.stringify({ status: select.value }) });
         toast('Status updated — client notified');
         if (state.editingDesignRequest?.id === designRequest.id) state.editingDesignRequest = designRequest;
-        await renderDesignRequests();
+        await withFocusPreserved(renderDesignRequests);
       } catch (ex) {
         toast(ex.message);
       }
@@ -6427,7 +6498,7 @@ async function renderDesignRequests() {
 
   if (!form) return;
 
-  $('#cancel-design-request').addEventListener('click', async () => { state.editingDesignRequest = null; await renderDesignRequests(); });
+  $('#cancel-design-request').addEventListener('click', async () => { state.editingDesignRequest = null; await withFocusPreserved(renderDesignRequests); });
   // #87: save + email the quote in one action.
   $('#dr-send-quote')?.addEventListener('click', async () => {
     const btn = $('#dr-send-quote');
@@ -6439,7 +6510,7 @@ async function renderDesignRequests() {
       });
       toast(emailSent ? 'Quote saved and emailed to the customer' : emailError || 'Quote saved (email failed)');
       state.editingDesignRequest = request;
-      await renderDesignRequests();
+      await withFocusPreserved(renderDesignRequests);
     } catch (ex) {
       toast(ex.message);
       btn.disabled = false;
@@ -6451,7 +6522,7 @@ async function renderDesignRequests() {
       const { designRequest } = await api(`/api/design-requests/${form.id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       toast('Saved — client notified if status changed');
       state.editingDesignRequest = designRequest;
-      await renderDesignRequests();
+      await withFocusPreserved(renderDesignRequests);
     } catch (ex) {
       toast(ex.message);
     }

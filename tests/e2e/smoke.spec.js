@@ -111,3 +111,38 @@ test('admin: real login screen accepts the seeded credentials', async ({ page })
   await page.click('#login-form button[type="submit"]');
   await expect(page.locator('#view-dashboard')).toBeVisible({ timeout: 15_000 });
 });
+
+// Regression for the admin SPA focus-preservation fix: every renderX()
+// replaces its whole view's innerHTML on every re-render, including one
+// triggered by the user's own save action -- this used to drop keyboard
+// focus to <body> and reset scroll to the top of the page. Worst on
+// Settings' scoped per-section saves, since a save anywhere on the page
+// re-renders the ENTIRE 18-section view. Exercises the exact scenario the
+// audit finding described: the LAST section on the page (Print Job
+// Costing Rates), so a real scroll-to-top regression is unambiguous.
+test('admin: Settings scoped save preserves keyboard focus and scroll position (#admin-focus-preservation)', async ({ page }) => {
+  await page.goto('http://localhost:8787/admin/');
+  await page.fill('#login-form input[name="username"]', ADMIN.username);
+  await page.fill('#login-form input[name="password"]', ADMIN.password);
+  await page.click('#login-form button[type="submit"]');
+  await expect(page.locator('#view-dashboard')).toBeVisible({ timeout: 15_000 });
+
+  await page.click('[data-route="settings"]');
+  await expect(page.locator('#view-settings')).toBeVisible();
+
+  const field = page.locator('#settings-section-print-costing [data-setting="markupPct"]');
+  await field.scrollIntoViewIfNeeded();
+  await field.fill('0.3');
+
+  const saveBtn = page.locator('#save-settings-print-costing');
+  const scrollBefore = await page.evaluate(() => window.scrollY);
+  await saveBtn.click();
+  await expect(page.locator('#toast')).not.toHaveClass(/hidden/); // the save round-trip has landed
+
+  // Focus must land back on (the re-rendered) save button, not <body> --
+  // and scroll must stay where it was, not snap back to the page top.
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('save-settings-print-costing');
+  const scrollAfter = await page.evaluate(() => window.scrollY);
+  expect(scrollAfter).toBeGreaterThan(0);
+  expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(50);
+});
