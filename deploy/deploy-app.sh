@@ -25,6 +25,20 @@ git pull origin main
 echo "==> Installing dependencies"
 npm ci
 
+# 2026-09-02 incident guard: the build bakes src/data/*.json and the
+# generated pages into dist/, and git's committed copies of those files
+# reflect whatever DEV database last generated them. A deploy that built
+# without first re-syncing from THIS server's live DB shipped the dev
+# catalog to production (missing products/photos). Sync + regenerate are
+# therefore part of the deploy itself, not a separate runbook step someone
+# can skip. Skipped only when there's no live DB yet (first bootstrap).
+if [ -f data/lapanza.db ]; then
+  echo "==> Syncing public JSON from the live database"
+  node -e 'Promise.all([import("./server/export.js"),import("./server/db.js")]).then(([e,d])=>e.syncPublicJson(d.getDb()))'
+  echo "==> Regenerating pages from live data"
+  npm run generate
+fi
+
 echo "==> Building static site"
 npm run build
 
