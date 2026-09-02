@@ -51,7 +51,10 @@ function normalizePromoInput(data, existing = {}) {
   if (!Number.isFinite(value) || value <= 0) throw new Error('Discount value must be a positive number');
   if (kind === 'percent' && value > 90) throw new Error('Percentage discounts are capped at 90%');
   const minSubtotal = Math.max(0, Number(data.minSubtotal ?? existing.minSubtotal) || 0);
-  const expiresAt = (data.expiresAt ?? existing.expiresAt) || null;
+  // `undefined` = field not sent (keep existing); null/'' = EXPLICIT clear.
+  // The original `??` fallback swallowed null, which made an expiry
+  // impossible to remove -- the admin form sends null for a blanked date.
+  const expiresAt = data.expiresAt !== undefined ? (data.expiresAt || null) : (existing.expiresAt || null);
   const maxUsesRaw = data.maxUses ?? existing.maxUses;
   const maxUses = maxUsesRaw === null || maxUsesRaw === undefined || maxUsesRaw === '' ? null : Math.max(1, Math.floor(Number(maxUsesRaw) || 0));
   const active = (data.active ?? existing.active ?? true) !== false;

@@ -6,10 +6,9 @@ Three graphics live in this folder:
 |------|-----|
 | `launch-square-1080.png` | Facebook post, Instagram feed post, TikTok photo post |
 | `launch-story-1080x1920.png` | WhatsApp Status, Instagram/Facebook Stories, TikTok background |
-| `launch-promo-1080.png` | Follow-up post pushing the LUNCH5 code |
+| `launch-promo-1080.png` | Follow-up post pushing the LAUNCH5 code |
 
-> Launch code: **LUNCH5** — 5% off orders over R250, no expiry (live and verified).
-> (Sprint10 — R10 off over R200 — also still works until 6 Sep.)
+> Launch code: **LAUNCH5** — 5% off orders over R250, no expiry (live and verified).
 
 ---
 
@@ -28,7 +27,7 @@ Three graphics live in this folder:
 > 🧸 Toys, Home & School items
 > 🧵 SA-made 3D printer filament, from stock
 >
-> Launch special: *5% off* orders over R250 with code *LUNCH5* 🎉
+> Launch special: *5% off* orders over R250 with code *LAUNCH5* 🎉
 >
 > Family-run, printed right here in Pierre van Ryneveld, Centurion. Have a look and tell us what you think!
 
@@ -45,7 +44,7 @@ Tips: send via Broadcast List (Contacts must have your number saved) rather than
 > 🧸 Toys, Home & School gear, printed to order in your colours
 > 🧵 South African–made filament for fellow makers — 12+ rolls gets you 5% off automatically
 >
-> 🎁 Launch special: 5% off orders over R250 — code **LUNCH5** at checkout.
+> 🎁 Launch special: 5% off orders over R250 — code **LAUNCH5** at checkout.
 >
 > 👉 https://lapanza3d.co.za
 > 📍 Pierre van Ryneveld, Centurion — collection or courier nationwide.
@@ -64,7 +63,7 @@ Note: pasting the link anywhere on Facebook now auto-shows the branded preview c
 >
 > Custom 3D prints · GWM & Land Rover parts · toys · home & school · SA-made filament. Upload your file, pick your colour, we print it in Centurion.
 >
-> 5% off over R250 with code LUNCH5 🎁 Link in bio.
+> 5% off over R250 with code LAUNCH5 🎁 Link in bio.
 >
 > #3dprinting #3dprintingsouthafrica #southafrica #centurion #pretoria #gwm #landrover #filament #supportlocalza #madeinsouthafrica #3dprinted #smallbusinesssa
 
@@ -90,7 +89,7 @@ Static images underperform on TikTok — the winning format is a **15–30s work
 
 1. **Day 1 (today):** WhatsApp Status + broadcast → Facebook post (pin it) → Instagram feed + Story
 2. **Day 2–3:** TikTok video #1 · share the FB post into 2–3 local groups
-3. **Day 4–7:** the `launch-promo-1080.png` post on FB/IG pushing LUNCH5
+3. **Day 4–7:** the `launch-promo-1080.png` post on FB/IG pushing LAUNCH5
 4. **Ongoing:** every finished customer job = one photo/time-lapse = one post. The site's product photos are your content pipeline.
 
 Watch results in **Admin → Analytics** (visitors/referrers) and the **Shopping Funnel** table — you'll see which platform actually sends buyers.

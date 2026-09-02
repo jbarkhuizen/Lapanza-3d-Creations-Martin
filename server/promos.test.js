@@ -110,3 +110,15 @@ test('redeemPromo race guard: the last use can only be taken once', () => {
   assert.strictEqual(getPromoByCode('LAST', db).usedCount, 1);
   db.close();
 });
+
+test('updatePromoCode can CLEAR an expiry with null (admin blanks the date field)', () => {
+  const db = openDb(':memory:');
+  const p = createPromoCode({ code: 'CLEARME', kind: 'fixed', value: 5, expiresAt: '2099-01-01T00:00:00.000Z' }, db);
+  assert.ok(p.expiresAt);
+  const cleared = updatePromoCode(p.id, { expiresAt: null }, db);
+  assert.strictEqual(cleared.expiresAt, null);
+  // and an update that doesn't mention expiresAt keeps whatever is there
+  const untouched = updatePromoCode(p.id, { value: 6 }, db);
+  assert.strictEqual(untouched.expiresAt, null);
+  db.close();
+});
