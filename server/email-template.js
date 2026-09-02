@@ -57,8 +57,11 @@ export function renderEmailShell({ settings = {}, preheader = '', bodyHtml }) {
 ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(preheader)}</div>` : ''}
 <div style="max-width:600px;margin:0 auto;padding:24px 16px;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7f3eb;border-radius:6px;overflow:hidden;border:1px solid #e5dcc9;">
-    <tr><td style="background:#1a1612;padding:28px 32px;text-align:center;">
-      <span style="font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:700;color:#f7f3eb;letter-spacing:-0.02em;">${escapeHtml(siteName.replace(/\s*3D\s*Creative Lab\s*$/i, ''))} <span style="color:#c24b28;">3D</span></span>
+    <tr><td style="background:#f7f3eb;padding:24px 32px 16px;text-align:center;">
+      <img src="https://lapanza3d.co.za/branding/lapanza-logo.png" width="150" alt="${escapeHtml(siteName)}" style="display:block;margin:0 auto;max-width:150px;height:auto;" />
+    </td></tr>
+    <tr><td style="background:#1a1612;padding:10px 32px;text-align:center;">
+      <span style="font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:700;color:#f7f3eb;letter-spacing:-0.02em;">${escapeHtml(siteName.replace(/\s*3D\s*Creative Lab\s*$/i, ''))} <span style="color:#c24b28;">3D</span></span>
     </td></tr>
     <tr><td style="padding:32px;color:#1a1612;font-size:15px;line-height:1.6;">
       ${bodyHtml}

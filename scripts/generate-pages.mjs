@@ -176,7 +176,10 @@ ${jsonLdScript(jsonLd)}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..700;1,9..40,300..700&family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&display=swap" rel="stylesheet">
-<link rel="icon" href="${prefix}favicon.svg" type="image/svg+xml">
+<link rel="icon" type="image/png" sizes="32x32" href="${prefix}branding/favicon-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="${prefix}branding/favicon-64.png">
+<link rel="apple-touch-icon" href="${prefix}branding/apple-touch-icon.png">
+${extra.includes('og:image') ? '' : `<meta property="og:image" content="${SITE_ORIGIN}/branding/og-image.png">`}
 <script>
 (function(){try{var t=localStorage.getItem('lapanza-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();
 </script>

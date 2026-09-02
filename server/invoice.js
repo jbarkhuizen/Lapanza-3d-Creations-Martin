@@ -59,6 +59,7 @@ export function renderInvoiceHtml(order, settings, { paid = false } = {}) {
   <button onclick="window.print()">Print</button>
   <div class="header-flex">
     <div>
+      <img src="https://lapanza3d.co.za/branding/lapanza-logo.png" alt="" style="height:64px;width:auto;margin-bottom:8px" />
       <h1>${escapeHtml(settings.siteName || 'Lapanza')}</h1>
       <p class="muted">${escapeHtml(settings.address || '')}<br>${escapeHtml(settings.phoneDisplay || '')}<br>${escapeHtml(settings.email || '')}</p>
     </div>

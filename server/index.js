@@ -244,6 +244,9 @@ app.use(cors({
 app.use(express.json({ limit: '4mb' }));
 app.use(cookieParser());
 app.use('/uploads', express.static(path.join(root, 'public', 'uploads')));
+// Review #23 (todo #162): brand assets -- nginx serves these from dist/ in
+// production; this mount keeps the admin's logo working in local dev too.
+app.use('/branding', express.static(path.join(root, 'public', 'branding')));
 
 const sessions = new Map();
 
