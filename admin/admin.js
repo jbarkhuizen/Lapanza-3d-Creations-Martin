@@ -633,6 +633,33 @@ function renderActiveSection(active) {
     activeClientRows || '<tr><td colspan="4"><div class="empty">No registered clients active right now</div></td></tr>';
 }
 
+// Owner request (2026-09-02): visits vs unique visitors per hour, last 24h.
+// Same no-chart-library inline-SVG approach as renderRevenueChart, with the
+// #148 lesson applied from the start: legend, axis labels, and a caption.
+function hourlyTrafficChartHtml(series) {
+  if (!series?.length || !series.some((h) => h.visits > 0)) {
+    return '<p class="muted">No visits recorded in the last 24 hours yet.</p>';
+  }
+  const width = 640;
+  const height = 160;
+  const groupW = width / series.length;
+  const barW = Math.max(2, groupW * 0.38);
+  const max = Math.max(...series.map((h) => h.visits), 1);
+  const bars = series
+    .map((h, i) => {
+      const x = i * groupW + (groupW - barW * 2 - 2) / 2;
+      const vh = Math.max(h.visits ? 2 : 0, Math.round((h.visits / max) * (height - 4)));
+      const uh = Math.max(h.uniqueVisitors ? 2 : 0, Math.round((h.uniqueVisitors / max) * (height - 4)));
+      const title = `<title>${escapeHtml(h.hour)} — ${h.visits} visit${h.visits === 1 ? '' : 's'}, ${h.uniqueVisitors} unique visitor${h.uniqueVisitors === 1 ? '' : 's'}</title>`;
+      return `<rect x="${x.toFixed(1)}" y="${height - vh}" width="${barW.toFixed(1)}" height="${vh}" rx="1.5" class="chart-bar">${title}</rect>
+        <rect x="${(x + barW + 2).toFixed(1)}" y="${height - uh}" width="${barW.toFixed(1)}" height="${uh}" rx="1.5" class="chart-bar-alt">${title}</rect>`;
+    })
+    .join('');
+  return `<svg viewBox="0 0 ${width} ${height}" class="revenue-chart" preserveAspectRatio="none" role="img" aria-label="Visits and unique visitors per hour, last 24 hours">${bars}</svg>
+    <div class="muted" style="display:flex;justify-content:space-between;font-size:0.75rem;margin-top:0.25rem"><span>${escapeHtml(series[0].hour)}</span><span>${escapeHtml(series[series.length - 1].hour)}</span></div>
+    <p class="muted" style="font-size:0.78rem;margin:0.4rem 0 0"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent,#c24b28);vertical-align:-1px"></span> Visits (page views) · <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:color-mix(in srgb, var(--accent,#c24b28) 40%, var(--line));vertical-align:-1px"></span> Unique visitors. Hover a bar for the exact figures. Your own admin sessions are excluded.</p>`;
+}
+
 async function renderAnalytics() {
   const [active, summary] = await Promise.all([api('/api/analytics/active'), api('/api/analytics/summary')]);
 
@@ -651,6 +678,11 @@ async function renderAnalytics() {
       <div class="stat-card"><div class="label">Visits today</div><div class="value">${escapeHtml(String(summary.todayVisits))}</div></div>
       <div class="stat-card"><div class="label">Total visits</div><div class="value">${escapeHtml(String(summary.totalVisits))}</div></div>
       <div class="stat-card"><div class="label">Unique visitors (all time)</div><div class="value">${escapeHtml(String(summary.uniqueVisitorsAllTime))}</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="section-head"><h3>Last 24 Hours — Hourly Traffic</h3></div>
+      ${hourlyTrafficChartHtml(summary.hourlyTraffic)}
     </div>
 
     <div class="panel table-wrap">

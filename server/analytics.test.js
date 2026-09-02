@@ -189,3 +189,21 @@ test('pruneOldPageViews also prunes old analytics_events on the same cycle', () 
   assert.strictEqual(db.prepare('SELECT COUNT(*) c FROM analytics_events').get().c, 0);
   db.close();
 });
+
+// Owner request (2026-09-02): hourly visits/unique-visitors series for the
+// Analytics chart -- always exactly 24 zero-filled buckets, current traffic
+// landing in the newest bucket.
+test('getVisitSummary.hourlyTraffic returns 24 buckets with current visits in the last one', () => {
+  const db = openDb(':memory:');
+  recordPageView({ visitorId: 'v1', path: '/' }, db);
+  recordPageView({ visitorId: 'v1', path: '/toys.html' }, db);
+  recordPageView({ visitorId: 'v2', path: '/' }, db);
+  const { hourlyTraffic } = getVisitSummary(db);
+  assert.strictEqual(hourlyTraffic.length, 24);
+  assert.ok(hourlyTraffic.every((h) => /^\d\d:00$/.test(h.hour)));
+  const last = hourlyTraffic[hourlyTraffic.length - 1];
+  assert.strictEqual(last.visits, 3);
+  assert.strictEqual(last.uniqueVisitors, 2);
+  assert.strictEqual(hourlyTraffic.slice(0, 23).reduce((n, h) => n + h.visits, 0), 0);
+  db.close();
+});

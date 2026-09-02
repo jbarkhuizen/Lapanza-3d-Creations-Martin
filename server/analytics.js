@@ -126,7 +126,30 @@ export function getVisitSummary(db = getDb()) {
   const topPages = db
     .prepare('SELECT path, visit_count AS visits FROM analytics_page_totals ORDER BY visit_count DESC LIMIT 10')
     .all();
-  return { totalVisits, uniqueVisitorsAllTime, todayVisits, dailyVisits, topPages };
+  // Owner request (2026-09-02): visits + unique visitors per hour over the
+  // last 24 hours, for the Analytics chart. Same 'localtime' convention as
+  // todayVisits/dailyVisits above (sqlite and Node both use the server's
+  // TZ, so the zero-filled bucket keys line up). Buckets with no traffic
+  // are filled with zeros so the chart always shows a full 24-hour axis.
+  const hourlyRows = db
+    .prepare(
+      `SELECT strftime('%Y-%m-%d %H', created_at, 'localtime') AS bucket,
+              COUNT(*) AS visits, COUNT(DISTINCT visitor_id) AS uniqueVisitors
+       FROM page_views
+       WHERE created_at >= datetime('now', '-24 hours')
+       GROUP BY bucket`,
+    )
+    .all();
+  const byBucket = new Map(hourlyRows.map((r) => [r.bucket, r]));
+  const pad = (n) => String(n).padStart(2, '0');
+  const hourlyTraffic = [];
+  for (let i = 23; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 3600 * 1000);
+    const key = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}`;
+    const row = byBucket.get(key);
+    hourlyTraffic.push({ hour: `${pad(d.getHours())}:00`, visits: row?.visits || 0, uniqueVisitors: row?.uniqueVisitors || 0 });
+  }
+  return { totalVisits, uniqueVisitorsAllTime, todayVisits, dailyVisits, topPages, hourlyTraffic };
 }
 
 // ---- Conversion events (backlog #113 / SITE-079) ----

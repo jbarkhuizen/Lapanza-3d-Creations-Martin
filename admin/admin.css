@@ -636,3 +636,6 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 .picker-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--bg-elevated); border-radius: 8px; padding: 0.55rem 0.85rem; cursor: pointer; font: inherit; color: inherit; }
 .picker-row:hover { border-color: var(--accent, #c24b28); background: color-mix(in srgb, var(--accent, #c24b28) 7%, var(--bg-elevated)); }
 .picker-row .muted { font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Hourly traffic chart (2026-09-02): second series tint */
+.chart-bar-alt { fill: color-mix(in srgb, var(--accent, #c24b28) 40%, var(--line)); }
