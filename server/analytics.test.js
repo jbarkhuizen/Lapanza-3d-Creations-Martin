@@ -12,6 +12,7 @@ import {
   pruneActiveVisitors,
   getActiveVisitors,
   getVisitSummary,
+  getTopPages,
   _activeVisitorsMap,
 } from './analytics.js';
 
@@ -168,7 +169,7 @@ test('recordEvent enforces the fixed vocabulary and getEventSummary reports 30-d
   recordEvent({ visitorId: 'v1', eventType: 'add_to_cart' }, db);
   recordEvent({ visitorId: 'v2', eventType: 'checkout_start' }, db);
   recordEvent({ eventType: 'payment_complete', detail: 'order:abc' }, db);
-  const summary = getEventSummary(db);
+  const summary = getEventSummary('30d', db);
   const byType = Object.fromEntries(summary.map((e) => [e.eventType, e]));
   assert.strictEqual(byType.add_to_cart.count, 2);
   assert.strictEqual(byType.add_to_cart.uniqueVisitors, 1);
@@ -205,5 +206,30 @@ test('getVisitSummary.hourlyTraffic returns 24 buckets with current visits in th
   assert.strictEqual(last.visits, 3);
   assert.strictEqual(last.uniqueVisitors, 2);
   assert.strictEqual(hourlyTraffic.slice(0, 23).reduce((n, h) => n + h.visits, 0), 0);
+  db.close();
+});
+
+// Owner request (2026-09-02): range-selectable funnel + top pages.
+test('getEventSummary and getTopPages respect the requested range', () => {
+  const db = openDb(':memory:');
+  recordEvent({ visitorId: 'v1', eventType: 'add_to_cart', path: '/x' }, db);
+  // an old event outside every window
+  db.prepare("UPDATE analytics_events SET created_at = datetime('now', '-3 days') WHERE visitor_id = 'v1'").run();
+  recordEvent({ visitorId: 'v2', eventType: 'add_to_cart', path: '/x' }, db);
+
+  const hour = getEventSummary('1h', db).find((e) => e.eventType === 'add_to_cart');
+  assert.strictEqual(hour.count, 1, 'only the fresh event within the last hour');
+  const month = getEventSummary('30d', db).find((e) => e.eventType === 'add_to_cart');
+  assert.strictEqual(month.count, 2, 'both events within 30 days');
+  assert.strictEqual(getEventSummary('nonsense', db).find((e) => e.eventType === 'add_to_cart').count, 2, 'unknown range falls back to 30d');
+
+  recordPageView({ visitorId: 'v1', path: '/fresh' }, db);
+  db.prepare("UPDATE page_views SET created_at = datetime('now', '-3 days') WHERE path = '/fresh'").run();
+  recordPageView({ visitorId: 'v2', path: '/fresh' }, db);
+  recordPageView({ visitorId: 'v2', path: '/other' }, db);
+  const hourPages = getTopPages('1h', db);
+  assert.strictEqual(hourPages.find((p) => p.path === '/fresh')?.visits, 1, 'ranged pages count only the window');
+  const allPages = getTopPages('all', db);
+  assert.strictEqual(allPages.find((p) => p.path === '/fresh')?.visits, 2, 'all-time reads the permanent tallies');
   db.close();
 });

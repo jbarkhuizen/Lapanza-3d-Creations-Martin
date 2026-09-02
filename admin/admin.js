@@ -661,7 +661,18 @@ function hourlyTrafficChartHtml(series) {
 }
 
 async function renderAnalytics() {
-  const [active, summary] = await Promise.all([api('/api/analytics/active'), api('/api/analytics/summary')]);
+  // Owner request (2026-09-02): range selectors for the funnel and top pages.
+  state.analyticsFunnelRange = state.analyticsFunnelRange || '30d';
+  state.analyticsPagesRange = state.analyticsPagesRange || 'all';
+  const [active, summary] = await Promise.all([
+    api('/api/analytics/active'),
+    api(`/api/analytics/summary?${new URLSearchParams({ funnelRange: state.analyticsFunnelRange, pagesRange: state.analyticsPagesRange })}`),
+  ]);
+  const RANGE_LABELS = { '1h': 'Last Hour', '24h': 'Last 24 Hours', '7d': 'Last 7 Days', '30d': 'Last 30 Days' };
+  const rangeOptions = (current, includeAll) => [
+    ...Object.entries(RANGE_LABELS).map(([v, l]) => `<option value="${v}" ${current === v ? 'selected' : ''}>${l}</option>`),
+    ...(includeAll ? [`<option value="all" ${current === 'all' ? 'selected' : ''}>All Time</option>`] : []),
+  ].join('');
 
   const dailyRows = summary.dailyVisits
     .map((d) => `<tr><td>${escapeHtml(d.day)}</td><td>${escapeHtml(String(d.visits))}</td><td>${escapeHtml(String(d.uniqueVisitors))}</td></tr>`)
@@ -686,7 +697,7 @@ async function renderAnalytics() {
     </div>
 
     <div class="panel table-wrap">
-      <div class="section-head"><h3>Shopping Funnel — Last 30 Days</h3></div>
+      <div class="section-head"><h3>Shopping Funnel</h3><select id="analytics-funnel-range">${rangeOptions(state.analyticsFunnelRange, false)}</select></div>
       <table class="catalog">
         <thead><tr><th>Step</th><th>Events</th><th>Unique Visitors</th></tr></thead>
         <tbody>${(summary.events || [])
@@ -716,13 +727,16 @@ async function renderAnalytics() {
         </table>
       </div>
       <div class="panel table-wrap">
-        <div class="section-head"><h3>Top Pages (All Time)</h3></div>
+        <div class="section-head"><h3>Top Pages</h3><select id="analytics-pages-range">${rangeOptions(state.analyticsPagesRange, true)}</select></div>
         <table class="catalog">
           <thead><tr><th>Page</th><th>Visits</th></tr></thead>
           <tbody>${topPageRows || '<tr><td colspan="2"><div class="empty">No visits recorded yet</div></td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
+
+  $('#analytics-funnel-range')?.addEventListener('change', async (e) => { state.analyticsFunnelRange = e.target.value; await renderAnalytics(); });
+  $('#analytics-pages-range')?.addEventListener('change', async (e) => { state.analyticsPagesRange = e.target.value; await renderAnalytics(); });
 
   renderActiveSection(active);
 

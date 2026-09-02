@@ -176,19 +176,52 @@ export function recordEvent({ visitorId = '', clientId = null, eventType, path =
   return true;
 }
 
-// Last-30-days funnel counts, plus distinct visitors per step -- enough for
-// the admin's "where do buyers drop off" read without any per-person view.
-export function getEventSummary(db = getDb()) {
+// Owner request (2026-09-02): the funnel and top pages are range-selectable.
+// A fixed vocabulary, validated here, so a range string can never reach SQL.
+export const ANALYTICS_RANGES = {
+  '1h': "'-1 hour'",
+  '24h': "'-24 hours'",
+  '7d': "'-7 days'",
+  '30d': "'-30 days'",
+};
+
+function rangeModifier(range, fallback = '30d') {
+  return ANALYTICS_RANGES[range] || ANALYTICS_RANGES[fallback];
+}
+
+// Funnel counts for the chosen range, plus distinct visitors per step --
+// enough for the admin's "where do buyers drop off" read without any
+// per-person view.
+export function getEventSummary(range = '30d', db = getDb()) {
   const rows = db
     .prepare(
       `SELECT event_type AS eventType, COUNT(*) AS count, COUNT(DISTINCT visitor_id) AS uniqueVisitors
        FROM analytics_events
-       WHERE created_at >= datetime('now', '-30 days')
+       WHERE created_at >= datetime('now', ${rangeModifier(range)})
        GROUP BY event_type`,
     )
     .all();
   const byType = Object.fromEntries(rows.map((r) => [r.eventType, r]));
   return ANALYTICS_EVENT_TYPES.map((t) => ({ eventType: t, count: byType[t]?.count || 0, uniqueVisitors: byType[t]?.uniqueVisitors || 0 }));
+}
+
+// Range-windowed top pages come from page_views directly (fine within the
+// 12-month retention window); 'all' keeps reading the permanent
+// analytics_page_totals tallies, which pruning never touches.
+export function getTopPages(range = 'all', db = getDb()) {
+  if (!ANALYTICS_RANGES[range]) {
+    return db.prepare('SELECT path, visit_count AS visits FROM analytics_page_totals ORDER BY visit_count DESC LIMIT 10').all();
+  }
+  return db
+    .prepare(
+      `SELECT path, COUNT(*) AS visits
+       FROM page_views
+       WHERE created_at >= datetime('now', ${rangeModifier(range)})
+       GROUP BY path
+       ORDER BY visits DESC
+       LIMIT 10`,
+    )
+    .all();
 }
 
 // Detail rows only -- analytics_page_totals/analytics_seen_visitors are

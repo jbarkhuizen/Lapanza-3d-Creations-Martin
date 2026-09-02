@@ -130,7 +130,7 @@ import {
 import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
-import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary } from './analytics.js';
+import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary, getTopPages } from './analytics.js';
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
 import { listResources, getResource, createResource, updateResource, deleteResource } from './resources.js';
 import { listTestimonials, getTestimonial, createTestimonial, updateTestimonial, deleteTestimonial } from './testimonials.js';
@@ -671,8 +671,14 @@ app.get('/api/analytics/active', requireAuth, (_req, res) => {
   res.json(getActiveVisitors());
 });
 
-app.get('/api/analytics/summary', requireAuth, (_req, res) => {
-  res.json({ ...getVisitSummary(), events: getEventSummary() });
+app.get('/api/analytics/summary', requireAuth, (req, res) => {
+  // funnelRange/pagesRange are validated inside the analytics module (fixed
+  // vocabulary; anything unknown falls back to the default).
+  res.json({
+    ...getVisitSummary(),
+    events: getEventSummary(req.query.funnelRange || '30d'),
+    topPages: getTopPages(req.query.pagesRange || 'all'),
+  });
 });
 
 // Phase 4: the post-checkout opt-in prompt toggles this without requiring a
