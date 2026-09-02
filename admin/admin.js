@@ -5437,11 +5437,17 @@ async function renderWhatsAppCampaigns() {
       }
     });
     tr.querySelector('[data-action="send"]')?.addEventListener('click', async () => {
-      if (!confirm('Send this WhatsApp update to every opted-in client now?')) return;
+      if (!confirm('Queue this WhatsApp update for every opted-in client now?')) return;
       try {
+        // Queued, not sent synchronously -- the response comes back as
+        // soon as the send starts, not once every recipient has been
+        // attempted (same as the newsletter Send button below). The
+        // delayed re-render picks up the real sent/failed counts once
+        // the background send actually finishes.
         const { campaign } = await api(`/api/whatsapp-campaigns/${tr.dataset.id}/send`, { method: 'POST' });
-        toast(`Sent to ${campaign.sentCount} recipient(s)${campaign.failedCount ? `, ${campaign.failedCount} failed` : ''}`);
+        toast(`Sending to ${campaign.pendingCount} recipient(s)`);
         await renderWhatsAppCampaigns();
+        setTimeout(() => renderWhatsAppCampaigns().catch(() => {}), 3000);
       } catch (ex) {
         toast(ex.message);
       }

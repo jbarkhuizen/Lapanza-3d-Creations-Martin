@@ -122,7 +122,7 @@ import {
   listCampaigns as listWhatsAppCampaigns,
   createCampaign as createWhatsAppCampaign,
   approveCampaign as approveWhatsAppCampaign,
-  sendCampaign as sendWhatsAppCampaign,
+  queueCampaign as queueWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
 import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
@@ -999,11 +999,17 @@ app.patch('/api/whatsapp-campaigns/:id/approve', requireAuth, (req, res) => {
   }
 });
 
-app.post('/api/whatsapp-campaigns/:id/send', requireAuth, async (req, res) => {
+// Queues the send instead of awaiting it -- for a large opted-in
+// recipient list this used to be a long-running request with the admin
+// waiting on nothing more than a plain loop over outbound API calls; see
+// queueWhatsAppCampaign's own comment. Mirrors POST /api/newsletter-
+// campaigns/:id/send (202 + optimistic status) exactly.
+app.post('/api/whatsapp-campaigns/:id/send', requireAuth, (req, res) => {
   try {
-    const campaign = await sendWhatsAppCampaign(req.params.id);
+    const campaign = queueWhatsAppCampaign(req.params.id);
     if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
-    res.json({ campaign });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Queued WhatsApp campaign "${campaign.templateName}" for ${campaign.pendingCount} recipient(s)` });
+    res.status(202).json({ campaign });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { randomUUID } from 'crypto';
 import { openDb } from './db.js';
 import { createClient } from './clients.js';
-import { listCampaigns, getCampaign, createCampaign, approveCampaign, sendCampaign } from './whatsapp-campaigns.js';
+import { listCampaigns, getCampaign, createCampaign, approveCampaign, sendCampaign, queueCampaign } from './whatsapp-campaigns.js';
 
 // Seeds a client and opts it in for WhatsApp updates -- createClient() itself
 // has no whatsapp_opt_in parameter (Phase 2 predates that column), so the
@@ -114,6 +114,82 @@ test('sendCampaign sends successfully when Meta credentials are configured and t
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+// #whatsapp-blocking-send: queueCampaign is what POST /api/whatsapp-
+// campaigns/:id/send now calls instead of awaiting sendCampaign directly
+// -- a large opted-in list used to make that a long-running request with
+// no benefit to the admin waiting on it. Same shape as newsletter-
+// campaigns.js's queueCampaign, mirrored below including its own crash
+// regression test.
+
+test('queueCampaign rejects a campaign that has not been approved, synchronously', () => {
+  const db = openDb(':memory:');
+  const campaign = createCampaign({ templateName: 'new_drop' }, db);
+  assert.throws(() => queueCampaign(campaign.id, db), /approved/);
+  db.close();
+});
+
+test('queueCampaign returns immediately with status "sending" and the real opted-in recipient count', async () => {
+  await withEnv({ WHATSAPP_ACCESS_TOKEN: undefined, WHATSAPP_PHONE_NUMBER_ID: undefined }, async () => {
+    const db = openDb(':memory:');
+    seedOptedInClient(db, 'queued-recipient-1@example.com', '27821110001');
+    seedOptedInClient(db, 'queued-recipient-2@example.com', '27821110002');
+    createClient({ email: 'not-opted-in@example.com', phone: '27820000000' }, db); // must not count
+    const campaign = createCampaign({ templateName: 'new_drop' }, db);
+    approveCampaign(campaign.id, db);
+
+    const queued = queueCampaign(campaign.id, db);
+    assert.strictEqual(queued.status, 'sending');
+    assert.strictEqual(queued.pendingCount, 2);
+    // The route handler must be able to respond with this immediately --
+    // it must not have to wait for the background send to finish.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const finished = getCampaign(campaign.id, db);
+    assert.strictEqual(finished.status, 'sent');
+    assert.strictEqual(finished.sentCount + finished.failedCount, 2);
+    db.close();
+  });
+});
+
+test('queueCampaign rejects a second concurrent queue attempt on the same campaign while one is already sending', () => {
+  const db = openDb(':memory:');
+  seedOptedInClient(db, 'concurrent-recipient@example.com', '27821119999');
+  const campaign = createCampaign({ templateName: 'new_drop' }, db);
+  approveCampaign(campaign.id, db);
+  queueCampaign(campaign.id, db); // marks it active synchronously, before its background send has a chance to finish
+  assert.throws(() => queueCampaign(campaign.id, db), /already sending/);
+  db.close();
+});
+
+test('queueCampaign returns null for an unknown id', () => {
+  const db = openDb(':memory:');
+  assert.strictEqual(queueCampaign(randomUUID(), db), null);
+  db.close();
+});
+
+test('a crash escaping sendCampaign inside queueCampaign is caught and re-opens the campaign as approved (re-sendable), never left stuck at "sending"', async () => {
+  // Regression: queueCampaign fires sendCampaign as void ... .finally() --
+  // without the .catch, a throw past the per-recipient try/catch (e.g. the
+  // final totals UPDATE failing) becomes an unhandled rejection outside any
+  // request context (process-fatal on Node >=15, taking the whole admin
+  // backend down) and strands the campaign at 'sending', a status
+  // sendCampaign refuses to re-enter (its own check only accepts 'approved').
+  const db = openDb(':memory:');
+  seedOptedInClient(db, 'crash-recipient@example.com', '27821118888');
+  const campaign = createCampaign({ templateName: 'new_drop' }, db);
+  approveCampaign(campaign.id, db);
+  const failingDb = {
+    prepare(sql) {
+      if (sql.includes("SET status = 'sent'")) throw new Error('disk I/O error');
+      return db.prepare(sql);
+    },
+  };
+  const queued = queueCampaign(campaign.id, failingDb);
+  assert.strictEqual(queued.status, 'sending');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.strictEqual(getCampaign(campaign.id, db).status, 'approved', 'the catch must re-open the crashed campaign as re-sendable, not leave it stuck at "sending"');
+  db.close();
 });
 
 test('getCampaign returns null for an unknown id', () => {
