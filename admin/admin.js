@@ -141,6 +141,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-clients'), route === 'clients');
   show($('#view-registered-users'), route === 'registered-users');
   show($('#view-shipping'), route === 'shipping');
+  show($('#view-promos'), route === 'promos');
   show($('#view-stock'), route === 'stock');
   show($('#view-resources'), route === 'resources');
   show($('#view-testimonials'), route === 'testimonials');
@@ -173,6 +174,7 @@ function setRoute(route, { id } = {}) {
     clients: ['Client Side', 'Clients'],
     'registered-users': ['Client Side', 'Registered users'],
     shipping: ['Client Side', 'Shipping options'],
+    promos: ['Client Side', 'Promo codes'],
     resources: ['Client Side', '3D Resources'],
     testimonials: ['Client Side', 'Testimonials'],
     'design-requests': ['Client Side', 'Design requests'],
@@ -454,6 +456,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'shipping') {
         setRoute('shipping');
         await renderShipping();
+      } else if (btn.dataset.route === 'promos') {
+        setRoute('promos');
+        await renderPromos();
       } else if (btn.dataset.route === 'stock') {
         setRoute('stock');
         await renderStock();
@@ -5488,6 +5493,103 @@ async function renderShipping() {
         toast('Shipping option saved');
         state.editingShipping = null;
         await renderShipping();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
+}
+
+// ---- Promo codes (#99) ----
+
+function blankPromo() {
+  return { id: null, code: '', kind: 'percent', value: 10, minSubtotal: 0, expiresAt: '', maxUses: '', active: true };
+}
+
+async function renderPromos() {
+  state.editingPromo = state.editingPromo || null;
+  const { promoCodes } = await api('/api/promo-codes');
+  const form = state.editingPromo;
+
+  const rows = promoCodes
+    .map((p) => `
+      <tr data-id="${escapeAttr(p.id)}">
+        <td><strong>${escapeHtml(p.code)}</strong></td>
+        <td>${p.kind === 'percent' ? `${escapeHtml(String(p.value))}% off` : `${formatRand(p.value)} off`}</td>
+        <td>${p.minSubtotal ? `min ${formatRand(p.minSubtotal)}` : '—'}</td>
+        <td>${p.expiresAt ? escapeHtml(String(p.expiresAt).slice(0, 10)) : '—'}</td>
+        <td>${escapeHtml(String(p.usedCount))}${p.maxUses !== null ? ` / ${escapeHtml(String(p.maxUses))}` : ''}</td>
+        <td>${p.active ? '<span class="badge published">Active</span>' : '<span class="badge draft">Inactive</span>'}</td>
+        <td><button class="btn small" data-action="edit" type="button">Edit</button></td>
+      </tr>`)
+    .join('');
+
+  $('#view-promos').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-promo" type="button">+ Promo code</button>
+      <span class="muted">${escapeHtml(String(promoCodes.length))} codes · discounts stack after volume pricing · codes are case-insensitive</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:600px">
+        <div class="section-head"><h3>${form.id ? 'Edit promo code' : 'New promo code'}</h3></div>
+        <label class="field"><span>Code</span><input id="pc-code" value="${escapeAttr(form.code)}" placeholder="e.g. SPRING10" /></label>
+        <div class="grid-2">
+          <label class="field"><span>Type</span>
+            <select id="pc-kind">
+              <option value="percent" ${form.kind === 'percent' ? 'selected' : ''}>% off the order</option>
+              <option value="fixed" ${form.kind === 'fixed' ? 'selected' : ''}>Fixed R off the order</option>
+            </select>
+          </label>
+          <label class="field"><span>Value</span><input id="pc-value" type="number" min="1" step="0.5" value="${escapeAttr(String(form.value))}" /></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>Min Order (R, 0 = None)</span><input id="pc-min" type="number" min="0" step="1" value="${escapeAttr(String(form.minSubtotal))}" /></label>
+          <label class="field"><span>Expires (Blank = Never)</span><input id="pc-expires" type="date" value="${escapeAttr(String(form.expiresAt || '').slice(0, 10))}" /></label>
+          <label class="field"><span>Max Uses (Blank = Unlimited)</span><input id="pc-max" type="number" min="1" step="1" value="${escapeAttr(String(form.maxUses ?? ''))}" /></label>
+        </div>
+        <label class="field checkbox"><input id="pc-active" type="checkbox" ${form.active ? 'checked' : ''} /><span>Active</span></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-promo" type="button">Save</button>
+          <button class="btn btn-ghost" id="cancel-promo" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Code</th><th>Discount</th><th>Min order</th><th>Expires</th><th>Uses</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">No promo codes yet — create one and share it in a campaign</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#new-promo').addEventListener('click', async () => { state.editingPromo = blankPromo(); await renderPromos(); });
+  $$('#view-promos tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]').addEventListener('click', () => {
+      const p = promoCodes.find((x) => x.id === tr.dataset.id);
+      state.editingPromo = { ...p, maxUses: p.maxUses ?? '', expiresAt: p.expiresAt || '' };
+      renderPromos();
+    });
+  });
+
+  if (form) {
+    $('#cancel-promo').addEventListener('click', async () => { state.editingPromo = null; await renderPromos(); });
+    $('#save-promo').addEventListener('click', async () => {
+      const expires = $('#pc-expires').value;
+      const payload = {
+        code: $('#pc-code').value.trim(),
+        kind: $('#pc-kind').value,
+        value: Number($('#pc-value').value) || 0,
+        minSubtotal: Number($('#pc-min').value) || 0,
+        // Stored as end-of-day so a code "expiring the 15th" still works ON
+        // the 15th -- matches how people read an expiry date.
+        expiresAt: expires ? `${expires}T23:59:59.999Z` : null,
+        maxUses: $('#pc-max').value === '' ? null : Number($('#pc-max').value),
+        active: $('#pc-active').checked,
+      };
+      try {
+        if (form.id) await api(`/api/promo-codes/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api('/api/promo-codes', { method: 'POST', body: JSON.stringify(payload) });
+        toast('Promo code saved');
+        state.editingPromo = null;
+        await renderPromos();
       } catch (ex) {
         toast(ex.message);
       }

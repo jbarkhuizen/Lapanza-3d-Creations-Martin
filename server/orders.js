@@ -5,6 +5,7 @@ import { matchShippingForWeight, getShippingOption } from './shipping.js';
 import { readCategoryProducts } from './export.js';
 import { getProduct, upsertProduct } from './store.js';
 import { getSettings } from './settings.js';
+import { validatePromo, computePromoDiscount, redeemPromo } from './promos.js';
 
 // 'cancelled' is reachable two ways: automatically (see cancelStalePendingOrders
 // below) and now also as an explicit admin action (updateOrderStatus) --
@@ -101,6 +102,8 @@ function rowToOrder(row) {
     subtotal: row.subtotal,
     discountPct: row.discount_pct,
     discountAmount: row.discount_amount,
+    promoCode: row.promo_code || '',
+    promoDiscountAmount: row.promo_discount_amount || 0,
     shippingOptionId: row.shipping_option_id,
     shippingPrice: row.shipping_price,
     shippingMethod: row.shipping_method,
@@ -171,7 +174,7 @@ export function listOrders({ status, q } = {}, db = getDb()) {
 // (e.g. a bad shipping option) can't leave an order with no items or a
 // client with no order.
 export function createOrder(
-  { client: clientData, items: cartItems, shippingMethod = 'courier', shippingOptionId, paymentMethod },
+  { client: clientData, items: cartItems, shippingMethod = 'courier', shippingOptionId, paymentMethod, promoCode },
   db = getDb(),
 ) {
   if (!ALLOWED_PAYMENT_METHODS.includes(paymentMethod)) throw new Error('Invalid payment method');
@@ -246,7 +249,24 @@ export function createOrder(
   const bestTier = tiers.filter((t) => filamentQty >= Number(t.minQty)).sort((a, b) => Number(b.minQty) - Number(a.minQty))[0] || null;
   const discountPct = bestTier ? Math.min(100, Number(bestTier.pct)) : 0;
   const discountAmount = bestTier ? Math.round(filamentSubtotal * (discountPct / 100)) : 0;
-  const total = Math.max(0, subtotal - discountAmount + shippingPrice);
+
+  // Backlog #99: promo codes stack AFTER the volume discount (owner-approved
+  // rule: volume first, promo on the remainder). An invalid code THROWS
+  // rather than silently dropping -- the customer typed it expecting a
+  // discount, so charging full price without saying so would be worse than
+  // making them fix or remove the code. Validated again here regardless of
+  // what the preview endpoint said earlier; redeemPromo() inside the
+  // transaction below is what actually consumes a use.
+  let promo = null;
+  let promoDiscountAmount = 0;
+  if (String(promoCode || '').trim()) {
+    const check = validatePromo(promoCode, subtotal - discountAmount, db);
+    if (!check.ok) throw new Error(check.reason);
+    promo = check.promo;
+    promoDiscountAmount = computePromoDiscount(promo, subtotal - discountAmount);
+  }
+
+  const total = Math.max(0, subtotal - discountAmount - promoDiscountAmount + shippingPrice);
 
   let clientDataUpdated = false;
   const tx = db.transaction(() => {
@@ -257,10 +277,10 @@ export function createOrder(
     const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO orders
-        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, shipping_option_id, shipping_price, shipping_method, total, total_weight,
+        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, promo_code, promo_discount_amount, shipping_option_id, shipping_price, shipping_method, total, total_weight,
          payment_method, payment_status, tracking_number, created_at, updated_at)
        VALUES
-        (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @discount_pct, @discount_amount, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
+        (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @discount_pct, @discount_amount, @promo_code, @promo_discount_amount, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
          @payment_method, 'pending', '', @created_at, @updated_at)`,
     ).run({
       id: orderId,
@@ -269,6 +289,8 @@ export function createOrder(
       subtotal,
       discount_pct: discountPct,
       discount_amount: discountAmount,
+      promo_code: promo ? promo.code : '',
+      promo_discount_amount: promoDiscountAmount,
       shipping_option_id: shippingOption?.id || null,
       shipping_price: shippingPrice,
       shipping_method: shippingMethod,
@@ -293,6 +315,7 @@ export function createOrder(
         weight: item.weight,
       });
     }
+    if (promo) redeemPromo(promo.id, db); // guarded increment -- throws if a concurrent order took the last use
     const lowStock = reserveStockForOrder(getOrder(orderId, db), db);
     return { orderId, lowStock };
   });

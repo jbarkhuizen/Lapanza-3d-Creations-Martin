@@ -430,6 +430,27 @@ export function ensureSchema(db) {
       UNIQUE (product_id, email)
     );
 
+    -- Backlog #99 (SITE-065): promo codes (the promotions half; gift cards
+    -- are deliberately parked -- prepaid liabilities need balance
+    -- accounting). Codes are matched case-insensitively (NOCASE unique).
+    -- kind: 'percent' (value = % off) or 'fixed' (value = rand off).
+    -- max_uses NULL = unlimited; used_count increments inside the same
+    -- transaction that creates the order, guarded so concurrent checkouts
+    -- can't over-redeem a limited code.
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id TEXT PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      kind TEXT NOT NULL DEFAULT 'percent',
+      value REAL NOT NULL DEFAULT 0,
+      min_subtotal REAL NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      max_uses INTEGER,
+      used_count INTEGER NOT NULL DEFAULT 0,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     -- Permanent running tallies, updated alongside every page_views insert
     -- (recordPageView in analytics.js) -- exist specifically so pruning old
     -- page_views rows (pruneOldPageViews, backlog #32) doesn't quietly turn
@@ -531,6 +552,7 @@ export function ensureSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log (created_at DESC);
   `);
   ensureCheckoutColumns(db);
+  ensurePromoColumns(db);
   ensureClientAuthColumns(db);
   ensureNewsletterCampaignColumns(db);
   ensureManagementColumns(db);
@@ -560,6 +582,18 @@ function hasColumn(db, tableInfoStatement, column) {
 // as the rest of this file, just at column granularity. PRAGMA doesn't
 // support bound parameters for identifiers, so each table name is a plain
 // hardcoded literal below rather than interpolated.
+// #99 promo codes: the applied code + its rand discount live on the order
+// itself, SEPARATE from discount_pct/discount_amount (which volume discounts
+// own) -- so an invoice can honestly show both lines.
+function ensurePromoColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'promo_code')) {
+    db.exec("ALTER TABLE orders ADD COLUMN promo_code TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'promo_discount_amount')) {
+    db.exec('ALTER TABLE orders ADD COLUMN promo_discount_amount REAL NOT NULL DEFAULT 0');
+  }
+}
+
 function ensureCheckoutColumns(db) {
   // Filament colours already had weight_g ("Filament Weight" -- the
   // product's own net weight, shown as a spec). shipping_weight_g is a

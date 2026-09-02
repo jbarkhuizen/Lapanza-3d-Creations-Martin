@@ -134,6 +134,16 @@
         <div class="panel p-6 border-2 border-charcoal rounded-sm brutal">
           <div class="flex justify-between text-sm mb-1"><span>Subtotal</span><span id="checkout-subtotal">R 0.00</span></div>
           <div id="checkout-discount-row" class="hidden flex justify-between text-sm mb-1" style="color:#2e6e46"><span>Volume discount</span><span id="checkout-discount">R 0.00</span></div>
+          <div id="checkout-promo-row" class="hidden flex justify-between text-sm mb-1" style="color:#2e6e46"><span id="checkout-promo-label">Promo</span><span id="checkout-promo-amount">R 0.00</span></div>
+          <div class="mb-3">
+            <div class="flex gap-2">
+              <input type="text" id="checkout-promo-input" placeholder="Promo code" autocomplete="off"
+                     class="flex-1 min-w-0 border border-charcoal/20 rounded-sm px-3 py-1.5 text-sm bg-transparent focus:outline-none focus:border-terracotta" />
+              <button type="button" id="checkout-promo-apply"
+                      class="text-xs font-semibold uppercase tracking-[0.12em] border-2 border-charcoal rounded-full px-3 py-1.5 hover:bg-charcoal hover:text-cream transition-colors">Apply</button>
+            </div>
+            <p id="checkout-promo-note" class="hidden text-xs mt-1"></p>
+          </div>
           <div class="flex justify-between text-sm mb-3"><span>Shipping</span><span id="checkout-shipping-price">R 0.00</span></div>
           <div class="flex justify-between font-serif text-xl mb-4"><span>Total</span><span id="checkout-total" class="text-terracotta">R 0.00</span></div>
           <p id="checkout-error" class="hidden text-sm text-terracotta mb-3"></p>

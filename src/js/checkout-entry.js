@@ -208,9 +208,58 @@ async function init() {
       }
     }
   } catch { /* no discount display -- server remains the authority */ }
-  const orderTotal = (shippingPrice) => Math.max(0, subtotal - volumeDiscountAmount + shippingPrice);
+  // Backlog #99: applied promo code. Like the volume discount above, this is
+  // a display mirror -- the server re-validates the code and computes the
+  // authoritative discount inside createOrder(). lastShippingPrice remembers
+  // the most recent shipping price so applying/removing a code can refresh
+  // the total without waiting for the next shipping event.
+  let appliedPromo = null; // { code, discountAmount }
+  let lastShippingPrice = 0;
+  const orderTotal = (shippingPrice) => {
+    lastShippingPrice = shippingPrice;
+    return Math.max(0, subtotal - volumeDiscountAmount - (appliedPromo?.discountAmount || 0) + shippingPrice);
+  };
   document.getElementById('checkout-weight').textContent = `${weight}g`;
   document.getElementById('checkout-subtotal').textContent = formatPrice(subtotal);
+
+  const promoInput = document.getElementById('checkout-promo-input');
+  const promoNote = document.getElementById('checkout-promo-note');
+  const promoRow = document.getElementById('checkout-promo-row');
+  const setPromoNote = (text, ok) => {
+    promoNote.textContent = text;
+    promoNote.classList.toggle('hidden', !text);
+    promoNote.style.color = ok ? '#2e6e46' : '#b53a2e';
+  };
+  document.getElementById('checkout-promo-apply')?.addEventListener('click', async () => {
+    const code = (promoInput.value || '').trim();
+    appliedPromo = null;
+    promoRow.classList.add('hidden');
+    if (!code) {
+      setPromoNote('', true);
+      document.getElementById('checkout-total').textContent = formatPrice(orderTotal(lastShippingPrice));
+      return;
+    }
+    try {
+      const res = await fetch('/api/promo/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, subtotal: subtotal - volumeDiscountAmount }),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setPromoNote(data.reason || 'That promo code is not valid.', false);
+      } else {
+        appliedPromo = { code: data.code, discountAmount: data.discountAmount };
+        document.getElementById('checkout-promo-label').textContent = `Promo ${data.code}`;
+        document.getElementById('checkout-promo-amount').textContent = `−${formatPrice(data.discountAmount)}`;
+        promoRow.classList.remove('hidden');
+        setPromoNote(`Code ${data.code} applied.`, true);
+      }
+    } catch {
+      setPromoNote('Could not check that code — please try again.', false);
+    }
+    document.getElementById('checkout-total').textContent = formatPrice(orderTotal(lastShippingPrice));
+  });
 
   const form = document.getElementById('checkout-form');
   const shippingBox = document.getElementById('checkout-shipping');
@@ -472,6 +521,7 @@ async function init() {
           shippingMethod: backendShippingMethod,
           shippingOptionId: shippingOption?.id || null,
           paymentMethod,
+          promoCode: appliedPromo?.code || '',
         }),
       });
 

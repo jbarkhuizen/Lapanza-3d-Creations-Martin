@@ -30,6 +30,11 @@ export function renderInvoiceHtml(order, settings, { paid = false } = {}) {
   const discountRow = order.discountAmount
     ? `<tr><td colspan="4" style="text-align:right">Discount${order.discountPct ? ` (${order.discountPct}%)` : ''}</td><td style="text-align:right">-${formatRand(order.discountAmount)}</td></tr>`
     : '';
+  // #99: promo discount is its own line, separate from the volume/manual
+  // discount above -- an order can honestly carry both.
+  const promoRow = order.promoDiscountAmount
+    ? `<tr><td colspan="4" style="text-align:right">Promo ${escapeHtml(order.promoCode || '')}</td><td style="text-align:right">-${formatRand(order.promoDiscountAmount)}</td></tr>`
+    : '';
   const paymentSection = paid
     ? `<p style="color:#1a7a3e"><strong>PAID IN FULL</strong><br>Payment received in full on ${escapeHtml(new Date().toLocaleDateString())}. Reference: ${escapeHtml(order.invoiceNumber || order.id)}.</p>`
     : `<p><strong>PAYMENT DETAILS</strong><br>
@@ -75,6 +80,7 @@ export function renderInvoiceHtml(order, settings, { paid = false } = {}) {
     <tfoot>
       <tr><td colspan="4" style="text-align:right">Subtotal</td><td style="text-align:right">${formatRand(order.subtotal)}</td></tr>
       ${discountRow}
+      ${promoRow}
       <tr><td colspan="4" style="text-align:right">Shipping</td><td style="text-align:right">${formatRand(order.shippingPrice)}</td></tr>
       <tr class="totals"><td colspan="4" style="text-align:right">${paid ? 'TOTAL PAID' : 'TOTAL DUE'}</td><td style="text-align:right">${formatRand(order.total)}</td></tr>
     </tfoot>

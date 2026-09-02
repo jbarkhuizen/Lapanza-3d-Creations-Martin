@@ -37,6 +37,7 @@ test('ensureSchema creates every expected table', () => {
     'potential_market_contacts',
     'print_job_filaments',
     'print_jobs',
+    'promo_codes',
     'purchases',
     'resources',
     'restock_subscriptions',

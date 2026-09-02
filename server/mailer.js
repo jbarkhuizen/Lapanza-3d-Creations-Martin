@@ -78,6 +78,8 @@ function orderTotalsHtml(order, settings) {
   };
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;font-size:14px;">
     <tr><td style="padding:2px 0;">Subtotal</td><td style="padding:2px 0;text-align:right;">${formatRand(order.subtotal)}</td></tr>
+    ${order.discountAmount ? `<tr><td style="padding:2px 0;">Discount${order.discountPct ? ` (${order.discountPct}%)` : ''}</td><td style="padding:2px 0;text-align:right;">-${formatRand(order.discountAmount)}</td></tr>` : ''}
+    ${order.promoDiscountAmount ? `<tr><td style="padding:2px 0;">Promo ${escapeHtml(order.promoCode || '')}</td><td style="padding:2px 0;text-align:right;">-${formatRand(order.promoDiscountAmount)}</td></tr>` : ''}
     <tr><td style="padding:2px 0;">Shipping (${escapeHtml(shippingLabels[order.shippingMethod] || order.shippingMethod)})</td><td style="padding:2px 0;text-align:right;">${formatRand(order.shippingPrice)}</td></tr>
     <tr><td style="padding:6px 0 0;font-weight:700;border-top:1px solid #e5dcc9;">Total</td><td style="padding:6px 0 0;text-align:right;font-weight:700;border-top:1px solid #e5dcc9;">${formatRand(order.total)}</td></tr>
   </table>

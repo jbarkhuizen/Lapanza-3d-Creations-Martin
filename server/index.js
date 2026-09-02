@@ -48,6 +48,7 @@ import { formatRand } from './money.js';
 import { renderInvoiceHtml } from './invoice.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, removeItemImage, reorderItemImages } from './store.js';
 import { sanitizeRichText } from './rich-text.js';
+import { listPromoCodes, createPromoCode, updatePromoCode, validatePromo, computePromoDiscount } from './promos.js';
 import {
   listClients,
   getClient,
@@ -2527,6 +2528,48 @@ app.get('/api/orders/:id/invoice', requireAuth, (req, res) => {
 
 // ---- Checkout (D/E) -- public, no admin auth ----
 
+// Backlog #99: promo codes. The public validate endpoint is a PREVIEW ONLY
+// (shows the discount line before payment); createOrder() re-validates and
+// redeems authoritatively inside its transaction. Rate-limited with the
+// checkout limiter -- it's an unauthenticated code-guessing surface.
+app.post('/api/promo/validate', checkoutLimiter, (req, res) => {
+  const { code, subtotal } = req.body || {};
+  const check = validatePromo(code, Number(subtotal) || 0);
+  if (!check.ok) return res.json({ ok: false, reason: check.reason });
+  res.json({
+    ok: true,
+    code: check.promo.code,
+    kind: check.promo.kind,
+    value: check.promo.value,
+    discountAmount: computePromoDiscount(check.promo, Number(subtotal) || 0),
+  });
+});
+
+app.get('/api/promo-codes', requireAuth, (_req, res) => {
+  res.json({ promoCodes: listPromoCodes() });
+});
+
+app.post('/api/promo-codes', requireAuth, (req, res) => {
+  try {
+    const promo = createPromoCode(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created promo code "${promo.code}" (${promo.kind} ${promo.value})` });
+    res.status(201).json({ promo });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/promo-codes/:id', requireAuth, (req, res) => {
+  try {
+    const promo = updatePromoCode(req.params.id, req.body || {});
+    if (!promo) return res.status(404).json({ error: 'Promo code not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated promo code "${promo.code}" (${promo.active ? 'active' : 'inactive'}, ${promo.kind} ${promo.value})` });
+    res.json({ promo });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.post('/api/checkout', checkoutLimiter, async (req, res) => {
   const body = req.body || {};
   try {
@@ -2536,6 +2579,7 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
       shippingMethod: body.shippingMethod,
       shippingOptionId: body.shippingOptionId,
       paymentMethod: body.paymentMethod,
+      promoCode: body.promoCode,
     });
     const lowStock = order._lowStock;
     delete order._lowStock;
