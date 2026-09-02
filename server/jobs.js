@@ -22,7 +22,13 @@ const PAGE_VIEWS_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 // it running). An in-process setInterval is the right fit here; there's no
 // external scheduler to hit an endpoint instead, and adding one (e.g.
 // node-cron) would be a dependency for something setInterval already does.
-export function startAutoCancelJob(intervalMs = HOUR_MS) {
+// onCancelled: optional callback invoked once per run when this actually
+// cancelled (and so restored stock for) at least one order -- lets the
+// caller (server/index.js, which owns publishCatalog/scheduleCatalogPublish
+// and can't be imported here without a circular dependency) republish the
+// storefront so its stock badges pick up the restored quantities. Not
+// awaited: same fire-and-forget reasoning as the notification emails below.
+export function startAutoCancelJob(intervalMs = HOUR_MS, onCancelled) {
   async function run() {
     let cancelled = [];
     try {
@@ -31,6 +37,13 @@ export function startAutoCancelJob(intervalMs = HOUR_MS) {
     } catch (err) {
       console.error('Auto-cancel job failed:', err);
       return;
+    }
+    if (cancelled.length > 0) {
+      try {
+        onCancelled?.(cancelled);
+      } catch (err) {
+        console.error('Auto-cancel job: onCancelled callback failed:', err);
+      }
     }
     // Separate from the cancel transaction above -- a Gmail hiccup here
     // must never be mistaken for the cancel itself having failed, and one

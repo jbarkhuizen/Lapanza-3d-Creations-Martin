@@ -579,6 +579,7 @@ app.post('/api/client/orders/:id/cancel', requireClientAuth, async (req, res) =>
     const order = cancelOrderByClient(req.params.id, req.clientId);
     if (!order) return res.status(404).json({ error: 'Order not found' });
     res.json({ order });
+    scheduleCatalogPublish(); // stock was just restored -- see its own comment above
     try {
       await sendOrderCancelledNotificationEmail(order, 'Cancelled by customer');
     } catch (err) {
@@ -1439,6 +1440,33 @@ async function publishCatalog() {
   } catch (err) {
     return `Saved, but publishing to the live site failed: ${err.message}. Try "Publish to site" from the dashboard.`;
   }
+}
+
+// Order-driven stock changes (checkout, admin manual orders, cancel/
+// un-cancel, the 7-day auto-cancel job) never called publishCatalog() at
+// all -- the storefront's "In stock" / "Only 2 left" / "Out of stock"
+// badges are baked into the generated static pages at publish time, so
+// every single order silently left them stale until an unrelated admin
+// catalog edit happened to trigger a publish. Unlike an admin catalog
+// save, nobody is waiting on the HTTP response for a republish here, and
+// a full generate+build (several seconds) synchronously inside the
+// checkout request would slow down every purchase for something the
+// customer isn't asking for. Debounced instead: schedule one
+// publishCatalog() a few seconds after the last stock-affecting order
+// event, so a burst of near-simultaneous orders still collapses into a
+// single rebuild rather than one per order. This mirrors the fire-and-
+// forget processRestockNotifications() call directly above it, and --
+// same as that call -- isn't unit-tested at the route level; only the
+// underlying stock-mutation logic it depends on is (server/orders.test.js).
+const CATALOG_PUBLISH_DEBOUNCE_MS = 10000;
+let pendingCatalogPublish = null;
+function scheduleCatalogPublish() {
+  if (pendingCatalogPublish) clearTimeout(pendingCatalogPublish);
+  pendingCatalogPublish = setTimeout(() => {
+    pendingCatalogPublish = null;
+    publishCatalog().catch((err) => console.error('Debounced catalog publish failed:', err));
+  }, CATALOG_PUBLISH_DEBOUNCE_MS);
+  pendingCatalogPublish.unref?.(); // never keep the process (or a test's fresh app) alive on its own
 }
 
 app.post('/api/products', requireAuth, async (req, res) => {
@@ -2395,6 +2423,7 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created manual order ${order.id} (${formatRand(order.total)})` });
     res.status(201).json({ order, clientDataUpdated });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
+    scheduleCatalogPublish(); // stock was just reserved -- see its own comment above
     try {
       await sendNewOrderNotificationEmail(order);
     } catch (err) {
@@ -2432,6 +2461,9 @@ app.put('/api/orders/:id/status', requireAuth, async (req, res) => {
     // #43: cancelling restores stock -- one of the moments an item can
     // come back into stock without a catalog publish.
     if (order.status === 'cancelled') processRestockNotifications(sendRestockNotification).catch(() => {});
+    // Either direction (cancel restores stock, un-cancel re-reserves it)
+    // needs the storefront republished -- see scheduleCatalogPublish's comment.
+    if (order.status === 'cancelled' || before?.status === 'cancelled') scheduleCatalogPublish();
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -2499,6 +2531,9 @@ app.delete('/api/orders/:id', requireAuth, (req, res) => {
   if (!ok) return res.status(404).json({ error: 'Order not found' });
   recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted order ${existing?.invoiceNumber || req.params.id}` });
   res.json({ ok: true });
+  // deleteOrder restores stock when the order still owned a reservation
+  // (see its own comment in orders.js) -- harmless to always schedule.
+  scheduleCatalogPublish();
 });
 
 // F.4/H.2: (re)send is the same helper for both the automatic send at
@@ -2551,6 +2586,7 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     const clientDataUpdated = Boolean(order._clientDataUpdated);
     delete order._clientDataUpdated;
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
+    scheduleCatalogPublish(); // stock was just reserved -- see its own comment above
 
     // The invoice itself (unlike the "your order is confirmed" email below)
     // is never a lie to send immediately -- it's a bill for what's owed,
@@ -3254,7 +3290,7 @@ if (isMainModule) {
   app.listen(PORT, () => {
     console.log(`\n> Lapanza Admin API  http://localhost:${PORT}/admin/\n`);
   });
-  startAutoCancelJob();
+  startAutoCancelJob(undefined, () => scheduleCatalogPublish()); // restored stock -- see that function's comment
   startAutoBackupJob();
   startAuditLogPruneJob();
   startPageViewsPruneJob();
