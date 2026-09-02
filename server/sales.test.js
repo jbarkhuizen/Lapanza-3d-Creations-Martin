@@ -107,3 +107,22 @@ test('getSalesSummary statusBreakdown covers every order status even with zero o
   assert.strictEqual(summary.statusBreakdown.find((s) => s.status === 'shipped').count, 0);
   db.close();
 });
+
+// Review #10 (todo #149): free-text manual/deposit lines read like invoices,
+// not products -- they stay in the revenue totals but never rank in Top
+// Products.
+test('getSalesSummary excludes manual: free-text lines from top products but not from revenue', async () => {
+  const db = openDb(':memory:');
+  const { getSalesSummary } = await import(`./sales.js?t=${Date.now()}`);
+  const f = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  addColour(f.id, { name: 'Red', sku: 'PLA-RED', priceRand: 100, weightG: 100, stockQty: 10 }, db);
+  const order = createOrder({ client: { name: 'C', email: 'c@example.com' }, items: [{ productId: 'filament:pla:PLA-RED', quantity: 1 }], shippingMethod: 'collect', paymentMethod: 'manual_eft' }, db);
+  updateOrderStatus(order.id, 'paid', db);
+  paidOrder(db, { total: 900, description: 'Custom print (request abc123) — deposit on quote of R1800' });
+
+  const summary = getSalesSummary('all', db);
+  assert.ok(summary.revenue >= 1000, 'manual line still counts in revenue');
+  assert.ok(summary.topProducts.every((p) => !String(p.productId).startsWith('manual:')), 'no manual lines ranked');
+  assert.strictEqual(summary.topProducts[0].productId, 'filament:pla:PLA-RED');
+  db.close();
+});

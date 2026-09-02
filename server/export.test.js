@@ -227,3 +227,23 @@ test('syncPublicJson carries the photo gallery through for both colours and cate
   Object.values(paths).forEach((p) => fs.existsSync(p) && fs.unlinkSync(p));
   db.close();
 });
+
+// Review #8 (todo #147): categories saved before the status field existed
+// have no status on disk; the read path reports them as published (what a
+// missing value has always meant publicly) so the admin list and editor
+// can never disagree again.
+test('readCategoryProducts defaults a missing status to published', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lapanza-export-'));
+  const catalogPath = path.join(dir, 'catalog.json');
+  fs.writeFileSync(catalogPath, JSON.stringify({
+    version: 1,
+    products: [
+      { id: 'a', kind: 'category', slug: 'old', name: 'Old (pre-status)' },
+      { id: 'b', kind: 'category', slug: 'new', name: 'New', status: 'draft' },
+    ],
+  }));
+  const products = readCategoryProducts(catalogPath);
+  assert.strictEqual(products.find((p) => p.id === 'a').status, 'published');
+  assert.strictEqual(products.find((p) => p.id === 'b').status, 'draft');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

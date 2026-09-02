@@ -45,6 +45,14 @@ try {
 } catch {
   /* settings.json not synced yet -- use the defaults above */
 }
+// Review #13 (todo #152): a Settings brand with no matching category has no
+// page data to generate -- drop it here so the sitemap/search index never
+// reference a page that doesn't exist (src/data/site.js applies the same
+// filter to the nav). The admin recipe stays: brand list entry + a
+// matching +Category with the same name + Publish.
+CAR_PART_BRANDS = CAR_PART_BRANDS.filter(
+  (b) => categories[String(b.name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')],
+);
 
 // SITE-010: distinguishes ready-stock filament (real stockQty, dispatches
 // fast) from made-to-order printed products (toys/homeware/phones/car

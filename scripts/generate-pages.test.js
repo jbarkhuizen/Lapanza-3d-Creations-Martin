@@ -335,9 +335,13 @@ test('generate-pages skips category pages missing from categories.json instead o
     assert.ok(fs.existsSync(path.join(root, 'story.html')), 'story.html should still be generated');
 
     const warnings = JSON.parse(fs.readFileSync(warningsPath, 'utf8'));
+    // Review #13 (todo #152): car-part BRANDS with no matching category are
+    // now filtered out up front (their nav links are suppressed the same
+    // way), so gwm/landrover no longer appear as skipped -- only the three
+    // core category pages still warn.
     assert.deepStrictEqual(
       [...warnings.skippedCategories].sort(),
-      ['gwm', 'homeware', 'landrover', 'phones', 'toys'],
+      ['homeware', 'phones', 'toys'],
     );
   } finally {
     // This fixture makes every category's items list empty for the run

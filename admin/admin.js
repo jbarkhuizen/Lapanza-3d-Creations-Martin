@@ -6450,7 +6450,23 @@ async function renderDesignRequests() {
           ${form.urgency ? `<div><strong>Urgency:</strong> ${escapeHtml(form.urgency)}</div>` : ''}
           ${form.deliveryPref ? `<div><strong>Delivery:</strong> ${escapeHtml(form.deliveryPref)}</div>` : ''}
         </div>` : ''}
-        ${(form.files || []).length ? `<div class="muted" style="font-size:0.85rem"><strong>Files:</strong> ${form.files.map((f) => `<a class="text-terracotta" style="text-decoration:underline;margin-right:0.6rem" href="${escapeAttr(f.filePath)}" ${f.kind === 'image' ? 'target="_blank" rel="noopener"' : `download="${escapeAttr(f.originalName || 'file')}"`}>${escapeHtml(f.originalName || f.filePath.split('/').pop())}</a>`).join('')}</div>` : ''}
+        ${(form.files || []).length ? `
+        <div class="stack gap-2" style="padding:10px;border:1px solid var(--line);border-radius:10px">
+          <strong style="font-size:0.92rem">Uploaded Files (${form.files.length})</strong>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            ${form.files.map((f) => f.kind === 'image' ? `
+              <a href="${escapeAttr(f.filePath)}" target="_blank" rel="noopener" title="${escapeAttr(f.originalName || '')}" style="display:block">
+                <img src="${escapeAttr(f.filePath)}" alt="${escapeAttr(f.originalName || 'Uploaded image')}" style="width:110px;height:110px;object-fit:cover;border-radius:6px;border:1px solid var(--line)" />
+              </a>` : `
+              <div class="stack" style="gap:4px;justify-content:center;padding:8px 12px;border:1px solid var(--line);border-radius:6px;max-width:220px">
+                <span style="font-size:0.82rem;word-break:break-all">${escapeHtml(f.originalName || f.filePath.split('/').pop())}</span>
+                <div class="row-card-actions">
+                  <a class="btn small" href="${escapeAttr(f.filePath)}" download="${escapeAttr(f.originalName || 'file')}">Download</a>
+                  <a class="btn small btn-ghost" href="${escapeAttr(f.filePath)}" target="_blank" rel="noopener">Open</a>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>` : '<p class="muted" style="font-size:0.85rem">No files were uploaded with this request.</p>'}
         ${form.budgetNote ? `<p class="muted" style="font-size:0.85rem">Budget: ${escapeHtml(form.budgetNote)}</p>` : ''}
         <div class="grid-2">
           ${form.referenceImagePath ? `<img src="${escapeAttr(form.referenceImagePath)}" alt="Reference image" style="width:120px;height:120px;object-fit:cover;border-radius:4px" />` : ''}

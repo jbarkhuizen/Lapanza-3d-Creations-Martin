@@ -1,5 +1,6 @@
 import filaments from '../data/filaments.json';
 import siteSettings from '../data/settings.json';
+import categories from '../data/categories.json';
 
 export const SITE = {
   name: 'Lapanza 3D Creative Lab',
@@ -76,7 +77,13 @@ export const FILAMENT_NAV = filaments.map((f) => ({
 const rawBrands = Array.isArray(siteSettings.carPartBrands) && siteSettings.carPartBrands.length
   ? siteSettings.carPartBrands.filter((b) => b && b.active !== false && b.name)
   : [{ name: 'GWM' }, { name: 'Landrover' }];
-export const CAR_BRANDS_NAV = rawBrands.map((b) => ({
-  slug: String(b.name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-  label: b.name,
-}));
+// Review #13 (todo #152): a brand only gets a nav link once its matching
+// category exists -- a Settings-only brand (no +Category yet) used to
+// render a link straight to a 404. The generator skips the page for the
+// same reason; this keeps nav and pages in lockstep.
+export const CAR_BRANDS_NAV = rawBrands
+  .map((b) => ({
+    slug: String(b.name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    label: b.name,
+  }))
+  .filter((b) => Boolean(categories[b.slug]));

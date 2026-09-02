@@ -21,6 +21,19 @@ function stat(pathname) {
   }
 }
 
+// Recursive total for one directory (`du -sx`): stays on one filesystem,
+// byte-exact block units. Returns null where du is unavailable (win32 dev).
+function directoryTotalBytes(directory) {
+  if (process.platform === 'win32') return null;
+  const output = spawnSync('du', ['-sx', '-B1', directory], {
+    encoding: 'utf8',
+    timeout: 30_000,
+    maxBuffer: 1024 * 1024,
+  }).stdout || '';
+  const match = output.match(/^(\d+)\t/);
+  return match ? Number(match[1]) : null;
+}
+
 function sizeMap(directory) {
   if (process.platform === 'win32') return new Map();
   const output = spawnSync('du', ['-x', '-B1', '--max-depth=1', directory], {
@@ -96,13 +109,24 @@ export function getSiteOverview({ appRoot = process.cwd(), filesystemRoot = path
   const backupFiles = fs.existsSync(backupDirectory)
     ? fs.readdirSync(backupDirectory).filter((file) => file.endsWith('.db'))
     : [];
+  // Review #2 (todo #141): stat() on a DIRECTORY returns the inode's own
+  // size (typically 4096 bytes, effectively constant) -- which is why the
+  // Application Storage figures never changed. Directories get a real
+  // recursive size via `du` instead; files keep stat().size. On win32 dev
+  // (no du) the size shows Unavailable rather than a wrong constant.
   const appPaths = [
     ['Application', appRoot],
     ['Database directory', dataDir()],
     ['Uploads', uploadsDir()],
     ['Backups', backupDirectory],
     ['Dependencies', path.join(appRoot, 'node_modules')],
-  ].map(([label, pathname]) => ({ label, path: pathname, ...stat(pathname) }));
+  ].map(([label, pathname]) => {
+    const base = { label, path: pathname, ...stat(pathname) };
+    try {
+      if (fs.statSync(pathname).isDirectory()) base.sizeBytes = directoryTotalBytes(pathname);
+    } catch { /* keep stat()'s answer */ }
+    return base;
+  });
   const latestRelease = db.prepare(`
     SELECT version_label AS versionLabel, description, deployed_date AS deployedAt
     FROM version_history

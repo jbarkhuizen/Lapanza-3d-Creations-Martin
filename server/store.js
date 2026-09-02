@@ -35,7 +35,18 @@ export function loadCatalog() {
     fs.writeFileSync(p.catalogPath, JSON.stringify(seeded, null, 2));
     return seeded;
   }
-  return JSON.parse(fs.readFileSync(p.catalogPath, 'utf8'));
+  const catalog = JSON.parse(fs.readFileSync(p.catalogPath, 'utf8'));
+  // Review #8 (todo #147): categories saved before the status field existed
+  // (or before the 92bc4af create-path fix) have NO status on disk. Nothing
+  // public gates on category status, so a missing value has always behaved
+  // as published -- but the admin LIST showed `p.status || 'draft'` while
+  // the EDITOR's select visually fell back to its first option (Published),
+  // and the two disagreed. Normalize on read to what the value truly means;
+  // the next save persists it.
+  for (const product of catalog.products || []) {
+    if (!product.status) product.status = 'published';
+  }
+  return catalog;
 }
 
 export function saveCatalog(catalog, db = getDb()) {

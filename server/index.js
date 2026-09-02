@@ -769,10 +769,10 @@ app.put('/api/design-requests/:id/quote', requireAuth, async (req, res) => {
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Design request ${request.id}: quoted R${request.quoteAmount}` });
     try {
       await sendDesignRequestQuoteEmail(request, `${siteUrlFor(req)}/design-request-status.html?token=${request.statusToken}`);
-      res.json({ request: withQuoteStage(request), emailSent: true });
+      res.json({ request: withQuoteStage({ ...request, files: listDesignRequestFiles(request.id) }), emailSent: true });
     } catch (err) {
       logEmailFailure(`Design request ${request.id} quote email`, err, req);
-      res.json({ request: withQuoteStage(request), emailSent: false, emailError: 'Quote saved, but the email failed to send — check SMTP settings.' });
+      res.json({ request: withQuoteStage({ ...request, files: listDesignRequestFiles(request.id) }), emailSent: false, emailError: 'Quote saved, but the email failed to send — check SMTP settings.' });
     }
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -2146,7 +2146,11 @@ app.get('/api/design-requests', requireAuth, (req, res) => {
 app.get('/api/design-requests/:id', requireAuth, (req, res) => {
   const request = getDesignRequest(req.params.id);
   if (!request) return res.status(404).json({ error: 'Design request not found' });
-  res.json({ designRequest: withQuoteStage(request) });
+  // Review #18 (todo #157): the LIST attached files but this detail route
+  // didn't -- so opening a request via View showed it without its uploads.
+  // Every response that can land in state.editingDesignRequest must carry
+  // the same shape.
+  res.json({ designRequest: withQuoteStage({ ...request, files: listDesignRequestFiles(request.id) }) });
 });
 
 app.patch('/api/design-requests/:id', requireAuth, async (req, res) => {
@@ -2161,7 +2165,7 @@ app.patch('/api/design-requests/:id', requireAuth, async (req, res) => {
         logEmailFailure('Design request status email', err, req);
       }
     }
-    res.json({ designRequest: withQuoteStage(updated) });
+    res.json({ designRequest: withQuoteStage({ ...updated, files: listDesignRequestFiles(updated.id) }) });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -42,6 +42,10 @@ export function getSalesSummary(range = '30d', db = getDb()) {
   // Grouped by product_id (the stable catalog key) rather than product_name,
   // so a mid-history rename doesn't split one product's sales across two
   // rows; MAX(product_name) just picks a display label deterministically.
+  // Review #10 (todo #149): free-text manual/deposit lines (product_id
+  // 'manual:…' -- walk-in sales, quote deposits) are excluded HERE only:
+  // they read like invoices, not products. They still count in the revenue
+  // totals above.
   const topProducts = db
     .prepare(
       `SELECT oi.product_id AS productId, MAX(oi.product_name) AS name,
@@ -49,6 +53,7 @@ export function getSalesSummary(range = '30d', db = getDb()) {
        FROM order_items oi
        JOIN orders o ON o.id = oi.order_id
        WHERE o.status IN ${REVENUE_STATUSES} ${rangeClause}
+         AND oi.product_id NOT LIKE 'manual:%'
        GROUP BY oi.product_id
        ORDER BY revenue DESC
        LIMIT 10`,

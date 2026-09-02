@@ -37,7 +37,11 @@ function defaultPaths() {
 export function readCategoryProducts(catalogJsonPath = defaultPaths().catalogJsonPath) {
   if (!fs.existsSync(catalogJsonPath)) return [];
   const catalog = JSON.parse(fs.readFileSync(catalogJsonPath, 'utf8'));
-  return (catalog.products || []).filter((p) => p.kind === 'category');
+  return (catalog.products || [])
+    .filter((p) => p.kind === 'category')
+    // Same missing-status normalization as store.js's loadCatalog (review
+    // #8, todo #147) -- this is the read the admin /api/products list uses.
+    .map((p) => (p.status ? p : { ...p, status: 'published' }));
 }
 
 // A featured-product entry only stores a productId (settings.featuredProducts,

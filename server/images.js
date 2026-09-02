@@ -36,7 +36,13 @@ export async function generateImageVariants(absImagePath) {
     if ((meta.width || 0) <= width) continue; // never upscale
     const out = variantPath(absImagePath, width);
     try {
-      await sharp(absImagePath).resize({ width }).webp({ quality: 78 }).toFile(out);
+      // Review #24/#12 (todos #163/#151): .rotate() with no argument bakes
+      // the EXIF orientation flag into the pixels. Without it, phone photos
+      // carrying an orientation flag rendered rotated in the WebP variants
+      // (WebP drops EXIF) while the original JPEG displayed upright --
+      // images "shifted orientation" depending on which file the browser
+      // picked from the <picture> srcset.
+      await sharp(absImagePath).rotate().resize({ width }).webp({ quality: 78 }).toFile(out);
       results.push(out);
     } catch (err) {
       console.error('images: variant failed', out, err.message);
