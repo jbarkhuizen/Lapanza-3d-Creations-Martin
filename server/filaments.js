@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 import { deleteImageFile } from './uploads.js';
+import { sanitizeRichText } from './rich-text.js';
 
 function rowToColour(row) {
   // Phase 3 spool tracking: stock_qty is "spools owned" (unchanged meaning,
@@ -101,8 +102,8 @@ export function createFilament(data, db = getDb()) {
     id,
     slug: slugify(data.slug || data.name),
     name: data.name || 'Untitled filament',
-    description: data.description || '',
-    colour_note: data.colourNote || '',
+    description: sanitizeRichText(data.description || ''),
+    colour_note: sanitizeRichText(data.colourNote || ''),
     specs_json: JSON.stringify(data.specs || []),
     seo_title: data.seoTitle || '',
     seo_description: data.seoDescription || '',
@@ -130,8 +131,8 @@ export function updateFilament(id, data, db = getDb()) {
     id,
     slug: slugify(data.slug ?? existing.slug),
     name: data.name ?? existing.name,
-    description: data.description ?? existing.description,
-    colour_note: data.colourNote ?? existing.colourNote,
+    description: sanitizeRichText(data.description ?? existing.description),
+    colour_note: sanitizeRichText(data.colourNote ?? existing.colourNote),
     specs_json: JSON.stringify(data.specs ?? existing.specs),
     seo_title: data.seoTitle ?? existing.seoTitle,
     seo_description: data.seoDescription ?? existing.seoDescription,

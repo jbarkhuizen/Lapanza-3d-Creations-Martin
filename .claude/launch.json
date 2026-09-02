@@ -18,6 +18,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:admin"],
       "port": 8787
+    },
+    {
+      "name": "lapanza-admin-node",
+      "runtimeExecutable": "C:\\PROGRA~1\\nodejs\\node.exe",
+      "runtimeArgs": ["server/index.js"],
+      "port": 8787
     }
   ]
 }

@@ -47,6 +47,7 @@ import { syncPublicJson, readCategoryProducts } from './export.js';
 import { formatRand } from './money.js';
 import { renderInvoiceHtml } from './invoice.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, removeItemImage, reorderItemImages } from './store.js';
+import { sanitizeRichText } from './rich-text.js';
 import {
   listClients,
   getClient,
@@ -1448,7 +1449,7 @@ app.post('/api/products', requireAuth, async (req, res) => {
     kind: 'category',
     slug: slugify(body.slug || body.name || 'product'),
     name: body.name || 'Untitled product',
-    description: body.description || '',
+    description: sanitizeRichText(body.description || ''),
     crumbs: body.crumbs || '',
     parent: body.parent || null,
     items: normalizeItems(body.items),
@@ -1478,7 +1479,7 @@ app.put('/api/products/:id', requireAuth, async (req, res) => {
     kind: 'category',
     slug: slugify(body.slug || existing.slug),
     name: body.name ?? existing.name,
-    description: body.description ?? existing.description,
+    description: sanitizeRichText(body.description ?? existing.description),
     crumbs: body.crumbs ?? existing.crumbs,
     parent: body.parent ?? existing.parent,
     items: normalizeItems(body.items ?? existing.items),
@@ -3137,7 +3138,7 @@ function normalizeItem(item, i) {
   return {
     id: item.id || randomUUID(),
     name: item.name || `Item ${i + 1}`,
-    details: item.details || '',
+    details: sanitizeRichText(item.details || ''),
     material: item.material || '',
     size: item.size || '',
     finish: item.finish || '',

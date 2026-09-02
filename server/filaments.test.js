@@ -263,3 +263,22 @@ test('colourGalleryPaths falls back to the legacy image_path when no gallery row
   assert.deepStrictEqual(colourGalleryPaths(getFilament(f.id, db).colours[0], db), ['/uploads/filaments/gallery-1.jpg']);
   db.close();
 });
+
+// #139: rich text is sanitized AT SAVE, not just at render -- a hostile or
+// pasted-in payload must never reach the database.
+test('createFilament and updateFilament sanitize description and colourNote', () => {
+  const db = openDb(':memory:');
+  const created = createFilament({
+    name: 'ASA',
+    description: '<p onclick="x()">Tough</p><script>alert(1)</script>',
+    colourNote: '<b>Note</b><img src=x onerror=alert(1)>',
+  }, db);
+  assert.strictEqual(created.description, '<p>Tough</p>alert(1)');
+  assert.strictEqual(created.colourNote, '<strong>Note</strong>');
+  const updated = updateFilament(created.id, { description: '<a href="javascript:alert(1)">safe text</a>' }, db);
+  assert.strictEqual(updated.description, 'safe text');
+  // carry-forward path re-sanitizes too (progressively cleans legacy rows)
+  const untouched = updateFilament(created.id, { name: 'ASA+' }, db);
+  assert.strictEqual(untouched.colourNote, '<strong>Note</strong>');
+  db.close();
+});

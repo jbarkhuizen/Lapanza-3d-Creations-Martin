@@ -989,7 +989,9 @@ function renderEditor() {
             <label class="field"><span>Name *</span><input data-field="name" value="${escapeAttr(p.name)}" /></label>
             <label class="field"><span>Slug *</span><input data-field="slug" value="${escapeAttr(p.slug)}" placeholder="auto-from-name" /></label>
           </div>
-          <label class="field"><span>Description</span><textarea data-field="description">${escapeHtml(p.description)}</textarea></label>
+          <!-- div, not label: Chrome cancels execCommand edits on a
+               contenteditable that sits inside a <label> -->
+          <div class="field"><span>Description</span>${richTextField('data-field="description"', p.description)}</div>
           <div class="grid-3">
             <label class="field"><span>Status</span>
               <select data-field="status">
@@ -1072,10 +1074,10 @@ function renderFilamentSections(p) {
         <h3>Colours & Pricing</h3>
         <button class="btn small" id="add-colour" type="button">+ Colour</button>
       </div>
-      <label class="field" style="margin-bottom:0.85rem">
+      <div class="field" style="margin-bottom:0.85rem">
         <span>Colour Note (Shown Under Swatches)</span>
-        <textarea data-field="colourNote">${escapeHtml(p.colourNote || '')}</textarea>
-      </label>
+        ${richTextField('data-field="colourNote"', p.colourNote || '')}
+      </div>
       <div id="colours-list">
         ${(p.colours || []).map((c, i) => `
           <div class="row-card" data-colour-index="${i}">
@@ -1192,7 +1194,7 @@ function renderCategorySections(p) {
               <label class="field"><span>Item Name</span><input data-item="name" value="${escapeAttr(item.name || '')}" /></label>
               <label class="field"><span>SKU</span><input data-item="sku" value="${escapeAttr(item.sku || '')}" /></label>
             </div>
-            <label class="field"><span>Details</span><textarea data-item="details">${escapeHtml(item.details || '')}</textarea></label>
+            <div class="field"><span>Details</span>${richTextField('data-item="details"', item.details || '')}</div>
             <div class="grid-3">
               <label class="field"><span>Material</span><input data-item="material" value="${escapeAttr(item.material || '')}" /></label>
               <label class="field"><span>Size</span><input data-item="size" value="${escapeAttr(item.size || '')}" /></label>
@@ -6485,4 +6487,167 @@ function guessHex(name) {
   return '#d6d0c4';
 }
 
+// ---------------------------------------------------------------------------
+// #139: rich-text editor for product descriptions (filament description /
+// colour note, category description, item details).
+//
+// The editor is a contenteditable div with a formatting toolbar, paired with
+// a HIDDEN textarea that keeps the field's original data-field/data-item
+// attribute -- so every existing binding (bindEditorEvents' input listeners,
+// the per-row save readers) keeps reading `.value` untouched. The editor
+// syncs its HTML into the textarea on every input and re-dispatches the
+// event. server/rich-text.js re-sanitizes on save either way; the client
+// mirror below only exists so the editor never renders stored markup that
+// the server never approved (legacy pre-#139 values are raw text).
+const RT_ALLOWED_TAGS = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'S', 'STRIKE', 'DEL', 'H3', 'H4', 'UL', 'OL', 'LI', 'A', 'BLOCKQUOTE', 'DIV']);
+
+function rtSanitizeToFragment(html) {
+  const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+  const out = document.createDocumentFragment();
+  const copy = (from, to) => {
+    for (const node of Array.from(from.childNodes)) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        to.appendChild(document.createTextNode(node.textContent));
+        continue;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) continue;
+      if (!RT_ALLOWED_TAGS.has(node.tagName)) {
+        copy(node, to); // drop the tag, keep its content
+        continue;
+      }
+      const el = document.createElement(node.tagName === 'DIV' ? 'p' : node.tagName.toLowerCase());
+      if (node.tagName === 'A') {
+        const href = String(node.getAttribute('href') || '').trim();
+        if (!/^https?:\/\//i.test(href)) {
+          copy(node, to);
+          continue;
+        }
+        el.setAttribute('href', href);
+        el.setAttribute('rel', 'noopener noreferrer');
+        el.setAttribute('target', '_blank');
+      }
+      copy(node, el);
+      to.appendChild(el);
+    }
+  };
+  copy(doc.body, out);
+  return out;
+}
+
+const RT_TOOLBAR = [
+  ['bold', 'B', 'Bold'],
+  ['italic', 'I', 'Italic'],
+  ['underline', 'U', 'Underline'],
+  ['strikeThrough', 'S', 'Strikethrough'],
+  ['h3', 'H3', 'Heading'],
+  ['h4', 'H4', 'Small heading'],
+  ['paragraph', '¶', 'Normal text'],
+  ['insertUnorderedList', '• List', 'Bullet list'],
+  ['insertOrderedList', '1. List', 'Numbered list'],
+  ['link', 'Link', 'Insert link (https)'],
+  ['unlink', 'Unlink', 'Remove link'],
+  ['removeFormat', 'Clear', 'Clear formatting'],
+];
+
+function richTextField(attr, value) {
+  // Value goes into the hidden textarea only -- the visible editor is filled
+  // from it through rtSanitizeToFragment() by the boot-time observer below.
+  return `<div class="rt-wrap">
+    <div class="rt-toolbar" role="toolbar" aria-label="Text formatting">
+      ${RT_TOOLBAR.map(([cmd, label, title]) => `<button type="button" tabindex="-1" data-rt-cmd="${cmd}" title="${title}">${label}</button>`).join('')}
+    </div>
+    <div class="rt-editor" contenteditable="true"></div>
+    <textarea ${attr} hidden>${escapeHtml(value || '')}</textarea>
+  </div>`;
+}
+
+function rtSync(wrap) {
+  const editor = wrap.querySelector('.rt-editor');
+  const textarea = wrap.querySelector('textarea');
+  if (!editor || !textarea) return;
+  textarea.value = editor.innerHTML;
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function initRichTextEditors(root) {
+  for (const wrap of (root instanceof Element || root instanceof Document ? root : document).querySelectorAll('.rt-wrap')) {
+    const editor = wrap.querySelector('.rt-editor');
+    if (!editor || editor.dataset.rtReady) continue;
+    editor.dataset.rtReady = '1';
+    editor.replaceChildren(rtSanitizeToFragment(wrap.querySelector('textarea')?.value || ''));
+    editor.addEventListener('input', () => rtSync(wrap));
+    editor.addEventListener('blur', () => rtSync(wrap));
+  }
+}
+
+document.addEventListener('mousedown', (e) => {
+  // Keep the editor's selection alive while a toolbar button is clicked.
+  if (e.target.closest?.('[data-rt-cmd]')) e.preventDefault();
+});
+
+// Inline formats are toggled by hand instead of execCommand: Chrome's
+// execCommand('bold') was observed splitting the selection's text nodes and
+// then wrapping nothing (italic worked, bold silently no-opped), so the
+// toolbar wraps/unwraps the real elements itself. Block commands
+// (formatBlock, lists) and createLink still go through execCommand, which
+// behaves.
+const RT_INLINE = { bold: 'strong', italic: 'em', underline: 'u', strikeThrough: 's' };
+
+function rtToggleInline(editor, tagName) {
+  const sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return;
+  const container = range.commonAncestorContainer;
+  const fromEl = container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement;
+  const existing = fromEl?.closest(tagName);
+  if (existing && existing !== editor && editor.contains(existing)) {
+    // Already inside the format -- unwrap that element.
+    const parent = existing.parentNode;
+    while (existing.firstChild) parent.insertBefore(existing.firstChild, existing);
+    parent.removeChild(existing);
+    parent.normalize();
+    return;
+  }
+  if (range.collapsed) return;
+  const el = document.createElement(tagName);
+  el.appendChild(range.extractContents());
+  range.insertNode(el);
+  sel.removeAllRanges();
+  const after = document.createRange();
+  after.selectNodeContents(el);
+  sel.addRange(after);
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest?.('[data-rt-cmd]');
+  if (!btn) return;
+  const wrap = btn.closest('.rt-wrap');
+  const editor = wrap?.querySelector('.rt-editor');
+  if (!editor) return;
+  editor.focus();
+  const cmd = btn.dataset.rtCmd;
+  try {
+    // Boolean false, NOT the string 'false' -- Chrome treats the string as
+    // truthy and flips to style-span output, which the sanitizer strips.
+    document.execCommand('styleWithCSS', false, false);
+    if (RT_INLINE[cmd]) rtToggleInline(editor, RT_INLINE[cmd]);
+    else if (cmd === 'h3' || cmd === 'h4') document.execCommand('formatBlock', false, cmd.toUpperCase());
+    else if (cmd === 'paragraph') document.execCommand('formatBlock', false, 'P');
+    else if (cmd === 'link') {
+      const url = window.prompt('Link URL (must start with https://)', 'https://');
+      if (url && /^https?:\/\//i.test(url.trim())) document.execCommand('createLink', false, url.trim());
+    } else {
+      document.execCommand(cmd, false, null);
+    }
+  } catch { /* never let an editing quirk break the panel */ }
+  rtSync(wrap);
+});
+
+// Panels re-render by replacing innerHTML, so editors appear at arbitrary
+// times -- watch for them instead of threading an init call through every
+// render site.
+new MutationObserver(() => initRichTextEditors(document)).observe(document.body, { childList: true, subtree: true });
+
 boot();
+initRichTextEditors(document);

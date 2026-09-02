@@ -499,3 +499,19 @@
 .gallery-thumb-strip { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
 .gallery-thumb-btn { width: 56px; height: 56px; border-radius: 0.25rem; overflow: hidden; border: 2px solid transparent; padding: 0; cursor: pointer; }
 .gallery-thumb-btn[aria-current="true"] { border-color: var(--color-terracotta, #c24b28); }
+
+/* #139: rich-text product descriptions. Tailwind preflight strips list and
+   heading styling, so the sanitized markup (h3/h4, ul/ol, links) needs its
+   look restored wherever a .rich-text container renders it. Sizes are
+   relative so the same block works in a hero paragraph and a small card. */
+.rich-text p { margin: 0 0 0.6em; }
+.rich-text p:last-child { margin-bottom: 0; }
+.rich-text h3 { font-family: var(--font-serif, inherit); font-size: 1.2em; margin: 0.8em 0 0.35em; letter-spacing: -0.01em; }
+.rich-text h4 { font-family: var(--font-serif, inherit); font-size: 1.05em; margin: 0.7em 0 0.3em; }
+.rich-text h3:first-child, .rich-text h4:first-child { margin-top: 0; }
+.rich-text ul, .rich-text ol { margin: 0 0 0.6em; padding-left: 1.3em; }
+.rich-text ul { list-style: disc; }
+.rich-text ol { list-style: decimal; }
+.rich-text li { margin: 0.15em 0; }
+.rich-text a { color: var(--color-terracotta, #c24b28); font-weight: 600; text-decoration: underline; }
+.rich-text blockquote { border-left: 3px solid color-mix(in srgb, var(--color-terracotta, #c24b28) 45%, transparent); margin: 0.6em 0; padding-left: 0.8em; }

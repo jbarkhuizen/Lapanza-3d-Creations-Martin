@@ -7,6 +7,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parsePrice, formatItemPrice } from '../server/money.js';
 import { itemAnchorId } from '../server/item-anchor.js';
+// #139: descriptions/details/colour notes are limited rich text. Rendering
+// through sanitizeRichText() (idempotent) also makes pre-#139 legacy values
+// safe -- these fields used to be interpolated completely unescaped.
+// stripTags() feeds the places markup must never reach: meta descriptions,
+// JSON-LD text, search/filter indexes.
+import { sanitizeRichText, stripTags } from '../server/rich-text.js';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const filaments = JSON.parse(fs.readFileSync(path.join(root, 'src/data/filaments.json'), 'utf8'));
@@ -563,7 +569,7 @@ function catalogueItems(label, items, categorySlug, depth = 0) {
       // pages (the only ones with a search/model filter bar rendered), but
       // harmless to include everywhere: cheap, and keeps this function from
       // needing to special-case categorySlug.
-      const searchIndex = [item.name, item.details, item.creator].filter(Boolean).join(' ').toLowerCase();
+      const searchIndex = [item.name, stripTags(item.details), item.creator].filter(Boolean).join(' ').toLowerCase();
       const modelList = (item.models || []).join('|');
       return `<article id="${itemAnchorId(item.sku, item.name || i)}" class="group border border-charcoal/10 rounded-sm overflow-hidden hover:border-terracotta transition-colors" data-search="${escapeAttr(searchIndex)}" data-models="${escapeAttr(modelList)}">
               <a href="${'../'.repeat(depth)}products/${itemDetailSlug(categorySlug, item, i)}.html" class="block aspect-square bg-gradient-to-br from-linen to-cream flex items-center justify-center border-b border-charcoal/10 overflow-hidden" aria-label="View ${escapeAttr(item.name)} details">
@@ -571,7 +577,7 @@ function catalogueItems(label, items, categorySlug, depth = 0) {
               </a>
               <div class="p-4">
                 <h3 class="font-serif text-lg mb-1">${name}</h3>
-                <p class="text-espresso/60 text-sm mb-2">${item.details || 'Custom printed to order.'}</p>
+                <div class="text-espresso/60 text-sm mb-2 rich-text">${sanitizeRichText(item.details) || 'Custom printed to order.'}</div>
                 ${meta ? `<p class="text-espresso/45 text-xs mb-2">${meta}</p>` : ''}
                 ${fitment ? `<p class="text-espresso/45 text-xs mb-2">${fitment}</p>` : ''}
                 ${item.price ? `<p class="text-terracotta font-semibold mb-1">${formatItemPrice(item.price)}</p>` : ''}
@@ -711,7 +717,7 @@ function productDetailJsonLd({ name, images, sku, price, inStock, url }) {
 
 function generateFilamentPage(f) {
   const note = f.colourNote
-    ? `<p class="text-espresso/50 text-xs mt-4">${f.colourNote}</p>`
+    ? `<div class="text-espresso/50 text-xs mt-4 rich-text">${sanitizeRichText(f.colourNote)}</div>`
     : '';
   const listedColours = (f.colours || []).filter((c) => c.listed !== false);
   const colours =
@@ -743,7 +749,7 @@ function generateFilamentPage(f) {
   const filamentPagePath = `filament/${f.slug}.html`;
   const html = `${head({
     title: `${f.name} — Lapanza 3D Creative Lab`,
-    description: metaDescription(f.description),
+    description: metaDescription(stripTags(f.description)),
     depth: 1,
     pagePath: filamentPagePath,
     jsonLd: [
@@ -768,7 +774,7 @@ ${shellStart({ depth: 1 })}
         <a href="${SITE.whatsapp}" target="_blank" rel="noopener noreferrer"
            class="text-[0.65rem] font-bold uppercase tracking-[0.18em] border-2 border-charcoal rounded-full px-4 py-2.5 hover:bg-charcoal hover:text-cream transition-colors">Order / enquire</a>
       </div>
-      <p class="text-espresso/75 leading-relaxed max-w-2xl mb-12 text-lg">${f.description}</p>
+      <div class="text-espresso/75 leading-relaxed max-w-2xl mb-12 text-lg rich-text">${sanitizeRichText(f.description)}</div>
       ${deliveryNote('filament')}
       ${volumeDiscountNote()}
       ${specsBlock(f.specs)}
@@ -798,7 +804,7 @@ function generateColourDetailPage(f, c) {
   const priceNum = parsePrice(c.price) || 0;
   const inStock = Number(c.stockQty) > 0;
   const title = `${f.name} — ${c.name} — Lapanza 3D Creative Lab`;
-  const description = `${f.name} filament in ${c.name}. ${c.price || ''} — ${inStock ? 'in stock' : 'made to order'}. ${f.description || ''}`.trim();
+  const description = `${f.name} filament in ${c.name}. ${c.price || ''} — ${inStock ? 'in stock' : 'made to order'}. ${stripTags(f.description)}`.trim();
 
   const html = `${head({
     title: escapeAttr(title),
@@ -833,7 +839,7 @@ ${shellStart({ depth: 1 })}
           <p class="eyebrow mb-2">Filament · ${f.name}</p>
           <h1 class="font-serif text-3xl md:text-4xl tracking-[-0.03em] mb-3">${c.name}</h1>
           <p class="text-2xl font-semibold text-terracotta mb-4">${c.price || ''}</p>
-          <p class="text-espresso/70 leading-relaxed mb-6">${f.description || ''}</p>
+          <div class="text-espresso/70 leading-relaxed mb-6 rich-text">${sanitizeRichText(f.description)}</div>
           <p class="text-sm ${inStock ? 'text-espresso/60' : 'text-terracotta'} mb-6">${inStock ? 'In stock' : 'Made to order'}</p>
           ${inStock ? addToCartButton({
             productId: `filament:${f.slug}:${c.sku}`,
@@ -876,7 +882,7 @@ function generateItemDetailPage(categorySlug, categoryName, item, index) {
   const meta = [item.material, item.size, item.finish].filter(Boolean).join(' · ');
   const fitment = [item.creator ? `Design: ${item.creator}` : '', item.models?.length ? `Fits: ${item.models.join(', ')}` : ''].filter(Boolean).join(' · ');
   const title = `${itemName} — ${categoryName} — Lapanza 3D Creative Lab`;
-  const description = (item.details || `${itemName}, printed to order.`).slice(0, 300);
+  const description = (stripTags(item.details) || `${itemName}, printed to order.`).slice(0, 300);
 
   const html = `${head({
     // Unlike filament/category copy (owner-controlled, no raw quotes seen so
@@ -915,7 +921,7 @@ ${shellStart({ depth: 1 })}
           <p class="eyebrow mb-2">${categoryName}</p>
           <h1 class="font-serif text-3xl md:text-4xl tracking-[-0.03em] mb-3">${itemName}</h1>
           ${item.price ? `<p class="text-2xl font-semibold text-terracotta mb-4">${formatItemPrice(item.price)}</p>` : ''}
-          <p class="text-espresso/70 leading-relaxed mb-4">${item.details || 'Custom printed to order.'}</p>
+          <div class="text-espresso/70 leading-relaxed mb-4 rich-text">${sanitizeRichText(item.details) || 'Custom printed to order.'}</div>
           ${meta ? `<p class="text-espresso/50 text-sm mb-2">${meta}</p>` : ''}
           ${fitment ? `<p class="text-espresso/50 text-sm mb-6">${fitment}</p>` : ''}
           ${fulfilmentLabel(item)}
@@ -1036,7 +1042,7 @@ ${footer({ depth: 0 })}`;
 
   const html = `${head({
     title: `${name} — Lapanza 3D Creative Lab`,
-    description,
+    description: stripTags(description),
     depth,
     pagePath,
     jsonLd: [
@@ -1060,7 +1066,7 @@ ${shellStart({ depth })}
         <a href="${SITE.whatsapp}" target="_blank" rel="noopener noreferrer"
            class="text-xs font-semibold uppercase tracking-[0.15em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Enquire</a>
       </div>
-      <p class="text-espresso/80 leading-relaxed max-w-2xl mb-10">${description}</p>
+      <div class="text-espresso/80 leading-relaxed max-w-2xl mb-10 rich-text">${sanitizeRichText(description)}</div>
       ${body}
       <div class="mt-10 pt-8 border-t border-charcoal/10">${backToHomeButton({ depth })}</div>
       </div>

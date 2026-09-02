@@ -602,3 +602,19 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
   .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
   .stats, .editor-layout, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
 }
+
+/* #139: rich-text editor (product descriptions / details / colour notes) */
+.rt-wrap { border: 1px solid var(--line); border-radius: 10px; background: var(--bg-elevated); overflow: hidden; }
+.rt-toolbar { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px 6px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--line) 22%, transparent); }
+.rt-toolbar button { border: 1px solid transparent; background: none; border-radius: 6px; padding: 3px 8px; font-size: 0.78rem; font-weight: 600; cursor: pointer; color: inherit; }
+.rt-toolbar button:hover { border-color: var(--line); background: var(--bg-elevated); }
+.rt-editor { min-height: 120px; max-height: 340px; overflow-y: auto; padding: 0.7rem 0.85rem; outline: none; line-height: 1.5; }
+.rt-editor:focus { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent, #c24b28) 35%, transparent); }
+.rt-editor h3 { font-size: 1.1rem; margin: 0.6em 0 0.3em; }
+.rt-editor h4 { font-size: 1rem; margin: 0.5em 0 0.25em; }
+.rt-editor p { margin: 0 0 0.5em; }
+.rt-editor ul, .rt-editor ol { margin: 0 0 0.5em; padding-left: 1.3em; }
+.rt-editor ul { list-style: disc; }
+.rt-editor ol { list-style: decimal; }
+.rt-editor a { color: var(--accent, #c24b28); text-decoration: underline; }
+.rt-editor blockquote { border-left: 3px solid var(--line); margin: 0.5em 0; padding-left: 0.7em; }
