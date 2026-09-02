@@ -155,6 +155,7 @@ import {
   updateInHouseFilament,
   deleteInHouseFilament,
   transferStockRoll,
+  setInHouseFilamentArchived,
 } from './in-house-filament.js';
 import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
 import { getVersion, listVersions } from './version-history.js';
@@ -1437,8 +1438,10 @@ async function publishCatalog() {
     // #43: a catalog publish is exactly when stock may have come back --
     // fire-and-forget; failures log inside the processor and stay pending.
     processRestockNotifications(sendRestockNotification).catch(() => {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_PUBLISHED, detail: 'Automatic publish after a save — pages regenerated and rebuilt.' });
     return undefined;
   } catch (err) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_PUBLISHED, detail: `Automatic publish FAILED: ${err.message}` });
     return `Saved, but publishing to the live site failed: ${err.message}. Try "Publish to site" from the dashboard.`;
   }
 }
@@ -2291,6 +2294,14 @@ app.get('/api/in-house-filament', requireAuth, (_req, res) => {
   res.json({ filaments: listInHouseFilament() });
 });
 
+// Review #5 (todo #144): archive/unarchive -- see in-house-filament.js.
+app.patch('/api/in-house-filament/:id/archive', requireAuth, (req, res) => {
+  const filament = setInHouseFilamentArchived(req.params.id, Boolean(req.body?.archived));
+  if (!filament) return res.status(404).json({ error: 'Filament not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `In-house filament "${filament.brand} ${filament.filamentType} ${filament.colorName}" ${filament.archived ? 'archived' : 'unarchived'}` });
+  res.json({ filament });
+});
+
 app.get('/api/in-house-filament/:id', requireAuth, (req, res) => {
   const filament = getInHouseFilament(req.params.id);
   if (!filament) return res.status(404).json({ error: 'Filament not found' });
@@ -2938,7 +2949,7 @@ app.put('/api/settings', requireAuth, async (req, res) => {
   res.json({ settings, ...(publishWarning ? { publishWarning } : {}) });
 });
 
-app.post('/api/publish', requireAuth, async (_req, res) => {
+app.post('/api/publish', requireAuth, async (req, res) => {
   syncPublicJson(getDb());
   try {
     await runGenerate();
@@ -2947,8 +2958,10 @@ app.post('/api/publish', requireAuth, async (_req, res) => {
     const message = warnings.length
       ? `Site pages regenerated and published, but ${warnings.length} category page(s) were skipped: ${warnings.join(', ')}. Check that these categories still exist in the catalog.`
       : 'Site pages regenerated and published live.';
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_PUBLISHED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Publish to site${warnings.length ? ` — ${warnings.length} category page(s) skipped` : ' — OK'}` });
     res.json({ ok: true, message, skippedCategories: warnings });
   } catch (err) {
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_PUBLISHED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Publish to site FAILED: ${err.message}` });
     res.status(500).json({ error: err.message || 'Publish failed' });
   }
 });
@@ -3041,6 +3054,15 @@ app.get('/api/documentation/:id', requireAuth, (req, res) => {
   const document = getDocumentation(req.params.id, root);
   if (!document) return res.status(404).json({ error: 'Documentation not found' });
   res.type('text/markdown').set('Content-Disposition', `inline; filename="${path.basename(document.path)}"`).send(document.content);
+});
+
+// Review #11 (todo #150): the last 10 publish runs (manual or automatic),
+// straight from audit_log -- no separate table to keep in sync.
+app.get('/api/publish-history', requireAuth, (_req, res) => {
+  const rows = getDb()
+    .prepare("SELECT username, detail, created_at AS createdAt FROM audit_log WHERE event_type = 'catalog_published' ORDER BY created_at DESC LIMIT 10")
+    .all();
+  res.json({ publishHistory: rows });
 });
 
 app.get('/api/test-cases', requireAuth, (_req, res) => {

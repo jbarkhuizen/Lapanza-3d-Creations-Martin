@@ -4,6 +4,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getDb } from './db.js';
 import { backupsDir, uploadsDir, dataDir } from './paths.js';
+import { recordAuditEvent, AUDIT_EVENTS } from './audit-log.js';
 
 // execFile (async), not execFileSync -- syncOffsite now makes two rclone
 // calls instead of one (DB backups, then uploads), and uploads is real
@@ -166,7 +167,13 @@ export async function syncOffsite({ remote = process.env.BACKUP_RCLONE_REMOTE, d
   try {
     await run('rclone', ['copy', uploads, uploadsRemoteFor(remote)]);
   } catch (err) {
+    // Review #4 (todo #143): this used to be console-only -- an uploads
+    // copy that failed every cycle was invisible unless someone read the
+    // server logs, which is exactly how the offsite uploads set fell far
+    // behind the local library. Audit-logged now so it shows on the admin
+    // Audit Logs page like every other backup failure.
     console.error('Offsite uploads copy failed (DB backup sync above still succeeded):', err.message);
+    recordAuditEvent({ eventType: AUDIT_EVENTS.BACKUP_FAILURE, detail: `Offsite uploads copy: ${err.message}` });
   }
   return true;
 }

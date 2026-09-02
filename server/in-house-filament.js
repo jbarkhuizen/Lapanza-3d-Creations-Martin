@@ -26,9 +26,21 @@ function rowToFilament(row) {
     remainingG,
     remainingM,
     percentLeft: totalG > 0 ? Math.max(0, Math.min(1, remainingG / totalG)) : null,
+    archived: Boolean(row.archived),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// Review #5 (todo #144): archive instead of delete for rolls locked by
+// print-job history. Archived rolls keep their history and stay listed
+// (flagged) on the In-House Filament page, but drop out of the print-job
+// filament picker so they can't be used going forward.
+export function setInHouseFilamentArchived(id, archived, db = getDb()) {
+  const result = db
+    .prepare('UPDATE in_house_filament SET archived = ?, updated_at = ? WHERE id = ?')
+    .run(archived ? 1 : 0, new Date().toISOString(), id);
+  return result.changes > 0 ? getInHouseFilament(id, db) : null;
 }
 
 export function listInHouseFilament(db = getDb()) {

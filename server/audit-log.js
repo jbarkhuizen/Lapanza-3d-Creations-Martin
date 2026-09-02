@@ -27,6 +27,10 @@ export const AUDIT_EVENTS = {
   ORDER_UPDATED: 'order_updated',
   STOCK_UPDATED: 'stock_updated',
   CATALOG_UPDATED: 'catalog_updated',
+  // Review #11 (todo #150): every publish-to-site run (manual button or the
+  // automatic one after a catalog/settings save), success or failure -- the
+  // dashboard's Publishing panel shows the last 10.
+  CATALOG_PUBLISHED: 'catalog_published',
   SETTINGS_UPDATED: 'settings_updated',
   MARKETING_UPDATED: 'marketing_updated',
 

@@ -689,9 +689,10 @@ function renderRevenueChart(series) {
 
 async function renderDashboard() {
   state.salesRange = state.salesRange || '30d';
-  const [data, sales] = await Promise.all([
+  const [data, sales, { publishHistory }] = await Promise.all([
     api('/api/dashboard'),
     api(`/api/dashboard/sales?range=${encodeURIComponent(state.salesRange)}`),
+    api('/api/publish-history').catch(() => ({ publishHistory: [] })),
   ]);
   state.dashboard = data;
   state.sales = sales;
@@ -749,6 +750,17 @@ async function renderDashboard() {
       <div class="panel">
         <div class="section-head"><h3>Publishing</h3><span class="badge ${t.drafts ? 'draft' : 'published'}">${t.published} live · ${t.drafts} draft</span></div>
         <p class="muted">Catalog last updated ${formatDate(data.updatedAt)}. Use <strong>Publish to site</strong> to regenerate public pages from this catalog.</p>
+        ${publishHistory.length ? `
+        <div class="recent-list" style="margin-top:0.5rem">
+          ${publishHistory.map((h) => `
+            <div class="recent-item">
+              <div>
+                <strong style="font-size:0.85rem;${/FAILED/.test(h.detail) ? 'color:#b53a2e' : ''}">${escapeHtml(h.detail)}</strong>
+                <div class="muted" style="font-size:0.78rem">${escapeHtml(h.username || 'automatic')}</div>
+              </div>
+              <div class="muted" style="font-size:0.78rem;white-space:nowrap">${escapeHtml(formatDate(h.createdAt))}</div>
+            </div>`).join('')}
+        </div>` : '<p class="muted" style="font-size:0.85rem">No publishes recorded yet — the list fills as you save and publish.</p>'}
       </div>
       <div class="panel">
         <div class="section-head"><h3>Recently Edited</h3></div>
@@ -781,20 +793,34 @@ async function renderDashboard() {
 // no single category product/name in common (PLA, ABS, etc. are each their
 // own top-level row), so that group matches on kind alone; every other
 // group matches a category product's name.
-const CATALOG_GROUP_DEFS = [
-  { key: 'filament', label: 'Filament', match: (p) => p.kind === 'filament' },
-  { key: 'toys', label: 'Toys', match: (p) => p.kind === 'category' && p.name === 'Toys' },
-  { key: 'phones', label: 'Phones', match: (p) => p.kind === 'category' && p.name === 'Phones' },
-  { key: 'homeware', label: 'Homeware', match: (p) => p.kind === 'category' && p.name === 'Homeware' },
-  {
-    key: 'car-parts',
-    label: 'Car Parts',
-    children: [
-      { key: 'car-parts-gwm', label: 'GWM', match: (p) => p.kind === 'category' && p.name === 'GWM' },
-      { key: 'car-parts-landrover', label: 'Landrover', match: (p) => p.kind === 'category' && p.name === 'Landrover' },
-    ],
-  },
-];
+// Review #6 (todo #145): groups are built from the REAL category names at
+// render time, not a hardcoded list -- renaming a category (Homeware ->
+// Home & School) or adding one shows up here automatically instead of the
+// rows falling into "Other". Car-part-brand categories (settings.
+// carPartBrands) nest under one Car Parts parent; everything else is a
+// top-level group. Shared by Product Catalog and Stock Management.
+function dynamicGroupDefs(categoryNames, matchFor, filamentMatch) {
+  const brandNames = new Set(
+    (state.settings?.carPartBrands || []).filter((b) => b && b.active !== false && b.name).map((b) => String(b.name)),
+  );
+  const brands = categoryNames.filter((n) => brandNames.has(n));
+  const rest = categoryNames.filter((n) => !brandNames.has(n));
+  const defs = [{ key: 'filament', label: 'Filament', match: filamentMatch }];
+  for (const n of rest) defs.push({ key: `cat-${slugify(n)}`, label: n, match: matchFor(n) });
+  if (brands.length) {
+    defs.push({
+      key: 'car-parts',
+      label: 'Car Parts',
+      children: brands.map((n) => ({ key: `cat-${slugify(n)}`, label: n, match: matchFor(n) })),
+    });
+  }
+  return defs;
+}
+
+function catalogGroupDefs() {
+  const names = [...new Set(state.products.filter((p) => p.kind === 'category').map((p) => p.name))];
+  return dynamicGroupDefs(names, (name) => (p) => p.kind === 'category' && p.name === name, (p) => p.kind === 'filament');
+}
 
 function catalogRowHtml(p) {
   const meta =
@@ -838,6 +864,7 @@ function catalogSectionHtml(key, label, list, forceOpen) {
 
 async function renderCatalog() {
   state.catalogCollapsed = state.catalogCollapsed || new Set();
+  await ensureSettingsLoaded(); // carPartBrands drives the Car Parts nesting
   await refreshProducts();
 
   // state.products is already filtered by the search/kind/status toolbar
@@ -846,7 +873,7 @@ async function renderCatalog() {
   // every group even if currently empty.
   const filtering = Boolean(state.filters.q || state.filters.kind || state.filters.status);
   const claimed = new Set();
-  const sectionsHtml = CATALOG_GROUP_DEFS.map((def) => {
+  const sectionsHtml = catalogGroupDefs().map((def) => {
     if (def.children) {
       const childrenHtml = def.children
         .map((child) => {
@@ -4520,7 +4547,9 @@ function readPrintJobPayload(draft) {
 async function renderPrintJobs() {
   state.newPrintJob = state.newPrintJob || blankPrintJob();
   const draft = state.newPrintJob;
-  const [{ printJobs }, { filaments }] = await Promise.all([api('/api/print-jobs'), api('/api/in-house-filament')]);
+  const [{ printJobs }, { filaments: allFilaments }] = await Promise.all([api('/api/print-jobs'), api('/api/in-house-filament')]);
+  // Review #5 (todo #144): archived rolls never appear in the picker.
+  const filaments = allFilaments.filter((f) => !f.archived);
 
   const slotRows = draft.slots
     .map((slot, idx) => `
@@ -4939,15 +4968,18 @@ async function renderInHouseFilament() {
   const editingBrand = state.editingInHouseFilament?.brand;
   if (editingBrand && !activeBrandNames.includes(editingBrand)) activeBrandNames.push(editingBrand);
   const filterBrandNames = allBrands.map((b) => b.name);
-  const filtered = filaments.filter((f) => (!state.inHouseFilters.brand || f.brand === state.inHouseFilters.brand) && [f.brand, f.filamentType, f.colorName].some((v) => v.toLowerCase().includes(state.inHouseFilters.q.toLowerCase())));
+  const filtered = filaments
+    .filter((f) => (!state.inHouseFilters.brand || f.brand === state.inHouseFilters.brand) && [f.brand, f.filamentType, f.colorName].some((v) => v.toLowerCase().includes(state.inHouseFilters.q.toLowerCase())))
+    // Review #5 (todo #144): archived rolls sink to the bottom, greyed.
+    .sort((a, b) => Number(a.archived) - Number(b.archived));
   const stockOptions = inventory.filter((item) => item.kind === 'filament' && item.stockQty > 0);
 
   const rows = filtered
     .map(
       (f, index) => `
         ${index === 0 || filtered[index - 1].filamentType !== f.filamentType ? `<tr class="table-group"><td colspan="8"><strong>${escapeHtml(f.filamentType)}</strong></td></tr>` : ''}
-        <tr data-id="${escapeAttr(f.id)}">
-          <td>${escapeHtml(f.brand)}</td>
+        <tr data-id="${escapeAttr(f.id)}" ${f.archived ? 'style="opacity:0.55"' : ''}>
+          <td>${escapeHtml(f.brand)}${f.archived ? ' <span class="badge draft">Archived</span>' : ''}</td>
           <td>${escapeHtml(f.colorName)}</td>
           <td><select class="ihf-stock-item"><option value="">Select stock item…</option>${stockOptions.map((item) => `<option value="${escapeAttr(item.id)}">${escapeHtml(item.name)} (${escapeHtml(String(item.stockQty))})</option>`).join('')}</select><button class="btn small" data-action="transfer" type="button">+ Roll</button></td>
           <td>${escapeHtml(String(f.rollsAvailable))}</td>
@@ -4956,6 +4988,7 @@ async function renderInHouseFilament() {
           <td>${escapeHtml(f.remainingG.toFixed(0))}g / ${escapeHtml(f.percentLeft != null ? Math.round(f.percentLeft * 100) : '—')}%</td>
           <td>
             <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small" data-action="archive" type="button">${f.archived ? 'Unarchive' : 'Archive'}</button>
             <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
           </td>
         </tr>`,
@@ -5005,6 +5038,16 @@ async function renderInHouseFilament() {
       state.editingInHouseFilament = filament;
       await renderInHouseFilament();
     });
+    tr.querySelector('[data-action="archive"]').addEventListener('click', async () => {
+      const f = filaments.find((x) => x.id === tr.dataset.id);
+      try {
+        await api(`/api/in-house-filament/${tr.dataset.id}/archive`, { method: 'PATCH', body: JSON.stringify({ archived: !f.archived }) });
+        toast(f.archived ? 'Unarchived' : 'Archived — hidden from the print-job picker, history kept');
+        await renderInHouseFilament();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
       if (!confirm('Delete this in-house filament?')) return;
       try {
@@ -5012,7 +5055,7 @@ async function renderInHouseFilament() {
         toast('Deleted');
         await renderInHouseFilament();
       } catch (ex) {
-        toast(ex.message);
+        toast(ex.message === 'Cannot delete — this filament has been used in a logged print job.' ? ex.message + ' Use Archive instead.' : ex.message);
       }
     });
     tr.querySelector('[data-action="transfer"]').addEventListener('click', async () => {
@@ -5614,20 +5657,12 @@ async function renderPromos() {
 // (a future new catalog category, added without an admin.js update) falls
 // into a trailing "Other" catch-all appended at render time rather than
 // silently vanishing from the page.
-const STOCK_GROUP_DEFS = [
-  { key: 'filament', label: 'Filament', match: (cat) => cat === 'Filament' },
-  { key: 'toys', label: 'Toys', match: (cat) => cat === 'Toys' },
-  { key: 'phones', label: 'Phones', match: (cat) => cat === 'Phones' },
-  { key: 'homeware', label: 'Homeware', match: (cat) => cat === 'Homeware' },
-  {
-    key: 'car-parts',
-    label: 'Car Parts',
-    children: [
-      { key: 'car-parts-gwm', label: 'GWM', match: (cat) => cat === 'GWM' },
-      { key: 'car-parts-landrover', label: 'Landrover', match: (cat) => cat === 'Landrover' },
-    ],
-  },
-];
+// Review #6 (todo #145): see dynamicGroupDefs -- stock groups come from the
+// live inventory's own category names, matching the Product Catalog page.
+function stockGroupDefs(items) {
+  const names = [...new Set(items.map((i) => i.category).filter((c) => c && c !== 'Filament'))];
+  return dynamicGroupDefs(names, (name) => (cat) => cat === name, (cat) => cat === 'Filament');
+}
 
 function stockRowHtml(item) {
   const edit = state.stockEdits[item.id] || {};
@@ -5688,6 +5723,7 @@ async function renderStock() {
   state.stockPriceMax = state.stockPriceMax ?? '';
   state.stockEdits = state.stockEdits || {}; // id -> { stockQty?, price? }
   state.stockCollapsed = state.stockCollapsed || new Set(); // group keys currently collapsed -- survives re-render (e.g. after Save)
+  await ensureSettingsLoaded(); // carPartBrands drives the Car Parts nesting
   const { items } = await api('/api/inventory');
   state.stockItems = items;
 
@@ -5703,7 +5739,7 @@ async function renderStock() {
   });
 
   const claimed = new Set();
-  const sectionsHtml = STOCK_GROUP_DEFS.map((def) => {
+  const sectionsHtml = stockGroupDefs(items).map((def) => {
     if (def.children) {
       const childrenHtml = def.children
         .map((child) => {

@@ -9,6 +9,7 @@ import {
   deleteInHouseFilament,
   incrementInHouseFilamentUsage,
   transferStockRoll,
+  setInHouseFilamentArchived,
 } from './in-house-filament.js';
 
 test('createInHouseFilament requires filament type and color name', () => {
@@ -75,5 +76,21 @@ test('deleteInHouseFilament removes the row', () => {
   const f = createInHouseFilament({ filamentType: 'PLA', colorName: 'Green', rollsAvailable: 1, weightG: 1000, rollLengthM: 335, costPerRollRand: 300 }, db);
   assert.strictEqual(deleteInHouseFilament(f.id, db), true);
   assert.strictEqual(getInHouseFilament(f.id, db), null);
+  db.close();
+});
+
+// Review #5 (todo #144): rolls locked by print-job history archive instead
+// of deleting -- flagged in the list, excluded from pickers by the client,
+// history untouched, reversible.
+test('setInHouseFilamentArchived flags a roll and unarchives it again', () => {
+  const db = openDb(':memory:');
+  const f = createInHouseFilament({ brand: 'Test', filamentType: 'PLA', colorName: 'Charred Gold', rollsAvailable: 1, weightG: 750 }, db);
+  assert.strictEqual(f.archived, false);
+  const archived = setInHouseFilamentArchived(f.id, true, db);
+  assert.strictEqual(archived.archived, true);
+  assert.strictEqual(listInHouseFilament(db).find((x) => x.id === f.id).archived, true);
+  const back = setInHouseFilamentArchived(f.id, false, db);
+  assert.strictEqual(back.archived, false);
+  assert.strictEqual(setInHouseFilamentArchived('nope', true, db), null);
   db.close();
 });

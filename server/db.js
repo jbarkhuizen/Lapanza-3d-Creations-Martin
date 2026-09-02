@@ -901,6 +901,13 @@ function ensureNewsletterCampaignColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(in_house_filament)', 'brand')) {
     db.exec("ALTER TABLE in_house_filament ADD COLUMN brand TEXT NOT NULL DEFAULT ''");
   }
+  // Review #5 (todo #144): a roll referenced by print-job history can't be
+  // deleted (FK, deliberate -- costing history must stay intact), so
+  // duplicates get archived instead: hidden from the print-job picker and
+  // parked at the bottom of the In-House Filament page, history untouched.
+  if (!hasColumn(db, 'PRAGMA table_info(in_house_filament)', 'archived')) {
+    db.exec('ALTER TABLE in_house_filament ADD COLUMN archived INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 // V1.01: version_number (a plain incrementing integer) is kept as the
