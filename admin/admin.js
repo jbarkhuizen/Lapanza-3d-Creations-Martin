@@ -4314,22 +4314,33 @@ function newOrderShippingControlHtml(order, shippingOptions, weight) {
     </div>`;
 }
 
+// UX rework (2026-09-02, owner feedback): both New Order pickers are live
+// type-ahead — results appear as you type (no Enter, no separate "Use"
+// click; the whole result row is the button). Product matching stays
+// client-side against the cached inventory list; client matching debounces
+// one server query. All interpolated values pass escapeHtml/escapeAttr.
+function newOrderProductMatchHtml(p) {
+  return `<button type="button" class="picker-row" data-product-id="${escapeAttr(p.productId)}">
+    <span>${escapeHtml(p.name)}</span>
+    <span class="muted">${formatRand(p.price)}${p.sku ? ` · ${escapeHtml(p.sku)}` : ''} · ${escapeHtml(String(p.stockQty))} in stock</span>
+  </button>`;
+}
+
+function newOrderClientResultHtml(c) {
+  return `<button type="button" class="picker-row" data-client-id="${escapeAttr(c.id)}">
+    <span>${escapeHtml(c.name || c.email)}</span>
+    <span class="muted">${escapeHtml(c.email)}${c.clientCode ? ` · ${escapeHtml(c.clientCode)}` : ''}${c.discountPct ? ` · ${escapeHtml(String(c.discountPct))}% discount` : ''}</span>
+  </button>`;
+}
+
 function newOrderItemRowHtml(item, idx, itemCount) {
   const productBlock = item.productId
     ? `<div class="panel" style="padding:0.5rem 0.75rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem">
          <span>${escapeHtml(item.productLabel)} <span class="muted">(${formatRand(item.productPrice)}${item.productStock != null ? `, ${escapeHtml(String(item.productStock))} in stock` : ''})</span></span>
          <button class="btn small btn-ghost" data-action="item-clear-product" type="button">Change</button>
        </div>`
-    : `<input class="ip-product-q" type="search" placeholder="Search product name or SKU, press Enter…" value="${escapeAttr(item.productQuery)}" />
-       <div class="stack gap-1">${item.productMatches
-         .map(
-           (p) => `
-         <div class="panel" style="padding:0.5rem 0.75rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem" data-product-id="${escapeAttr(p.productId)}">
-           <span>${escapeHtml(p.name)} <span class="muted">(${formatRand(p.price)}${p.sku ? ` · ${escapeHtml(p.sku)}` : ''}, ${escapeHtml(String(p.stockQty))} in stock)</span></span>
-           <button class="btn small" data-action="pick-product" type="button">Use</button>
-         </div>`,
-         )
-         .join('')}</div>`;
+    : `<input class="ip-product-q" type="search" placeholder="Type product name or SKU — results appear as you type" value="${escapeAttr(item.productQuery)}" autocomplete="off" />
+       <div class="ip-matches stack gap-1">${item.productMatches.map(newOrderProductMatchHtml).join('')}</div>`;
 
   return `
     <div class="panel stack gap-2" data-item-idx="${idx}" style="padding:0.75rem 0.9rem">
@@ -4365,15 +4376,7 @@ async function renderNewOrder() {
   const weight = newOrderWeight(order);
   const totals = newOrderTotals(order, shippingOptions);
 
-  const clientResultsHtml = order.clientResults
-    .map(
-      (c) => `
-        <div class="panel" style="padding:0.6rem 0.9rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem" data-client-id="${escapeAttr(c.id)}">
-          <span>${escapeHtml(c.name || c.email)} <span class="muted">(${escapeHtml(c.email)}${c.discountPct ? ` — ${escapeHtml(String(c.discountPct))}% discount` : ''})</span></span>
-          <button class="btn small" data-action="pick-client" type="button">Use</button>
-        </div>`,
-    )
-    .join('');
+  const clientResultsHtml = order.clientResults.map(newOrderClientResultHtml).join('');
 
   const itemRows = order.items.map((item, idx) => newOrderItemRowHtml(item, idx, order.items.length)).join('');
 
@@ -4397,8 +4400,8 @@ async function renderNewOrder() {
               <p class="muted" style="margin:0.2rem 0 0">${escapeHtml([order.selectedClient.street, order.selectedClient.suburb, order.selectedClient.city, order.selectedClient.province, order.selectedClient.postalCode].filter(Boolean).join(', ') || 'No shipping address on file')}</p>
               ${order.selectedClient.pudoRelevant ? `<p class="muted" style="margin:0.2rem 0 0">PUDO: ${escapeHtml([order.selectedClient.pudoLockerName, order.selectedClient.pudoLockerAddress, order.selectedClient.pudoLockerSuburb, order.selectedClient.pudoLockerCity, order.selectedClient.pudoLockerPostalCode].filter(Boolean).join(', ') || 'locker marked relevant, details not filled in yet')}</p>` : ''}
             </div>` : `
-            <input id="no-client-q" type="search" placeholder="Search name, email, client code…" value="${escapeAttr(order.clientQuery)}" />
-            <div class="stack gap-2">${clientResultsHtml}</div>`}
+            <input id="no-client-q" type="search" placeholder="Type name, email or client code — results appear as you type" value="${escapeAttr(order.clientQuery)}" autocomplete="off" />
+            <div id="no-client-results" class="stack gap-2">${clientResultsHtml}</div>`}
         ` : `
           <p class="muted" style="margin:0">Submitting this creates a real client record (same as checkout) — it appears in Clients and this order shows in their order history.</p>
           <div class="grid-2">
@@ -4460,20 +4463,37 @@ async function renderNewOrder() {
   $('[data-action="mode-new"]')?.addEventListener('click', async () => { order.clientMode = 'new'; await renderNewOrder(); });
   $('[data-action="clear-client"]')?.addEventListener('click', async () => { order.selectedClient = null; order.clientResults = []; await renderNewOrder(); });
 
-  $('#no-client-q')?.addEventListener('keydown', async (e) => {
-    if (e.key !== 'Enter') return;
-    order.clientQuery = $('#no-client-q').value.trim();
-    if (!order.clientQuery) { order.clientResults = []; return renderNewOrder(); }
-    const { clients } = await api(`/api/clients?${new URLSearchParams({ q: order.clientQuery })}`);
-    order.clientResults = clients;
-    await renderNewOrder();
-  });
-  $$('[data-client-id]').forEach((row) => {
-    row.querySelector('[data-action="pick-client"]').addEventListener('click', async () => {
-      order.selectedClient = order.clientResults.find((c) => c.id === row.dataset.clientId);
-      order.discountPct = order.selectedClient?.discountPct || 0;
-      await renderNewOrder();
+  // Live client search: debounced fetch, results injected into the results
+  // container only (a full re-render would steal focus mid-typing).
+  const bindClientPicks = () => {
+    $$('#no-client-results [data-client-id]').forEach((row) => {
+      row.addEventListener('click', async () => {
+        order.selectedClient = order.clientResults.find((c) => c.id === row.dataset.clientId);
+        order.discountPct = order.selectedClient?.discountPct || 0;
+        await renderNewOrder();
+      });
     });
+  };
+  bindClientPicks();
+  let clientSearchTimer = null;
+  $('#no-client-q')?.addEventListener('input', (e) => {
+    order.clientQuery = e.target.value.trim();
+    clearTimeout(clientSearchTimer);
+    clientSearchTimer = setTimeout(async () => {
+      const box = $('#no-client-results');
+      if (!box) return;
+      if (order.clientQuery.length < 2) {
+        order.clientResults = [];
+        box.innerHTML = order.clientQuery ? '<p class="muted" style="margin:0;font-size:0.85rem">Keep typing…</p>' : '';
+        return;
+      }
+      const { clients } = await api(`/api/clients?${new URLSearchParams({ q: order.clientQuery })}`);
+      order.clientResults = clients;
+      box.innerHTML = clients.length
+        ? clients.map(newOrderClientResultHtml).join('')
+        : '<p class="muted" style="margin:0;font-size:0.85rem">No clients match — switch to "New client" to create one.</p>';
+      bindClientPicks();
+    }, 250);
   });
 
   $('#add-item')?.addEventListener('click', async () => {
@@ -4490,27 +4510,39 @@ async function renderNewOrder() {
       item.productQuery = ''; item.productMatches = [];
       await renderNewOrder();
     });
-    row.querySelector('.ip-product-q')?.addEventListener('keydown', async (e) => {
-      if (e.key !== 'Enter') return;
+    // Live product search: the inventory list is already cached client-side,
+    // so filtering is instant on every keystroke; only this row's results
+    // container updates (a full re-render would steal focus).
+    const pickProduct = async (productId) => {
+      const p = item.productMatches.find((m) => m.productId === productId);
+      if (!p) return;
+      item.productId = p.productId;
+      item.productLabel = p.name;
+      item.productPrice = p.price;
+      item.productWeight = p.weight || 0;
+      item.productStock = p.stockQty;
+      item.productMatches = [];
+      await renderNewOrder();
+    };
+    const bindProductPicks = () => {
+      row.querySelectorAll('.ip-matches [data-product-id]').forEach((matchRow) => {
+        matchRow.addEventListener('click', () => pickProduct(matchRow.dataset.productId));
+      });
+    };
+    bindProductPicks();
+    row.querySelector('.ip-product-q')?.addEventListener('input', (e) => {
       item.productQuery = e.target.value.trim();
       const q = item.productQuery.toLowerCase();
-      item.productMatches = q
-        ? state.productCatalog.filter((p) => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q)).slice(0, 8)
+      item.productMatches = q.length >= 2
+        ? state.productCatalog.filter((p) => p.name.toLowerCase().includes(q) || (p.sku || '').toLowerCase().includes(q)).slice(0, 8)
         : [];
-      await renderNewOrder();
-    });
-    row.querySelectorAll('[data-product-id]').forEach((matchRow) => {
-      matchRow.querySelector('[data-action="pick-product"]').addEventListener('click', async () => {
-        const p = item.productMatches.find((m) => m.productId === matchRow.dataset.productId);
-        if (!p) return;
-        item.productId = p.productId;
-        item.productLabel = p.name;
-        item.productPrice = p.price;
-        item.productWeight = p.weight || 0;
-        item.productStock = p.stockQty;
-        item.productMatches = [];
-        await renderNewOrder();
-      });
+      const box = row.querySelector('.ip-matches');
+      if (!box) return;
+      if (q.length < 2) box.innerHTML = q ? '<p class="muted" style="margin:0;font-size:0.85rem">Keep typing…</p>' : '';
+      else box.innerHTML = item.productMatches.length
+        ? item.productMatches.map(newOrderProductMatchHtml).join('')
+        : '<p class="muted" style="margin:0;font-size:0.85rem">No products match that name or SKU.</p>';
+      bindProductPicks();
     });
     row.querySelector('.ni-desc')?.addEventListener('input', (e) => { item.description = e.target.value; });
     row.querySelector('.ni-qty')?.addEventListener('input', (e) => { item.quantity = e.target.value; });

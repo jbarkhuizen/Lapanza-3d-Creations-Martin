@@ -631,3 +631,8 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 #upload-progress-overlay .upl-label { font-size: 0.8rem; margin-bottom: 6px; }
 #upload-progress-overlay .upl-track { height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--line) 60%, transparent); overflow: hidden; }
 #upload-progress-overlay .upl-fill { display: block; height: 100%; width: 0%; background: var(--accent, #c24b28); transition: width 0.15s ease; }
+
+/* New Order live pickers (2026-09-02): full-row clickable results */
+.picker-row { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--bg-elevated); border-radius: 8px; padding: 0.55rem 0.85rem; cursor: pointer; font: inherit; color: inherit; }
+.picker-row:hover { border-color: var(--accent, #c24b28); background: color-mix(in srgb, var(--accent, #c24b28) 7%, var(--bg-elevated)); }
+.picker-row .muted { font-size: 0.82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
