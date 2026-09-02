@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
-  "description": "Lapanza 3D Creative Lab \u2014 professional site",
+  "description": "Lapanza 3D Creative Lab — professional site",
   "scripts": {
     "dev": "vite",
     "dev:site": "vite",
@@ -27,6 +27,7 @@
     "gsap": "^3.12.7",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",
+    "sanitize-html": "^2.17.7",
     "sharp": "^0.35.4",
     "three": "^0.172.0"
   },

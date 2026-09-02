@@ -1,8 +1,36 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import { openDb } from './db.js';
-import { createClient, mergeClients, getClient, updateClient } from './clients.js';
+import { createClient, mergeClients, getClient, updateClient, findOrCreateClientForCheckout } from './clients.js';
 import { createDesignRequest } from './design-requests.js';
+
+test('findOrCreateClientForCheckout never lets a name match overwrite an existing client\'s email (account-takeover guard)', () => {
+  const db = openDb(':memory:');
+  const victim = createClient({ email: 'victim@example.com', name: 'Sam Ndlovu', firstName: 'Sam', lastName: 'Ndlovu', phone: '0821112222' }, db);
+
+  // An attacker who only knows the victim's name checks out with their own
+  // email address. This must NOT match/merge into the victim's record --
+  // it must create a brand-new guest client instead.
+  const result = findOrCreateClientForCheckout(
+    { email: 'attacker@evil.example', firstName: 'Sam', lastName: 'Ndlovu', phone: '0000000000' },
+    db,
+  );
+  assert.notStrictEqual(result.id, victim.id, 'attacker submission must not resolve to the victim\'s client id');
+
+  const victimAfter = getClient(victim.id, db);
+  assert.strictEqual(victimAfter.email, 'victim@example.com', 'victim\'s email must be untouched');
+  assert.strictEqual(victimAfter.phone, '0821112222', 'victim\'s other details must be untouched by an unrelated name match');
+
+  // The genuine repeat-customer case -- same email, same name -- still
+  // reconciles in place as before (e.g. an updated phone number).
+  const again = findOrCreateClientForCheckout(
+    { email: 'victim@example.com', firstName: 'Sam', lastName: 'Ndlovu', phone: '0823334444' },
+    db,
+  );
+  assert.strictEqual(again.id, victim.id);
+  assert.strictEqual(again.phone, '0823334444');
+  db.close();
+});
 
 test('updateClient round-trips PUDO locker fields; untouched updates preserve them (#24)', () => {
   const db = openDb(':memory:');

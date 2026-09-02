@@ -5192,7 +5192,7 @@ async function renderNewsletterCampaigns() {
       <div class="newsletter-assets">${assets.map((asset) => `<button class="newsletter-asset" type="button" data-asset-url="${escapeAttr(asset.url)}" data-asset-alt="${escapeAttr(asset.altText)}"><img src="${escapeAttr(asset.url)}" alt="${escapeAttr(asset.altText)}" /></button>`).join('')}</div>
       <div id="newsletter-block-editor" class="stack gap-2">${blockEditor}</div>
       <div class="row-card-actions"><button class="btn small" id="nc-add-block" type="button">+ Content block</button><button class="btn small" id="nc-save-template" type="button">Save as template</button><button class="btn small" id="nc-preview" type="button">Preview</button></div>
-      <iframe id="nc-preview-frame" class="newsletter-preview hidden" title="Newsletter preview"></iframe>
+      <iframe id="nc-preview-frame" class="newsletter-preview hidden" title="Newsletter preview" sandbox=""></iframe>
       <div class="newsletter-recipient-picker">
         <div class="section-head"><strong>Eligible recipients (${escapeHtml(String(recipients.length))})</strong><label class="field checkbox"><input id="nc-select-all" type="checkbox" /><span>Select All</span></label></div>
         <div class="newsletter-recipient-list">${recipients.map((recipient) => `<label class="newsletter-recipient"><input class="nc-recipient" type="checkbox" value="${escapeAttr(recipient.key)}" /><span><strong>${escapeHtml(recipient.name || recipient.email)}</strong><small>${escapeHtml(recipient.email)} · ${escapeHtml(recipient.sourceType)}</small></span></label>`).join('') || '<p class="muted">No eligible recipients. Record client email-marketing consent or wait for a subscriber to confirm.</p>'}</div>

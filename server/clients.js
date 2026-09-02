@@ -193,14 +193,28 @@ function clientDataDiffers(existing, data) {
 // account login -- and only when that fails, an exact first+last name
 // match against a *single* existing client, so two different customers who
 // happen to share a name are never silently merged), or creates a new one.
-// A match whose other details (phone/address/business name/a changed
-// email under the same name) no longer agree with what's on file gets
-// updated in place, flagged via the transient client._dataUpdated (see
-// orders.js's matching _lowStock convention) so the checkout route can
-// surface a brief "Updating Client Data" notice rather than silently
-// overwriting what's on file. Everything below runs inside one transaction
-// so the code-generation SELECT MAX + INSERT in insertClient can't race
-// with a concurrent checkout picking the same next client_code.
+// A match whose other details (phone/address/business name) no longer
+// agree with what's on file gets updated in place, flagged via the
+// transient client._dataUpdated (see orders.js's matching _lowStock
+// convention) so the checkout route can surface a brief "Updating Client
+// Data" notice rather than silently overwriting what's on file.
+//
+// SECURITY: the name-match fallback must never be allowed to change an
+// existing client's email. Email doubles as the account login (password
+// reset goes to it), so letting an unauthenticated checkout submission
+// silently repoint someone else's email -- just by knowing their name --
+// is a full account-takeover path, not a data-reconciliation nicety. A
+// name match whose stored email disagrees with what was submitted is
+// therefore treated as NOT a match at all: the submission creates its own
+// new guest client instead of merging into (and overwriting) someone
+// else's record. Since an email-agreeing name match would already have
+// been caught by the findClientByEmail() lookup above, this fallback only
+// ever fires on a genuine first-time email for that name -- exactly the
+// case that must become a new record, not an update.
+//
+// Everything below runs inside one transaction so the code-generation
+// SELECT MAX + INSERT in insertClient can't race with a concurrent
+// checkout picking the same next client_code.
 export function findOrCreateClientForCheckout(data, db = getDb()) {
   const email = String(data.email || '').trim();
   if (!email) throw new Error('Email is required');
@@ -213,7 +227,12 @@ export function findOrCreateClientForCheckout(data, db = getDb()) {
         const nameMatches = db
           .prepare('SELECT * FROM clients WHERE LOWER(first_name) = LOWER(?) AND LOWER(last_name) = LOWER(?)')
           .all(firstName, lastName);
-        if (nameMatches.length === 1) existing = rowToClient(nameMatches[0]);
+        if (
+          nameMatches.length === 1 &&
+          String(nameMatches[0].email || '').trim().toLowerCase() === email.toLowerCase()
+        ) {
+          existing = rowToClient(nameMatches[0]);
+        }
       }
     }
     if (!existing) return insertClient(db, d);

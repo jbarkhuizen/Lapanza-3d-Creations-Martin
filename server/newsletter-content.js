@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import sanitizeHtml from 'sanitize-html';
 import { getDb } from './db.js';
 
 const escape = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
@@ -34,12 +35,45 @@ export function createTemplate({ name, subject = '', blocks }, db = getDb()) {
   return listTemplates(db).find((template) => template.id === id);
 }
 
+// A real allowlist sanitizer, not a regex blocklist. The previous
+// regex-based version only stripped QUOTED on*= handlers, so an unquoted
+// one (<img src=x onerror=alert(1)>) or an <svg onload=...> sailed
+// straight through -- and whatever survived was later dropped into the
+// admin preview iframe's srcdoc (admin.js), which treats it as same-origin
+// to the parent, i.e. script access to the live admin session. sanitize-
+// html strips every attribute not explicitly allowed below regardless of
+// quoting, and drops <script>/<style> tags along with their contents by
+// default -- closing both the "unquoted handler" and "CSS/style
+// injection" gaps a regex blocklist can't reliably cover.
+//
+// Email templates commonly rely on tables + inline styles for layout
+// (many mail clients still don't support modern CSS), so both are kept;
+// scripts, forms, iframes/objects/embeds, and any javascript:/data: URI
+// are not -- image sources are restricted to http(s) only, matching the
+// http(s)-or-/uploads/ convention renderBlocks() already uses above.
+const IMPORTED_TEMPLATE_SANITIZE_OPTIONS = {
+  allowedTags: [
+    'div', 'p', 'span', 'br', 'hr', 'a', 'img',
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'strong', 'b', 'em', 'i', 'u', 's', 'small', 'font', 'center',
+    'ul', 'ol', 'li', 'blockquote',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+  ],
+  allowedAttributes: {
+    '*': ['style', 'align', 'valign', 'width', 'height', 'class', 'color', 'bgcolor'],
+    a: ['href', 'target'],
+    img: ['src', 'alt', 'width', 'height'],
+    table: ['cellpadding', 'cellspacing', 'border'],
+    font: ['face', 'size', 'color'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  allowedSchemesByTag: { img: ['http', 'https'] },
+  allowedSchemesAppliedToAttributes: ['href', 'src'],
+  allowProtocolRelative: false,
+};
+
 export function sanitizeImportedHtml(value) {
-  const bodyHtml = String(value || '')
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<(iframe|object|embed|form)\b[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, '')
-    .replace(/(href|src)\s*=\s*(['"])\s*javascript:[\s\S]*?\2/gi, '$1="#"');
+  const bodyHtml = sanitizeHtml(String(value || ''), IMPORTED_TEMPLATE_SANITIZE_OPTIONS).trim();
   const bodyText = bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   if (!bodyText) throw new Error('Imported template has no readable content');
   return { bodyHtml, bodyText };
