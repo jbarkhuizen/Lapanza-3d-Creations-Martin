@@ -127,6 +127,10 @@ export function syncPublicJson(db, paths = defaultPaths()) {
         name: p.name,
         description: p.description,
         crumbs: p.crumbs || `Home / ${p.name}`,
+        // Dynamic category pages: the generator and nav skip drafts, so the
+        // public export needs the status (it's not sensitive — published/
+        // draft only).
+        status: p.status || 'published',
         ...(p.parent ? { parent: p.parent } : {}),
         items: (p.items || []).map((item) => ({
           name: item.name,

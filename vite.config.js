@@ -38,6 +38,16 @@ function htmlEntries() {
       entries[key] = resolve(abs, file);
     }
   }
+  // Every root-level *.html becomes an entry automatically — a new
+  // generated category page (dynamic categories, 2026-09-02) or any future
+  // root page can no longer 404 in production because it wasn't hand-listed
+  // above (the trap that bit three times). The explicit names stay for
+  // their stable chunk keys; this scan only adds what they missed.
+  const claimed = new Set(Object.values(entries));
+  for (const file of readdirSync(__dirname).filter((f) => f.endsWith('.html'))) {
+    const abs = resolve(__dirname, file);
+    if (!claimed.has(abs)) entries[`root-${file.replace(/\.html$/, '')}`] = abs;
+  }
   return entries;
 }
 

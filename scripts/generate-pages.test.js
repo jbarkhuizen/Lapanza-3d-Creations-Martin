@@ -355,3 +355,38 @@ test('generate-pages skips category pages missing from categories.json instead o
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
   }
 });
+
+test('generate-pages gives a NEW published category its own root page, nav data, and sitemap entry', () => {
+  const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
+  const backup = fs.readFileSync(categoriesPath, 'utf8');
+  const newPage = path.join(root, 'test-shoppe.html');
+  try {
+    const cats = JSON.parse(backup);
+    cats['test-shoppe'] = {
+      slug: 'test-shoppe',
+      name: 'Test Shoppe',
+      description: 'A brand new category.',
+      crumbs: 'Home / Test Shoppe',
+      status: 'published',
+      items: [{ name: 'Widget', sku: 'TS-1', price: 'R 50.00', details: 'A widget.', listed: true, available: true, stockQty: 3, images: [] }],
+    };
+    // a DRAFT category must stay page-less
+    cats['draft-shoppe'] = { slug: 'draft-shoppe', name: 'Draft Shoppe', description: '', crumbs: '', status: 'draft', items: [] };
+    fs.writeFileSync(categoriesPath, JSON.stringify(cats));
+
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+
+    assert.ok(fs.existsSync(newPage), 'test-shoppe.html generated at the root');
+    const html = fs.readFileSync(newPage, 'utf8');
+    assert.match(html, /Test Shoppe/);
+    assert.match(html, /Widget/);
+    assert.ok(!fs.existsSync(path.join(root, 'draft-shoppe.html')), 'draft category gets no page');
+    const sitemap = fs.readFileSync(path.join(root, 'public', 'sitemap.xml'), 'utf8');
+    assert.match(sitemap, /test-shoppe\.html/);
+  } finally {
+    fs.writeFileSync(categoriesPath, backup);
+    fs.rmSync(newPage, { force: true });
+    fs.rmSync(path.join(root, 'draft-shoppe.html'), { force: true });
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+  }
+});

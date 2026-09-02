@@ -1149,6 +1149,24 @@ const categoryPages = [
     const slug = brandSlug(b.name);
     return { slug, file: `car-parts/${slug}.html`, depth: 1, pagePath: `car-parts/${slug}.html`, name: b.name };
   }),
+  // New-category support (2026-09-02, owner-requested after Weed Shoppe
+  // shipped with no page): every category in categories.json that isn't a
+  // core page or a car-part brand gets its own root-level page, published
+  // status only — a draft category stays admin-only until it's published.
+  // vite.config's htmlEntries scans the root for *.html, so these need no
+  // hand-listing there (the trap that 404'd new pages three times before).
+  ...Object.values(categories)
+    .filter((c) => !['toys', 'homeware', 'phones'].includes(c.slug))
+    .filter((c) => !CAR_PART_BRANDS.some((b) => brandSlug(b.name) === c.slug))
+    .filter((c) => (c.status || 'published') !== 'draft')
+    .map((c) => ({
+      slug: c.slug,
+      file: `${c.slug}.html`,
+      depth: 0,
+      pagePath: `${c.slug}.html`,
+      name: c.name,
+      description: c.description || `${c.name} — printed to order by Lapanza 3D Creative Lab.`,
+    })),
 ];
 
 const skippedCategories = [];
@@ -1466,9 +1484,10 @@ ${footer({ depth: 0 })}`;
     ['3D Resources', 'resources.html'],
     ['Custom Design and Print Request', 'design-request.html'],
     ['My Account', 'account.html'],
-    ['Toys', 'toys.html'],
-    ['Homeware', 'homeware.html'],
-    ['Phones', 'phones.html'],
+    // Category pages by their CURRENT names, dynamic ones included.
+    ...categoryPages
+      .filter((p) => p.depth === 0 && categories[p.slug])
+      .map((p) => [p.name || categories[p.slug].name, p.pagePath]),
     ...CAR_PART_BRANDS.map((b) => [`Car Parts — ${b.name}`, `car-parts/${brandSlug(b.name)}.html`]),
   ]) {
     entries.push({ t: 'Page', n, s: '', k: '', h, p: '' });
