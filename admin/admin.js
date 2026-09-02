@@ -6209,12 +6209,26 @@ const CSV_FIELD_ALIASES = {
   status: 'status',
 };
 
+// Fallback column order for a file with no header row at all -- matches
+// the field order the admin's own "New contact" form uses
+// (blankPotentialMarketContact), so a plausible headerless export
+// (name, surname, email, mobile, status) still lands on the right fields.
+const DEFAULT_CSV_COLUMN_ORDER = ['name', 'surname', 'email', 'mobileNumber', 'status'];
+
 function csvRowsToContacts(rows) {
   if (!rows.length) return [];
   const headerKeys = rows[0].map((h) => CSV_FIELD_ALIASES[h.trim().toLowerCase().replace(/[^a-z]/g, '')] || null);
-  return rows.slice(1).map((r) => {
+  // A real header row matches at least one known field name. If NONE of
+  // row 0's cells do, this file almost certainly has no header row at
+  // all -- treating it as one would silently drop its first real contact
+  // (row 0 consumed as "headers", never imported). Fall back to a fixed
+  // column order and treat every row, including row 0, as data.
+  const hasRecognizedHeader = headerKeys.some(Boolean);
+  const keys = hasRecognizedHeader ? headerKeys : DEFAULT_CSV_COLUMN_ORDER;
+  const dataRows = hasRecognizedHeader ? rows.slice(1) : rows;
+  return dataRows.map((r) => {
     const contact = {};
-    headerKeys.forEach((key, i) => { if (key) contact[key] = (r[i] || '').trim(); });
+    keys.forEach((key, i) => { if (key) contact[key] = (r[i] || '').trim(); });
     return contact;
   });
 }
