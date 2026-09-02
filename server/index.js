@@ -1820,6 +1820,16 @@ app.put('/api/inventory', requireAuth, async (req, res) => {
   const results = bulkUpdateInventory(updates);
   await alertOnLowStock(updates.filter((u, i) => results[i]?.ok && u.stockQty !== undefined).map((u) => u.id));
   const okCount = results.filter((r) => r.ok).length;
+  // #inventory-publish-gap: this is the highest-frequency catalog-mutating
+  // route in the admin (Stock Management's own "Save Changes" button), and
+  // it was the one write path left that skipped publishCatalog() entirely
+  // -- a filament colour's stockQty/price update here was a bare SQL write
+  // with no JSON export and no static-page regen at all, so an edit looked
+  // saved (200 OK, no error) but never reached the live site until an
+  // unrelated catalog action happened to trigger a publish. Same rule as
+  // every other mutating route below: publish once, surface a
+  // publishWarning if it fails, never silently skip it.
+  const publishWarning = okCount > 0 ? await publishCatalog() : undefined;
   if (okCount > 0) {
     // Capped to keep `detail` readable for a genuinely bulk save (e.g. a
     // 50-row Stock Management edit) -- the exact ids are still in the raw
@@ -1833,7 +1843,7 @@ app.put('/api/inventory', requireAuth, async (req, res) => {
       detail: `Updated ${okCount} inventory item(s): ${ids.join(', ')}${okCount > ids.length ? `, +${okCount - ids.length} more` : ''}`,
     });
   }
-  res.json({ results });
+  res.json({ results, ...(publishWarning ? { publishWarning } : {}) });
 });
 
 // #3: fires whenever ANY of these ids' stock is now <=1, regardless of why

@@ -225,6 +225,51 @@ test('filament create/update/colour flow end to end through the API', async (t) 
   assert.strictEqual(deleted.status, 200);
 });
 
+// Regression: PUT /api/inventory (Stock Management's own bulk "Save
+// Changes") was the one catalog-mutating route left that never called
+// publishCatalog() -- a filament colour's stock/price edit here was a bare
+// SQL write with no JSON export and no static-page regen, so it looked
+// saved in the admin but never reached the live site. Every other
+// mutating route in this file always calls publishCatalog(), which -- in
+// this sandboxed test cwd, with no real scripts/generate-pages.mjs to run
+// -- always resolves to a publishWarning string rather than throwing. That
+// makes the presence of a publishWarning key here the observable proof
+// that publishCatalog() actually ran; before the fix, this response never
+// carried that key at all, regardless of outcome.
+test('PUT /api/inventory publishes after a stock/price edit, same as every other catalog-mutating route (#inventory-publish-gap)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA', slug: 'pla' });
+  const filamentId = created.body.filament.id;
+  const withColour = await request(app)
+    .post(`/api/filaments/${filamentId}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'White', sku: 'SKU-1', priceRand: 299, weightG: 1000, stockQty: 5 });
+  const colourId = withColour.body.filament.colours[0].id;
+
+  const res = await request(app)
+    .put('/api/inventory')
+    .set('Cookie', cookie)
+    .send({ updates: [{ kind: 'filament', id: colourId, parentId: filamentId, stockQty: 3 }] });
+
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.results[0].ok, true);
+  assert.ok(typeof res.body.publishWarning === 'string' && res.body.publishWarning.length > 0, 'publishCatalog() must run after a successful inventory update');
+
+  // A row that fails validation (negative stock) makes no real change, so
+  // no publish should be attempted for it.
+  const rejected = await request(app)
+    .put('/api/inventory')
+    .set('Cookie', cookie)
+    .send({ updates: [{ kind: 'filament', id: colourId, parentId: filamentId, stockQty: -1 }] });
+  assert.strictEqual(rejected.body.results[0].ok, false);
+  assert.strictEqual(rejected.body.publishWarning, undefined);
+});
+
 test('admins panel: list, add, refuse removing the last admin', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
