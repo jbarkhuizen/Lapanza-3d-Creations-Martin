@@ -3560,11 +3560,16 @@ async function renderOrders() {
   // route -- no parallel state that could disagree with it. Collected is its
   // own timestamp (collected_at) since courier orders can also be handed
   // over in person. All three disabled on cancelled orders.
+  // Collected and Shipped are mutually exclusive (owner: an order is either
+  // handed over in person OR sent by courier); Finalized = delivery
+  // confirmed. Ticking one of the pair clears the other in the handler
+  // below, so a completed order shows Shipped only when it went the
+  // courier path.
   const fulfilCell = (o, kind) => {
     const disabled = o.status === 'cancelled' ? 'disabled' : '';
     const checked =
       kind === 'collected' ? (o.collectedAt ? 'checked' : '')
-      : kind === 'shipped' ? (o.status === 'shipped' || o.status === 'completed' ? 'checked' : '')
+      : kind === 'shipped' ? (o.status === 'shipped' || (o.status === 'completed' && !o.collectedAt) ? 'checked' : '')
       : (o.status === 'completed' ? 'checked' : '');
     return `<td class="fulfil-cell"><input type="checkbox" data-fulfil="${kind}" ${checked} ${disabled} /></td>`;
   };
@@ -3572,7 +3577,8 @@ async function renderOrders() {
     .map(
       (o) => `
         <tr data-id="${escapeAttr(o.id)}">
-          <td><code>${escapeHtml(o.invoiceNumber || o.id.slice(0, 8))}</code></td>
+          <td><code>${escapeHtml(o.id.slice(0, 8))}</code></td>
+          <td><code>${escapeHtml(o.invoiceNumber || '—')}</code></td>
           <td>${statusBadge(o.status)}</td>
           <td>${formatRand(o.total)}</td>
           <td>${escapeHtml(o.paymentMethod)}</td>
@@ -3598,8 +3604,8 @@ async function renderOrders() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Invoice</th><th>Status</th><th>Total</th><th>Payment</th><th>Placed</th><th>Collected</th><th>Shipped</th><th>Finalized</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="9"><div class="empty">No orders match your filters</div></td></tr>'}</tbody>
+        <thead><tr><th>Order</th><th>Invoice</th><th>Status</th><th>Total</th><th>Payment</th><th>Placed</th><th>Collected</th><th>Shipped</th><th>Finalized</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="10"><div class="empty">No orders match your filters</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -3626,15 +3632,27 @@ async function renderOrders() {
       const id = tr.dataset.id;
       const kind = e.target.dataset.fulfil;
       e.target.disabled = true;
+      const order = orders.find((x) => x.id === id) || {};
       try {
         if (kind === 'collected') {
           await api(`/api/orders/${id}/collected`, { method: 'PATCH', body: JSON.stringify({ collected: e.target.checked }) });
+          // Collected excludes Shipped: step a shipped order back to paid.
+          if (e.target.checked && order.status === 'shipped') {
+            await api(`/api/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'paid' }) });
+          }
         } else if (kind === 'shipped') {
           // Tick = shipped; untick steps back to paid.
           await api(`/api/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: e.target.checked ? 'shipped' : 'paid' }) });
+          // Shipped excludes Collected: clear the collection tick.
+          if (e.target.checked && order.collectedAt) {
+            await api(`/api/orders/${id}/collected`, { method: 'PATCH', body: JSON.stringify({ collected: false }) });
+          }
         } else {
-          // Finalized tick = completed; untick steps back to shipped.
-          await api(`/api/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: e.target.checked ? 'completed' : 'shipped' }) });
+          // Finalized tick = completed (works from either fork); untick
+          // returns to the side it came from -- paid for a collected
+          // order, shipped for a courier one.
+          const back = order.collectedAt ? 'paid' : 'shipped';
+          await api(`/api/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: e.target.checked ? 'completed' : back }) });
         }
       } catch (err) {
         toast(err.message || 'Update failed');
