@@ -2462,10 +2462,14 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     // "Already paid" (walk-in/WhatsApp sale settled on the spot) creates the
     // order already in 'paid' status -- send the paid-in-full invoice
     // straight away rather than an unpaid one that would be inaccurate.
-    try {
-      await sendInvoiceEmail(order, { paid: order.status === 'paid' });
-    } catch (err) {
-      logEmailFailure(`Order ${order.id} invoice email`, err, req);
+    // A walk-in client may have no email at all (allowed since 2026-09-03);
+    // skipping silently is correct there, not a delivery failure.
+    if (order.client?.email) {
+      try {
+        await sendInvoiceEmail(order, { paid: order.status === 'paid' });
+      } catch (err) {
+        logEmailFailure(`Order ${order.id} invoice email`, err, req);
+      }
     }
   } catch (err) {
     res.status(400).json({ error: err.message });

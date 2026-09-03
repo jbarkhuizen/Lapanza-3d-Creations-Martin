@@ -577,3 +577,36 @@ test('setOrderCollected sets and clears collected_at independently of status', (
   assert.strictEqual(setOrderCollected('missing-id', true, db), null);
   db.close();
 });
+
+// Walk-in customers captured in the admin centre may have no email
+// (owner decision 2026-09-03) -- and two of them must never merge into
+// one client record via the empty-email lookup.
+test('createManualOrder accepts a client without an email; walk-ins stay separate', () => {
+  const db = openDb(':memory:');
+  const first = createManualOrder({
+    client: { firstName: 'Walk', lastName: 'In' },
+    items: [{ description: 'Custom print', quantity: 1, unitPrice: 50 }],
+    paymentMethod: 'cash_on_collection',
+    shippingMethod: 'collect',
+  }, db);
+  assert.ok(first.id);
+  assert.strictEqual(first.client.email, '');
+
+  const second = createManualOrder({
+    client: { firstName: 'Another', lastName: 'Customer' },
+    items: [{ description: 'Custom print', quantity: 1, unitPrice: 80 }],
+    paymentMethod: 'cash_on_collection',
+    shippingMethod: 'collect',
+  }, db);
+  assert.notStrictEqual(second.client.id, first.client.id, 'no-email walk-ins must not merge');
+
+  // Same first+last name walk-in DOES reuse the record (exact-name fallback).
+  const repeat = createManualOrder({
+    client: { firstName: 'Walk', lastName: 'In' },
+    items: [{ description: 'Another job', quantity: 1, unitPrice: 20 }],
+    paymentMethod: 'cash_on_collection',
+    shippingMethod: 'collect',
+  }, db);
+  assert.strictEqual(repeat.client.id, first.client.id);
+  db.close();
+});

@@ -73,7 +73,12 @@ export function getClient(id, db = getDb()) {
 }
 
 export function findClientByEmail(email, db = getDb()) {
-  return rowToClient(db.prepare('SELECT * FROM clients WHERE LOWER(email) = LOWER(?)').get(String(email || '').trim()));
+  // Walk-in clients can have no email (owner decision 2026-09-03) -- an
+  // empty string must never match another empty-email client, or every
+  // walk-in would silently merge into one record.
+  const trimmed = String(email || '').trim();
+  if (!trimmed) return null;
+  return rowToClient(db.prepare('SELECT * FROM clients WHERE LOWER(email) = LOWER(?)').get(trimmed));
 }
 
 function insertClient(db, data) {
@@ -117,8 +122,10 @@ function insertClient(db, data) {
   return getClient(id, db);
 }
 
+// Email is optional here (owner decision 2026-09-03): walk-in customers
+// captured directly in the admin centre often have none. Online checkout
+// and account registration still require it at their own entry points.
 export function createClient(data, db = getDb()) {
-  if (!data.email || !String(data.email).trim()) throw new Error('Email is required');
   const tx = db.transaction((d) => insertClient(db, d));
   return tx(data);
 }
@@ -126,8 +133,8 @@ export function createClient(data, db = getDb()) {
 export function updateClient(id, data, db = getDb()) {
   const existing = getClient(id, db);
   if (!existing) return null;
+  // Empty email allowed (walk-in clients) -- see createClient above.
   const email = data.email !== undefined ? String(data.email).trim() : existing.email;
-  if (!email) throw new Error('Email is required');
   const emailMarketingOptIn = data.emailMarketingOptIn !== undefined ? Boolean(data.emailMarketingOptIn) : existing.emailMarketingOptIn;
   const whatsappOptIn = data.whatsappOptIn !== undefined ? Boolean(data.whatsappOptIn) : existing.whatsappOptIn;
   const consentChanged = emailMarketingOptIn !== existing.emailMarketingOptIn;
@@ -209,9 +216,13 @@ function clientDataDiffers(existing, data) {
 // overwriting what's on file. Everything below runs inside one transaction
 // so the code-generation SELECT MAX + INSERT in insertClient can't race
 // with a concurrent checkout picking the same next client_code.
-export function findOrCreateClientForCheckout(data, db = getDb()) {
+export function findOrCreateClientForCheckout(data, db = getDb(), { requireEmail = true } = {}) {
   const email = String(data.email || '').trim();
-  if (!email) throw new Error('Email is required');
+  // Online checkout keeps email mandatory (invoices/confirmations need it);
+  // createManualOrder passes requireEmail: false for walk-in customers.
+  // findClientByEmail already refuses empty lookups, so a no-email client
+  // can only ever be matched by the exact first+last name fallback below.
+  if (!email && requireEmail) throw new Error('Email is required');
   const tx = db.transaction((d) => {
     let existing = findClientByEmail(email, db);
     if (!existing) {

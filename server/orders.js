@@ -436,7 +436,7 @@ export function createManualOrder(
 
   let clientDataUpdated = false;
   const tx = db.transaction(() => {
-    const client = clientId ? getClient(clientId, db) : findOrCreateClientForCheckout(clientData, db);
+    const client = clientId ? getClient(clientId, db) : findOrCreateClientForCheckout(clientData, db, { requireEmail: false });
     if (!client) throw new Error('Client not found');
     clientDataUpdated = Boolean(client._dataUpdated);
     const orderId = randomUUID();

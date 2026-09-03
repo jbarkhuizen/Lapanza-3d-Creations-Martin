@@ -3986,7 +3986,7 @@ async function renderClients() {
         </div>
         <div class="grid-2">
           <label class="field"><span>Business Name (Optional)</span><input id="cf-business-name" value="${escapeAttr(form.businessName || '')}" /></label>
-          <label class="field"><span>Email *</span><input id="cf-email" type="email" required value="${escapeAttr(form.email)}" /></label>
+          <label class="field"><span>Email (Optional for walk-ins)</span><input id="cf-email" type="email" value="${escapeAttr(form.email)}" /></label>
         </div>
         <div class="grid-2">
           <label class="field"><span>Phone</span><input id="cf-phone" value="${escapeAttr(form.phone)}" /></label>
@@ -4595,7 +4595,7 @@ async function renderNewOrder() {
           </div>
           <div class="grid-2">
             <label class="field"><span>Business Name (Optional)</span><input id="no-new-business" value="${escapeAttr(order.newClient.businessName)}" /></label>
-            <label class="field"><span>Email *</span><input id="no-new-email" type="email" value="${escapeAttr(order.newClient.email)}" /></label>
+            <label class="field"><span>Email (Optional for walk-ins)</span><input id="no-new-email" type="email" value="${escapeAttr(order.newClient.email)}" /></label>
           </div>
           <label class="field"><span>Phone</span><input id="no-new-phone" value="${escapeAttr(order.newClient.phone)}" /></label>
         `}
@@ -4786,7 +4786,6 @@ async function renderNewOrder() {
       if (!order.selectedClient) return toast('Pick a client first');
       payload.clientId = order.selectedClient.id;
     } else {
-      if (!$('#no-new-email').value.trim()) return toast('Client email is required');
       payload.client = {
         firstName: $('#no-new-first').value,
         lastName: $('#no-new-last').value,
