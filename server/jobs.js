@@ -1,15 +1,12 @@
-import { cancelStalePendingOrders } from './orders.js';
 import { createBackup, pruneOldBackups, syncOffsite } from './backups.js';
 import { pruneOldAuditLogEntries, AUDIT_LOG_RETENTION_MONTHS, recordAuditEvent, AUDIT_EVENTS } from './audit-log.js';
 import { pruneOldPageViews, PAGE_VIEWS_RETENTION_MONTHS } from './analytics.js';
-import { sendOrderCancelledNotificationEmail } from './mailer.js';
 import { alertBackupFailure } from './alerts.js';
 import { pruneExpiredDesignFiles } from './design-requests.js';
 import { deleteDesignRequestFile } from './uploads.js';
 import { getSettings } from './settings.js';
 
 const HOUR_MS = 60 * 60 * 1000;
-const CANCEL_AFTER_MS = 7 * 24 * HOUR_MS; // 7 days
 const BACKUP_INTERVAL_MS = 24 * HOUR_MS; // daily
 const BACKUP_RETENTION_COUNT = 30; // ~1 month of daily backups
 const AUDIT_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
@@ -17,42 +14,9 @@ const PAGE_VIEWS_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 
 // G.2: this project has no external process manager, cron, or container
 // orchestrator -- it runs as a single persistent `node server/index.js`
-// process (see start.mjs/start.bat/README: the whole site is launched by
-// double-clicking start.bat, which just runs `npm run dev:all` and leaves
-// it running). An in-process setInterval is the right fit here; there's no
-// external scheduler to hit an endpoint instead, and adding one (e.g.
-// node-cron) would be a dependency for something setInterval already does.
-export function startAutoCancelJob(intervalMs = HOUR_MS) {
-  async function run() {
-    let cancelled = [];
-    try {
-      cancelled = cancelStalePendingOrders(CANCEL_AFTER_MS);
-      if (cancelled.length > 0) console.log(`Auto-cancel: cancelled ${cancelled.length} stale pending_payment order(s)`);
-    } catch (err) {
-      console.error('Auto-cancel job failed:', err);
-      return;
-    }
-    // Separate from the cancel transaction above -- a Gmail hiccup here
-    // must never be mistaken for the cancel itself having failed, and one
-    // order's failed notification shouldn't skip the rest.
-    for (const order of cancelled) {
-      try {
-        await sendOrderCancelledNotificationEmail(order, 'Automatically cancelled — unpaid after 7 days');
-      } catch (err) {
-        console.error(`Order ${order.id} cancelled-notification email failed to send:`, err.message);
-      }
-    }
-  }
-  run(); // also run once immediately on boot, don't wait a full interval for the first pass
-  const timer = setInterval(run, intervalMs);
-  timer.unref?.(); // don't keep the process alive on its own if everything else has shut down
-  return timer;
-}
-
-// Same in-process setInterval shape as startAutoCancelJob above -- no
-// external cron/scheduler in this project. Runs once on boot too, so a
-// freshly-deployed server has at least one backup within seconds rather
-// than waiting a full day for the first one.
+// process, so an in-process setInterval is the right fit for every job in
+// this file. Each runs once on boot too, so a freshly-deployed server has
+// at least one backup within seconds rather than waiting a full day.
 export function startAutoBackupJob(intervalMs = BACKUP_INTERVAL_MS, keep = BACKUP_RETENTION_COUNT) {
   async function run() {
     try {

@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { openDb } from './db.js';
 import { updateSettings } from './settings.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
-import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected } from './orders.js';
+import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected } from './orders.js';
 import { createShippingOption } from './shipping.js';
 
 function colourStock(filamentId, sku, db) {
@@ -278,41 +278,6 @@ test('paying an order does not decrement stock again -- it was already reserved 
   const updated = updateOrderStatus(order.id, 'shipped', db);
   assert.strictEqual(updated.status, 'shipped');
   assert.strictEqual(colourStock(filament.id, colour.sku, db), 1); // still unchanged
-  db.close();
-});
-
-test('cancelStalePendingOrders restores reserved stock for each order it cancels', () => {
-  const db = openDb(':memory:');
-  createShippingOption({ name: 'Standard', minWeight: 0, maxWeight: 5000, price: 8500 }, db);
-  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
-  const filamentWithColour = addColour(
-    filament.id,
-    { name: 'Gold', sku: 'PLA-GOLD-1KG', priceRand: 299, weightG: 1000, stockQty: 5 },
-    db,
-  );
-  const colour = filamentWithColour.colours[0];
-  const productId = `filament:pla:${colour.sku}`;
-
-  const order = createOrder(
-    { client: { name: 'C', email: 'c@example.com', phone: '0123456789' }, items: [{ productId, quantity: 2 }], paymentMethod: 'manual_eft' },
-    db,
-  );
-  assert.strictEqual(colourStock(filament.id, colour.sku, db), 3);
-
-  // Backdate created_at so it counts as stale, same technique the existing
-  // auto-cancel job tests use.
-  db.prepare("UPDATE orders SET created_at = datetime('now', '-10 days') WHERE id = ?").run(order.id);
-  const cancelledOrders = cancelStalePendingOrders(5 * 24 * 60 * 60 * 1000, db);
-  assert.strictEqual(cancelledOrders.length, 1);
-  assert.strictEqual(cancelledOrders[0].id, order.id);
-  assert.strictEqual(colourStock(filament.id, colour.sku, db), 5); // back to full
-
-  // A now-freed-up roll can be sold again.
-  const secondOrder = createOrder(
-    { client: { name: 'D', email: 'd@example.com', phone: '0123456789' }, items: [{ productId, quantity: 5 }], paymentMethod: 'manual_eft' },
-    db,
-  );
-  assert.ok(secondOrder.id);
   db.close();
 });
 

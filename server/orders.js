@@ -7,9 +7,10 @@ import { getProduct, upsertProduct } from './store.js';
 import { getSettings } from './settings.js';
 import { validatePromo, computePromoDiscount, redeemPromo } from './promos.js';
 
-// 'cancelled' is reachable two ways: automatically (see cancelStalePendingOrders
-// below) and now also as an explicit admin action (updateOrderStatus) --
-// per user instruction this reverses the original "automatic-only" design.
+// 'cancelled' is reachable only by explicit human action: an admin
+// (updateOrderStatus) or the order's own client (cancelOrderByClient).
+// The automatic stale-order cancel job was removed 2026-09-03 per owner
+// instruction -- unpaid orders now stay pending until someone decides.
 const ALLOWED_STATUSES = ['pending_payment', 'paid', 'shipped', 'completed', 'cancelled'];
 const ALLOWED_PAYMENT_METHODS = ['payfast_card', 'payfast_eft', 'manual_eft', 'cash_on_collection'];
 // 'fixed' (Phase 3): a named flat-price shipping_options row (option_type =
@@ -625,8 +626,8 @@ function reserveStockForOrder(order, db) {
 
 // Symmetric inverse of decrementStockForOrder/reserveStockForOrder -- adds
 // back whatever an order's creation reserved, when that order is cancelled
-// (either automatically, via cancelStalePendingOrders, or by an admin, via
-// updateOrderStatus) instead of ever being fulfilled. No floor/cap needed:
+// (by an admin via updateOrderStatus, or the client's own
+// self-service cancel) instead of ever being fulfilled. No floor/cap needed:
 // adding back exactly what was taken can't overflow past where stock
 // started, regardless of which of the two functions above did the taking.
 function restoreStockForOrder(order, db) {
@@ -777,39 +778,11 @@ export function recordPaymentTransaction({ orderId, gateway, gatewayReference, r
   }
 }
 
-// G: only ever moves pending_payment -> cancelled, never touches paid/
-// shipped/completed, and performs no gateway calls (no refund logic).
-// Releases each order's reserved stock back via restoreStockForOrder --
-// otherwise an abandoned/failed checkout would permanently lock up
-// whatever it reserved at creation, never coming back for sale.
-// Returns the cancelled orders themselves (not just a count) so the caller
-// (jobs.js's auto-cancel job) can send an owner-notification email for each
-// one -- those email calls must happen after this transaction-per-order
-// commits, never inside it (better-sqlite3 transactions are synchronous).
-export function cancelStalePendingOrders(olderThanMs, db = getDb()) {
-  const cutoff = new Date(Date.now() - olderThanMs).toISOString();
-  const stale = db.prepare("SELECT id FROM orders WHERE status = 'pending_payment' AND created_at < ?").all(cutoff);
-  const cancelOne = db.transaction((orderId) => {
-    const order = getOrder(orderId, db);
-    if (!order || order.status !== 'pending_payment') return null;
-    db.prepare("UPDATE orders SET status = 'cancelled', updated_at = ? WHERE id = ?").run(new Date().toISOString(), orderId);
-    restoreStockForOrder(order, db);
-    return order;
-  });
-  const cancelled = [];
-  for (const row of stale) {
-    const order = cancelOne(row.id);
-    if (order) cancelled.push(order);
-  }
-  return cancelled;
-}
-
 // Client self-service cancel -- deliberately narrower than the admin
 // updateOrderStatus route: enforces both ownership (returns null for a
 // missing order OR one that belongs to a different client -- same response
 // either way, so this can't be used to probe which order ids exist) and
-// status (only reachable from pending_payment, the same restriction
-// cancelStalePendingOrders enforces automatically for the timed job).
+// status (only reachable from pending_payment).
 export function cancelOrderByClient(orderId, clientId, db = getDb()) {
   const order = getOrder(orderId, db);
   if (!order || order.clientId !== clientId) return null;

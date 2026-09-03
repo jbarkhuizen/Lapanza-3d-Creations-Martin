@@ -403,10 +403,10 @@ export async function sendNewOrderNotificationEmail(order) {
   });
 }
 
-// Fires on either cancellation path -- a customer's own self-service cancel
-// (POST /api/client/orders/:id/cancel) or the 7-day auto-cancel job
-// (jobs.js's startAutoCancelJob) -- `reason` is the only thing that tells
-// them apart in the email body. Editable via Settings -> Communications ->
+// Fires when a customer cancels their own order (POST
+// /api/client/orders/:id/cancel); `reason` appears in the email body.
+// (The 7-day auto-cancel job that also used this was removed 2026-09-03
+// per owner instruction.) Editable via Settings -> Communications ->
 // "Order cancelled notification". Tokens: {{orderRef}}, {{total}},
 // {{clientName}}, {{clientEmail}}, {{reason}}.
 export async function sendOrderCancelledNotificationEmail(order, reason) {

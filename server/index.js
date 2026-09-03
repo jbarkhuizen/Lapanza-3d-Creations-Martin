@@ -130,7 +130,7 @@ import {
   sendCampaign as sendWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
-import { startAutoCancelJob, startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
+import { startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary, getTopPages } from './analytics.js';
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
@@ -582,7 +582,7 @@ app.get('/api/client/orders', requireClientAuth, (req, res) => {
 // Self-service cancel, mirrored from the account page's "Cancel" button --
 // only reachable for the caller's own order, and only while it's still
 // pending_payment (see cancelOrderByClient). Same owner-notification email
-// as the 7-day auto-cancel job, just a different `reason` string.
+// as an admin cancel, just a different `reason` string.
 app.post('/api/client/orders/:id/cancel', requireClientAuth, async (req, res) => {
   try {
     const order = cancelOrderByClient(req.params.id, req.clientId);
@@ -3369,13 +3369,12 @@ if (isMainModule) {
   app.listen(PORT, () => {
     console.log(`\n> Lapanza Admin API  http://localhost:${PORT}/admin/\n`);
   });
-  startAutoCancelJob();
   startAutoBackupJob();
   startAuditLogPruneJob();
   startPageViewsPruneJob();
   startDesignFilePruneJob(); // #90 design-file retention
   // #43 safety net: catches restocks whose trigger path was missed (e.g.
-  // auto-cancel job restores, direct DB edits) -- daily, same idiom as the
+  // direct DB edits) -- daily, same idiom as the
   // other in-process jobs.
   setInterval(() => processRestockNotifications(sendRestockNotification).catch(() => {}), 24 * 60 * 60 * 1000);
   processRestockNotifications(sendRestockNotification).catch(() => {});
