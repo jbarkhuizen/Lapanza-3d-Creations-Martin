@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { openDb } from './db.js';
 import { updateSettings } from './settings.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
-import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot } from './orders.js';
+import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelStalePendingOrders, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected } from './orders.js';
 import { createShippingOption } from './shipping.js';
 
 function colourStock(filamentId, sku, db) {
@@ -587,5 +587,28 @@ test('createOrder reuses an identical recent pending order instead of duplicatin
   updateOrderStatus(first.id, 'paid', db);
   const afterPaid = createOrder(payload, db);
   assert.notStrictEqual(afterPaid.id, first.id);
+  db.close();
+});
+
+test('setOrderCollected sets and clears collected_at independently of status', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const colour = addColour(filament.id, { name: 'Red', sku: 'PLA-COLL-1KG', priceRand: 100, weightG: 500, stockQty: 5 }, db).colours[0];
+  const order = createOrder({
+    client: { name: 'Collector', email: 'collect@example.com' },
+    items: [{ productId: `filament:pla:${colour.sku}`, quantity: 1 }],
+    paymentMethod: 'cash_on_collection',
+    shippingMethod: 'collect',
+  }, db);
+  assert.strictEqual(order.collectedAt, null);
+
+  const marked = setOrderCollected(order.id, true, db);
+  assert.ok(marked.collectedAt, 'collected_at should be set');
+  assert.strictEqual(marked.status, order.status, 'status untouched by collection tick');
+
+  const cleared = setOrderCollected(order.id, false, db);
+  assert.strictEqual(cleared.collectedAt, null);
+
+  assert.strictEqual(setOrderCollected('missing-id', true, db), null);
   db.close();
 });

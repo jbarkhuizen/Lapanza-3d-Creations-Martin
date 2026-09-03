@@ -651,3 +651,7 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 .comm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .comm-chip { border: 1px solid var(--line); background: color-mix(in srgb, var(--accent, #c24b28) 8%, var(--bg-elevated)); border-radius: 999px; padding: 2px 10px; font-size: 0.78rem; font-family: ui-monospace, Consolas, monospace; cursor: pointer; color: inherit; }
 .comm-chip:hover { border-color: var(--accent, #c24b28); }
+
+/* Orders fulfilment ticks (Collected / Shipped / Finalized) */
+.fulfil-cell { text-align: center; cursor: default; }
+.fulfil-cell input[type='checkbox'] { width: 1.1rem; height: 1.1rem; accent-color: var(--terracotta, #c96f4a); cursor: pointer; }

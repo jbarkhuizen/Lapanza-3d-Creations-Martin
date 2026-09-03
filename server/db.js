@@ -592,6 +592,13 @@ function ensurePromoColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(orders)', 'promo_discount_amount')) {
     db.exec('ALTER TABLE orders ADD COLUMN promo_discount_amount REAL NOT NULL DEFAULT 0');
   }
+  // Owner request (2026-09-03): per-order "Collected" tick on the Orders
+  // page. Shipped/Finalized reuse the existing status machine; collection
+  // is an independent fact (a courier order can also be collected in
+  // person), so it gets its own timestamp instead of a fifth status.
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'collected_at')) {
+    db.exec('ALTER TABLE orders ADD COLUMN collected_at TEXT');
+  }
 }
 
 function ensureCheckoutColumns(db) {

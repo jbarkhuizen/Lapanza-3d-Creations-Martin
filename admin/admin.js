@@ -3555,15 +3555,29 @@ async function renderOrders() {
   const { orders } = await api(
     `/api/orders?${new URLSearchParams({ status: state.orderFilters.status, q: state.orderFilters.q })}`,
   );
+  // Fulfilment ticks (owner request 2026-09-03): Shipped/Finalized drive the
+  // REAL status machine (shipped/completed) via the existing audited status
+  // route -- no parallel state that could disagree with it. Collected is its
+  // own timestamp (collected_at) since courier orders can also be handed
+  // over in person. All three disabled on cancelled orders.
+  const fulfilCell = (o, kind) => {
+    const disabled = o.status === 'cancelled' ? 'disabled' : '';
+    const checked =
+      kind === 'collected' ? (o.collectedAt ? 'checked' : '')
+      : kind === 'shipped' ? (o.status === 'shipped' || o.status === 'completed' ? 'checked' : '')
+      : (o.status === 'completed' ? 'checked' : '');
+    return `<td class="fulfil-cell"><input type="checkbox" data-fulfil="${kind}" ${checked} ${disabled} /></td>`;
+  };
   const rows = orders
     .map(
       (o) => `
         <tr data-id="${escapeAttr(o.id)}">
-          <td><code>${escapeHtml(o.id.slice(0, 8))}</code></td>
+          <td><code>${escapeHtml(o.invoiceNumber || o.id.slice(0, 8))}</code></td>
           <td>${statusBadge(o.status)}</td>
           <td>${formatRand(o.total)}</td>
           <td>${escapeHtml(o.paymentMethod)}</td>
           <td>${escapeHtml(formatDate(o.createdAt))}</td>
+          ${fulfilCell(o, 'collected')}${fulfilCell(o, 'shipped')}${fulfilCell(o, 'finalized')}
           <td><button class="btn small" data-action="view" type="button">View</button></td>
         </tr>`,
     )
@@ -3584,8 +3598,8 @@ async function renderOrders() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Order</th><th>Status</th><th>Total</th><th>Payment</th><th>Placed</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No orders match your filters</div></td></tr>'}</tbody>
+        <thead><tr><th>Invoice</th><th>Status</th><th>Total</th><th>Payment</th><th>Placed</th><th>Collected</th><th>Shipped</th><th>Finalized</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="9"><div class="empty">No orders match your filters</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -3599,6 +3613,34 @@ async function renderOrders() {
 
   $$('#view-orders tbody tr[data-id]').forEach((tr) => {
     tr.addEventListener('click', () => openOrderDetail(tr.dataset.id));
+  });
+
+  // Checkbox cells sit inside the clickable row -- stop propagation so a
+  // tick doesn't also open the order detail view.
+  $$('#view-orders .fulfil-cell').forEach((td) => {
+    td.addEventListener('click', (e) => e.stopPropagation());
+  });
+  $$('#view-orders input[data-fulfil]').forEach((box) => {
+    box.addEventListener('change', async (e) => {
+      const tr = e.target.closest('tr[data-id]');
+      const id = tr.dataset.id;
+      const kind = e.target.dataset.fulfil;
+      e.target.disabled = true;
+      try {
+        if (kind === 'collected') {
+          await api(`/api/orders/${id}/collected`, { method: 'PATCH', body: JSON.stringify({ collected: e.target.checked }) });
+        } else if (kind === 'shipped') {
+          // Tick = shipped; untick steps back to paid.
+          await api(`/api/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: e.target.checked ? 'shipped' : 'paid' }) });
+        } else {
+          // Finalized tick = completed; untick steps back to shipped.
+          await api(`/api/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: e.target.checked ? 'completed' : 'shipped' }) });
+        }
+      } catch (err) {
+        toast(err.message || 'Update failed');
+      }
+      await renderOrders();
+    });
   });
 }
 

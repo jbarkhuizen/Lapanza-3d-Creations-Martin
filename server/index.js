@@ -85,6 +85,7 @@ import {
   createOrder,
   createManualOrder,
   updateOrderStatus,
+  setOrderCollected,
   updateOrderTracking,
   markOrderPaid,
   markConfirmationEmailSent,
@@ -2451,12 +2452,12 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created manual order ${order.id} (${formatRand(order.total)})` });
     res.status(201).json({ order, clientDataUpdated });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
-    if (!reusedOrder) {
-      try {
-        await sendNewOrderNotificationEmail(order);
-      } catch (err) {
-        logEmailFailure('New order owner-notification email', err, req);
-      }
+    // Manual orders have no duplicate-reuse path (that guard lives in the
+    // public checkout route) -- always notify the owner.
+    try {
+      await sendNewOrderNotificationEmail(order);
+    } catch (err) {
+      logEmailFailure('New order owner-notification email', err, req);
     }
     // "Already paid" (walk-in/WhatsApp sale settled on the spot) creates the
     // order already in 'paid' status -- send the paid-in-full invoice
@@ -2474,6 +2475,15 @@ app.post('/api/orders', requireAuth, async (req, res) => {
 app.get('/api/orders/:id', requireAuth, (req, res) => {
   const order = getOrder(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json({ order });
+});
+
+// Owner request (2026-09-03): the Orders page's "Collected" tick.
+app.patch('/api/orders/:id/collected', requireAuth, (req, res) => {
+  const collected = Boolean((req.body || {}).collected);
+  const order = setOrderCollected(req.params.id, collected);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.id}: marked ${collected ? 'collected' : 'NOT collected'}` });
   res.json({ order });
 });
 

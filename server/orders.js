@@ -112,6 +112,7 @@ function rowToOrder(row) {
     paymentMethod: row.payment_method,
     paymentStatus: row.payment_status,
     trackingNumber: row.tracking_number,
+    collectedAt: row.collected_at || null,
     confirmationEmailSentAt: row.confirmation_email_sent_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -144,6 +145,15 @@ export function getOrder(id, db = getDb()) {
     shippingOption: order.shippingOptionId ? getShippingOption(order.shippingOptionId, db) : null,
     transactions: db.prepare('SELECT * FROM payment_transactions WHERE order_id = ? ORDER BY created_at ASC').all(id),
   };
+}
+
+// Owner request (2026-09-03): the Orders page's "Collected" tick.
+// Independent of status -- records the physical handover moment.
+export function setOrderCollected(id, collected, db = getDb()) {
+  const res = db
+    .prepare('UPDATE orders SET collected_at = ?, updated_at = ? WHERE id = ?')
+    .run(collected ? new Date().toISOString() : null, new Date().toISOString(), id);
+  return res.changes > 0 ? getOrder(id, db) : null;
 }
 
 // Bug: the admin Invoice History / Orders list never showed a client name --
