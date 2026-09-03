@@ -145,7 +145,15 @@ export function updateClient(id, data, db = getDb()) {
       email_marketing_consent_source = @email_marketing_consent_source, email_marketing_token = @email_marketing_token WHERE id = @id`,
   ).run({
     id,
-    name: data.name ?? existing.name,
+    // When first/last change without an explicit name, recompose name from
+    // them -- otherwise the displayed name goes stale (a manual-order
+    // client update sends only firstName/lastName, and every list and
+    // order-detail view renders `name`).
+    name:
+      data.name ??
+      (data.firstName !== undefined || data.lastName !== undefined
+        ? `${String(data.firstName ?? existing.firstName ?? '').trim()} ${String(data.lastName ?? existing.lastName ?? '').trim()}`.trim() || existing.name
+        : existing.name),
     first_name: data.firstName ?? existing.firstName,
     last_name: data.lastName ?? existing.lastName,
     business_name: data.businessName ?? existing.businessName,

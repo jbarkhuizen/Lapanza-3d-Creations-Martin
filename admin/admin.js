@@ -3688,7 +3688,7 @@ async function openOrderDetail(id) {
   await renderOrderDetail(id);
 }
 
-async function renderOrderDetail(id) {
+async function renderOrderDetail(id, editClient = false) {
   const { order } = await api(`/api/orders/${id}`);
   const c = order.client || {};
   const addr = [c.street, c.suburb, c.city, c.province, c.postalCode, c.country].filter(Boolean).join(', ');
@@ -3737,10 +3737,33 @@ async function renderOrderDetail(id) {
       </div>
 
       <div class="panel stack gap-2">
-        <div class="section-head"><h3>Client</h3></div>
-        <p><strong>${escapeHtml(c.name || '')}</strong>${c.businessName ? ` &middot; ${escapeHtml(c.businessName)}` : ''} (${escapeHtml(c.clientCode || '')})<br>
-           ${escapeHtml(c.email || '')} &middot; ${escapeHtml(c.phone || '')}<br>
-           ${escapeHtml(addr)}</p>
+        <div class="section-head"><h3>Client</h3>${editClient ? '' : '<button class="btn small" id="edit-client" type="button">Edit</button>'}</div>
+        ${editClient ? `
+          <div class="grid-2">
+            <label class="field"><span>First Name</span><input id="ec-first" value="${escapeAttr(c.firstName || '')}" /></label>
+            <label class="field"><span>Surname</span><input id="ec-last" value="${escapeAttr(c.lastName || '')}" /></label>
+          </div>
+          <div class="grid-2">
+            <label class="field"><span>Business Name</span><input id="ec-business" value="${escapeAttr(c.businessName || '')}" /></label>
+            <label class="field"><span>Email</span><input id="ec-email" type="email" value="${escapeAttr(c.email || '')}" /></label>
+          </div>
+          <label class="field"><span>Phone</span><input id="ec-phone" value="${escapeAttr(c.phone || '')}" /></label>
+          <div class="grid-2">
+            <label class="field"><span>Street</span><input id="ec-street" value="${escapeAttr(c.street || '')}" /></label>
+            <label class="field"><span>Suburb</span><input id="ec-suburb" value="${escapeAttr(c.suburb || '')}" /></label>
+          </div>
+          <div class="grid-3">
+            <label class="field"><span>City</span><input id="ec-city" value="${escapeAttr(c.city || '')}" /></label>
+            <label class="field"><span>Province</span><input id="ec-province" value="${escapeAttr(c.province || '')}" /></label>
+            <label class="field"><span>Postal Code</span><input id="ec-postal" value="${escapeAttr(c.postalCode || '')}" /></label>
+          </div>
+          <div class="row-card-actions">
+            <button class="btn btn-primary small" id="save-client" type="button">Save client</button>
+            <button class="btn small btn-ghost" id="cancel-edit-client" type="button">Cancel</button>
+          </div>` : `
+          <p><strong>${escapeHtml(c.name || '')}</strong>${c.businessName ? ` &middot; ${escapeHtml(c.businessName)}` : ''} (${escapeHtml(c.clientCode || '')})<br>
+             ${escapeHtml(c.email || '')} &middot; ${escapeHtml(c.phone || '')}<br>
+             ${escapeHtml(addr)}</p>`}
       </div>
 
       <div class="panel table-wrap">
@@ -3765,6 +3788,38 @@ async function renderOrderDetail(id) {
     </div>`;
 
   $('#back-to-orders').addEventListener('click', async () => { setRoute('orders'); await renderOrders(); });
+
+  // Client edit (owner request 2026-09-03): fixes wrong names/details right
+  // from the order. Saves to the client RECORD (PUT /api/clients/:id,
+  // partial merge), so the change shows everywhere this client appears.
+  $('#edit-client')?.addEventListener('click', () => renderOrderDetail(order.id, true));
+  $('#cancel-edit-client')?.addEventListener('click', () => renderOrderDetail(order.id));
+  $('#save-client')?.addEventListener('click', async () => {
+    const firstName = $('#ec-first').value.trim();
+    const lastName = $('#ec-last').value.trim();
+    try {
+      await api(`/api/clients/${c.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`.trim(),
+          businessName: $('#ec-business').value.trim(),
+          email: $('#ec-email').value.trim(),
+          phone: $('#ec-phone').value.trim(),
+          street: $('#ec-street').value.trim(),
+          suburb: $('#ec-suburb').value.trim(),
+          city: $('#ec-city').value.trim(),
+          province: $('#ec-province').value.trim(),
+          postalCode: $('#ec-postal').value.trim(),
+        }),
+      });
+      toast('Client updated');
+      await renderOrderDetail(order.id);
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
 
   $('#save-order').addEventListener('click', async () => {
     try {
@@ -4592,6 +4647,14 @@ async function renderNewOrder() {
   $('[data-action="mode-search"]')?.addEventListener('click', async () => { order.clientMode = 'search'; await renderNewOrder(); });
   $('[data-action="mode-new"]')?.addEventListener('click', async () => { order.clientMode = 'new'; await renderNewOrder(); });
   $('[data-action="clear-client"]')?.addEventListener('click', async () => { order.selectedClient = null; order.clientResults = []; await renderNewOrder(); });
+
+  // New-client fields must persist into state on every keystroke -- other
+  // parts of this form (add line, product pick, shipping change) re-render
+  // the whole view from state, which used to wipe anything typed here
+  // because these inputs were only ever read at submit time.
+  [['#no-new-first', 'firstName'], ['#no-new-last', 'lastName'], ['#no-new-business', 'businessName'], ['#no-new-email', 'email'], ['#no-new-phone', 'phone']].forEach(([sel, key]) => {
+    $(sel)?.addEventListener('input', (e) => { order.newClient[key] = e.target.value; });
+  });
 
   // Live client search: debounced fetch, results injected into the results
   // container only (a full re-render would steal focus mid-typing).

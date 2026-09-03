@@ -72,3 +72,17 @@ test('mergeClients rejects an unknown source or target id', () => {
   assert.throws(() => mergeClients(client.id, 'does-not-exist', db), /Client not found/);
   db.close();
 });
+
+test('updateClient recomposes name when first/last change without explicit name', () => {
+  const db = openDb(':memory:');
+  const client = createClient({ firstName: 'Old', lastName: 'Name', email: 'recompose@example.com' }, db);
+  const updated = updateClient(client.id, { firstName: 'Corneel', lastName: 'de Toit' }, db);
+  assert.strictEqual(updated.name, 'Corneel de Toit');
+  // Explicit name still wins.
+  const explicit = updateClient(client.id, { firstName: 'A', lastName: 'B', name: 'Custom Display' }, db);
+  assert.strictEqual(explicit.name, 'Custom Display');
+  // Untouched first/last leaves name alone.
+  const phoneOnly = updateClient(client.id, { phone: '0820000000' }, db);
+  assert.strictEqual(phoneOnly.name, 'Custom Display');
+  db.close();
+});
