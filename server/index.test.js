@@ -1065,9 +1065,14 @@ test('Payfast checkout does not send the order confirmation immediately -- only 
     .send({ name: 'Red', sku: 'PLA-RED', priceRand: 100, weightG: 100, stockQty: 10 });
   const productId = `filament:pla:${colour.body.filament.colours[0].sku}`;
 
+  // Distinct quantities per payment method: the 2026-09-03 duplicate guard
+  // treats an identical pending cart from the same email as a payment
+  // RETRY and reuses the order (skipping its emails) -- which is exactly
+  // right in production, but this test needs three separate orders.
+  let nextQty = 0;
   const checkoutPayload = (paymentMethod) => ({
     client: { firstName: 'Test', lastName: 'Buyer', email: 'buyer@example.com' },
-    items: [{ productId, quantity: 1 }],
+    items: [{ productId, quantity: ++nextQty }],
     shippingMethod: 'collect',
     paymentMethod,
   });

@@ -268,6 +268,38 @@ export function createOrder(
 
   const total = Math.max(0, subtotal - discountAmount - promoDiscountAmount + shippingPrice);
 
+  // Go-live duplicate guard (2026-09-03): an abandoned Payfast attempt sends
+  // the customer back to checkout with a full cart, and each retry used to
+  // create a brand-new order (new invoice, new emails, stock reserved
+  // again -- three real customers did exactly this on launch day). If the
+  // SAME email placed an identical pending order (same item lines, same
+  // total) within the last 30 minutes, treat this submission as a payment
+  // retry: hand back the existing order (updating its payment method if
+  // they switched, e.g. card -> Instant EFT) instead of minting another.
+  // A changed cart or total falls through and creates a new order normally.
+  const dupeWindowStart = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const recentPending = db
+    .prepare(
+      `SELECT o.id FROM orders o JOIN clients c ON c.id = o.client_id
+       WHERE o.status = 'pending_payment' AND o.created_at >= ? AND LOWER(c.email) = LOWER(?)
+       ORDER BY o.created_at DESC`,
+    )
+    .all(dupeWindowStart, String(clientData?.email || '').trim());
+  const lineKey = (lines) => lines.map((l) => `${l.productId}x${l.quantity}`).sort().join('|');
+  const submittedKey = lineKey(resolved);
+  for (const candidate of recentPending) {
+    const existing = getOrder(candidate.id, db);
+    if (existing.total !== total) continue;
+    if (lineKey(existing.items) !== submittedKey) continue;
+    if (existing.paymentMethod !== paymentMethod) {
+      db.prepare('UPDATE orders SET payment_method = ?, updated_at = ? WHERE id = ?')
+        .run(paymentMethod, new Date().toISOString(), existing.id);
+    }
+    const reused = getOrder(existing.id, db);
+    reused._reused = true; // caller: skip the emails, this order already sent them
+    return reused;
+  }
+
   let clientDataUpdated = false;
   const tx = db.transaction(() => {
     const client = findOrCreateClientForCheckout(clientData, db);

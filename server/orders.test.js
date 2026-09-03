@@ -554,3 +554,38 @@ test('createOrder with no configured volume tiers applies no discount (#60 defau
   assert.strictEqual(order.total, 600);
   db.close();
 });
+
+// Go-live duplicate guard (2026-09-03): an identical pending order from the
+// same email within 30 minutes is a payment retry, not a new order.
+test('createOrder reuses an identical recent pending order instead of duplicating it', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'Std', minWeight: 0, maxWeight: 50000, price: 100 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const withColour = addColour(filament.id, { name: 'Blue', sku: 'DUP-1', priceRand: 300, weightG: 1000, stockQty: 10 }, db);
+  const productId = `filament:pla:${withColour.colours[0].sku}`;
+  const payload = {
+    client: { name: 'Dup Tester', email: 'dup@example.com', phone: '0820000000' },
+    items: [{ productId, quantity: 1 }],
+    shippingMethod: 'collect',
+    paymentMethod: 'payfast_card',
+  };
+  const first = createOrder(payload, db);
+  const second = createOrder({ ...payload, paymentMethod: 'payfast_eft' }, db); // retried with a different method
+  assert.strictEqual(second.id, first.id, 'same order handed back');
+  assert.strictEqual(second._reused, true);
+  assert.strictEqual(second.paymentMethod, 'payfast_eft', 'method switch applied to the existing order');
+  assert.strictEqual(db.prepare('SELECT COUNT(*) n FROM orders').get().n, 1, 'no duplicate row');
+  // stock reserved exactly once
+  assert.strictEqual(getFilament(filament.id, db).colours[0].stockQty, 9);
+
+  // a genuinely different cart still creates a new order
+  const changed = createOrder({ ...payload, items: [{ productId, quantity: 2 }] }, db);
+  assert.notStrictEqual(changed.id, first.id);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) n FROM orders').get().n, 2);
+
+  // a paid order is never reused -- a fresh identical purchase is legitimate
+  updateOrderStatus(first.id, 'paid', db);
+  const afterPaid = createOrder(payload, db);
+  assert.notStrictEqual(afterPaid.id, first.id);
+  db.close();
+});

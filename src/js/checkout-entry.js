@@ -185,6 +185,43 @@ async function init() {
   }
 
   renderLines(items);
+
+  // Duplicate-order fix (2026-09-03): Payfast's cancel_url lands back here
+  // with ?cancelled=<orderId>. Offer to finish paying the EXISTING order --
+  // before this, every retry submitted the still-full cart as a brand-new
+  // order (new invoice + emails + stock reserved again; three customers hit
+  // it on launch day). The server also dedupes identical re-submissions,
+  // so even ignoring this banner no longer mints duplicates.
+  const cancelledOrderId = new URLSearchParams(window.location.search).get('cancelled');
+  if (cancelledOrderId) {
+    const banner = document.createElement('div');
+    banner.className = 'panel p-6 border-2 border-terracotta rounded-sm mb-8';
+    banner.innerHTML = `
+      <h2 class="font-serif text-xl mb-2 tracking-tight">Your payment wasn't completed</h2>
+      <p class="text-sm text-espresso/70 mb-4">No problem — your order is saved and unpaid. Finish paying it below (no new order will be created):</p>
+      <div class="flex flex-wrap gap-3">
+        <button type="button" data-retry-method="payfast_card" class="inline-flex items-center gap-2 bg-charcoal text-cream rounded-full px-5 py-2.5 text-sm font-semibold hover:bg-terracotta transition-colors">Pay by Card</button>
+        <button type="button" data-retry-method="payfast_eft" class="inline-flex items-center gap-2 border-2 border-charcoal rounded-full px-5 py-2.5 text-sm font-semibold hover:bg-charcoal hover:text-cream transition-colors">Pay by Instant EFT</button>
+      </div>
+      <p class="text-xs text-espresso/50 mt-3" data-retry-note>Prefer EFT into our account or cash on collection? Just place the order again below with that option — we'll reuse your saved order.</p>`;
+    const main = document.getElementById('main');
+    main?.insertBefore(banner, main.querySelector('#checkout-empty'));
+    banner.querySelectorAll('[data-retry-method]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const { redirect } = await api('/api/checkout/retry-payment', {
+            method: 'POST',
+            body: JSON.stringify({ orderId: cancelledOrderId, method: btn.dataset.retryMethod }),
+          });
+          submitToPayfast(redirect);
+        } catch (err) {
+          banner.querySelector('[data-retry-note]').textContent = err.message;
+          btn.disabled = false;
+        }
+      });
+    });
+  }
   // Backlog #113: a checkout page load with a non-empty cart = checkout
   // started (fires once per load; analytics.js's listener does the send).
   try {

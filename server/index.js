@@ -2450,10 +2450,12 @@ app.post('/api/orders', requireAuth, async (req, res) => {
     recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created manual order ${order.id} (${formatRand(order.total)})` });
     res.status(201).json({ order, clientDataUpdated });
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
-    try {
-      await sendNewOrderNotificationEmail(order);
-    } catch (err) {
-      logEmailFailure('New order owner-notification email', err, req);
+    if (!reusedOrder) {
+      try {
+        await sendNewOrderNotificationEmail(order);
+      } catch (err) {
+        logEmailFailure('New order owner-notification email', err, req);
+      }
     }
     // "Already paid" (walk-in/WhatsApp sale settled on the spot) creates the
     // order already in 'paid' status -- send the paid-in-full invoice
@@ -2633,6 +2635,30 @@ app.put('/api/promo-codes/:id', requireAuth, (req, res) => {
   }
 });
 
+// Duplicate-order fix (2026-09-03): a customer bounced back from Payfast
+// (cancel_url) can retry payment on their EXISTING pending order instead of
+// placing a new one. The order id is an unguessable UUID handed to that
+// browser by its own checkout — the same capability model as
+// checkout-complete.html?order=. Only pending Payfast-eligible orders
+// qualify; the method may switch between card and Instant EFT.
+app.post('/api/checkout/retry-payment', checkoutLimiter, (req, res) => {
+  const { orderId, method } = req.body || {};
+  const order = getOrder(String(orderId || ''));
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  if (order.status !== 'pending_payment') {
+    return res.status(400).json({ error: 'This order is no longer awaiting payment.' });
+  }
+  const chosen = method === 'payfast_eft' ? 'payfast_eft' : 'payfast_card';
+  if (order.paymentMethod !== chosen) {
+    getDb().prepare('UPDATE orders SET payment_method = ?, updated_at = ? WHERE id = ?')
+      .run(chosen, new Date().toISOString(), order.id);
+  }
+  const requestOrigin = `${req.protocol}://${req.get('host')}`;
+  const siteUrl = process.env.SITE_URL || requestOrigin;
+  const apiUrl = process.env.API_URL || requestOrigin;
+  res.json({ redirect: buildPayfastRedirect({ order: getOrder(order.id), siteUrl, apiUrl, paymentMethod: chosen }) });
+});
+
 app.post('/api/checkout', checkoutLimiter, async (req, res) => {
   const body = req.body || {};
   try {
@@ -2648,6 +2674,12 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     delete order._lowStock;
     const clientDataUpdated = Boolean(order._clientDataUpdated);
     delete order._clientDataUpdated;
+    // Duplicate guard (2026-09-03): createOrder handed back an EXISTING
+    // pending order (a payment retry) -- everything below already happened
+    // for it (invoice email, owner notification, stock reservation), so
+    // skip straight to the payment step instead of re-sending it all.
+    const reusedOrder = Boolean(order._reused);
+    delete order._reused;
     if (lowStock?.length) await sendLowStockAlerts(lowStock);
 
     // The invoice itself (unlike the "your order is confirmed" email below)
@@ -2656,10 +2688,12 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     // every payment method as soon as the order exists. A second, distinct
     // "paid in full" invoice follows later for Payfast once the ITN webhook
     // actually confirms payment (see markOrderPaid's call site below).
-    try {
-      await sendInvoiceEmail(order);
-    } catch (err) {
-      logEmailFailure(`Order ${order.id} invoice email`, err, req);
+    if (!reusedOrder) {
+      try {
+        await sendInvoiceEmail(order);
+      } catch (err) {
+        logEmailFailure(`Order ${order.id} invoice email`, err, req);
+      }
     }
 
     // For Payfast (card/EFT), the order isn't actually paid yet at this
@@ -2671,7 +2705,7 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
     // to wait for, so they still confirm immediately.
     const isOnlinePayment = body.paymentMethod === 'payfast_card' || body.paymentMethod === 'payfast_eft';
     let emailSent = false;
-    if (!isOnlinePayment) {
+    if (!isOnlinePayment && !reusedOrder) {
       try {
         await sendOrderConfirmationEmail(order);
         emailSent = true;
