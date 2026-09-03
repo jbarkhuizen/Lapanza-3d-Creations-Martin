@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 import { getSettings } from './settings.js';
 import { formatRand } from './money.js';
 import { renderInvoiceHtml } from './invoice.js';
+import { renderPackingSlipHtml } from './packing-slip.js';
 import { renderEmailShell, renderButton, escapeHtml, textToHtml, interpolate } from './email-template.js';
 
 const FROM_ADDRESS = process.env.GMAIL_USER || 'lapanzaonline@gmail.com';
@@ -360,6 +361,10 @@ export async function sendDesignRequestStatusEmail(request, newStatus) {
 // Editable via Settings -> Communications -> "New order notification".
 // Tokens: {{orderRef}}, {{total}}, {{clientName}}, {{clientEmail}},
 // {{paymentMethod}}, {{itemCount}}.
+// Owner request (2026-09-03): the notification now carries the FULL order
+// (item lines, totals, delivery details) in the body, and attaches the
+// packing slip as a printable .html file for the shipping box -- open the
+// attachment, hit its Print button, done.
 export async function sendNewOrderNotificationEmail(order) {
   const settings = getSettings();
   const vars = {
@@ -370,18 +375,29 @@ export async function sendNewOrderNotificationEmail(order) {
     paymentMethod: order.paymentMethod,
     itemCount: order.items?.length || 0,
   };
+  const addr = order.client
+    ? [order.client.street, order.client.suburb, order.client.city, order.client.province, order.client.postalCode, order.client.country].filter(Boolean).join(', ')
+    : '';
   const bodyHtml = `${messageHtmlFor(settings, 'newOrderNotification', vars)}
     <p style="margin:0 0 16px;font-size:14px;">
       <strong>Reference:</strong> ${escapeHtml(String(vars.orderRef))}<br>
-      <strong>Client:</strong> ${escapeHtml(vars.clientName)} (${escapeHtml(vars.clientEmail)})<br>
-      <strong>Total:</strong> ${escapeHtml(vars.total)}<br>
-      <strong>Payment method:</strong> ${escapeHtml(vars.paymentMethod)}<br>
-      <strong>Items:</strong> ${escapeHtml(String(vars.itemCount))}
+      <strong>Client:</strong> ${escapeHtml(vars.clientName)} (${escapeHtml(vars.clientEmail)})${order.client?.phone ? ` · ${escapeHtml(order.client.phone)}` : ''}<br>
+      ${addr ? `<strong>Delivery address:</strong> ${escapeHtml(addr)}<br>` : ''}
+      <strong>Payment method:</strong> ${escapeHtml(vars.paymentMethod)}
     </p>
-    <p style="margin:0;font-size:13px;color:#3b322b;">View it in the admin portal.</p>`;
+    ${orderItemsTableHtml(order)}
+    ${orderTotalsHtml(order, settings)}
+    <p style="margin:0;font-size:13px;color:#3b322b;">The attached packing slip is print-ready for the shipping box. Full order in the admin portal.</p>`;
   await getTransporter().sendMail({
     from: FROM_ADDRESS,
     to: settings.orderNotificationEmail,
+    attachments: [
+      {
+        filename: `packing-slip-${String(vars.orderRef).replace(/[^A-Za-z0-9-]/g, '')}.html`,
+        content: renderPackingSlipHtml(order),
+        contentType: 'text/html',
+      },
+    ],
     subject: subjectFor(settings, 'newOrderNotification', vars),
     html: renderEmailShell({ settings, preheader: 'New order placed', bodyHtml }),
   });

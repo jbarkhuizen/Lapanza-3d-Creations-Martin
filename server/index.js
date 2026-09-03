@@ -49,6 +49,7 @@ import { formatRand } from './money.js';
 import { renderInvoiceHtml } from './invoice.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, removeItemImage, reorderItemImages } from './store.js';
 import { sanitizeRichText } from './rich-text.js';
+import { renderPackingSlipHtml } from './packing-slip.js';
 import { listPromoCodes, createPromoCode, updatePromoCode, validatePromo, computePromoDiscount } from './promos.js';
 import {
   listClients,
@@ -3232,47 +3233,6 @@ function escapeHtml(value) {
 
 // F.3: a minimal print-friendly page, not a PDF -- "A print-friendly HTML
 // view is enough" per spec. Uses the browser's own print dialog (window.print()).
-function renderPackingSlipHtml(order) {
-  const rows = order.items
-    .map((i) => `<tr><td>${escapeHtml(i.productName)}</td><td style="text-align:right">${i.quantity}</td><td style="text-align:right">${i.weight * i.quantity}g</td></tr>`)
-    .join('');
-  const addr = order.client
-    ? [order.client.street, order.client.suburb, order.client.city, order.client.province, order.client.postalCode, order.client.country]
-        .filter(Boolean)
-        .join(', ')
-    : '';
-  return `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>Packing slip — ${escapeHtml(order.id)}</title>
-<style>
-  body { font-family: system-ui, sans-serif; max-width: 700px; margin: 2rem auto; color: #1a1612; }
-  h1 { font-size: 1.4rem; margin-bottom: 0.25rem; }
-  table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
-  th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; }
-  .muted { color: #666; font-size: 0.9rem; }
-  .totals { font-weight: 600; }
-  @media print { button { display: none; } }
-</style></head>
-<body>
-  <button onclick="window.print()">Print</button>
-  <h1>Packing slip</h1>
-  <p class="muted">Order ${escapeHtml(order.id)} — ${escapeHtml(order.createdAt)}</p>
-  <p><strong>${escapeHtml(order.client?.name || '')}</strong>${order.client?.businessName ? ` (${escapeHtml(order.client.businessName)})` : ''}<br>${escapeHtml(addr)}<br>${escapeHtml(order.client?.phone || '')}</p>
-  <table>
-    <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Weight</th></tr></thead>
-    <tbody>${rows}</tbody>
-    <tfoot><tr class="totals"><td>Total parcel weight</td><td></td><td style="text-align:right">${order.totalWeight}g</td></tr></tfoot>
-  </table>
-  <p>Shipping method: ${escapeHtml(SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}</p>
-</body></html>`;
-}
-
-const SHIPPING_METHOD_LABELS = {
-  courier: 'Our shipping',
-  own_courier: "Customer's own courier",
-  collect: 'Collect from store',
-  fixed: 'Shipping',
-};
-
 function slugify(value) {
   return (
     String(value || '')
