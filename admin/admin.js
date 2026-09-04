@@ -6002,7 +6002,48 @@ function stockRowHtml(item) {
         </tr>`;
 }
 
-const STOCK_TABLE_HEAD = '<thead><tr><th>SKU</th><th>Name</th><th>Category</th><th>Stock</th><th>Price (R)</th><th>Remaining (filament)</th><th>Products page</th><th></th></tr></thead>';
+// Sortable-column helpers (owner request 2026-09-04, Stock + Reorder pages).
+// Purely client-side: clicking a header toggles asc/desc on that key and
+// re-renders. applySort keeps missing values (null/undefined/'') last in
+// either direction (e.g. non-filament rows in the Remaining column).
+function sortIndicator(sortState, key) {
+  if (sortState?.key !== key) return '';
+  return sortState.dir === 'asc' ? ' \u25B2' : ' \u25BC';
+}
+function sortableTh(sortState, key, label) {
+  return `<th class="sort-th" data-sort="${escapeAttr(key)}" title="Sort by ${escapeAttr(label)}">${escapeHtml(label)}${sortIndicator(sortState, key)}</th>`;
+}
+function applySort(items, sortState, accessors) {
+  if (!sortState?.key || !accessors[sortState.key]) return items;
+  const get = accessors[sortState.key];
+  const dir = sortState.dir === 'desc' ? -1 : 1;
+  return [...items].sort((a, b) => {
+    const va = get(a);
+    const vb = get(b);
+    const aMissing = va === null || va === undefined || va === '';
+    const bMissing = vb === null || vb === undefined || vb === '';
+    if (aMissing && bMissing) return 0;
+    if (aMissing) return 1; // missing values always last
+    if (bMissing) return -1;
+    if (typeof va === 'string' || typeof vb === 'string') {
+      return String(va).localeCompare(String(vb), undefined, { numeric: true, sensitivity: 'base' }) * dir;
+    }
+    return (va - vb) * dir;
+  });
+}
+const STOCK_SORT_ACCESSORS = {
+  sku: (i) => i.sku || '',
+  name: (i) => i.name || '',
+  stock: (i) => Number(i.stockQty),
+  price: (i) => Number(i.price),
+  remaining: (i) => (i.kind === 'filament' ? i.remainingG : null),
+  listed: (i) => (i.listed !== false ? 0 : 1), // Listed before Not listed on asc
+};
+
+function stockTableHead() {
+  const st = state.stockSort;
+  return `<thead><tr>${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'name', 'Name')}<th>Category</th>${sortableTh(st, 'stock', 'Stock')}${sortableTh(st, 'price', 'Price (R)')}${sortableTh(st, 'remaining', 'Remaining (filament)')}${sortableTh(st, 'listed', 'Products page')}<th></th></tr></thead>`;
+}
 
 // Renders one leaf section (a real <details> with its own mini-table).
 // `forceOpen` wins over the remembered collapse state -- used while
@@ -6010,7 +6051,7 @@ const STOCK_TABLE_HEAD = '<thead><tr><th>SKU</th><th>Name</th><th>Category</th><
 // manually collapsed earlier.
 function stockSectionHtml(key, label, items, forceOpen) {
   const open = forceOpen || !state.stockCollapsed.has(key);
-  const rows = items.map(stockRowHtml).join('');
+  const rows = applySort(items, state.stockSort, STOCK_SORT_ACCESSORS).map(stockRowHtml).join('');
   // data-initial-open: some browsers fire a spurious 'toggle' event the
   // moment a freshly-inserted `<details open>` is parsed (no user action
   // involved) -- the toggle listener below uses this to tell that apart
@@ -6020,7 +6061,7 @@ function stockSectionHtml(key, label, items, forceOpen) {
       <summary>${escapeHtml(label)} <span class="muted">(${items.length})</span></summary>
       <div class="panel table-wrap">
         <table class="catalog">
-          ${STOCK_TABLE_HEAD}
+          ${stockTableHead()}
           <tbody>${rows || '<tr><td colspan="8"><div class="empty">No items</div></td></tr>'}</tbody>
         </table>
       </div>
@@ -6033,6 +6074,7 @@ async function renderStock() {
   state.stockPriceMax = state.stockPriceMax ?? '';
   state.stockEdits = state.stockEdits || {}; // id -> { stockQty?, price? }
   state.stockCollapsed = state.stockCollapsed || new Set(); // group keys currently collapsed -- survives re-render (e.g. after Save)
+  state.stockSort = state.stockSort || null; // { key, dir } -- applies within every section
   await ensureSettingsLoaded(); // carPartBrands drives the Car Parts nesting
   const { items } = await api('/api/inventory');
   state.stockItems = items;
@@ -6106,6 +6148,18 @@ async function renderStock() {
       const key = el.dataset.group;
       if (el.open) state.stockCollapsed.delete(key);
       else state.stockCollapsed.add(key);
+    });
+  });
+
+  // Column sorting: same key toggles direction, new key starts ascending.
+  // Unsaved edits survive the re-render (stockRowHtml is edit-aware).
+  $$('#view-stock th.sort-th').forEach((th) => {
+    th.addEventListener('click', async () => {
+      const key = th.dataset.sort;
+      state.stockSort = state.stockSort?.key === key
+        ? { key, dir: state.stockSort.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' };
+      await renderStock();
     });
   });
 
@@ -6201,9 +6255,17 @@ async function renderStock() {
 // #122 (split off Stock management, backlog 2026-09-04): reorder report now
 // has its own nav route and page instead of a collapsible panel bolted onto
 // the top of Stock management.
+const REORDER_SORT_ACCESSORS = {
+  item: (i) => i.name || '',
+  sku: (i) => i.sku || '',
+  category: (i) => i.category || i.kind || '',
+  stock: (i) => Number(i.stockQty),
+  sold: (i) => Number(i.soldLast30Days),
+};
+
 async function renderReorderReport() {
   const view = $('#view-reorder-report');
-  view.innerHTML = `<p class="muted">Loading…</p>`;
+  view.innerHTML = `<p class="muted">Loading\u2026</p>`;
   let reorderItems = [];
   let threshold = 0;
   try {
@@ -6213,17 +6275,21 @@ async function renderReorderReport() {
     return;
   }
 
-  view.innerHTML = `
+  // Sorting re-renders from the already-fetched list -- no refetch per click.
+  const draw = () => {
+    const st = state.reorderSort;
+    const sorted = applySort(reorderItems, st, REORDER_SORT_ACCESSORS);
+    view.innerHTML = `
     <div class="panel" style="padding:0.75rem 1rem">
       <h3 style="margin-top:0">${reorderItems.length} item${reorderItems.length === 1 ? '' : 's'} at or below ${threshold} in stock</h3>
       ${reorderItems.length
         ? `<div class="table-wrap"><table class="catalog">
-        <thead><tr><th>Item</th><th>SKU</th><th>Category</th><th>In Stock</th><th>Sold (30 Days)</th></tr></thead>
-        <tbody>${reorderItems
+        <thead><tr>${sortableTh(st, 'item', 'Item')}${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'category', 'Category')}${sortableTh(st, 'stock', 'In Stock')}${sortableTh(st, 'sold', 'Sold (30 Days)')}</tr></thead>
+        <tbody>${sorted
           .map(
             (i) => `<tr>
           <td>${escapeHtml(i.name)}</td>
-          <td><code>${escapeHtml(i.sku || '—')}</code></td>
+          <td><code>${escapeHtml(i.sku || '\u2014')}</code></td>
           <td>${escapeHtml(i.category || i.kind)}</td>
           <td style="font-weight:600;${Number(i.stockQty) <= 0 ? 'color:var(--danger, #c24b28)' : ''}">${escapeHtml(String(i.stockQty))}</td>
           <td>${escapeHtml(String(i.soldLast30Days))}</td>
@@ -6231,9 +6297,20 @@ async function renderReorderReport() {
           )
           .join('')}</tbody>
       </table></div>
-      <p class="muted" style="font-size:0.8rem;margin:0.5rem 0 0">Threshold is the Low-stock Threshold in Settings → Storefront. Sold counts exclude cancelled orders.</p>`
+      <p class="muted" style="font-size:0.8rem;margin:0.5rem 0 0">Threshold is the Low-stock Threshold in Settings \u2192 Storefront. Sold counts exclude cancelled orders.</p>`
         : '<p class="muted" style="margin:0.5rem 0 0">Nothing needs reordering right now.</p>'}
     </div>`;
+    view.querySelectorAll('th.sort-th').forEach((th) => {
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        state.reorderSort = state.reorderSort?.key === key
+          ? { key, dir: state.reorderSort.dir === 'asc' ? 'desc' : 'asc' }
+          : { key, dir: 'asc' };
+        draw();
+      });
+    });
+  };
+  draw();
 }
 
 // ---- 3D Resources ----

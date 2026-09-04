@@ -655,3 +655,7 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 /* Orders fulfilment ticks (Collected / Shipped / Finalized) */
 .fulfil-cell { text-align: center; cursor: default; }
 .fulfil-cell input[type='checkbox'] { width: 1.1rem; height: 1.1rem; accent-color: var(--terracotta, #c96f4a); cursor: pointer; }
+
+/* Sortable column headers (Stock management + Reorder Report) */
+th.sort-th { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sort-th:hover { color: var(--terracotta, #c96f4a); }
