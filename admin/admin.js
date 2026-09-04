@@ -143,6 +143,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-shipping'), route === 'shipping');
   show($('#view-promos'), route === 'promos');
   show($('#view-stock'), route === 'stock');
+  show($('#view-reorder-report'), route === 'reorder-report');
   show($('#view-resources'), route === 'resources');
   show($('#view-testimonials'), route === 'testimonials');
   show($('#view-design-requests'), route === 'design-requests');
@@ -184,6 +185,7 @@ function setRoute(route, { id } = {}) {
     'invoice-history': ['Client Side', 'Invoice History'],
     'new-order': ['Client Side', 'New order'],
     stock: ['Local Management', 'Stock management'],
+    'reorder-report': ['Local Management', 'Reorder Report'],
     purchases: ['Local Management', 'Purchase History'],
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
@@ -503,6 +505,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'stock') {
         setRoute('stock');
         await renderStock();
+      } else if (btn.dataset.route === 'reorder-report') {
+        setRoute('reorder-report');
+        await renderReorderReport();
       } else if (btn.dataset.route === 'resources') {
         setRoute('resources');
         await renderResources();
@@ -6076,36 +6081,8 @@ async function renderStock() {
 
   const dirtyCount = Object.keys(state.stockEdits).length;
 
-  // #122: reorder report -- fetched alongside, rendered above the sections.
-  let reorderHtml = '';
-  try {
-    const { items: reorderItems, threshold } = await api('/api/reorder-report');
-    reorderHtml = `
-    <details class="panel" ${reorderItems.length ? 'open' : ''} style="padding:0.75rem 1rem;margin-bottom:0.75rem">
-      <summary class="section-head" style="cursor:pointer"><h3 style="display:inline">Reorder Report — ${reorderItems.length} item${reorderItems.length === 1 ? '' : 's'} at or below ${threshold} in stock</h3></summary>
-      ${reorderItems.length
-        ? `<div class="table-wrap"><table class="catalog">
-        <thead><tr><th>Item</th><th>SKU</th><th>Category</th><th>In Stock</th><th>Sold (30 Days)</th></tr></thead>
-        <tbody>${reorderItems
-          .map(
-            (i) => `<tr>
-          <td>${escapeHtml(i.name)}</td>
-          <td><code>${escapeHtml(i.sku || '—')}</code></td>
-          <td>${escapeHtml(i.category || i.kind)}</td>
-          <td style="font-weight:600;${Number(i.stockQty) <= 0 ? 'color:var(--danger, #c24b28)' : ''}">${escapeHtml(String(i.stockQty))}</td>
-          <td>${escapeHtml(String(i.soldLast30Days))}</td>
-        </tr>`,
-          )
-          .join('')}</tbody>
-      </table></div>
-      <p class="muted" style="font-size:0.8rem;margin:0.5rem 0 0">Threshold is the Low-stock Threshold in Settings → Storefront. Sold counts exclude cancelled orders.</p>`
-        : '<p class="muted" style="margin:0.5rem 0 0">Nothing needs reordering right now.</p>'}
-    </details>`;
-  } catch { /* report is an extra -- stock editing must still work */ }
-
   const stockView = $('#view-stock');
   stockView.innerHTML = `
-    ${reorderHtml}
     <div class="toolbar">
       <input id="stock-q" type="search" placeholder="Search SKU, name, category…" value="${escapeAttr(state.stockQ)}" />
       <input id="stock-price-min" type="number" min="0" step="1" placeholder="Min R" style="max-width:100px" value="${escapeAttr(String(state.stockPriceMin))}" />
@@ -6219,6 +6196,44 @@ async function renderStock() {
       saveBtn.disabled = false;
     }
   });
+}
+
+// #122 (split off Stock management, backlog 2026-09-04): reorder report now
+// has its own nav route and page instead of a collapsible panel bolted onto
+// the top of Stock management.
+async function renderReorderReport() {
+  const view = $('#view-reorder-report');
+  view.innerHTML = `<p class="muted">Loading…</p>`;
+  let reorderItems = [];
+  let threshold = 0;
+  try {
+    ({ items: reorderItems, threshold } = await api('/api/reorder-report'));
+  } catch (ex) {
+    view.innerHTML = `<p class="error-text">${escapeHtml(ex.message)}</p>`;
+    return;
+  }
+
+  view.innerHTML = `
+    <div class="panel" style="padding:0.75rem 1rem">
+      <h3 style="margin-top:0">${reorderItems.length} item${reorderItems.length === 1 ? '' : 's'} at or below ${threshold} in stock</h3>
+      ${reorderItems.length
+        ? `<div class="table-wrap"><table class="catalog">
+        <thead><tr><th>Item</th><th>SKU</th><th>Category</th><th>In Stock</th><th>Sold (30 Days)</th></tr></thead>
+        <tbody>${reorderItems
+          .map(
+            (i) => `<tr>
+          <td>${escapeHtml(i.name)}</td>
+          <td><code>${escapeHtml(i.sku || '—')}</code></td>
+          <td>${escapeHtml(i.category || i.kind)}</td>
+          <td style="font-weight:600;${Number(i.stockQty) <= 0 ? 'color:var(--danger, #c24b28)' : ''}">${escapeHtml(String(i.stockQty))}</td>
+          <td>${escapeHtml(String(i.soldLast30Days))}</td>
+        </tr>`,
+          )
+          .join('')}</tbody>
+      </table></div>
+      <p class="muted" style="font-size:0.8rem;margin:0.5rem 0 0">Threshold is the Low-stock Threshold in Settings → Storefront. Sold counts exclude cancelled orders.</p>`
+        : '<p class="muted" style="margin:0.5rem 0 0">Nothing needs reordering right now.</p>'}
+    </div>`;
 }
 
 // ---- 3D Resources ----
