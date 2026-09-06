@@ -50,6 +50,7 @@ import { renderInvoiceHtml } from './invoice.js';
 import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, removeItemImage, reorderItemImages } from './store.js';
 import { sanitizeRichText } from './rich-text.js';
 import { renderPackingSlipHtml } from './packing-slip.js';
+import { listInstructionFiles, deleteInstructionFile, uploadInstructionFile } from './instruction-files.js';
 import { listPromoCodes, createPromoCode, updatePromoCode, validatePromo, computePromoDiscount } from './promos.js';
 import {
   listClients,
@@ -2480,6 +2481,26 @@ app.get('/api/orders/:id', requireAuth, (req, res) => {
   const order = getOrder(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   res.json({ order });
+});
+
+// Owner request (2026-09-06): instruction files (fitting cards etc.)
+// uploaded in the admin centre and included with shipped prints. Stored
+// under public/uploads/instructions, served by the /uploads static route.
+app.get('/api/instruction-files', requireAuth, (_req, res) => {
+  res.json({ files: listInstructionFiles() });
+});
+
+app.post('/api/instruction-files', requireAuth, uploadInstructionFile.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'A PDF file is required (max 10MB)' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Uploaded instruction file ${req.file.filename} (${Math.round(req.file.size / 1024)}KB)` });
+  res.status(201).json({ file: { filename: req.file.filename, size: req.file.size, uploadedAt: new Date().toISOString() } });
+});
+
+app.delete('/api/instruction-files/:filename', requireAuth, (req, res) => {
+  const ok = deleteInstructionFile(req.params.filename);
+  if (!ok) return res.status(404).json({ error: 'File not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted instruction file ${req.params.filename}` });
+  res.json({ ok: true });
 });
 
 // Owner request (2026-09-03): the Orders page's "Collected" tick.

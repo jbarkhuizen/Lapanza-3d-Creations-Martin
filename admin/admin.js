@@ -144,6 +144,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-promos'), route === 'promos');
   show($('#view-stock'), route === 'stock');
   show($('#view-reorder-report'), route === 'reorder-report');
+  show($('#view-instruction-files'), route === 'instruction-files');
   show($('#view-resources'), route === 'resources');
   show($('#view-testimonials'), route === 'testimonials');
   show($('#view-design-requests'), route === 'design-requests');
@@ -186,6 +187,7 @@ function setRoute(route, { id } = {}) {
     'new-order': ['Client Side', 'New order'],
     stock: ['Local Management', 'Stock management'],
     'reorder-report': ['Local Management', 'Reorder Report'],
+    'instruction-files': ['Local Management', 'Instruction Files'],
     purchases: ['Local Management', 'Purchase History'],
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
@@ -508,6 +510,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'reorder-report') {
         setRoute('reorder-report');
         await renderReorderReport();
+      } else if (btn.dataset.route === 'instruction-files') {
+        setRoute('instruction-files');
+        await renderInstructionFiles();
       } else if (btn.dataset.route === 'resources') {
         setRoute('resources');
         await renderResources();
@@ -6255,6 +6260,80 @@ async function renderStock() {
 // #122 (split off Stock management, backlog 2026-09-04): reorder report now
 // has its own nav route and page instead of a collapsible panel bolted onto
 // the top of Stock management.
+// Owner request (2026-09-06): printable instruction sheets (fitting cards)
+// kept in the admin centre for including with shipped prints. Files are
+// public under /uploads/instructions/<name> -- same served path as product
+// images -- so View/Print opens the real URL a customer could also be sent.
+async function renderInstructionFiles() {
+  const view = $('#view-instruction-files');
+  view.innerHTML = `<p class="muted">Loading\u2026</p>`;
+  let files = [];
+  try {
+    ({ files } = await api('/api/instruction-files'));
+  } catch (ex) {
+    view.innerHTML = `<p class="error-text">${escapeHtml(ex.message)}</p>`;
+    return;
+  }
+
+  const rows = files
+    .map(
+      (f) => `<tr data-filename="${escapeAttr(f.filename)}">
+        <td><code>${escapeHtml(f.filename)}</code></td>
+        <td>${escapeHtml(String(Math.max(1, Math.round(f.size / 1024))))} KB</td>
+        <td>${escapeHtml(formatDate(f.uploadedAt))}</td>
+        <td style="white-space:nowrap">
+          <a class="btn small" href="/uploads/instructions/${encodeURIComponent(f.filename)}" target="_blank" rel="noopener">View / Print</a>
+          <button class="btn small btn-danger" data-action="delete-instruction" type="button">Delete</button>
+        </td>
+      </tr>`,
+    )
+    .join('');
+
+  view.innerHTML = `
+    <div class="panel stack gap-3">
+      <div class="section-head"><h3>Instruction Files</h3>
+        <label class="btn btn-primary" style="cursor:pointer">Upload PDF<input id="instruction-upload" type="file" accept="application/pdf" hidden /></label>
+      </div>
+      <p class="muted" style="margin:0;font-size:0.85rem">Printable instruction sheets (fitting cards etc.) to include with shipped prints. PDF only, max 10MB. View / Print opens the file in a new tab \u2014 print from there.</p>
+      <div class="table-wrap">
+        <table class="catalog">
+          <thead><tr><th>File</th><th>Size</th><th>Uploaded</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="4"><div class="empty">No instruction files yet \u2014 upload your first PDF</div></td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  $('#instruction-upload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const body = new FormData();
+    body.append('file', file);
+    try {
+      const res = await fetch('/api/instruction-files', { method: 'POST', body });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed');
+      toast(`Uploaded ${data.file.filename}`);
+      await renderInstructionFiles();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $$('#view-instruction-files [data-action="delete-instruction"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const filename = btn.closest('tr').dataset.filename;
+      if (!confirm(`Delete ${filename}? This cannot be undone.`)) return;
+      try {
+        await api(`/api/instruction-files/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        toast('File deleted');
+        await renderInstructionFiles();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+}
+
 const REORDER_SORT_ACCESSORS = {
   item: (i) => i.name || '',
   sku: (i) => i.sku || '',
