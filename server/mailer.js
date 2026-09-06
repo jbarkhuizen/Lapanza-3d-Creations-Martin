@@ -403,8 +403,10 @@ export async function sendNewOrderNotificationEmail(order) {
       <strong>Reference:</strong> ${escapeHtml(String(vars.orderRef))}<br>
       <strong>Client:</strong> ${escapeHtml(vars.clientName)} (${escapeHtml(vars.clientEmail)})${order.client?.phone ? ` · ${escapeHtml(order.client.phone)}` : ''}<br>
       ${addr ? `<strong>Delivery address:</strong> ${escapeHtml(addr)}<br>` : ''}
+      ${order.pudoLockerName ? `<strong>PUDO locker:</strong> ${escapeHtml(order.pudoLockerName)}${order.pudoLockerAddress ? ` — ${escapeHtml(order.pudoLockerAddress)}` : ''}<br>` : ''}
       <strong>Payment method:</strong> ${escapeHtml(vars.paymentMethod)}
     </p>
+    ${order.customerNotes ? `<p style="margin:0 0 16px;font-size:14px;background:#f7efe0;border-left:3px solid #a96b12;padding:8px 12px;"><strong>Customer note:</strong> ${escapeHtml(order.customerNotes)}</p>` : ''}
     ${orderItemsTableHtml(order)}
     ${orderTotalsHtml(order, settings)}
     <p style="margin:0;font-size:13px;color:#3b322b;">The attached packing slip is print-ready for the shipping box. Full order in the admin portal.</p>`;

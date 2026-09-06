@@ -47,14 +47,14 @@
     <form id="checkout-form" class="grid md:grid-cols-[1.4fr_1fr] gap-8 items-start">
       <div class="stack gap-6">
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Your Items</h2>
+          <h2 class="font-serif text-xl mb-4 tracking-tight"><span class="text-terracotta">1 ·</span> Your Items</h2>
           <ul id="checkout-lines" class="stack gap-3"></ul>
           <p class="text-sm text-espresso/60 mt-4">Total weight: <span id="checkout-weight">0g</span></p>
         </div>
 
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
           <div class="flex items-center justify-between mb-4">
-            <h2 class="font-serif text-xl tracking-tight">Your Details</h2>
+            <h2 class="font-serif text-xl tracking-tight"><span class="text-terracotta">2 ·</span> Your Details</h2>
             <button type="button" id="checkout-update-details" class="hidden text-xs font-semibold uppercase tracking-[0.1em] border-2 border-charcoal rounded-full px-4 py-2 hover:bg-charcoal hover:text-cream transition-colors">Update Details</button>
           </div>
           <p class="text-sm text-espresso/60 mb-4">No account needed — you can check out as a guest. After your order you'll get the option to create one to track it.</p>
@@ -104,6 +104,13 @@
         </div>
 
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
+          <h2 class="font-serif text-xl mb-2 tracking-tight">Notes / Special Instructions</h2>
+          <p class="text-sm text-espresso/60 mb-3">Anything we should know about your order or delivery? (Optional)</p>
+          <textarea name="customerNotes" rows="3" maxlength="1000" placeholder="e.g. colour preferences, delivery instructions, gate code…"
+                    class="w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm"></textarea>
+        </div>
+
+        <div class="panel p-6 border border-charcoal/10 rounded-sm">
           <div class="stack gap-2 text-sm">
             <label class="flex gap-2"><input name="whatsappOptIn" type="checkbox" checked /> Consent to receive WhatsApp updates on new products and features</label>
             <label class="flex gap-2"><input name="emailMarketingOptIn" type="checkbox" checked /> Consent to receive email updates and newsletters</label>
@@ -113,7 +120,7 @@
 
       <div class="stack gap-6">
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Shipping Options</h2>
+          <h2 class="font-serif text-xl mb-4 tracking-tight"><span class="text-terracotta">3 ·</span> Shipping</h2>
           <div class="stack gap-2 text-sm mb-4">
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed_pudo" checked /> PUDO Locker</label>
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="courier" /> Our shipping (courier)</label>
@@ -122,10 +129,11 @@
             <label class="flex items-center gap-2"><input type="radio" name="shippingMethod" value="fixed_local" /> Local Delivery</label>
           </div>
           <div id="checkout-shipping">Calculating…</div>
+          <div id="checkout-pudo" class="hidden mt-4"></div>
         </div>
 
         <div class="panel p-6 border border-charcoal/10 rounded-sm">
-          <h2 class="font-serif text-xl mb-4 tracking-tight">Payment Options</h2>
+          <h2 class="font-serif text-xl mb-4 tracking-tight"><span class="text-terracotta">4 ·</span> Payment</h2>
           <div class="stack gap-2 text-sm">
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_card" checked /> Payfast — Card</label>
             <label class="flex items-center gap-2"><input type="radio" name="paymentMethod" value="payfast_eft" /> Payfast — Instant EFT</label>

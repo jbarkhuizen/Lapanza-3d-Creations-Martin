@@ -605,6 +605,14 @@ function ensurePromoColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(orders)', 'instruction_files')) {
     db.exec("ALTER TABLE orders ADD COLUMN instruction_files TEXT NOT NULL DEFAULT '[]'");
   }
+  // Owner request (2026-09-06): PUDO locker chosen at checkout + free-text
+  // customer note. Stored on the order itself (immutable record of where
+  // the parcel was actually sent, independent of later client-record edits).
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'pudo_locker_name')) {
+    db.exec("ALTER TABLE orders ADD COLUMN pudo_locker_name TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE orders ADD COLUMN pudo_locker_address TEXT NOT NULL DEFAULT ''");
+    db.exec("ALTER TABLE orders ADD COLUMN customer_notes TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 function ensureCheckoutColumns(db) {

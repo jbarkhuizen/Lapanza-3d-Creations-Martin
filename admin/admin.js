@@ -3326,6 +3326,7 @@ async function renderSettings() {
         <label class="field" style="max-width:260px"><span>Design-file Retention (Months After Finalized)</span><input data-setting="designFileRetentionMonths" type="number" min="1" step="1" value="${escapeAttr(String(s.designFileRetentionMonths ?? 12))}" /></label>
         <label class="field"><span>Default Quote Terms ({{depositPct}} Is Replaced at Quote Time)</span><textarea data-setting="quoteTermsDefault" rows="3">${escapeHtml(s.quoteTermsDefault || '')}</textarea></label>
         <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
+        <label class="field"><span>PUDO API Key (The Courier Guy — powers the checkout locker picker; free key from pudo.co.za → Settings → API Keys)</span><input data-setting="pudoApiKey" type="password" autocomplete="off" value="${escapeAttr(s.pudoApiKey || '')}" /></label>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
         <div class="grid-2">
           <label class="field"><span>Ready-stock Filament Dispatch (Business Days)</span><input data-setting="filamentDispatchDays" value="${escapeAttr(s.filamentDispatchDays || '')}" /></label>
@@ -3791,6 +3792,13 @@ async function renderOrderDetail(id, editClient = false) {
           ${instructionFiles.map((f) => `
             <label class="field checkbox" style="margin:0"><input type="checkbox" class="order-instruction" value="${escapeAttr(f.filename)}" ${order.instructionFiles?.includes(f.filename) ? 'checked' : ''} /><span><code>${escapeHtml(f.filename)}</code></span></label>`).join('')}
         </div>
+      </div>` : ''}
+
+      ${order.pudoLockerName || order.customerNotes ? `
+      <div class="panel stack gap-2">
+        <div class="section-head"><h3>Delivery Notes</h3></div>
+        ${order.pudoLockerName ? `<p style="margin:0"><strong>PUDO locker:</strong> ${escapeHtml(order.pudoLockerName)}${order.pudoLockerAddress ? ` — ${escapeHtml(order.pudoLockerAddress)}` : ''}</p>` : ''}
+        ${order.customerNotes ? `<p style="margin:0"><strong>Customer note:</strong> ${escapeHtml(order.customerNotes)}</p>` : ''}
       </div>` : ''}
 
       <div class="panel table-wrap">

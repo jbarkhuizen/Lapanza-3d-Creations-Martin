@@ -39,6 +39,13 @@ function parseRand(value) {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
+// Free-text fields submitted from checkout (PUDO locker pick + customer
+// note). Trimmed and length-capped -- rendered escaped everywhere, but a
+// megabyte of pasted text should still never reach the DB.
+function cleanText(value, max) {
+  return String(value ?? '').trim().slice(0, max);
+}
+
 // Never trust client-submitted price/weight for a payment amount -- a
 // checkout POST could be hand-crafted to claim any price. Every cart line
 // is re-resolved here against the current authoritative source (SQLite for
@@ -115,6 +122,9 @@ function rowToOrder(row) {
     trackingNumber: row.tracking_number,
     collectedAt: row.collected_at || null,
     instructionFiles: (() => { try { return JSON.parse(row.instruction_files || '[]'); } catch { return []; } })(),
+    pudoLockerName: row.pudo_locker_name || '',
+    pudoLockerAddress: row.pudo_locker_address || '',
+    customerNotes: row.customer_notes || '',
     confirmationEmailSentAt: row.confirmation_email_sent_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -197,7 +207,7 @@ export function listOrders({ status, q } = {}, db = getDb()) {
 // (e.g. a bad shipping option) can't leave an order with no items or a
 // client with no order.
 export function createOrder(
-  { client: clientData, items: cartItems, shippingMethod = 'courier', shippingOptionId, paymentMethod, promoCode },
+  { client: clientData, items: cartItems, shippingMethod = 'courier', shippingOptionId, paymentMethod, promoCode, pudoLockerName, pudoLockerAddress, customerNotes },
   db = getDb(),
 ) {
   if (!ALLOWED_PAYMENT_METHODS.includes(paymentMethod)) throw new Error('Invalid payment method');
@@ -333,10 +343,10 @@ export function createOrder(
     db.prepare(
       `INSERT INTO orders
         (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, promo_code, promo_discount_amount, shipping_option_id, shipping_price, shipping_method, total, total_weight,
-         payment_method, payment_status, tracking_number, created_at, updated_at)
+         payment_method, payment_status, tracking_number, pudo_locker_name, pudo_locker_address, customer_notes, created_at, updated_at)
        VALUES
         (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @discount_pct, @discount_amount, @promo_code, @promo_discount_amount, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
-         @payment_method, 'pending', '', @created_at, @updated_at)`,
+         @payment_method, 'pending', '', @pudo_locker_name, @pudo_locker_address, @customer_notes, @created_at, @updated_at)`,
     ).run({
       id: orderId,
       invoice_number: invoiceNumber,
@@ -346,6 +356,9 @@ export function createOrder(
       discount_amount: discountAmount,
       promo_code: promo ? promo.code : '',
       promo_discount_amount: promoDiscountAmount,
+      pudo_locker_name: cleanText(pudoLockerName, 200),
+      pudo_locker_address: cleanText(pudoLockerAddress, 400),
+      customer_notes: cleanText(customerNotes, 1000),
       shipping_option_id: shippingOption?.id || null,
       shipping_price: shippingPrice,
       shipping_method: shippingMethod,

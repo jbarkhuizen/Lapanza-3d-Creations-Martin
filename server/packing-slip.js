@@ -49,6 +49,8 @@ export function renderPackingSlipHtml(order) {
     <tfoot><tr class="totals"><td>Total parcel weight</td><td></td><td style="text-align:right">${order.totalWeight}g</td></tr></tfoot>
   </table>
   <p>Shipping method: ${escapeHtml(SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}</p>
+  ${order.pudoLockerName ? `<p><strong>PUDO locker:</strong> ${escapeHtml(order.pudoLockerName)}${order.pudoLockerAddress ? ` — ${escapeHtml(order.pudoLockerAddress)}` : ''}</p>` : ''}
+  ${order.customerNotes ? `<p><strong>Customer note:</strong> ${escapeHtml(order.customerNotes)}</p>` : ''}
   <p class="muted">Thank you for supporting Lapanza 3D Creative Lab — lapanza3d.co.za</p>
 </body></html>`;
 }

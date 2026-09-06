@@ -631,3 +631,32 @@ test('setOrderInstructionFiles persists a deduplicated list readable via getOrde
   assert.strictEqual(setOrderInstructionFiles('missing', ['x.pdf'], db), null);
   db.close();
 });
+
+test('createOrder stores PUDO locker pick and customer notes, length-capped', () => {
+  const db = openDb(':memory:');
+  createShippingOption({ name: 'PUDO Small', minWeight: 0, maxWeight: 50000, price: 60 }, db);
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const colour = addColour(filament.id, { name: 'Red', sku: 'PLA-PUDO-1KG', priceRand: 100, weightG: 500, stockQty: 5 }, db).colours[0];
+  const order = createOrder({
+    client: { name: 'Pudo Tester', email: 'pudo@example.com' },
+    items: [{ productId: `filament:pla:${colour.sku}`, quantity: 1 }],
+    paymentMethod: 'manual_eft',
+    shippingMethod: 'collect',
+    pudoLockerName: '  Sasol Rivonia  ',
+    pudoLockerAddress: '375 Rivonia Rd, Sandton',
+    customerNotes: 'N'.repeat(2000),
+  }, db);
+  assert.strictEqual(order.pudoLockerName, 'Sasol Rivonia'); // trimmed
+  assert.strictEqual(order.pudoLockerAddress, '375 Rivonia Rd, Sandton');
+  assert.strictEqual(order.customerNotes.length, 1000); // capped
+
+  const plain = createOrder({
+    client: { name: 'Plain', email: 'plain@example.com' },
+    items: [{ productId: `filament:pla:${colour.sku}`, quantity: 2 }],
+    paymentMethod: 'manual_eft',
+    shippingMethod: 'collect',
+  }, db);
+  assert.strictEqual(plain.pudoLockerName, '');
+  assert.strictEqual(plain.customerNotes, '');
+  db.close();
+});

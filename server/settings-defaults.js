@@ -68,6 +68,9 @@ export const DEFAULT_SETTINGS = {
   // nextInvoiceNumber(). Only used until the very first order/invoice is
   // created here; after that the counter is self-sustaining from orders.
   invoiceNumberSeed: 10,
+  // The Courier Guy / PUDO API key (free account at pudo.co.za -> Settings
+  // -> API Keys). Powers the checkout locker picker; empty = manual entry.
+  pudoApiKey: '',
 
   // Phase 3: Print Job Costing tool (server/print-jobs.js) -- internal-only,
   // never affects storefront product pricing.

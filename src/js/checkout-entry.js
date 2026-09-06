@@ -308,6 +308,160 @@ async function init() {
   let shippingReady = false;
   let fixedOptions = null;
 
+  // PUDO locker pick (owner request 2026-09-06). The locker list comes from
+  // our own cached proxy (/api/pudo/lockers); when it's empty (no API key
+  // configured, or the courier API is down with no cache) the picker
+  // degrades to two manual fields, so PUDO checkout always works.
+  const pudoBox = document.getElementById('checkout-pudo');
+  let pudoLockers = null; // null = not fetched yet; [] = fetched, none available
+  let chosenLocker = readPrefs().pudoLocker || null; // { name, address }
+
+  function setChosenLocker(locker) {
+    chosenLocker = locker;
+    writePrefs({ pudoLocker: locker });
+  }
+
+  function renderChosenLocker(container) {
+    container.textContent = '';
+    const box = document.createElement('div');
+    box.className = 'border border-charcoal/15 rounded-sm px-3 py-2 bg-cream/50 text-sm flex items-start justify-between gap-3';
+    const info = document.createElement('div');
+    const nameEl = document.createElement('div');
+    nameEl.className = 'font-semibold';
+    nameEl.textContent = chosenLocker.name;
+    const addrEl = document.createElement('div');
+    addrEl.className = 'text-espresso/60 text-xs mt-0.5';
+    addrEl.textContent = chosenLocker.address;
+    info.appendChild(nameEl);
+    info.appendChild(addrEl);
+    const change = document.createElement('button');
+    change.type = 'button';
+    change.className = 'text-xs font-semibold uppercase tracking-[0.1em] underline hover:text-terracotta shrink-0';
+    change.textContent = 'Change';
+    change.addEventListener('click', () => { setChosenLocker(null); renderPudoPicker(); });
+    box.appendChild(info);
+    box.appendChild(change);
+    container.appendChild(box);
+  }
+
+  function renderManualLockerFields(container) {
+    const note = document.createElement('p');
+    note.className = 'text-sm text-espresso/60 mb-2';
+    note.textContent = 'Tell us which PUDO locker to send your parcel to (find yours at pudo.co.za):';
+    container.appendChild(note);
+    [['pudo-manual-name', 'Locker name *', chosenLocker?.name || ''], ['pudo-manual-address', 'Locker address *', chosenLocker?.address || '']].forEach(([id, label, value]) => {
+      const wrap = document.createElement('label');
+      wrap.className = 'block text-sm mt-2';
+      const span = document.createElement('span');
+      span.className = 'block mb-1 text-espresso/70';
+      span.textContent = label;
+      const input = document.createElement('input');
+      input.id = id;
+      input.value = value;
+      input.className = 'w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent';
+      input.addEventListener('input', () => {
+        const name = document.getElementById('pudo-manual-name')?.value.trim() || '';
+        const address = document.getElementById('pudo-manual-address')?.value.trim() || '';
+        setChosenLocker(name || address ? { name, address } : null);
+      });
+      wrap.appendChild(span);
+      wrap.appendChild(input);
+      container.appendChild(wrap);
+    });
+  }
+
+  async function renderPudoPicker() {
+    pudoBox.classList.remove('hidden');
+    pudoBox.textContent = '';
+    const heading = document.createElement('p');
+    heading.className = 'text-sm font-semibold mb-2';
+    heading.textContent = 'Your PUDO locker';
+    pudoBox.appendChild(heading);
+
+    if (chosenLocker?.name) {
+      renderChosenLocker(pudoBox);
+      return;
+    }
+
+    if (pudoLockers === null) {
+      const loading = document.createElement('p');
+      loading.className = 'text-sm text-espresso/60';
+      loading.textContent = 'Loading locker list…';
+      pudoBox.appendChild(loading);
+      try {
+        const { lockers } = await api('/api/pudo/lockers');
+        pudoLockers = Array.isArray(lockers) ? lockers : [];
+      } catch {
+        pudoLockers = [];
+      }
+      // State may have changed while awaiting (method switched away).
+      if (form.shippingMethod.value !== 'fixed_pudo') return;
+      return renderPudoPicker();
+    }
+
+    if (!pudoLockers.length) {
+      renderManualLockerFields(pudoBox);
+      return;
+    }
+
+    const search = document.createElement('input');
+    search.type = 'search';
+    search.id = 'pudo-search';
+    search.placeholder = `Search ${pudoLockers.length} lockers by name, suburb or address…`;
+    search.autocomplete = 'off';
+    search.className = 'w-full border border-charcoal/20 rounded-sm px-3 py-2 bg-transparent text-sm';
+    const results = document.createElement('div');
+    results.className = 'mt-2 stack gap-1';
+    results.style.maxHeight = '15rem';
+    results.style.overflowY = 'auto';
+    pudoBox.appendChild(search);
+    pudoBox.appendChild(results);
+
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      results.textContent = '';
+      if (q.length < 2) {
+        const hint = document.createElement('p');
+        hint.className = 'text-xs text-espresso/50';
+        hint.textContent = q ? 'Keep typing…' : '';
+        results.appendChild(hint);
+        return;
+      }
+      const matches = pudoLockers.filter((l) => `${l.name} ${l.address}`.toLowerCase().includes(q)).slice(0, 12);
+      if (!matches.length) {
+        const none = document.createElement('p');
+        none.className = 'text-xs text-espresso/60';
+        none.textContent = 'No lockers match — try another suburb or town name.';
+        results.appendChild(none);
+        return;
+      }
+      matches.forEach((l) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'text-left border border-charcoal/10 rounded-sm px-3 py-2 hover:border-terracotta transition-colors w-full';
+        const nm = document.createElement('div');
+        nm.className = 'text-sm font-semibold';
+        nm.textContent = l.name;
+        const ad = document.createElement('div');
+        ad.className = 'text-xs text-espresso/60 mt-0.5';
+        ad.textContent = l.address;
+        row.appendChild(nm);
+        row.appendChild(ad);
+        row.addEventListener('click', () => {
+          setChosenLocker({ name: l.name, address: l.address });
+          renderPudoPicker();
+        });
+        results.appendChild(row);
+      });
+    });
+    search.focus();
+  }
+
+  function hidePudoPicker() {
+    pudoBox.classList.add('hidden');
+    pudoBox.textContent = '';
+  }
+
   // Admin-managed 'fixed' shipping_options rows have no category field --
   // just a free-text name (e.g. "PUDO Locker to Locker (Small)", "Local
   // Delivery") -- so the two radios below are split by name here, purely
@@ -381,6 +535,7 @@ async function init() {
     shippingReady = false;
     submitBtn.disabled = true;
 
+    hidePudoPicker();
     if (method === 'own_courier' || method === 'collect') {
       shippingOption = null;
       shippingReady = true;
@@ -395,7 +550,9 @@ async function init() {
     }
 
     if (method === 'fixed_pudo' || method === 'fixed_local') {
-      setAddressRequired(true);
+      // A locker delivery doesn't need a street address -- the locker IS
+      // the address; local delivery still does.
+      setAddressRequired(method === 'fixed_local');
       shippingOption = null;
       shippingReady = false;
       submitBtn.disabled = true;
@@ -414,6 +571,8 @@ async function init() {
         }
       }
       renderFixedOptionsPicker(method);
+      if (method === 'fixed_pudo') renderPudoPicker();
+      else hidePudoPicker();
       return;
     }
 
@@ -543,6 +702,13 @@ async function init() {
     const paymentMethod = data.get('paymentMethod');
     const shippingMethod = data.get('shippingMethod');
 
+    if (shippingMethod === 'fixed_pudo' && !chosenLocker?.name) {
+      errorEl.textContent = 'Please choose (or type in) the PUDO locker your parcel should go to.';
+      errorEl.classList.remove('hidden');
+      document.getElementById('checkout-pudo')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     submitBtn.disabled = true;
     submitBtn.textContent = 'Placing order…';
     try {
@@ -559,6 +725,9 @@ async function init() {
           shippingOptionId: shippingOption?.id || null,
           paymentMethod,
           promoCode: appliedPromo?.code || '',
+          pudoLockerName: shippingMethod === 'fixed_pudo' ? chosenLocker?.name || '' : '',
+          pudoLockerAddress: shippingMethod === 'fixed_pudo' ? chosenLocker?.address || '' : '',
+          customerNotes: data.get('customerNotes') || '',
         }),
       });
 

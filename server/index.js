@@ -51,6 +51,7 @@ import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, re
 import { sanitizeRichText } from './rich-text.js';
 import { renderPackingSlipHtml } from './packing-slip.js';
 import { listInstructionFiles, deleteInstructionFile, uploadInstructionFile } from './instruction-files.js';
+import { getPudoLockers } from './pudo.js';
 import { listPromoCodes, createPromoCode, updatePromoCode, validatePromo, computePromoDiscount } from './promos.js';
 import {
   listClients,
@@ -2709,6 +2710,14 @@ app.post('/api/checkout/retry-payment', checkoutLimiter, (req, res) => {
   res.json({ redirect: buildPayfastRedirect({ order: getOrder(order.id), siteUrl, apiUrl, paymentMethod: chosen }) });
 });
 
+// Owner request (2026-09-06): the PUDO locker list for checkout's picker.
+// Public and unauthenticated (it feeds the storefront); the API key stays
+// server-side in Settings and the response is a slim cached subset.
+app.get('/api/pudo/lockers', async (_req, res) => {
+  const { lockers, fetchedAt } = await getPudoLockers();
+  res.json({ lockers, fetchedAt });
+});
+
 app.post('/api/checkout', checkoutLimiter, async (req, res) => {
   const body = req.body || {};
   try {
@@ -2719,6 +2728,9 @@ app.post('/api/checkout', checkoutLimiter, async (req, res) => {
       shippingOptionId: body.shippingOptionId,
       paymentMethod: body.paymentMethod,
       promoCode: body.promoCode,
+      pudoLockerName: body.pudoLockerName,
+      pudoLockerAddress: body.pudoLockerAddress,
+      customerNotes: body.customerNotes,
     });
     const lowStock = order._lowStock;
     delete order._lowStock;
@@ -2918,6 +2930,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'orderNotificationEmail',
     // SITE-027
     'lowStockThreshold',
+    // PUDO locker picker (2026-09-06)
+    'pudoApiKey',
     // SITE-026 / #60 -- volume price breaks (shape-guarded below)
     'volumeDiscounts',
     // SITE-056/057 / #90 -- design-file retention window
