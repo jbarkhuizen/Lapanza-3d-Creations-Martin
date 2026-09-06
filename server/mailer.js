@@ -3,6 +3,9 @@ import { getSettings } from './settings.js';
 import { formatRand } from './money.js';
 import { renderInvoiceHtml } from './invoice.js';
 import { renderPackingSlipHtml } from './packing-slip.js';
+import path from 'path';
+import fs from 'fs';
+import { INSTRUCTIONS_DIR } from './instruction-files.js';
 import { renderEmailShell, renderButton, escapeHtml, textToHtml, interpolate } from './email-template.js';
 
 const FROM_ADDRESS = process.env.GMAIL_USER || 'lapanzaonline@gmail.com';
@@ -92,6 +95,21 @@ function orderTotalsHtml(order, settings) {
 // the caller can decide whether to record confirmation_email_sent_at.
 // Editable via Settings -> Communications -> "Order confirmation". Tokens:
 // {{name}}, {{orderRef}}.
+// Owner request (2026-09-06): instruction sheets picked on the order (admin
+// order detail) ride along as PDF attachments on the customer's
+// confirmation and invoice emails. Missing files are skipped silently --
+// a sheet deleted after being picked must not block the email.
+function instructionAttachments(order) {
+  return (order.instructionFiles || [])
+    .map((name) => {
+      const safe = path.basename(String(name || ''));
+      const abs = path.join(INSTRUCTIONS_DIR(), safe);
+      if (!safe.toLowerCase().endsWith('.pdf') || !fs.existsSync(abs)) return null;
+      return { filename: safe, path: abs, contentType: 'application/pdf' };
+    })
+    .filter(Boolean);
+}
+
 export async function sendOrderConfirmationEmail(order) {
   if (!order.client?.email) throw new Error('Order has no client email');
   const settings = getSettings();
@@ -107,6 +125,7 @@ export async function sendOrderConfirmationEmail(order) {
     to: order.client.email,
     subject: subjectFor(settings, 'orderConfirmation', vars),
     html: renderEmailShell({ settings, preheader: 'Thanks for your order', bodyHtml }),
+    attachments: instructionAttachments(order),
   });
 }
 
@@ -202,6 +221,7 @@ export async function sendInvoiceEmail(order, { paid = false } = {}) {
     to: order.client.email,
     subject,
     html: renderInvoiceHtml(order, getSettings(), { paid }),
+    attachments: instructionAttachments(order),
   });
 }
 

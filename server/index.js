@@ -87,6 +87,7 @@ import {
   createManualOrder,
   updateOrderStatus,
   setOrderCollected,
+  setOrderInstructionFiles,
   updateOrderTracking,
   markOrderPaid,
   markConfirmationEmailSent,
@@ -2494,6 +2495,19 @@ app.post('/api/instruction-files', requireAuth, uploadInstructionFile.single('fi
   if (!req.file) return res.status(400).json({ error: 'A PDF file is required (max 10MB)' });
   recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Uploaded instruction file ${req.file.filename} (${Math.round(req.file.size / 1024)}KB)` });
   res.status(201).json({ file: { filename: req.file.filename, size: req.file.size, uploadedAt: new Date().toISOString() } });
+});
+
+// Owner request (2026-09-06): pick which instruction sheets ship with an
+// order's customer emails (confirmation + invoice attach them).
+app.patch('/api/orders/:id/instruction-files', requireAuth, (req, res) => {
+  const requested = Array.isArray((req.body || {}).files) ? (req.body || {}).files.map(String) : [];
+  const available = new Set(listInstructionFiles().map((f) => f.filename));
+  const unknown = requested.filter((f) => !available.has(f));
+  if (unknown.length) return res.status(400).json({ error: `Unknown instruction file: ${unknown[0]}` });
+  const order = setOrderInstructionFiles(req.params.id, requested);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.invoiceNumber || order.id}: instruction files set to [${requested.join(', ') || 'none'}]` });
+  res.json({ order });
 });
 
 app.delete('/api/instruction-files/:filename', requireAuth, (req, res) => {

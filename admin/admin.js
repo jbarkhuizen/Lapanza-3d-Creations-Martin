@@ -3700,6 +3700,13 @@ async function openOrderDetail(id) {
 
 async function renderOrderDetail(id, editClient = false) {
   const { order } = await api(`/api/orders/${id}`);
+  // Instruction sheets available for attaching to this order's customer
+  // emails (owner request 2026-09-06). Failure here must not break the
+  // order page -- the panel just hides.
+  let instructionFiles = [];
+  try {
+    ({ files: instructionFiles } = await api('/api/instruction-files'));
+  } catch { /* panel hidden */ }
   const c = order.client || {};
   const addr = [c.street, c.suburb, c.city, c.province, c.postalCode, c.country].filter(Boolean).join(', ');
 
@@ -3776,6 +3783,16 @@ async function renderOrderDetail(id, editClient = false) {
              ${escapeHtml(addr)}</p>`}
       </div>
 
+      ${instructionFiles.length ? `
+      <div class="panel stack gap-2">
+        <div class="section-head"><h3>Instruction Files</h3><button class="btn small btn-primary" id="save-instructions" type="button">Save selection</button></div>
+        <p class="muted" style="margin:0;font-size:0.85rem">Ticked sheets are attached as PDFs to this order's confirmation and invoice emails (sent or re-sent after saving).</p>
+        <div class="stack gap-1">
+          ${instructionFiles.map((f) => `
+            <label class="field checkbox" style="margin:0"><input type="checkbox" class="order-instruction" value="${escapeAttr(f.filename)}" ${order.instructionFiles?.includes(f.filename) ? 'checked' : ''} /><span><code>${escapeHtml(f.filename)}</code></span></label>`).join('')}
+        </div>
+      </div>` : ''}
+
       <div class="panel table-wrap">
         <div class="section-head"><h3>Items</h3></div>
         <table class="catalog">
@@ -3802,6 +3819,17 @@ async function renderOrderDetail(id, editClient = false) {
   // Client edit (owner request 2026-09-03): fixes wrong names/details right
   // from the order. Saves to the client RECORD (PUT /api/clients/:id,
   // partial merge), so the change shows everywhere this client appears.
+  $('#save-instructions')?.addEventListener('click', async () => {
+    const files = $$('#view-order-detail .order-instruction:checked').map((cb) => cb.value);
+    try {
+      await api(`/api/orders/${order.id}/instruction-files`, { method: 'PATCH', body: JSON.stringify({ files }) });
+      toast(files.length ? `${files.length} instruction file${files.length === 1 ? '' : 's'} will be attached` : 'No instruction files attached');
+      await renderOrderDetail(order.id);
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
   $('#edit-client')?.addEventListener('click', () => renderOrderDetail(order.id, true));
   $('#cancel-edit-client')?.addEventListener('click', () => renderOrderDetail(order.id));
   $('#save-client')?.addEventListener('click', async () => {

@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { openDb } from './db.js';
 import { updateSettings } from './settings.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
-import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected } from './orders.js';
+import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected, setOrderInstructionFiles } from './orders.js';
 import { createShippingOption } from './shipping.js';
 
 function colourStock(filamentId, sku, db) {
@@ -608,5 +608,26 @@ test('createManualOrder accepts a client without an email; walk-ins stay separat
     shippingMethod: 'collect',
   }, db);
   assert.strictEqual(repeat.client.id, first.client.id);
+  db.close();
+});
+
+test('setOrderInstructionFiles persists a deduplicated list readable via getOrder', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const colour = addColour(filament.id, { name: 'Red', sku: 'PLA-INSTR-1KG', priceRand: 100, weightG: 500, stockQty: 5 }, db).colours[0];
+  const order = createOrder({
+    client: { name: 'Instr Tester', email: 'instr@example.com' },
+    items: [{ productId: `filament:pla:${colour.sku}`, quantity: 1 }],
+    paymentMethod: 'manual_eft',
+    shippingMethod: 'collect',
+  }, db);
+  assert.deepStrictEqual(order.instructionFiles, []);
+
+  const updated = setOrderInstructionFiles(order.id, ['spacer.pdf', 'cup.pdf', 'spacer.pdf'], db);
+  assert.deepStrictEqual(updated.instructionFiles, ['spacer.pdf', 'cup.pdf']);
+
+  const cleared = setOrderInstructionFiles(order.id, [], db);
+  assert.deepStrictEqual(cleared.instructionFiles, []);
+  assert.strictEqual(setOrderInstructionFiles('missing', ['x.pdf'], db), null);
   db.close();
 });

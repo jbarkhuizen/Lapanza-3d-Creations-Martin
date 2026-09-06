@@ -114,6 +114,7 @@ function rowToOrder(row) {
     paymentStatus: row.payment_status,
     trackingNumber: row.tracking_number,
     collectedAt: row.collected_at || null,
+    instructionFiles: (() => { try { return JSON.parse(row.instruction_files || '[]'); } catch { return []; } })(),
     confirmationEmailSentAt: row.confirmation_email_sent_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -154,6 +155,17 @@ export function setOrderCollected(id, collected, db = getDb()) {
   const res = db
     .prepare('UPDATE orders SET collected_at = ?, updated_at = ? WHERE id = ?')
     .run(collected ? new Date().toISOString() : null, new Date().toISOString(), id);
+  return res.changes > 0 ? getOrder(id, db) : null;
+}
+
+// Owner request (2026-09-06): which instruction sheets ride along with this
+// order's customer emails. Caller validates the filenames exist (the route
+// checks against listInstructionFiles) -- this just persists the list.
+export function setOrderInstructionFiles(id, filenames, db = getDb()) {
+  const clean = [...new Set((Array.isArray(filenames) ? filenames : []).map((f) => String(f)))];
+  const res = db
+    .prepare('UPDATE orders SET instruction_files = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(clean), new Date().toISOString(), id);
   return res.changes > 0 ? getOrder(id, db) : null;
 }
 

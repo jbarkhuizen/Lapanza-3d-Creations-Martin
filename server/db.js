@@ -599,6 +599,12 @@ function ensurePromoColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(orders)', 'collected_at')) {
     db.exec('ALTER TABLE orders ADD COLUMN collected_at TEXT');
   }
+  // Owner request (2026-09-06): instruction files picked per order in the
+  // admin, attached to the customer's confirmation/invoice emails. JSON
+  // array of filenames under public/uploads/instructions.
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'instruction_files')) {
+    db.exec("ALTER TABLE orders ADD COLUMN instruction_files TEXT NOT NULL DEFAULT '[]'");
+  }
 }
 
 function ensureCheckoutColumns(db) {
