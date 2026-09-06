@@ -66,6 +66,11 @@ const PUBLIC_SETTINGS_KEYS = [
   // generate-pages' "Only N left" stock labels and car-part brand pages --
   // the same filtered object feeds src/data/settings.json at build time)
   'printLeadTimeDays', 'filamentDispatchDays', 'volumeDiscounts', 'lowStockThreshold', 'carPartBrands',
+  // Checkout address autocomplete (2026-09-06). Deliberately public: this
+  // Google Maps key is embedded in the page by nature; it is locked to the
+  // site's domain + Places API in the Google console. NEVER add pudoApiKey
+  // here -- that one is server-side only.
+  'googleMapsApiKey',
 ];
 
 export function publicSettings(settings) {

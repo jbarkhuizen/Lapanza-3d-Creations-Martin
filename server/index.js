@@ -2932,6 +2932,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'lowStockThreshold',
     // PUDO locker picker (2026-09-06)
     'pudoApiKey',
+    // Checkout address autocomplete (2026-09-06)
+    'googleMapsApiKey',
     // SITE-026 / #60 -- volume price breaks (shape-guarded below)
     'volumeDiscounts',
     // SITE-056/057 / #90 -- design-file retention window

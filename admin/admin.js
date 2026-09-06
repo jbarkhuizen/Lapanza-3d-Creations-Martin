@@ -3327,6 +3327,7 @@ async function renderSettings() {
         <label class="field"><span>Default Quote Terms ({{depositPct}} Is Replaced at Quote Time)</span><textarea data-setting="quoteTermsDefault" rows="3">${escapeHtml(s.quoteTermsDefault || '')}</textarea></label>
         <label class="field" style="max-width:220px"><span>Low-stock Threshold</span><input data-setting="lowStockThreshold" type="number" min="1" step="1" value="${escapeAttr(String(s.lowStockThreshold ?? 3))}" /></label>
         <label class="field"><span>PUDO API Key (The Courier Guy — powers the checkout locker picker; free key from pudo.co.za → Settings → API Keys)</span><input data-setting="pudoApiKey" type="password" autocomplete="off" value="${escapeAttr(s.pudoApiKey || '')}" /></label>
+        <label class="field"><span>Google Maps API Key (checkout address autocomplete; restrict it to lapanza3d.co.za + Places API in the Google console — it ships in the public page)</span><input data-setting="googleMapsApiKey" autocomplete="off" value="${escapeAttr(s.googleMapsApiKey || '')}" /></label>
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Shown on filament/category pages and in the cart. Free text (e.g. "3-5") since these are ranges, not exact counts.</p>
         <div class="grid-2">
           <label class="field"><span>Ready-stock Filament Dispatch (Business Days)</span><input data-setting="filamentDispatchDays" value="${escapeAttr(s.filamentDispatchDays || '')}" /></label>

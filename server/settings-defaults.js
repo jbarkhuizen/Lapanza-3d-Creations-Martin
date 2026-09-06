@@ -71,6 +71,11 @@ export const DEFAULT_SETTINGS = {
   // The Courier Guy / PUDO API key (free account at pudo.co.za -> Settings
   // -> API Keys). Powers the checkout locker picker; empty = manual entry.
   pudoApiKey: '',
+  // Google Maps Platform key for checkout address autocomplete. CLIENT-SIDE
+  // by design (ships in site-settings.json and the page) -- safety comes
+  // from restricting it to the lapanza3d.co.za domain + Places API in the
+  // Google Cloud console, not from hiding it.
+  googleMapsApiKey: '',
 
   // Phase 3: Print Job Costing tool (server/print-jobs.js) -- internal-only,
   // never affects storefront product pricing.

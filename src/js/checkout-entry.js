@@ -237,12 +237,18 @@ async function init() {
   try {
     const settingsRes = await fetch('/site-settings.json', { cache: 'no-store' });
     if (settingsRes.ok) {
-      const vd = computeVolumeDiscount(items, (await settingsRes.json()).volumeDiscounts);
+      const siteSettings = await settingsRes.json();
+      const vd = computeVolumeDiscount(items, siteSettings.volumeDiscounts);
       if (vd) {
         volumeDiscountAmount = vd.amount;
         document.getElementById('checkout-discount').textContent = `−${formatPrice(vd.amount)}`;
         document.getElementById('checkout-discount-row').classList.remove('hidden');
       }
+      // Google address autocomplete (owner request 2026-09-06) -- purely
+      // additive: a search box above the address fields that fills them in.
+      // Any failure (no key, blocked script, API error) leaves manual
+      // entry exactly as it was.
+      if (siteSettings.googleMapsApiKey) initAddressAutocomplete(siteSettings.googleMapsApiKey);
     }
   } catch { /* no discount display -- server remains the authority */ }
   // Backlog #99: applied promo code. Like the volume discount above, this is
@@ -297,6 +303,80 @@ async function init() {
     }
     document.getElementById('checkout-total').textContent = formatPrice(orderTotal(lastShippingPrice));
   });
+
+  // ---- Google Places address autocomplete (owner request 2026-09-06) ----
+  // Uses the current PlaceAutocompleteElement web component (the classic
+  // places.Autocomplete widget is legacy-only for new Google projects, and
+  // this key was created fresh). The component renders its own search box;
+  // a selection parses addressComponents into the existing manual fields,
+  // which stay fully editable.
+  async function initAddressAutocomplete(mapsKey) {
+    try {
+      window.__gmapsReady = window.__gmapsReady || new Promise((resolve) => { window.__gmapsReadyCb = resolve; });
+      if (!document.getElementById('gmaps-loader')) {
+        const script = document.createElement('script');
+        script.id = 'gmaps-loader';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(mapsKey)}&v=weekly&loading=async&callback=__gmapsReadyCb`;
+        script.async = true;
+        document.head.appendChild(script);
+      }
+      await window.__gmapsReady;
+      const { PlaceAutocompleteElement } = await google.maps.importLibrary('places');
+      const pac = new PlaceAutocompleteElement({ includedRegionCodes: ['za'] });
+      pac.id = 'checkout-address-search';
+      pac.style.width = '100%';
+
+      const wrap = document.createElement('div');
+      wrap.className = 'mt-4';
+      const label = document.createElement('span');
+      label.className = 'block mb-1 text-espresso/70 text-sm';
+      label.textContent = 'Search your address';
+      wrap.appendChild(label);
+      wrap.appendChild(pac);
+      const hint = document.createElement('p');
+      hint.className = 'text-xs text-espresso/50 mt-1';
+      hint.textContent = 'Start typing and pick your address — the fields below fill in automatically (you can still edit them).';
+      wrap.appendChild(hint);
+      const addressBox = document.getElementById('checkout-address-fields');
+      addressBox.insertBefore(wrap, addressBox.firstChild);
+
+      const fill = (components, formatted) => {
+        const get = (type, short = false) => {
+          const c = (components || []).find((x) => (x.types || []).includes(type));
+          if (!c) return '';
+          return short ? (c.shortText || c.short_name || '') : (c.longText || c.long_name || '');
+        };
+        const streetNumber = get('street_number');
+        const route = get('route');
+        const setField = (name, value) => {
+          const input = document.querySelector(`[name="${name}"]`);
+          if (input && value) input.value = value;
+        };
+        setField('street', [streetNumber, route].filter(Boolean).join(' ') || formatted || '');
+        setField('suburb', get('sublocality_level_1') || get('sublocality') || get('neighborhood'));
+        setField('city', get('locality') || get('administrative_area_level_2'));
+        setField('province', get('administrative_area_level_1'));
+        setField('postalCode', get('postal_code'));
+      };
+
+      // Current event is 'gmp-select' (placePrediction); some rollouts still
+      // fire the older 'gmp-placeselect' (place). Support both.
+      pac.addEventListener('gmp-select', async (e) => {
+        try {
+          const place = e.placePrediction.toPlace();
+          await place.fetchFields({ fields: ['addressComponents', 'formattedAddress'] });
+          fill(place.addressComponents, place.formattedAddress);
+        } catch { /* leave manual fields as they are */ }
+      });
+      pac.addEventListener('gmp-placeselect', async (e) => {
+        try {
+          const place = e.place;
+          await place.fetchFields({ fields: ['addressComponents', 'formattedAddress'] });
+          fill(place.addressComponents, place.formattedAddress);
+        } catch { /* leave manual fields as they are */ }
+      });
+    } catch { /* autocomplete is an enhancement -- manual entry unaffected */ }
+  }
 
   const form = document.getElementById('checkout-form');
   const shippingBox = document.getElementById('checkout-shipping');
