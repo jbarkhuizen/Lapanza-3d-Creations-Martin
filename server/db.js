@@ -321,6 +321,36 @@ export function ensureSchema(db) {
       created_at TEXT NOT NULL
     );
 
+    -- Expenses module (owner request 2026-09-07): supplier invoices with
+    -- line items, replacing the flat purchases table above (kept as a
+    -- safety copy; its rows migrate into expense_invoices on boot via
+    -- expenses.js's migratePurchasesToExpenses, keyed on
+    -- source_purchase_id so the migration is idempotent). Money is REAL
+    -- rand with cents here -- supplier invoices carry cents and the
+    -- Financial Overview reconciles against real card statements.
+    CREATE TABLE IF NOT EXISTS expense_invoices (
+      id TEXT PRIMARY KEY,
+      supplier TEXT NOT NULL,
+      purchase_date TEXT,
+      payment_method TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      total REAL NOT NULL DEFAULT 0,
+      source_purchase_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_expense_invoices_date ON expense_invoices (purchase_date);
+
+    CREATE TABLE IF NOT EXISTS expense_items (
+      id TEXT PRIMARY KEY,
+      expense_id TEXT NOT NULL REFERENCES expense_invoices(id) ON DELETE CASCADE,
+      description TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT '',
+      quantity REAL NOT NULL DEFAULT 1,
+      unit_price REAL NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_expense_items_expense ON expense_items (expense_id);
+
     -- Phase 4: marketing campaigns. Separate from newsletter_subscribers
     -- (the audience list) -- these are the actual messages sent, with a
     -- compose -> approve -> send lifecycle.

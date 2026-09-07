@@ -153,7 +153,8 @@ function setRoute(route, { id } = {}) {
   show($('#view-whatsapp-updates'), route === 'whatsapp-updates');
   show($('#view-invoice-history'), route === 'invoice-history');
   show($('#view-new-order'), route === 'new-order');
-  show($('#view-purchases'), route === 'purchases');
+  show($('#view-expenses'), route === 'expenses');
+  show($('#view-finance-overview'), route === 'finance-overview');
   show($('#view-print-jobs'), route === 'print-jobs');
   show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-backups'), route === 'backups');
@@ -188,7 +189,8 @@ function setRoute(route, { id } = {}) {
     stock: ['Local Management', 'Stock management'],
     'reorder-report': ['Local Management', 'Reorder Report'],
     'instruction-files': ['Local Management', 'Instruction Files'],
-    purchases: ['Local Management', 'Purchase History'],
+    expenses: ['Expenses', 'Expenses'],
+    'finance-overview': ['Expenses', 'Financial Overview'],
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
     backups: ['Settings', 'Backups'],
@@ -537,9 +539,12 @@ function bindChrome() {
       } else if (btn.dataset.route === 'new-order') {
         setRoute('new-order');
         await renderNewOrder();
-      } else if (btn.dataset.route === 'purchases') {
-        setRoute('purchases');
-        await renderPurchases();
+      } else if (btn.dataset.route === 'expenses') {
+        setRoute('expenses');
+        await renderExpenses();
+      } else if (btn.dataset.route === 'finance-overview') {
+        setRoute('finance-overview');
+        await renderFinanceOverview();
       } else if (btn.dataset.route === 'print-jobs') {
         setRoute('print-jobs');
         await renderPrintJobs();
@@ -3114,6 +3119,7 @@ const SETTINGS_SECTIONS = [
   { key: 'filament-brands', label: 'In-house Filament Brands' },
   { key: 'todo-categories', label: 'Todo Categories' },
   { key: 'todo-priorities', label: 'Todo Priorities' },
+  { key: 'expense-lists', label: 'Expenses' },
   { key: 'car-part-brands', label: 'Car-part Brands' },
   { key: 'car-part-models-landrover', label: 'Landrover Part Models' },
   { key: 'car-part-models-gwm', label: 'GWM Part Models' },
@@ -3373,6 +3379,9 @@ async function renderSettings() {
       ${settingsSectionWrap('filament-brands', 'In-house Filament Brands', configurableListPanel('inHouseFilamentBrands', 'In-house filament brands', s.inHouseFilamentBrands, 'Used when adding and filtering local print-stock rolls. Untick a brand to retire it from the "add new roll" picker without touching existing stock already logged under it.'))}
       ${settingsSectionWrap('todo-categories', 'Todo Categories', configurableListPanel('todoCategories', 'Todo / Backlog: Categories', s.todoCategories, 'Options for the Category field on the Todo/Backlog page.'))}
       ${settingsSectionWrap('todo-priorities', 'Todo Priorities', configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.'))}
+      ${settingsSectionWrap('expense-lists', 'Expenses', `
+        ${configurableListPanel('expenseCategories', 'Expenses: Categories', s.expenseCategories, 'Categories for expense line items — these drive the Financial Overview breakdown.')}
+        ${configurableListPanel('expensePaymentMethods', 'Expenses: Payment Methods', s.expensePaymentMethods, 'Your cards and accounts for the Paid Via field — matches how you reconcile statements.')}`)}
       ${settingsSectionWrap('car-part-brands', 'Car-part Brands', configurableListPanel('carPartBrands', 'Car-part brands', s.carPartBrands, 'The vehicle brands with their own car-parts page (name becomes the page URL — keep it simple, e.g. Toyota). After adding one: create its category via Product Catalog → + Category with parent car-parts and the matching slug, then Publish to site. Unticking hides the page and nav link on the next publish without touching existing items.'))}
       ${settingsSectionWrap('car-part-models-landrover', 'Landrover Part Models', configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.'))}
       ${settingsSectionWrap('car-part-models-gwm', 'GWM Part Models', configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.'))}
@@ -5446,26 +5455,152 @@ async function renderInHouseFilament() {
   }
 }
 
-// ---- Purchase History (Phase 3, supplier expenses) ----
+// ---- Expenses (owner request 2026-09-07; replaced Purchase History) ----
+// Supplier invoices with line items. Categories + payment methods come from
+// the Settings configurable lists (expenseCategories/expensePaymentMethods).
 
-function blankPurchase() {
-  return { id: null, supplier: '', goods: '', totalValue: 0, status: 'outstanding', paymentType: '', purchaseDate: '' };
+function blankExpense() {
+  return { id: null, supplier: '', purchaseDate: new Date().toISOString().slice(0, 10), paymentMethod: '', notes: '', items: [blankExpenseItem()] };
 }
 
-async function renderPurchases() {
-  state.editingPurchase = state.editingPurchase || null;
-  const { purchases } = await api('/api/purchases');
+function blankExpenseItem() {
+  return { description: '', category: '', quantity: 1, unitPrice: 0 };
+}
 
-  const rows = purchases
+function activeListNames(list) {
+  return (list || []).filter((x) => x.active !== false).map((x) => x.name);
+}
+
+const EXPENSE_SORT_ACCESSORS = {
+  date: (e) => e.purchaseDate || '',
+  supplier: (e) => e.supplier || '',
+  method: (e) => e.paymentMethod || '',
+  total: (e) => Number(e.total),
+};
+
+function expenseFormHtml(form, categories, methods) {
+  const itemRows = form.items
     .map(
-      (p) => `
-        <tr data-id="${escapeAttr(p.id)}">
-          <td>${escapeHtml(p.supplier)}</td>
-          <td>${escapeHtml(p.goods || '—')}</td>
-          <td>${formatRand(p.totalValue)}</td>
-          <td>${statusBadge(p.status)}</td>
-          <td>${escapeHtml(p.paymentType || '—')}</td>
+      (item, idx) => `
+        <tr data-item-idx="${idx}">
+          <td><input class="ex-item-desc" value="${escapeAttr(item.description)}" placeholder="e.g. Creality K1C printer" /></td>
           <td>
+            <select class="ex-item-category">
+              <option value="">Uncategorised</option>
+              ${categories.map((c) => `<option value="${escapeAttr(c)}" ${item.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              ${item.category && !categories.includes(item.category) ? `<option value="${escapeAttr(item.category)}" selected>${escapeHtml(item.category)}</option>` : ''}
+            </select>
+          </td>
+          <td><input class="ex-item-qty" type="number" min="0.01" step="0.01" value="${escapeAttr(String(item.quantity))}" style="width:5rem" /></td>
+          <td><input class="ex-item-price" type="number" min="0" step="0.01" value="${escapeAttr(String(item.unitPrice))}" style="width:7rem" /></td>
+          <td class="ex-item-total" style="text-align:right;white-space:nowrap">${formatRand((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0))}</td>
+          <td>${form.items.length > 1 ? '<button class="btn small btn-ghost" data-action="remove-item" type="button">&times;</button>' : ''}</td>
+        </tr>`,
+    )
+    .join('');
+  const total = form.items.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0);
+  return `
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>${form.id ? 'Edit expense' : 'New expense'}</h3></div>
+        <div class="grid-3">
+          <label class="field"><span>Service Provider / Supplier *</span><input id="ex-supplier" value="${escapeAttr(form.supplier)}" /></label>
+          <label class="field"><span>Date Purchased</span><input id="ex-date" type="date" value="${escapeAttr(form.purchaseDate || '')}" /></label>
+          <label class="field"><span>Paid Via</span>
+            <select id="ex-method">
+              <option value="">—</option>
+              ${methods.map((m) => `<option value="${escapeAttr(m)}" ${form.paymentMethod === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+              ${form.paymentMethod && !methods.includes(form.paymentMethod) ? `<option value="${escapeAttr(form.paymentMethod)}" selected>${escapeHtml(form.paymentMethod)}</option>` : ''}
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="catalog">
+            <thead><tr><th>Item</th><th>Category</th><th>Qty</th><th>Unit Price (R)</th><th style="text-align:right">Line Total</th><th></th></tr></thead>
+            <tbody id="ex-item-rows">${itemRows}</tbody>
+          </table>
+        </div>
+        <div class="row-card-actions">
+          <button class="btn small" id="ex-add-item" type="button">+ Add line</button>
+          <span style="margin-left:auto;font-weight:600">Invoice total: <span id="ex-total">${formatRand(total)}</span></span>
+        </div>
+        <label class="field"><span>Notes (Optional)</span><textarea id="ex-notes" rows="2" maxlength="1000">${escapeHtml(form.notes || '')}</textarea></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-expense" type="button">Save expense</button>
+          <button class="btn btn-ghost" id="cancel-expense" type="button">Cancel</button>
+        </div>
+      </div>`;
+}
+
+// The form edits state.editingExpense in place on every keystroke (same
+// lesson as New Order 2026-09-03: inputs that only exist in the DOM get
+// wiped by any re-render).
+function bindExpenseForm(form) {
+  const syncTotals = () => {
+    $$('#ex-item-rows tr[data-item-idx]').forEach((tr) => {
+      const item = form.items[Number(tr.dataset.itemIdx)];
+      tr.querySelector('.ex-item-total').textContent = formatRand((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0));
+    });
+    const total = form.items.reduce((sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unitPrice) || 0), 0);
+    $('#ex-total').textContent = formatRand(total);
+  };
+  $('#ex-supplier').addEventListener('input', (e) => { form.supplier = e.target.value; });
+  $('#ex-date').addEventListener('input', (e) => { form.purchaseDate = e.target.value; });
+  $('#ex-method').addEventListener('change', (e) => { form.paymentMethod = e.target.value; });
+  $('#ex-notes').addEventListener('input', (e) => { form.notes = e.target.value; });
+  $$('#ex-item-rows tr[data-item-idx]').forEach((tr) => {
+    const item = form.items[Number(tr.dataset.itemIdx)];
+    tr.querySelector('.ex-item-desc').addEventListener('input', (e) => { item.description = e.target.value; });
+    tr.querySelector('.ex-item-category').addEventListener('change', (e) => { item.category = e.target.value; });
+    tr.querySelector('.ex-item-qty').addEventListener('input', (e) => { item.quantity = e.target.value; syncTotals(); });
+    tr.querySelector('.ex-item-price').addEventListener('input', (e) => { item.unitPrice = e.target.value; syncTotals(); });
+    tr.querySelector('[data-action="remove-item"]')?.addEventListener('click', async () => {
+      form.items.splice(Number(tr.dataset.itemIdx), 1);
+      await renderExpenses();
+    });
+  });
+  $('#ex-add-item').addEventListener('click', async () => { form.items.push(blankExpenseItem()); await renderExpenses(); });
+  $('#cancel-expense').addEventListener('click', async () => { state.editingExpense = null; await renderExpenses(); });
+  $('#save-expense').addEventListener('click', async () => {
+    const payload = {
+      supplier: form.supplier,
+      purchaseDate: form.purchaseDate,
+      paymentMethod: form.paymentMethod,
+      notes: form.notes,
+      items: form.items.map((i) => ({ description: i.description, category: i.category, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0 })),
+    };
+    try {
+      if (form.id) await api(`/api/expenses/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      else await api('/api/expenses', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Expense saved');
+      state.editingExpense = null;
+      await renderExpenses();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+}
+
+async function renderExpenses() {
+  state.editingExpense = state.editingExpense || null;
+  state.expenseQ = state.expenseQ || '';
+  state.expenseSort = state.expenseSort || { key: 'date', dir: 'desc' };
+  await ensureSettingsLoaded();
+  const categories = activeListNames(state.settings.expenseCategories);
+  const methods = activeListNames(state.settings.expensePaymentMethods);
+  const { expenses } = await api(`/api/expenses?${new URLSearchParams({ q: state.expenseQ })}`);
+
+  const sorted = applySort(expenses, state.expenseSort, EXPENSE_SORT_ACCESSORS);
+  const grandTotal = expenses.reduce((sum, e) => sum + e.total, 0);
+  const rows = sorted
+    .map(
+      (e) => `
+        <tr data-id="${escapeAttr(e.id)}">
+          <td style="white-space:nowrap">${escapeHtml((e.purchaseDate || '').slice(0, 10) || '—')}</td>
+          <td>${escapeHtml(e.supplier)}</td>
+          <td>${e.items.map((i) => escapeHtml(i.description)).join('<br>')}</td>
+          <td>${escapeHtml(e.paymentMethod || '—')}</td>
+          <td style="text-align:right;white-space:nowrap">${formatRand(e.total)}</td>
+          <td style="white-space:nowrap">
             <button class="btn small" data-action="edit" type="button">Edit</button>
             <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
           </td>
@@ -5473,79 +5608,151 @@ async function renderPurchases() {
     )
     .join('');
 
-  const form = state.editingPurchase;
-  $('#view-purchases').innerHTML = `
+  const st = state.expenseSort;
+  $('#view-expenses').innerHTML = `
     <div class="toolbar">
-      <button class="btn btn-primary" id="new-purchase" type="button">+ Purchase</button>
-      <span class="muted">${escapeHtml(String(purchases.length))} purchases</span>
+      <button class="btn btn-primary" id="new-expense" type="button">+ Expense</button>
+      <input id="expense-q" type="search" placeholder="Search supplier, item, category, card…" value="${escapeAttr(state.expenseQ)}" />
+      <span class="muted">${escapeHtml(String(expenses.length))} invoice${expenses.length === 1 ? '' : 's'} · ${formatRand(grandTotal)}</span>
     </div>
-    ${form ? `
-      <div class="panel stack gap-3" style="max-width:600px">
-        <div class="section-head"><h3>${form.id ? 'Edit purchase' : 'New purchase'}</h3></div>
-        <label class="field"><span>Supplier</span><input id="pu-supplier" value="${escapeAttr(form.supplier)}" /></label>
-        <label class="field"><span>Goods</span><input id="pu-goods" value="${escapeAttr(form.goods)}" /></label>
-        <div class="grid-3">
-          <label class="field"><span>Total Value (R)</span><input id="pu-value" type="number" min="0" step="1" value="${escapeAttr(String(form.totalValue))}" /></label>
-          <label class="field"><span>Status</span>
-            <select id="pu-status">
-              <option value="outstanding" ${form.status === 'outstanding' ? 'selected' : ''}>Outstanding</option>
-              <option value="paid" ${form.status === 'paid' ? 'selected' : ''}>Paid</option>
-            </select>
-          </label>
-          <label class="field"><span>Payment Type</span><input id="pu-payment-type" value="${escapeAttr(form.paymentType)}" placeholder="e.g. Card, EFT" /></label>
-        </div>
-        <div class="row-card-actions">
-          <button class="btn btn-primary" id="save-purchase" type="button">Save</button>
-          <button class="btn btn-ghost" id="cancel-purchase" type="button">Cancel</button>
-        </div>
-      </div>` : ''}
+    ${state.editingExpense ? expenseFormHtml(state.editingExpense, categories, methods) : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Supplier</th><th>Goods</th><th>Value</th><th>Status</th><th>Payment</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No purchases logged yet</div></td></tr>'}</tbody>
+        <thead><tr>${sortableTh(st, 'date', 'Date')}${sortableTh(st, 'supplier', 'Service Provider')}<th>Items</th>${sortableTh(st, 'method', 'Paid Via')}${sortableTh(st, 'total', 'Total')}<th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No expenses captured yet — click + Expense to log the first one</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
-  $('#new-purchase').addEventListener('click', async () => { state.editingPurchase = blankPurchase(); await renderPurchases(); });
-  $$('#view-purchases tbody tr[data-id]').forEach((tr) => {
+  $$('#view-expenses th.sort-th').forEach((th) => {
+    th.addEventListener('click', async () => {
+      const key = th.dataset.sort;
+      state.expenseSort = state.expenseSort?.key === key
+        ? { key, dir: state.expenseSort.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' };
+      await renderExpenses();
+    });
+  });
+  $('#expense-q').addEventListener('keydown', async (e) => {
+    if (e.key !== 'Enter') return;
+    state.expenseQ = $('#expense-q').value.trim();
+    await renderExpenses();
+  });
+  $('#new-expense').addEventListener('click', async () => { state.editingExpense = blankExpense(); await renderExpenses(); });
+  $$('#view-expenses tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
-      const { purchase } = await api(`/api/purchases/${tr.dataset.id}`);
-      state.editingPurchase = purchase;
-      await renderPurchases();
+      const { expense } = await api(`/api/expenses/${tr.dataset.id}`);
+      state.editingExpense = expense;
+      await renderExpenses();
+      $('#ex-supplier')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
-      if (!confirm('Delete this purchase?')) return;
+      if (!confirm('Delete this expense invoice? This cannot be undone.')) return;
       try {
-        await api(`/api/purchases/${tr.dataset.id}`, { method: 'DELETE' });
-        toast('Deleted');
-        await renderPurchases();
+        await api(`/api/expenses/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Expense deleted');
+        await renderExpenses();
       } catch (ex) {
         toast(ex.message);
       }
     });
   });
+  if (state.editingExpense) bindExpenseForm(state.editingExpense);
+}
 
-  if (form) {
-    $('#cancel-purchase').addEventListener('click', async () => { state.editingPurchase = null; await renderPurchases(); });
-    $('#save-purchase').addEventListener('click', async () => {
-      const payload = {
-        supplier: $('#pu-supplier').value,
-        goods: $('#pu-goods').value,
-        totalValue: Number($('#pu-value').value) || 0,
-        status: $('#pu-status').value,
-        paymentType: $('#pu-payment-type').value,
-      };
-      try {
-        if (form.id) await api(`/api/purchases/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-        else await api('/api/purchases', { method: 'POST', body: JSON.stringify(payload) });
-        toast('Purchase saved');
-        state.editingPurchase = null;
-        await renderPurchases();
-      } catch (ex) {
-        toast(ex.message);
-      }
-    });
+// ---- Financial Overview (owner request 2026-09-07) ----
+// Income = paid orders only (owner decision); expenses from the module
+// above. Same inline-SVG chart approach as the analytics page.
+
+function monthlyFinanceChartHtml(series) {
+  if (!series?.length || !series.some((m) => m.income > 0 || m.expenses > 0)) {
+    return '<p class="muted">No income or expenses recorded in this window yet.</p>';
   }
+  const width = 640;
+  const height = 170;
+  const groupW = width / series.length;
+  const barW = Math.max(3, groupW * 0.32);
+  const max = Math.max(...series.map((m) => Math.max(m.income, m.expenses)), 1);
+  const bars = series
+    .map((m, i) => {
+      const x = i * groupW + (groupW - barW * 2 - 2) / 2;
+      const ih = Math.max(m.income ? 2 : 0, Math.round((m.income / max) * (height - 4)));
+      const eh = Math.max(m.expenses ? 2 : 0, Math.round((m.expenses / max) * (height - 4)));
+      const title = `<title>${escapeHtml(m.month)} — In: ${escapeHtml(formatRand(m.income))}, Out: ${escapeHtml(formatRand(m.expenses))}, Net: ${escapeHtml(formatRand(m.net))}</title>`;
+      return `<rect x="${x.toFixed(1)}" y="${height - ih}" width="${barW.toFixed(1)}" height="${ih}" rx="1.5" class="chart-bar">${title}</rect>
+        <rect x="${(x + barW + 2).toFixed(1)}" y="${height - eh}" width="${barW.toFixed(1)}" height="${eh}" rx="1.5" class="chart-bar-alt">${title}</rect>`;
+    })
+    .join('');
+  return `<svg viewBox="0 0 ${width} ${height}" class="revenue-chart" preserveAspectRatio="none" role="img" aria-label="Income vs expenses per month">${bars}</svg>
+    <div class="muted" style="display:flex;justify-content:space-between;font-size:0.75rem;margin-top:0.25rem"><span>${escapeHtml(series[0].month)}</span><span>${escapeHtml(series[series.length - 1].month)}</span></div>
+    <p class="muted" style="font-size:0.78rem;margin:0.4rem 0 0"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--accent,#c24b28);vertical-align:-1px"></span> Income (paid orders) · <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:color-mix(in srgb, var(--accent,#c24b28) 40%, var(--line));vertical-align:-1px"></span> Expenses. Hover a bar for the figures.</p>`;
+}
+
+async function renderFinanceOverview() {
+  const data = await api('/api/finance/overview');
+  const thisMonth = data.months[data.months.length - 1] || { income: 0, expenses: 0, net: 0 };
+  const currentTaxYear = data.taxYears[0];
+
+  const monthRows = [...data.months]
+    .reverse()
+    .map((m) => `<tr><td>${escapeHtml(m.month)}</td><td style="text-align:right">${formatRand(m.income)}</td><td style="text-align:right">${formatRand(m.expenses)}</td><td style="text-align:right;font-weight:600;${m.net < 0 ? 'color:var(--danger,#c24b28)' : 'color:#2e6e46'}">${formatRand(m.net)}</td></tr>`)
+    .join('');
+
+  const maxCat = Math.max(...data.categories.map((c) => c.total), 1);
+  const categoryRows = data.categories
+    .map(
+      (c) => `<tr><td>${escapeHtml(c.category)}</td><td style="width:45%"><div style="background:color-mix(in srgb, var(--accent,#c24b28) 30%, var(--line));height:10px;border-radius:3px;width:${Math.max(2, Math.round((c.total / maxCat) * 100))}%"></div></td><td style="text-align:right;white-space:nowrap">${formatRand(c.total)}</td></tr>`,
+    )
+    .join('');
+
+  const methodRows = data.paymentMethods
+    .map((m) => `<tr><td>${escapeHtml(m.method)}</td><td style="text-align:right">${formatRand(m.total)}</td></tr>`)
+    .join('');
+
+  const taxRows = data.taxYears
+    .map(
+      (t) => `<tr><td>${escapeHtml(t.label)}</td><td class="muted" style="font-size:0.85rem">${escapeHtml(t.from)} → ${escapeHtml(t.to.slice(0, 7))}</td><td style="text-align:right">${formatRand(t.income)}</td><td style="text-align:right">${formatRand(t.expenses)}</td><td style="text-align:right;font-weight:600;${t.net < 0 ? 'color:var(--danger,#c24b28)' : 'color:#2e6e46'}">${formatRand(t.net)}</td></tr>`,
+    )
+    .join('');
+
+  $('#view-finance-overview').innerHTML = `
+    <div class="stats">
+      <div class="stat-card"><div class="label">This month in</div><div class="value">${formatRand(thisMonth.income)}</div></div>
+      <div class="stat-card"><div class="label">This month out</div><div class="value">${formatRand(thisMonth.expenses)}</div></div>
+      <div class="stat-card"><div class="label">This month net</div><div class="value" style="${thisMonth.net < 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(thisMonth.net)}</div></div>
+      <div class="stat-card"><div class="label">Tax year ${escapeHtml(currentTaxYear?.label || '')} net</div><div class="value" style="${(currentTaxYear?.net || 0) < 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(currentTaxYear?.net || 0)}</div></div>
+    </div>
+
+    <div class="panel stack gap-2" style="margin-top:0.75rem">
+      <div class="section-head"><h3>Income vs Expenses — last 12 months</h3></div>
+      ${monthlyFinanceChartHtml(data.months)}
+    </div>
+
+    <div class="grid-2" style="margin-top:0.75rem;align-items:start">
+      <div class="panel table-wrap">
+        <div class="section-head"><h3>Where the money goes</h3><span class="muted" style="font-size:0.8rem">last 12 months</span></div>
+        <table class="catalog"><tbody>${categoryRows || '<tr><td><div class="empty">No expenses yet</div></td></tr>'}</tbody></table>
+      </div>
+      <div class="panel table-wrap">
+        <div class="section-head"><h3>Per card / account</h3><span class="muted" style="font-size:0.8rem">last 12 months</span></div>
+        <table class="catalog"><tbody>${methodRows || '<tr><td><div class="empty">No expenses yet</div></td></tr>'}</tbody></table>
+      </div>
+    </div>
+
+    <div class="panel table-wrap" style="margin-top:0.75rem">
+      <div class="section-head"><h3>Tax year summary (1 Mar – end Feb)</h3></div>
+      <table class="catalog">
+        <thead><tr><th>Tax year</th><th></th><th style="text-align:right">Income</th><th style="text-align:right">Expenses</th><th style="text-align:right">Net</th></tr></thead>
+        <tbody>${taxRows}</tbody>
+      </table>
+    </div>
+
+    <div class="panel table-wrap" style="margin-top:0.75rem">
+      <div class="section-head"><h3>Month by month</h3></div>
+      <table class="catalog">
+        <thead><tr><th>Month</th><th style="text-align:right">Income</th><th style="text-align:right">Expenses</th><th style="text-align:right">Net</th></tr></thead>
+        <tbody>${monthRows}</tbody>
+      </table>
+    </div>`;
 }
 
 // ---- Newsletter campaigns: compose -> approve -> send (Phase 4) ----

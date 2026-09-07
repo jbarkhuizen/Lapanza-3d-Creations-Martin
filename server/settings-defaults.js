@@ -76,6 +76,11 @@ export const DEFAULT_SETTINGS = {
   // from restricting it to the lapanza3d.co.za domain + Places API in the
   // Google Cloud console, not from hiding it.
   googleMapsApiKey: '',
+  // Expenses module (2026-09-07): both editable in Settings like the todo
+  // lists. Categories drive the Financial Overview breakdown; payment
+  // methods are the owner's real cards/accounts for statement reconciling.
+  expenseCategories: ['Printers & Equipment', 'Filament & Stock', 'Consumables', 'Operating Costs'],
+  expensePaymentMethods: ['Absa Credit Card', 'Linandi Nedcard', 'Johan Nedcard', 'Johan FNB Card', 'Cheque ACC'],
 
   // Phase 3: Print Job Costing tool (server/print-jobs.js) -- internal-only,
   // never affects storefront product pricing.

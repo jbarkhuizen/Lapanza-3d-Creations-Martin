@@ -163,7 +163,7 @@ import {
   transferStockRoll,
   setInHouseFilamentArchived,
 } from './in-house-filament.js';
-import { listPurchases, getPurchase, createPurchase, updatePurchase, deletePurchase } from './purchases.js';
+import { listExpenses, getExpense, createExpense, updateExpense, deleteExpense, migratePurchasesToExpenses, getFinancialOverview } from './expenses.js';
 import { getVersion, listVersions } from './version-history.js';
 import { getReleaseDetails } from './release-details.js';
 import { listTodos, createTodo, updateTodo } from './todos.js';
@@ -2406,33 +2406,48 @@ app.delete('/api/in-house-filament/:id', requireAuth, (req, res) => {
 
 // ---- Purchase History (Phase 3, supplier expenses) ----
 
-app.get('/api/purchases', requireAuth, (req, res) => {
-  res.json({ purchases: listPurchases({ status: req.query.status }) });
+// ---- Expenses (owner request 2026-09-07; replaces the purchases routes,
+// whose page was retired -- old rows migrate on boot) ----
+app.get('/api/expenses', requireAuth, (req, res) => {
+  res.json({ expenses: listExpenses({ q: req.query.q, category: req.query.category }) });
 });
 
-app.get('/api/purchases/:id', requireAuth, (req, res) => {
-  const purchase = getPurchase(req.params.id);
-  if (!purchase) return res.status(404).json({ error: 'Purchase not found' });
-  res.json({ purchase });
+app.get('/api/finance/overview', requireAuth, (_req, res) => {
+  res.json(getFinancialOverview());
 });
 
-app.post('/api/purchases', requireAuth, (req, res) => {
+app.get('/api/expenses/:id', requireAuth, (req, res) => {
+  const expense = getExpense(req.params.id);
+  if (!expense) return res.status(404).json({ error: 'Expense not found' });
+  res.json({ expense });
+});
+
+app.post('/api/expenses', requireAuth, (req, res) => {
   try {
-    res.status(201).json({ purchase: createPurchase(req.body || {}) });
+    const expense = createExpense(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Captured expense: ${expense.supplier} (${formatRand(expense.total)}, ${expense.items.length} item${expense.items.length === 1 ? '' : 's'})` });
+    res.status(201).json({ expense });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-app.put('/api/purchases/:id', requireAuth, (req, res) => {
-  const purchase = updatePurchase(req.params.id, req.body || {});
-  if (!purchase) return res.status(404).json({ error: 'Purchase not found' });
-  res.json({ purchase });
+app.put('/api/expenses/:id', requireAuth, (req, res) => {
+  try {
+    const expense = updateExpense(req.params.id, req.body || {});
+    if (!expense) return res.status(404).json({ error: 'Expense not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated expense: ${expense.supplier} (${formatRand(expense.total)})` });
+    res.json({ expense });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
-app.delete('/api/purchases/:id', requireAuth, (req, res) => {
-  const ok = deletePurchase(req.params.id);
-  if (!ok) return res.status(404).json({ error: 'Purchase not found' });
+app.delete('/api/expenses/:id', requireAuth, (req, res) => {
+  const existing = getExpense(req.params.id);
+  const ok = deleteExpense(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Expense not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted expense: ${existing?.supplier || req.params.id} (${formatRand(existing?.total || 0)})` });
   res.json({ ok: true });
 });
 
@@ -2934,6 +2949,8 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'pudoApiKey',
     // Checkout address autocomplete (2026-09-06)
     'googleMapsApiKey',
+    // Expenses module (2026-09-07)
+    'expenseCategories', 'expensePaymentMethods',
     // SITE-026 / #60 -- volume price breaks (shape-guarded below)
     'volumeDiscounts',
     // SITE-056/057 / #90 -- design-file retention window
@@ -3418,6 +3435,15 @@ app.use((err, req, res, next) => {
 });
 
 getDb();
+// Purchase History -> Expenses migration (idempotent, keyed on
+// source_purchase_id; see expenses.js). Runs on every boot so a restored
+// backup with unmigrated rows self-heals.
+try {
+  const migrated = migratePurchasesToExpenses();
+  if (migrated > 0) console.log(`Expenses: migrated ${migrated} Purchase History row(s) into expense invoices`);
+} catch (err) {
+  console.error('Purchase History migration failed:', err);
+}
 
 const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 if (isMainModule) {
