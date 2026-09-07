@@ -26,6 +26,7 @@ function rowToColour(row) {
     shippingWeightG: row.shipping_weight_g ?? row.weight_g,
     rollLengthM: row.roll_length_m,
     priceRand: row.price_rand,
+    buyingPriceRand: row.buying_price_rand || 0,
     stockQty: row.stock_qty,
     usedM: row.used_m || 0,
     usedG: row.used_g || 0,
@@ -169,9 +170,9 @@ export function addColour(filamentTypeId, data, db = getDb()) {
   const weightG = Number(data.weightG) || 0;
   db.prepare(
     `INSERT INTO filament_colours
-      (id, filament_type_id, name, hex, sku, weight_g, shipping_weight_g, roll_length_m, price_rand, stock_qty, image_path, notes, sort_order, created_at, updated_at)
+      (id, filament_type_id, name, hex, sku, weight_g, shipping_weight_g, roll_length_m, price_rand, buying_price_rand, stock_qty, image_path, notes, sort_order, created_at, updated_at)
      VALUES
-      (@id, @filament_type_id, @name, @hex, @sku, @weight_g, @shipping_weight_g, @roll_length_m, @price_rand, @stock_qty, @image_path, @notes, @sort_order, @created_at, @updated_at)`,
+      (@id, @filament_type_id, @name, @hex, @sku, @weight_g, @shipping_weight_g, @roll_length_m, @price_rand, @buying_price_rand, @stock_qty, @image_path, @notes, @sort_order, @created_at, @updated_at)`,
   ).run({
     id,
     filament_type_id: filamentTypeId,
@@ -184,6 +185,7 @@ export function addColour(filamentTypeId, data, db = getDb()) {
     shipping_weight_g: data.shippingWeightG != null && data.shippingWeightG !== '' ? Number(data.shippingWeightG) : weightG,
     roll_length_m: data.rollLengthM != null && data.rollLengthM !== '' ? Number(data.rollLengthM) : null,
     price_rand: Number(data.priceRand) || 0,
+    buying_price_rand: Number(data.buyingPriceRand) || 0,
     stock_qty: Number(data.stockQty) || 0,
     image_path: null,
     notes: data.notes || '',
@@ -200,7 +202,7 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
   db.prepare(
     `UPDATE filament_colours SET
       name = @name, hex = @hex, sku = @sku, weight_g = @weight_g, shipping_weight_g = @shipping_weight_g, roll_length_m = @roll_length_m,
-      price_rand = @price_rand, stock_qty = @stock_qty, notes = @notes, listed = @listed, updated_at = @updated_at
+      price_rand = @price_rand, buying_price_rand = @buying_price_rand, stock_qty = @stock_qty, notes = @notes, listed = @listed, updated_at = @updated_at
      WHERE id = @id`,
   ).run({
     id: colourId,
@@ -229,6 +231,7 @@ export function updateColour(filamentTypeId, colourId, data, db = getDb()) {
         ? null
         : toNumberOr(data.rollLengthM, existing.roll_length_m),
     price_rand: data.priceRand != null ? toNumberOr(data.priceRand, existing.price_rand) : existing.price_rand,
+    buying_price_rand: data.buyingPriceRand != null ? toNumberOr(data.buyingPriceRand, existing.buying_price_rand) : existing.buying_price_rand,
     stock_qty: data.stockQty != null ? toNumberOr(data.stockQty, existing.stock_qty) : existing.stock_qty,
     notes: data.notes ?? existing.notes,
     listed: data.listed !== undefined ? (data.listed ? 1 : 0) : existing.listed,

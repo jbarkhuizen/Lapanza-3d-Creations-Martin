@@ -638,6 +638,14 @@ function ensurePromoColumns(db) {
   // Owner request (2026-09-06): PUDO locker chosen at checkout + free-text
   // customer note. Stored on the order itself (immutable record of where
   // the parcel was actually sent, independent of later client-record edits).
+  // Owner request (2026-09-07): buying price per stock item (Stock Value
+  // sheet under Expenses). Category items carry item.buyingPrice inside
+  // catalog.json; filament colours get a real column here. REAL rand with
+  // cents, like the expenses tables. NEVER exported publicly -- both
+  // syncPublicJson field lists omit it.
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'buying_price_rand')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN buying_price_rand REAL NOT NULL DEFAULT 0');
+  }
   // Owner request (2026-09-07): "Packed" tick on the Orders page. Like
   // collected_at, an independent operational fact -- never touches status.
   if (!hasColumn(db, 'PRAGMA table_info(orders)', 'packed_at')) {

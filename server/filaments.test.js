@@ -282,3 +282,20 @@ test('createFilament and updateFilament sanitize description and colourNote', ()
   assert.strictEqual(untouched.colourNote, '<strong>Note</strong>');
   db.close();
 });
+
+test('buying price round-trips through addColour/updateColour, defaults 0', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const withColour = addColour(filament.id, { name: 'Red', sku: 'BUY-1', priceRand: 300, weightG: 1000, stockQty: 5, buyingPriceRand: 180.5 }, db);
+  assert.strictEqual(withColour.colours[0].buyingPriceRand, 180.5);
+
+  const updated = updateColour(filament.id, withColour.colours[0].id, { buyingPriceRand: 199.99 }, db);
+  assert.strictEqual(updated.colours[0].buyingPriceRand, 199.99);
+  // Untouched by an unrelated update.
+  const again = updateColour(filament.id, withColour.colours[0].id, { stockQty: 3 }, db);
+  assert.strictEqual(again.colours[0].buyingPriceRand, 199.99);
+
+  const plain = addColour(filament.id, { name: 'Blue', sku: 'BUY-2', priceRand: 300, weightG: 1000 }, db);
+  assert.strictEqual(plain.colours.find((c) => c.sku === 'BUY-2').buyingPriceRand, 0);
+  db.close();
+});

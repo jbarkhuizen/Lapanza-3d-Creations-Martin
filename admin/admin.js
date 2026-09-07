@@ -155,6 +155,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-new-order'), route === 'new-order');
   show($('#view-expenses'), route === 'expenses');
   show($('#view-finance-overview'), route === 'finance-overview');
+  show($('#view-stock-value'), route === 'stock-value');
   show($('#view-print-jobs'), route === 'print-jobs');
   show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-backups'), route === 'backups');
@@ -191,6 +192,7 @@ function setRoute(route, { id } = {}) {
     'instruction-files': ['Local Management', 'Instruction Files'],
     expenses: ['Expenses', 'Expenses'],
     'finance-overview': ['Expenses', 'Financial Overview'],
+    'stock-value': ['Expenses', 'Stock Value'],
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
     backups: ['Settings', 'Backups'],
@@ -545,6 +547,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'finance-overview') {
         setRoute('finance-overview');
         await renderFinanceOverview();
+      } else if (btn.dataset.route === 'stock-value') {
+        setRoute('stock-value');
+        await renderStockValue();
       } else if (btn.dataset.route === 'print-jobs') {
         setRoute('print-jobs');
         await renderPrintJobs();
@@ -5671,6 +5676,69 @@ async function renderExpenses() {
   if (state.editingExpense) bindExpenseForm(state.editingExpense);
 }
 
+// ---- Stock Value (owner request 2026-09-07) ----
+// True value of stock on hand: quantity x buying price, from the same
+// /api/inventory list Stock Management edits. Client-side compute; items
+// without a buying price yet are flagged so the number is honest.
+
+const STOCK_VALUE_SORT_ACCESSORS = {
+  name: (i) => i.name || '',
+  sku: (i) => i.sku || '',
+  category: (i) => i.category || '',
+  stock: (i) => Number(i.stockQty),
+  buying: (i) => Number(i.buyingPrice),
+  value: (i) => Number(i.stockQty) * Number(i.buyingPrice),
+};
+
+async function renderStockValue() {
+  state.stockValueSort = state.stockValueSort || { key: 'value', dir: 'desc' };
+  const { items } = await api('/api/inventory');
+  const inStock = items.filter((i) => Number(i.stockQty) > 0);
+  const costValue = inStock.reduce((sum, i) => sum + i.stockQty * (i.buyingPrice || 0), 0);
+  const saleValue = inStock.reduce((sum, i) => sum + i.stockQty * (i.price || 0), 0);
+  const unpriced = inStock.filter((i) => !(i.buyingPrice > 0));
+
+  const st = state.stockValueSort;
+  const rows = applySort(inStock, st, STOCK_VALUE_SORT_ACCESSORS)
+    .map(
+      (i) => `<tr>
+        <td>${escapeHtml(i.name)}</td>
+        <td><code>${escapeHtml(i.sku || '—')}</code></td>
+        <td>${escapeHtml(i.category)}</td>
+        <td style="text-align:right">${escapeHtml(String(i.stockQty))}</td>
+        <td style="text-align:right;${i.buyingPrice > 0 ? '' : 'color:var(--danger,#c24b28)'}">${i.buyingPrice > 0 ? formatRand(i.buyingPrice) : 'not set'}</td>
+        <td style="text-align:right">${formatRand(i.price)}</td>
+        <td style="text-align:right;font-weight:600">${formatRand(i.stockQty * (i.buyingPrice || 0))}</td>
+      </tr>`,
+    )
+    .join('');
+
+  $('#view-stock-value').innerHTML = `
+    <div class="stats">
+      <div class="stat-card"><div class="label">Stock value (at cost)</div><div class="value">${formatRand(costValue)}</div></div>
+      <div class="stat-card"><div class="label">Potential sale value</div><div class="value">${formatRand(saleValue)}</div></div>
+      <div class="stat-card"><div class="label">Potential margin</div><div class="value" style="${saleValue - costValue < 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(saleValue - costValue)}</div></div>
+      <div class="stat-card"><div class="label">Items missing buying price</div><div class="value" style="${unpriced.length ? 'color:var(--danger,#c24b28)' : ''}">${escapeHtml(String(unpriced.length))}</div></div>
+    </div>
+    ${unpriced.length ? `<p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0">Stock value only counts items with a buying price — set the missing ones on the Stock management page and this number becomes the true cost of stock on hand.</p>` : ''}
+    <div class="panel table-wrap" style="margin-top:0.75rem">
+      <table class="catalog">
+        <thead><tr>${sortableTh(st, 'name', 'Item')}${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'category', 'Category')}${sortableTh(st, 'stock', 'In Stock')}${sortableTh(st, 'buying', 'Buying Price')}<th style="text-align:right">Selling Price</th>${sortableTh(st, 'value', 'Stock Value')}</tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty">Nothing in stock right now</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $$('#view-stock-value th.sort-th').forEach((th) => {
+    th.addEventListener('click', async () => {
+      const key = th.dataset.sort;
+      state.stockValueSort = state.stockValueSort?.key === key
+        ? { key, dir: state.stockValueSort.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' };
+      await renderStockValue();
+    });
+  });
+}
+
 // ---- Financial Overview (owner request 2026-09-07) ----
 // Income = paid orders only (owner decision); expenses from the module
 // above. Same inline-SVG chart approach as the analytics page.
@@ -6239,6 +6307,7 @@ function stockRowHtml(item) {
   const edit = state.stockEdits[item.id] || {};
   const stockVal = edit.stockQty ?? item.stockQty;
   const priceVal = edit.price ?? item.price;
+  const buyingVal = edit.buyingPrice ?? item.buyingPrice ?? 0;
   const listedVal = edit.listed ?? item.listed !== false;
   const dirty = edit.stockQty !== undefined || edit.price !== undefined || edit.listed !== undefined;
   // Phase 3: spool-level fields only exist for filament rows -- read-only
@@ -6253,6 +6322,7 @@ function stockRowHtml(item) {
           <td>${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.category)}</td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="stockQty" value="${escapeAttr(String(stockVal))}" style="width:5rem" /></td>
+          <td><input type="number" min="0" step="0.01" class="stock-input" data-field="buyingPrice" value="${escapeAttr(String(buyingVal))}" style="width:6rem" /></td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></td>
           <td class="muted" style="font-size:0.85rem">${spoolCell}</td>
           <td style="white-space:nowrap;font-size:0.85rem">
@@ -6297,13 +6367,14 @@ const STOCK_SORT_ACCESSORS = {
   name: (i) => i.name || '',
   stock: (i) => Number(i.stockQty),
   price: (i) => Number(i.price),
+  buying: (i) => Number(i.buyingPrice),
   remaining: (i) => (i.kind === 'filament' ? i.remainingG : null),
   listed: (i) => (i.listed !== false ? 0 : 1), // Listed before Not listed on asc
 };
 
 function stockTableHead() {
   const st = state.stockSort;
-  return `<thead><tr>${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'name', 'Name')}<th>Category</th>${sortableTh(st, 'stock', 'Stock')}${sortableTh(st, 'price', 'Price (R)')}${sortableTh(st, 'remaining', 'Remaining (filament)')}${sortableTh(st, 'listed', 'Products page')}<th></th></tr></thead>`;
+  return `<thead><tr>${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'name', 'Name')}<th>Category</th>${sortableTh(st, 'stock', 'Stock')}${sortableTh(st, 'buying', 'Buying Price (R)')}${sortableTh(st, 'price', 'Selling Price (R)')}${sortableTh(st, 'remaining', 'Remaining (filament)')}${sortableTh(st, 'listed', 'Products page')}<th></th></tr></thead>`;
 }
 
 // Renders one leaf section (a real <details> with its own mini-table).
@@ -6323,7 +6394,7 @@ function stockSectionHtml(key, label, items, forceOpen) {
       <div class="panel table-wrap">
         <table class="catalog">
           ${stockTableHead()}
-          <tbody>${rows || '<tr><td colspan="8"><div class="empty">No items</div></td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="9"><div class="empty">No items</div></td></tr>'}</tbody>
         </table>
       </div>
     </details>`;

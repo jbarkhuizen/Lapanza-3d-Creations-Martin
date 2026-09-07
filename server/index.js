@@ -3348,6 +3348,9 @@ function normalizeItem(item, i) {
     size: item.size || '',
     finish: item.finish || '',
     price: item.price || '',
+    // Owner request (2026-09-07): cost price for the Stock Value sheet.
+    // Admin-only -- export.js's public field lists deliberately omit it.
+    buyingPrice: Math.max(0, Math.round((Number(item.buyingPrice) || 0) * 100) / 100),
     sku: item.sku || '',
     imageUrl: item.imageUrl || '',
     videoUrl: item.videoUrl || '', // review #25 (todo #164)

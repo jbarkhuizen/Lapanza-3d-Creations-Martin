@@ -32,6 +32,7 @@ export function listInventory(db = getDb()) {
         category: 'Filament',
         stockQty: colour.stockQty,
         price: colour.priceRand,
+        buyingPrice: colour.buyingPriceRand || 0,
         weight: colour.shippingWeightG ?? colour.weightG,
         // Phase 3 spool tracking -- read-only here, written only by logging
         // a print job (see print-jobs.js / filaments.js's incrementFilamentUsage).
@@ -61,6 +62,7 @@ export function listInventory(db = getDb()) {
         category: product.name,
         stockQty: Number(item.stockQty) || 0,
         price: parseRand(item.price),
+        buyingPrice: Number(item.buyingPrice) || 0,
         weight: Number(item.shippingWeight ?? item.weight) || 0,
         listed: item.listed !== false,
       });
@@ -70,13 +72,14 @@ export function listInventory(db = getDb()) {
   return rows;
 }
 
-function updateCategoryItemStock(productId, itemId, { stockQty, price, listed }) {
+function updateCategoryItemStock(productId, itemId, { stockQty, price, buyingPrice, listed }) {
   const product = getProduct(productId);
   if (!product) throw new Error('Product not found');
   const item = (product.items || []).find((i) => i.id === itemId);
   if (!item) throw new Error('Item not found');
   if (stockQty !== undefined) item.stockQty = Math.max(0, Number(stockQty) || 0);
   if (price !== undefined) item.price = formatRand(Math.max(0, Number(price) || 0));
+  if (buyingPrice !== undefined) item.buyingPrice = Math.max(0, Math.round((Number(buyingPrice) || 0) * 100) / 100);
   if (listed !== undefined) item.listed = Boolean(listed);
   upsertProduct(product);
 }
@@ -95,7 +98,7 @@ export function bulkUpdateInventory(updates, db = getDb()) {
   // clobbered. Older clients that don't send it keep the old last-write-wins.
   const liveStock = new Map(listInventory(db).map((row) => [row.id, row.stockQty]));
   for (const update of updates) {
-    const { kind, id, parentId, stockQty, price, listed, expectedStockQty } = update;
+    const { kind, id, parentId, stockQty, price, buyingPrice, listed, expectedStockQty } = update;
     if (stockQty !== undefined && Number(stockQty) < 0) {
       results.push({ id, ok: false, error: 'Stock cannot be negative' });
       continue;
@@ -111,11 +114,15 @@ export function bulkUpdateInventory(updates, db = getDb()) {
       results.push({ id, ok: false, error: 'Price cannot be negative' });
       continue;
     }
+    if (buyingPrice !== undefined && Number(buyingPrice) < 0) {
+      results.push({ id, ok: false, error: 'Buying price cannot be negative' });
+      continue;
+    }
     try {
       if (kind === 'filament') {
-        updateColour(parentId, id, { stockQty, priceRand: price, listed }, db);
+        updateColour(parentId, id, { stockQty, priceRand: price, buyingPriceRand: buyingPrice, listed }, db);
       } else if (kind === 'category') {
-        updateCategoryItemStock(parentId, id, { stockQty, price, listed });
+        updateCategoryItemStock(parentId, id, { stockQty, price, buyingPrice, listed });
       } else {
         throw new Error('Unknown inventory kind');
       }
