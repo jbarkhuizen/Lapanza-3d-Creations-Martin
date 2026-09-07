@@ -121,6 +121,7 @@ function rowToOrder(row) {
     paymentStatus: row.payment_status,
     trackingNumber: row.tracking_number,
     collectedAt: row.collected_at || null,
+    packedAt: row.packed_at || null,
     instructionFiles: (() => { try { return JSON.parse(row.instruction_files || '[]'); } catch { return []; } })(),
     pudoLockerName: row.pudo_locker_name || '',
     pudoLockerAddress: row.pudo_locker_address || '',
@@ -165,6 +166,15 @@ export function setOrderCollected(id, collected, db = getDb()) {
   const res = db
     .prepare('UPDATE orders SET collected_at = ?, updated_at = ? WHERE id = ?')
     .run(collected ? new Date().toISOString() : null, new Date().toISOString(), id);
+  return res.changes > 0 ? getOrder(id, db) : null;
+}
+
+// Owner request (2026-09-07): the Orders page's "Packed" tick. Same shape
+// as setOrderCollected -- an independent timestamp, no status interaction.
+export function setOrderPacked(id, packed, db = getDb()) {
+  const res = db
+    .prepare('UPDATE orders SET packed_at = ?, updated_at = ? WHERE id = ?')
+    .run(packed ? new Date().toISOString() : null, new Date().toISOString(), id);
   return res.changes > 0 ? getOrder(id, db) : null;
 }
 

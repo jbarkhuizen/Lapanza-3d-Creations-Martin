@@ -638,6 +638,11 @@ function ensurePromoColumns(db) {
   // Owner request (2026-09-06): PUDO locker chosen at checkout + free-text
   // customer note. Stored on the order itself (immutable record of where
   // the parcel was actually sent, independent of later client-record edits).
+  // Owner request (2026-09-07): "Packed" tick on the Orders page. Like
+  // collected_at, an independent operational fact -- never touches status.
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'packed_at')) {
+    db.exec('ALTER TABLE orders ADD COLUMN packed_at TEXT');
+  }
   if (!hasColumn(db, 'PRAGMA table_info(orders)', 'pudo_locker_name')) {
     db.exec("ALTER TABLE orders ADD COLUMN pudo_locker_name TEXT NOT NULL DEFAULT ''");
     db.exec("ALTER TABLE orders ADD COLUMN pudo_locker_address TEXT NOT NULL DEFAULT ''");

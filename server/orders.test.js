@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { openDb } from './db.js';
 import { updateSettings } from './settings.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
-import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected, setOrderInstructionFiles } from './orders.js';
+import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected, setOrderPacked, setOrderInstructionFiles } from './orders.js';
 import { createShippingOption } from './shipping.js';
 
 function colourStock(filamentId, sku, db) {
@@ -658,5 +658,25 @@ test('createOrder stores PUDO locker pick and customer notes, length-capped', ()
   }, db);
   assert.strictEqual(plain.pudoLockerName, '');
   assert.strictEqual(plain.customerNotes, '');
+  db.close();
+});
+
+test('setOrderPacked sets and clears packed_at without touching status', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const colour = addColour(filament.id, { name: 'Red', sku: 'PLA-PACK-1KG', priceRand: 100, weightG: 500, stockQty: 5 }, db).colours[0];
+  const order = createOrder({
+    client: { name: 'Packer', email: 'pack@example.com' },
+    items: [{ productId: `filament:pla:${colour.sku}`, quantity: 1 }],
+    paymentMethod: 'manual_eft',
+    shippingMethod: 'collect',
+  }, db);
+  assert.strictEqual(order.packedAt, null);
+  const marked = setOrderPacked(order.id, true, db);
+  assert.ok(marked.packedAt);
+  assert.strictEqual(marked.status, order.status);
+  const cleared = setOrderPacked(order.id, false, db);
+  assert.strictEqual(cleared.packedAt, null);
+  assert.strictEqual(setOrderPacked('missing', true, db), null);
   db.close();
 });

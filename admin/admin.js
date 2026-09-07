@@ -3586,10 +3586,15 @@ async function renderOrders() {
   // confirmed. Ticking one of the pair clears the other in the handler
   // below, so a completed order shows Shipped only when it went the
   // courier path.
+  // Paid drives the real status machine (tick = paid, untick = pending
+  // payment -- gateway-paid orders arrive already ticked); Packed is an
+  // independent timestamp like Collected.
   const fulfilCell = (o, kind) => {
     const disabled = o.status === 'cancelled' ? 'disabled' : '';
     const checked =
-      kind === 'collected' ? (o.collectedAt ? 'checked' : '')
+      kind === 'paid' ? (o.paymentStatus === 'paid' ? 'checked' : '')
+      : kind === 'packed' ? (o.packedAt ? 'checked' : '')
+      : kind === 'collected' ? (o.collectedAt ? 'checked' : '')
       : kind === 'shipped' ? (o.status === 'shipped' || (o.status === 'completed' && !o.collectedAt) ? 'checked' : '')
       : (o.status === 'completed' ? 'checked' : '');
     return `<td class="fulfil-cell"><input type="checkbox" data-fulfil="${kind}" ${checked} ${disabled} /></td>`;
@@ -3600,11 +3605,12 @@ async function renderOrders() {
         <tr data-id="${escapeAttr(o.id)}">
           <td><code>${escapeHtml(o.id.slice(0, 8))}</code></td>
           <td><code>${escapeHtml(o.invoiceNumber || '—')}</code></td>
+          <td>${escapeHtml(o.client?.name || '—')}</td>
           <td>${statusBadge(o.status)}</td>
           <td>${formatRand(o.total)}</td>
           <td>${escapeHtml(o.paymentMethod)}</td>
           <td>${escapeHtml(formatDate(o.createdAt))}</td>
-          ${fulfilCell(o, 'collected')}${fulfilCell(o, 'shipped')}${fulfilCell(o, 'finalized')}
+          ${fulfilCell(o, 'paid')}${fulfilCell(o, 'packed')}${fulfilCell(o, 'collected')}${fulfilCell(o, 'shipped')}${fulfilCell(o, 'finalized')}
           <td><button class="btn small" data-action="view" type="button">View</button></td>
         </tr>`,
     )
@@ -3625,8 +3631,8 @@ async function renderOrders() {
     </div>
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr><th>Order</th><th>Invoice</th><th>Status</th><th>Total</th><th>Payment</th><th>Placed</th><th>Collected</th><th>Shipped</th><th>Finalized</th><th></th></tr></thead>
-        <tbody>${rows || '<tr><td colspan="10"><div class="empty">No orders match your filters</div></td></tr>'}</tbody>
+        <thead><tr><th>Order</th><th>Invoice</th><th>Client</th><th>Status</th><th>Total</th><th>Payment</th><th>Placed</th><th>Paid</th><th>Packed</th><th>Collected</th><th>Shipped</th><th>Finalized</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="13"><div class="empty">No orders match your filters</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -3655,7 +3661,13 @@ async function renderOrders() {
       e.target.disabled = true;
       const order = orders.find((x) => x.id === id) || {};
       try {
-        if (kind === 'collected') {
+        if (kind === 'paid') {
+          // Tick = payment received (manual EFT / cash); untick returns to
+          // pending payment. Gateway payments set this automatically.
+          await api(`/api/orders/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: e.target.checked ? 'paid' : 'pending_payment' }) });
+        } else if (kind === 'packed') {
+          await api(`/api/orders/${id}/packed`, { method: 'PATCH', body: JSON.stringify({ packed: e.target.checked }) });
+        } else if (kind === 'collected') {
           await api(`/api/orders/${id}/collected`, { method: 'PATCH', body: JSON.stringify({ collected: e.target.checked }) });
           // Collected excludes Shipped: step a shipped order back to paid.
           if (e.target.checked && order.status === 'shipped') {

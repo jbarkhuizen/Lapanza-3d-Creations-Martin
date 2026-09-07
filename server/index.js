@@ -88,6 +88,7 @@ import {
   createManualOrder,
   updateOrderStatus,
   setOrderCollected,
+  setOrderPacked,
   setOrderInstructionFiles,
   updateOrderTracking,
   markOrderPaid,
@@ -2531,6 +2532,15 @@ app.delete('/api/instruction-files/:filename', requireAuth, (req, res) => {
   if (!ok) return res.status(404).json({ error: 'File not found' });
   recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted instruction file ${req.params.filename}` });
   res.json({ ok: true });
+});
+
+// Owner request (2026-09-07): the Orders page's "Packed" tick.
+app.patch('/api/orders/:id/packed', requireAuth, (req, res) => {
+  const packed = Boolean((req.body || {}).packed);
+  const order = setOrderPacked(req.params.id, packed);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.invoiceNumber || order.id}: marked ${packed ? 'packed' : 'NOT packed'}` });
+  res.json({ order });
 });
 
 // Owner request (2026-09-03): the Orders page's "Collected" tick.
