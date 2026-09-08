@@ -272,6 +272,48 @@ test('admin login accepts either the username or the login email set via PATCH /
   assert.strictEqual(stolen.status, 400);
 });
 
+test('account-repayments: full loop via the real routes -- log an expense advance, repay part of it, see it reflected in both the list summary and Financial Overview', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  await request(app).post('/api/expenses').set('Cookie', cookie).send({
+    supplier: 'Creality Store',
+    purchaseDate: '2026-09-01',
+    paymentMethod: 'Absa Credit Card',
+    items: [{ description: 'Printer', category: 'Printers & Equipment', quantity: 1, unitPrice: 1000 }],
+  });
+
+  const created = await request(app).post('/api/account-repayments').set('Cookie', cookie).send({ account: 'Absa Credit Card', amount: 300, repaidDate: '2026-09-05' });
+  assert.strictEqual(created.status, 201);
+  const repaymentId = created.body.repayment.id;
+
+  const list = await request(app).get('/api/account-repayments').set('Cookie', cookie);
+  assert.strictEqual(list.status, 200);
+  assert.strictEqual(list.body.repayments.length, 1);
+  const absaSummary = list.body.summary.accounts.find((a) => a.account === 'Absa Credit Card');
+  assert.strictEqual(absaSummary.advanced, 1000);
+  assert.strictEqual(absaSummary.repaid, 300);
+  assert.strictEqual(absaSummary.outstanding, 700);
+
+  const overview = await request(app).get('/api/finance/overview').set('Cookie', cookie);
+  assert.strictEqual(overview.body.advancesOutstanding, 700, 'Financial Overview surfaces the same outstanding total');
+
+  const updated = await request(app).put(`/api/account-repayments/${repaymentId}`).set('Cookie', cookie).send({ amount: 700 });
+  assert.strictEqual(updated.status, 200);
+  assert.strictEqual(updated.body.repayment.amount, 700);
+
+  const deleted = await request(app).delete(`/api/account-repayments/${repaymentId}`).set('Cookie', cookie);
+  assert.strictEqual(deleted.status, 200);
+  const afterDelete = await request(app).get('/api/account-repayments').set('Cookie', cookie);
+  assert.strictEqual(afterDelete.body.repayments.length, 0);
+
+  const unauth = await request(app).get('/api/account-repayments');
+  assert.strictEqual(unauth.status, 401);
+});
+
 test('settings PUT/GET round-trip has no adminPassword field anymore', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

@@ -351,6 +351,26 @@ export function ensureSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_expense_items_expense ON expense_items (expense_id);
 
+    -- Owner request (2026-09-08): every expense is paid from one of the
+    -- owner's own Paid From accounts (expensePaymentMethods) -- until the
+    -- business pays that money back, it's an advance, not real business
+    -- capital, so the business isn't genuinely profitable yet. This is the
+    -- repayment ledger; the "advanced" side of the balance is NOT stored
+    -- here at all -- it's computed live as the all-time sum of
+    -- expense_invoices.total per payment_method (account-repayments.js's
+    -- getAdvancesSummary()), so there's only ever one source of truth for
+    -- what was actually spent, never a second copy that could drift.
+    CREATE TABLE IF NOT EXISTS account_repayments (
+      id TEXT PRIMARY KEY,
+      account TEXT NOT NULL,
+      amount REAL NOT NULL,
+      repaid_date TEXT NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_account_repayments_account ON account_repayments (account);
+
     -- Phase 4: marketing campaigns. Separate from newsletter_subscribers
     -- (the audience list) -- these are the actual messages sent, with a
     -- compose -> approve -> send lifecycle.

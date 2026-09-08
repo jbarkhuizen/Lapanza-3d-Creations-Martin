@@ -169,6 +169,7 @@ import {
   setInHouseFilamentArchived,
 } from './in-house-filament.js';
 import { listExpenses, getExpense, createExpense, updateExpense, deleteExpense, migratePurchasesToExpenses, getFinancialOverview } from './expenses.js';
+import { listRepayments, createRepayment, updateRepayment, deleteRepayment, getAdvancesSummary } from './account-repayments.js';
 import { getVersion, listVersions } from './version-history.js';
 import { getReleaseDetails } from './release-details.js';
 import { listTodos, createTodo, updateTodo } from './todos.js';
@@ -2436,7 +2437,49 @@ app.get('/api/expenses', requireAuth, (req, res) => {
 });
 
 app.get('/api/finance/overview', requireAuth, (_req, res) => {
-  res.json(getFinancialOverview());
+  const overview = getFinancialOverview();
+  const { totals } = getAdvancesSummary();
+  res.json({ ...overview, advancesOutstanding: totals.outstanding });
+});
+
+// ---- Account Repayments (owner request 2026-09-08) ----
+// Every expense is paid from one of the owner's own Paid From accounts --
+// an advance into the business, not business capital, until it's paid
+// back. "Advanced" per account is computed live from expense_invoices (see
+// account-repayments.js's getAdvancesSummary) rather than stored here;
+// this table only ever holds the repayment side, so the list route returns
+// both together in one call rather than making the admin page fetch twice.
+app.get('/api/account-repayments', requireAuth, (req, res) => {
+  res.json({ repayments: listRepayments({ account: req.query.account }), summary: getAdvancesSummary() });
+});
+
+app.post('/api/account-repayments', requireAuth, (req, res) => {
+  try {
+    const repayment = createRepayment(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Logged repayment to ${repayment.account}: ${formatRand(repayment.amount)}` });
+    res.status(201).json({ repayment });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/account-repayments/:id', requireAuth, (req, res) => {
+  try {
+    const repayment = updateRepayment(req.params.id, req.body || {});
+    if (!repayment) return res.status(404).json({ error: 'Repayment not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated repayment to ${repayment.account}: ${formatRand(repayment.amount)}` });
+    res.json({ repayment });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/account-repayments/:id', requireAuth, (req, res) => {
+  const existing = listRepayments({}).find((r) => r.id === req.params.id);
+  const ok = deleteRepayment(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Repayment not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted repayment to ${existing?.account || req.params.id}: ${formatRand(existing?.amount || 0)}` });
+  res.json({ ok: true });
 });
 
 app.get('/api/expenses/:id', requireAuth, (req, res) => {

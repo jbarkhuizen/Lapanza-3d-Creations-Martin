@@ -50,12 +50,14 @@ function handleSessionExpired() {
 }
 
 // ---- Unsaved-changes navigation guard (owner request 2026-09-08) ----
-// Four pages now track a distinct "edited but not yet saved" state:
+// Five pages now track a distinct "edited but not yet saved" state:
 //   - Stock management: state.stockEdits (a map of only the rows touched)
 //   - Product catalog editor: state.draft, diffed against a state.draftSaved
 //     snapshot -- see markDraftSaved()
 //   - Expenses: state.editingExpense, diffed against state.editingExpenseSaved
 //     -- see markExpenseSaved()
+//   - Advances & Repayments: state.editingRepayment, diffed against
+//     state.editingRepaymentSaved -- see markRepaymentSaved(), same shape
 //   - Settings: state.settingsDirty, a plain boolean. Settings has no single
 //     in-memory form object the way the other three do -- its ~18 sections
 //     each read straight from the DOM at their own scoped Save click
@@ -77,6 +79,9 @@ function hasUnsavedChanges() {
   }
   if (state.route === 'expenses' && state.editingExpense) {
     return JSON.stringify(state.editingExpense) !== JSON.stringify(state.editingExpenseSaved);
+  }
+  if (state.route === 'account-repayments' && state.editingRepayment) {
+    return JSON.stringify(state.editingRepayment) !== JSON.stringify(state.editingRepaymentSaved);
   }
   if (state.route === 'settings' && state.settingsDirty) return true;
   return false;
@@ -151,12 +156,14 @@ async function guardNavigation() {
     state.stockEdits = {};
     if (state.route === 'editor') { state.draft = null; state.draftSaved = null; }
     if (state.route === 'expenses') { state.editingExpense = null; state.editingExpenseSaved = null; }
+    if (state.route === 'account-repayments') { state.editingRepayment = null; state.editingRepaymentSaved = null; }
     if (isSettings) state.settingsDirty = false;
     return true;
   }
   if (choice === 'save') {
     if (state.route === 'editor') return saveProductDraft();
     if (state.route === 'expenses') return saveExpenseForm();
+    if (state.route === 'account-repayments') return saveRepaymentForm();
     return saveStockEdits();
   }
   return false;
@@ -270,6 +277,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-expenses'), route === 'expenses');
   show($('#view-finance-overview'), route === 'finance-overview');
   show($('#view-stock-value'), route === 'stock-value');
+  show($('#view-account-repayments'), route === 'account-repayments');
   show($('#view-print-jobs'), route === 'print-jobs');
   show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-backups'), route === 'backups');
@@ -308,6 +316,7 @@ function setRoute(route, { id } = {}) {
     expenses: ['Financial', 'Expenses'],
     'finance-overview': ['Financial', 'Financial Overview'],
     'stock-value': ['Financial', 'Stock Value'],
+    'account-repayments': ['Financial', 'Advances & Repayments'],
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
     backups: ['Settings', 'Backups'],
@@ -760,6 +769,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'stock-value') {
         setRoute('stock-value');
         await renderStockValue();
+      } else if (btn.dataset.route === 'account-repayments') {
+        setRoute('account-repayments');
+        await renderAccountRepayments();
       } else if (btn.dataset.route === 'print-jobs') {
         setRoute('print-jobs');
         await renderPrintJobs();
@@ -6107,6 +6119,7 @@ async function renderFinanceOverview() {
       <div class="stat-card"><div class="label">This month out</div><div class="value">${formatRand(thisMonth.expenses)}</div></div>
       <div class="stat-card"><div class="label">This month net</div><div class="value" style="${thisMonth.net < 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(thisMonth.net)}</div></div>
       <div class="stat-card"><div class="label">Tax year ${escapeHtml(currentTaxYear?.label || '')} net</div><div class="value" style="${(currentTaxYear?.net || 0) < 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(currentTaxYear?.net || 0)}</div></div>
+      <div class="stat-card"><div class="label">Outstanding advances</div><div class="value" style="${data.advancesOutstanding > 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(data.advancesOutstanding)}</div></div>
     </div>
 
     <div class="panel stack gap-2" style="margin-top:0.75rem">
@@ -6140,6 +6153,191 @@ async function renderFinanceOverview() {
         <tbody>${monthRows}</tbody>
       </table>
     </div>`;
+}
+
+// ---- Advances & Repayments (owner request 2026-09-08) ----
+// Every expense is paid from one of the owner's own Paid From accounts --
+// an advance into the business, not business capital, until it's paid
+// back. "Advanced" per account comes from GET /api/account-repayments'
+// summary (all-time, computed server-side from expense_invoices -- see
+// account-repayments.js's getAdvancesSummary); this page's own local state
+// only ever tracks the repayment side, same shape as Expenses'
+// state.editingExpense.
+
+function blankRepayment() {
+  return { id: null, account: '', amount: 0, repaidDate: new Date().toISOString().slice(0, 10), notes: '' };
+}
+
+function markRepaymentSaved() {
+  state.editingRepaymentSaved = state.editingRepayment ? structuredClone(state.editingRepayment) : null;
+}
+
+const REPAYMENT_SORT_ACCESSORS = {
+  date: (r) => r.repaidDate || '',
+  account: (r) => r.account || '',
+  amount: (r) => Number(r.amount),
+};
+
+function repaymentFormHtml(form, methods) {
+  return `
+      <div class="panel stack gap-3">
+        <div class="section-head"><h3>${form.id ? 'Edit repayment' : 'Log a repayment'}</h3></div>
+        <div class="grid-3">
+          <label class="field"><span>Paid From Account *</span>
+            <select id="rp-account">
+              <option value="">— choose —</option>
+              ${methods.map((m) => `<option value="${escapeAttr(m)}" ${form.account === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
+              ${form.account && !methods.includes(form.account) ? `<option value="${escapeAttr(form.account)}" selected>${escapeHtml(form.account)}</option>` : ''}
+            </select>
+          </label>
+          <label class="field"><span>Amount Repaid (R) *</span><span class="rand-input"><input id="rp-amount" type="number" min="0.01" step="0.01" value="${escapeAttr(Number(form.amount || 0).toFixed(2))}" /></span></label>
+          <label class="field"><span>Date</span><input id="rp-date" type="date" value="${escapeAttr(form.repaidDate || '')}" /></label>
+        </div>
+        <label class="field"><span>Notes (Optional)</span><textarea id="rp-notes" rows="2" maxlength="500">${escapeHtml(form.notes || '')}</textarea></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-repayment" type="button">${form.id ? 'Save changes' : 'Log repayment'}</button>
+          <button class="btn btn-ghost" id="cancel-repayment" type="button">Cancel</button>
+        </div>
+      </div>`;
+}
+
+function bindRepaymentForm(form) {
+  $('#rp-account').addEventListener('change', (e) => { form.account = e.target.value; });
+  $('#rp-amount').addEventListener('input', (e) => { form.amount = e.target.value; });
+  $('#rp-date').addEventListener('input', (e) => { form.repaidDate = e.target.value; });
+  $('#rp-notes').addEventListener('input', (e) => { form.notes = e.target.value; });
+  $('#cancel-repayment').addEventListener('click', async () => {
+    state.editingRepayment = null;
+    state.editingRepaymentSaved = null;
+    await renderAccountRepayments();
+  });
+  $('#save-repayment').addEventListener('click', () => saveRepaymentForm());
+}
+
+// Extracted the same way saveExpenseForm()/saveProductDraft() were, so the
+// unsaved-changes nav guard's Save choice can trigger a real save and know
+// whether it succeeded.
+async function saveRepaymentForm() {
+  const form = state.editingRepayment;
+  if (!form) return true;
+  if (!form.account) { toast('Pick a Paid From account'); return false; }
+  const payload = { account: form.account, amount: Number(form.amount) || 0, repaidDate: form.repaidDate, notes: form.notes };
+  try {
+    if (form.id) await api(`/api/account-repayments/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    else await api('/api/account-repayments', { method: 'POST', body: JSON.stringify(payload) });
+    toast('Repayment saved');
+    state.editingRepayment = null;
+    state.editingRepaymentSaved = null;
+    await renderAccountRepayments();
+    return true;
+  } catch (ex) {
+    toast(ex.message);
+    return false;
+  }
+}
+
+async function renderAccountRepayments() {
+  state.editingRepayment = state.editingRepayment || null;
+  state.repaymentSort = state.repaymentSort || { key: 'date', dir: 'desc' };
+  await ensureSettingsLoaded();
+  const methods = activeListNames(state.settings.expensePaymentMethods);
+  const { repayments, summary } = await api('/api/account-repayments');
+
+  const st = state.repaymentSort;
+  const rows = applySort(repayments, st, REPAYMENT_SORT_ACCESSORS)
+    .map(
+      (r) => `
+        <tr data-id="${escapeAttr(r.id)}">
+          <td style="white-space:nowrap">${escapeHtml((r.repaidDate || '').slice(0, 10) || '—')}</td>
+          <td>${escapeHtml(r.account)}</td>
+          <td style="text-align:right;white-space:nowrap">${formatRand(r.amount)}</td>
+          <td>${escapeHtml(r.notes || '—')}</td>
+          <td style="white-space:nowrap">
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  const accountRows = summary.accounts
+    .map(
+      (a) => `
+        <tr>
+          <td>${escapeHtml(a.account)}</td>
+          <td style="text-align:right">${formatRand(a.advanced)}</td>
+          <td style="text-align:right">${formatRand(a.repaid)}</td>
+          <td style="text-align:right;font-weight:600;${a.outstanding > 0 ? 'color:var(--danger,#c24b28)' : 'color:#2e6e46'}">${formatRand(a.outstanding)}</td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-account-repayments').innerHTML = `
+    <p class="muted" style="margin:0 0 0.75rem;font-size:0.88rem;line-height:1.5">
+      Every expense is paid from one of your own Paid From accounts — that money is an advance into the business, not business capital, until it's paid back. This page tracks what's still owed per account and lets you log repayments as you make them.
+    </p>
+    <div class="stats">
+      <div class="stat-card"><div class="label">Total advanced (all time)</div><div class="value">${formatRand(summary.totals.advanced)}</div></div>
+      <div class="stat-card"><div class="label">Total repaid</div><div class="value">${formatRand(summary.totals.repaid)}</div></div>
+      <div class="stat-card"><div class="label">Outstanding</div><div class="value" style="${summary.totals.outstanding > 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(summary.totals.outstanding)}</div></div>
+    </div>
+    <div class="panel table-wrap" style="margin-top:0.75rem">
+      <div class="section-head"><h3>By account</h3></div>
+      <table class="catalog">
+        <thead><tr><th>Paid From Account</th><th style="text-align:right">Advanced</th><th style="text-align:right">Repaid</th><th style="text-align:right">Outstanding</th></tr></thead>
+        <tbody>${accountRows || '<tr><td colspan="4"><div class="empty">No expenses or repayments yet</div></td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="toolbar" style="margin-top:0.75rem">
+      <button class="btn btn-primary" id="new-repayment" type="button">+ Log Repayment</button>
+      <span class="muted">${escapeHtml(String(repayments.length))} repayment${repayments.length === 1 ? '' : 's'} logged</span>
+    </div>
+    ${state.editingRepayment ? repaymentFormHtml(state.editingRepayment, methods) : ''}
+    <div class="panel table-wrap" style="margin-top:0.75rem">
+      <div class="section-head"><h3>Repayment history</h3></div>
+      <table class="catalog">
+        <thead><tr>${sortableTh(st, 'date', 'Date')}${sortableTh(st, 'account', 'Paid From Account')}${sortableTh(st, 'amount', 'Amount')}<th>Notes</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="5"><div class="empty">No repayments logged yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $$('#view-account-repayments th.sort-th').forEach((th) => {
+    th.addEventListener('click', async () => {
+      const key = th.dataset.sort;
+      state.repaymentSort = state.repaymentSort?.key === key
+        ? { key, dir: state.repaymentSort.dir === 'asc' ? 'desc' : 'asc' }
+        : { key, dir: 'asc' };
+      await renderAccountRepayments();
+    });
+  });
+
+  $('#new-repayment').addEventListener('click', async () => {
+    state.editingRepayment = blankRepayment();
+    markRepaymentSaved();
+    await renderAccountRepayments();
+  });
+
+  $$('#view-account-repayments tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]')?.addEventListener('click', async () => {
+      const r = repayments.find((x) => x.id === tr.dataset.id);
+      state.editingRepayment = { ...r };
+      markRepaymentSaved();
+      await renderAccountRepayments();
+      $('#rp-account')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
+      if (!confirm('Delete this repayment record? This cannot be undone.')) return;
+      try {
+        await api(`/api/account-repayments/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Repayment deleted');
+        await renderAccountRepayments();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (state.editingRepayment) bindRepaymentForm(state.editingRepayment);
 }
 
 // ---- Newsletter campaigns: compose -> approve -> send (Phase 4) ----
