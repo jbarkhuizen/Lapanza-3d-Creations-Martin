@@ -659,3 +659,46 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
 /* Sortable column headers (Stock management + Reorder Report) */
 th.sort-th { cursor: pointer; user-select: none; white-space: nowrap; }
 th.sort-th:hover { color: var(--terracotta, #c96f4a); }
+
+/* Rand-value inputs (owner request 2026-09-08): a fixed "R" prefix so a
+   Buying Price / Manufacturing Cost / Selling Price cell reads as money at a
+   glance instead of a bare number -- Stock management's grid is the first
+   place raw currency inputs appear without a "(R)" label doing that job
+   instead. */
+.rand-input { position: relative; display: inline-block; }
+.rand-input::before {
+  content: 'R';
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+.rand-input input { padding-left: 1.35rem; }
+
+/* Unsaved-changes nav guard (owner request 2026-09-08) -- a Save/Discard/
+   Stay prompt when navigating away with edits still on screen; see
+   guardNavigation()/showUnsavedChangesModal() in admin.js. */
+.nav-guard-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.nav-guard-modal {
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: var(--radius, 14px);
+  padding: 1.5rem;
+  max-width: 26rem;
+  width: calc(100% - 2rem);
+  box-shadow: var(--shadow);
+}
+.nav-guard-modal h3 { margin: 0 0 0.5rem; }
+.nav-guard-modal p { margin: 0 0 1.25rem; color: var(--muted); font-size: 0.9rem; }
+.nav-guard-actions { display: flex; justify-content: flex-end; gap: 0.5rem; flex-wrap: wrap; }

@@ -49,6 +49,67 @@ function handleSessionExpired() {
   toast('Your session has ended — please sign in again');
 }
 
+// ---- Unsaved-changes navigation guard (owner request 2026-09-08) ----
+// Stock management is currently the only page that tracks a distinct
+// "edited but not yet saved" state (state.stockEdits) -- everywhere else in
+// this admin writes straight into its working state with no saved-vs-draft
+// distinction to compare against, so there's nothing real to detect there
+// yet. This checks the one dirty state that actually exists; a future page
+// that grows its own draft-tracking (the product editor's state.draft is the
+// obvious next candidate) should extend this function, not duplicate it.
+function hasUnsavedChanges() {
+  return Object.keys(state.stockEdits || {}).length > 0;
+}
+
+// Three-way choice a native confirm() can't give (Save / Discard / stay) --
+// a small overlay built on demand rather than a static element in
+// index.html, since it only ever needs to exist for the few seconds it's
+// asking the question.
+function showUnsavedChangesModal() {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'nav-guard-overlay';
+    overlay.innerHTML = `
+      <div class="nav-guard-modal" role="alertdialog" aria-modal="true" aria-labelledby="nav-guard-title">
+        <h3 id="nav-guard-title">Unsaved changes</h3>
+        <p>You have edits on this page that haven't been saved yet. Save them before leaving, or discard them?</p>
+        <div class="nav-guard-actions">
+          <button type="button" class="btn" data-action="cancel">Stay here</button>
+          <button type="button" class="btn btn-danger" data-action="discard">Discard changes</button>
+          <button type="button" class="btn btn-primary" data-action="save">Save changes</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const cleanup = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => cleanup('cancel'));
+    overlay.querySelector('[data-action="discard"]').addEventListener('click', () => cleanup('discard'));
+    overlay.querySelector('[data-action="save"]').addEventListener('click', () => cleanup('save'));
+    // Clicking the dimmed backdrop (not the dialog itself) reads as "stay",
+    // same as pressing Escape -- neither is a "discard my edits" gesture.
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup('cancel'); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') cleanup('cancel'); });
+    overlay.querySelector('[data-action="save"]').focus();
+  });
+}
+
+// Call before any in-app navigation actually happens. Resolves true when
+// it's safe to proceed (nothing dirty, or the user explicitly saved/
+// discarded), false when the navigation should be aborted (user chose to
+// stay, or a Save attempt failed -- staying put with the failure still on
+// screen is safer than losing it mid-navigation).
+async function guardNavigation() {
+  if (!hasUnsavedChanges()) return true;
+  const choice = await showUnsavedChangesModal();
+  if (choice === 'discard') {
+    state.stockEdits = {};
+    return true;
+  }
+  if (choice === 'save') {
+    return saveStockEdits();
+  }
+  return false;
+}
+
 async function api(path, options = {}) {
   let res;
   try {
@@ -219,6 +280,52 @@ function setRoute(route, { id } = {}) {
   // "these buttons don't belong here" bug reported 2026-08-28. Inclusion
   // list instead, so a new route is hidden by default and has to opt in.
   show($('.topbar-actions'), route === 'catalog' || route === 'editor');
+
+  // Owner report (2026-09-08): the browser Back button left the admin
+  // entirely instead of moving to the previous admin page -- this SPA never
+  // touched history, so there was only ever the one entry the page loaded
+  // with, and "back" from anywhere fell straight through to whatever the
+  // browser had before that. suppressHistoryPush is set by the popstate
+  // handler below while it's replaying a state the browser already popped,
+  // so that replay doesn't itself push a duplicate entry.
+  if (!suppressHistoryPush) {
+    const method = historyInitialized ? 'pushState' : 'replaceState';
+    history[method]({ route, id: state.editingId }, '', location.pathname + location.search);
+    historyInitialized = true;
+  }
+}
+let historyInitialized = false;
+let suppressHistoryPush = false;
+
+// Routes that need an id to render (order-detail/editor/version-detail)
+// have no matching sidebar button to replay a popped history state through
+// -- there's nothing wrong with landing on one via Back, there's just no
+// generic way to re-open "order X" from a bare route name the way every
+// other route re-opens from its nav-btn. Falls back to that route's own
+// list page, which IS reachable that way.
+const POPSTATE_FALLBACK_ROUTE = {
+  'order-detail': 'orders',
+  editor: 'catalog',
+  'version-detail': 'version-history',
+};
+
+async function replayHistoryRoute(route) {
+  const targetRoute = POPSTATE_FALLBACK_ROUTE[route] || route;
+  const btn = $(`.nav-btn[data-route="${targetRoute}"]`);
+  if (!btn) return; // unknown/unreachable route -- nothing safe to do
+  suppressHistoryPush = true;
+  try {
+    btn.click();
+    // btn.click() only starts the async listener; nothing else here awaits
+    // it, but there's nothing further this function needs to do once it's
+    // dispatched -- the listener itself re-guards/re-renders.
+  } finally {
+    // Cleared on the next tick rather than immediately: the click listener's
+    // work (including its own await guardNavigation()) runs after this
+    // synchronous call returns, and setRoute() inside it must still see
+    // suppressHistoryPush === true when it runs.
+    setTimeout(() => { suppressHistoryPush = false; }, 0);
+  }
 }
 
 
@@ -448,6 +555,36 @@ function bindChrome() {
     }
   });
 
+  // Browser Back/Forward: replay the popped route through the same
+  // guard+dispatch path a sidebar click uses (see replayHistoryRoute above)
+  // instead of letting the SPA fall out of sync with whatever the address
+  // bar now shows.
+  window.addEventListener('popstate', async (e) => {
+    if (!state.authenticated) return;
+    const target = e.state && e.state.route;
+    if (!target || target === state.route) return;
+    if (!(await guardNavigation())) {
+      // User chose to stay -- the browser already popped the entry, so push
+      // the current route straight back on to undo that pop visually.
+      suppressHistoryPush = true;
+      history.pushState({ route: state.route, id: state.editingId }, '', location.pathname);
+      setTimeout(() => { suppressHistoryPush = false; }, 0);
+      return;
+    }
+    await replayHistoryRoute(target);
+  });
+
+  // Real navigation away from the admin entirely (closing the tab,
+  // refreshing, typing a new URL) never goes through guardNavigation() above
+  // -- this is the browser-level backstop for exactly that case. Back/
+  // forward within the SPA doesn't unload the document, so this never fires
+  // for the popstate path above; the two are complementary, not redundant.
+  window.addEventListener('beforeunload', (e) => {
+    if (!hasUnsavedChanges()) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
   $('#btn-logout').addEventListener('click', async () => {
     try {
       await api('/api/auth/logout', { method: 'POST' });
@@ -461,6 +598,7 @@ function bindChrome() {
 
   $$('.nav-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
+      if (!(await guardNavigation())) return;
       try {
       if (btn.dataset.route === 'dashboard') {
         setRoute('dashboard');
@@ -6471,7 +6609,7 @@ function stockRowHtml(item) {
   // "not applicable" apart from "0 / not flagged").
   const manufacturingCell = item.kind === 'filament'
     ? '<span class="muted">—</span>'
-    : `<input type="number" min="0" step="0.01" class="stock-input" data-field="manufacturingCost" value="${escapeAttr(String(manufacturingVal))}" style="width:6rem" />`;
+    : `<span class="rand-input"><input type="number" min="0" step="0.01" class="stock-input" data-field="manufacturingCost" value="${escapeAttr(Number(manufacturingVal).toFixed(2))}" style="width:6rem" /></span>`;
   const madeToOrderCell = item.kind === 'filament'
     ? '<span class="muted">—</span>'
     : `
@@ -6483,9 +6621,9 @@ function stockRowHtml(item) {
           <td>${escapeHtml(item.name)}</td>
           <td>${escapeHtml(item.category)}</td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="stockQty" value="${escapeAttr(String(stockVal))}" style="width:5rem" /></td>
-          <td><input type="number" min="0" step="0.01" class="stock-input" data-field="buyingPrice" value="${escapeAttr(String(buyingVal))}" style="width:6rem" /></td>
+          <td><span class="rand-input"><input type="number" min="0" step="0.01" class="stock-input" data-field="buyingPrice" value="${escapeAttr(Number(buyingVal).toFixed(2))}" style="width:6rem" /></span></td>
           <td>${manufacturingCell}</td>
-          <td><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></td>
+          <td><span class="rand-input"><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></span></td>
           <td class="muted" style="font-size:0.85rem">${spoolCell}</td>
           <td style="white-space:nowrap;font-size:0.85rem">${madeToOrderCell}</td>
           <td style="white-space:nowrap;font-size:0.85rem">
@@ -6739,32 +6877,39 @@ async function renderStock() {
     });
   });
 
-  $('#save-stock').addEventListener('click', async () => {
-    const ids = Object.keys(state.stockEdits);
-    if (!ids.length) return;
-    const updates = ids.map((id) => {
-      const item = state.stockItems.find((i) => i.id === id);
-      // expectedStockQty = what this grid displayed at load; the server
-      // rejects the row (instead of clobbering) if an order or another
-      // admin changed it in the meantime.
-      return { kind: item.kind, id: item.id, parentId: item.parentId, expectedStockQty: item.stockQty, ...state.stockEdits[id] };
-    });
-    const saveBtn = $('#save-stock');
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving…';
-    try {
-      const { results } = await api('/api/inventory', { method: 'PUT', body: JSON.stringify({ updates }) });
-      const failed = results.filter((r) => !r.ok);
-      toast(failed.length ? `${failed.length} item(s) failed to save — ${failed[0].error}` : 'Stock updated');
-      for (const r of results) {
-        if (r.ok) delete state.stockEdits[r.id];
-      }
-      await renderStock();
-    } catch (ex) {
-      toast(ex.message);
-      saveBtn.disabled = false;
-    }
+  $('#save-stock').addEventListener('click', () => saveStockEdits());
+}
+
+// Shared by the Save Changes button above and the unsaved-changes nav guard
+// (guardNavigation()) -- both need "actually persist state.stockEdits and
+// report whether it fully succeeded", not just a click handler with nowhere
+// to return a result to.
+async function saveStockEdits() {
+  const ids = Object.keys(state.stockEdits);
+  if (!ids.length) return true;
+  const updates = ids.map((id) => {
+    const item = state.stockItems.find((i) => i.id === id);
+    // expectedStockQty = what this grid displayed at load; the server
+    // rejects the row (instead of clobbering) if an order or another
+    // admin changed it in the meantime.
+    return { kind: item.kind, id: item.id, parentId: item.parentId, expectedStockQty: item.stockQty, ...state.stockEdits[id] };
   });
+  const saveBtn = $('#save-stock');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+  try {
+    const { results } = await api('/api/inventory', { method: 'PUT', body: JSON.stringify({ updates }) });
+    const failed = results.filter((r) => !r.ok);
+    toast(failed.length ? `${failed.length} item(s) failed to save — ${failed[0].error}` : 'Stock updated');
+    for (const r of results) {
+      if (r.ok) delete state.stockEdits[r.id];
+    }
+    if ($('#view-stock')) await renderStock();
+    return failed.length === 0;
+  } catch (ex) {
+    toast(ex.message);
+    if (saveBtn) saveBtn.disabled = false;
+    return false;
+  }
 }
 
 // #122 (split off Stock management, backlog 2026-09-04): reorder report now
