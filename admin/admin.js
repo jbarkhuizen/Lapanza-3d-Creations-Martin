@@ -50,15 +50,31 @@ function handleSessionExpired() {
 }
 
 // ---- Unsaved-changes navigation guard (owner request 2026-09-08) ----
-// Stock management is currently the only page that tracks a distinct
-// "edited but not yet saved" state (state.stockEdits) -- everywhere else in
-// this admin writes straight into its working state with no saved-vs-draft
-// distinction to compare against, so there's nothing real to detect there
-// yet. This checks the one dirty state that actually exists; a future page
-// that grows its own draft-tracking (the product editor's state.draft is the
-// obvious next candidate) should extend this function, not duplicate it.
+// Stock management (state.stockEdits) and the product catalog editor
+// (state.draft, compared against a state.draftSaved snapshot -- see
+// markDraftSaved()) are the two pages that track a distinct "edited but not
+// yet saved" state; everywhere else in this admin writes straight into its
+// working state with no saved-vs-draft distinction to compare against, so
+// there's nothing real to detect there yet.
 function hasUnsavedChanges() {
-  return Object.keys(state.stockEdits || {}).length > 0;
+  if (Object.keys(state.stockEdits || {}).length > 0) return true;
+  if (state.route === 'editor' && state.draft) {
+    return JSON.stringify(state.draft) !== JSON.stringify(state.draftSaved);
+  }
+  return false;
+}
+
+// Snapshots state.draft as the "last known saved" baseline hasUnsavedChanges()
+// diffs against. Call after every point the editor's state.draft is set from
+// a fresh server load OR a successful save -- openNew(), openEditor(), and
+// the end of saveProductDraft()/saveFilament()/saveOneColour()/saveOneItem()
+// (all of which reassign state.draft from a server response). Deliberately
+// NOT called after the video upload/remove handlers, which only merge a
+// fresh `items` array into state.draft -- those leave any other still-
+// unsaved edit correctly flagged dirty, at the cost of the guard firing
+// once more than strictly necessary if `items` was the only real difference.
+function markDraftSaved() {
+  state.draftSaved = state.draft ? structuredClone(state.draft) : null;
 }
 
 // Three-way choice a native confirm() can't give (Save / Discard / stay) --
@@ -102,10 +118,11 @@ async function guardNavigation() {
   const choice = await showUnsavedChangesModal();
   if (choice === 'discard') {
     state.stockEdits = {};
+    if (state.route === 'editor') { state.draft = null; state.draftSaved = null; }
     return true;
   }
   if (choice === 'save') {
-    return saveStockEdits();
+    return state.route === 'editor' ? saveProductDraft() : saveStockEdits();
   }
   return false;
 }
@@ -1243,6 +1260,7 @@ async function openNew(kind) {
   await ensureSettingsLoaded();
   state.draft = blankProduct(kind);
   state.editingId = state.draft.id;
+  markDraftSaved();
   setRoute('editor', { id: state.draft.id });
   renderEditor();
 }
@@ -1257,6 +1275,7 @@ async function openEditor(id, kind) {
     state.draft = structuredClone(product);
   }
   state.editingId = id;
+  markDraftSaved();
   setRoute('editor', { id });
   renderEditor();
 }
@@ -1754,33 +1773,16 @@ function bindEditorEvents() {
   });
 
   $('#back-catalog').addEventListener('click', async () => {
+    // This is its own route change, same as any sidebar nav-btn, but it
+    // never went through that shared click dispatcher -- it's the button
+    // most likely to actually hit the unsaved-edits case (Back to catalog
+    // straight from an in-progress edit), so it needs its own guard call.
+    if (!(await guardNavigation())) return;
     setRoute('catalog');
     await renderCatalog();
   });
 
-  $('#save-product').addEventListener('click', async () => {
-    syncNestedFromDom();
-    if (!p.name.trim()) return toast('Name is required');
-    if (!p.slug.trim()) p.slug = slugify(p.name);
-    try {
-      if (p.kind === 'filament') {
-        await saveFilament(p);
-      } else if (p._isNew) {
-        const { _isNew, ...payload } = p;
-        const res = await api('/api/products', { method: 'POST', body: JSON.stringify(payload) });
-        state.draft = res.product;
-        toast(res.publishWarning || 'Product created and published live');
-        renderEditor();
-      } else {
-        const res = await api(`/api/products/${p.id}`, { method: 'PUT', body: JSON.stringify(p) });
-        state.draft = res.product;
-        toast(res.publishWarning || 'Product saved and published live');
-        renderEditor();
-      }
-    } catch (ex) {
-      toast(ex.message);
-    }
-  });
+  $('#save-product').addEventListener('click', () => saveProductDraft());
 
   $('#delete-product')?.addEventListener('click', async () => {
     if (!confirm(`Delete “${p.name}”? This cannot be undone.`)) return;
@@ -1791,12 +1793,53 @@ function bindEditorEvents() {
         await api(`/api/products/${p.id}`, { method: 'DELETE' });
       }
       toast('Product deleted');
+      // The record just deleted can't have "unsaved changes" any more --
+      // without this, hasUnsavedChanges() would keep comparing the deleted
+      // draft against its old snapshot and wrongly guard the very next
+      // navigation with a stale prompt.
+      state.draft = null;
+      state.draftSaved = null;
       setRoute('catalog');
       await renderCatalog();
     } catch (ex) {
       toast(ex.message);
     }
   });
+}
+
+// Extracted from the #save-product click handler (owner request 2026-09-08)
+// so the unsaved-changes nav guard (guardNavigation()) can trigger a real
+// save and know whether it actually succeeded -- a bare click() has nowhere
+// to report that back to. Reads state.draft fresh rather than closing over
+// bindEditorEvents()'s local `p`, since the guard can call this from outside
+// that scope entirely (e.g. from the sidebar's nav-btn click handler).
+async function saveProductDraft() {
+  const p = state.draft;
+  if (!p) return true;
+  syncNestedFromDom();
+  if (!p.name.trim()) { toast('Name is required'); return false; }
+  if (!p.slug.trim()) p.slug = slugify(p.name);
+  try {
+    if (p.kind === 'filament') {
+      await saveFilament(p);
+    } else if (p._isNew) {
+      const { _isNew, ...payload } = p;
+      const res = await api('/api/products', { method: 'POST', body: JSON.stringify(payload) });
+      state.draft = res.product;
+      toast(res.publishWarning || 'Product created and published live');
+      renderEditor();
+    } else {
+      const res = await api(`/api/products/${p.id}`, { method: 'PUT', body: JSON.stringify(p) });
+      state.draft = res.product;
+      toast(res.publishWarning || 'Product saved and published live');
+      renderEditor();
+    }
+    markDraftSaved();
+    return true;
+  } catch (ex) {
+    toast(ex.message);
+    return false;
+  }
 }
 
 // Filament type-level fields (name, slug, description, specs, colourNote,
@@ -1887,6 +1930,7 @@ async function saveOneColour(p, idx) {
     const { filament } = await api(`/api/filaments/${filamentId}`);
     state.draft = { ...filament, kind: 'filament' };
     state.editingId = filamentId;
+    markDraftSaved();
     renderEditor();
   } catch (ex) {
     toast(ex.message);
@@ -1937,6 +1981,7 @@ async function saveOneItem(p, idx) {
     const { product } = await api(`/api/products/${productId}`);
     state.draft = { ...product, kind: 'category' };
     state.editingId = productId;
+    markDraftSaved();
     renderEditor();
   } catch (ex) {
     toast(ex.message);
