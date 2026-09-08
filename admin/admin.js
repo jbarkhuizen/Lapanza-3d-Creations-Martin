@@ -3637,7 +3637,7 @@ async function renderSettings() {
       ${settingsSectionWrap('todo-priorities', 'Todo Priorities', configurableListPanel('todoPriorities', 'Todo / Backlog: Priorities', s.todoPriorities, 'Options for the Priority field, and its sort order in the Todo/Backlog table — a new priority is added at the end (lowest urgency) until reordering is supported.'))}
       ${settingsSectionWrap('expense-lists', 'Expenses', `
         ${configurableListPanel('expenseCategories', 'Expenses: Categories', s.expenseCategories, 'Categories for expense line items — these drive the Financial Overview breakdown.')}
-        ${configurableListPanel('expensePaymentMethods', 'Expenses: Payment Methods', s.expensePaymentMethods, 'Your cards and accounts for the Paid Via field — matches how you reconcile statements.')}`)}
+        ${configurableListPanel('expensePaymentMethods', 'Expenses: Paid From Accounts', s.expensePaymentMethods, 'Your cards and accounts for the Paid From field — matches how you reconcile statements, and drives the Financial Overview breakdown by account.')}`)}
       ${settingsSectionWrap('car-part-brands', 'Car-part Brands', configurableListPanel('carPartBrands', 'Car-part brands', s.carPartBrands, 'The vehicle brands with their own car-parts page (name becomes the page URL — keep it simple, e.g. Toyota). After adding one: create its category via Product Catalog → + Category with parent car-parts and the matching slug, then Publish to site. Unticking hides the page and nav link on the next publish without touching existing items.'))}
       ${settingsSectionWrap('car-part-models-landrover', 'Landrover Part Models', configurableListPanel('carPartModelsLandrover', 'Landrover part models', s.carPartModelsLandrover, 'Vehicle models a Landrover catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.'))}
       ${settingsSectionWrap('car-part-models-gwm', 'GWM Part Models', configurableListPanel('carPartModelsGwm', 'GWM part models', s.carPartModelsGwm, 'Vehicle models a GWM catalog item can be tagged as fitting (multi-select, on the item itself). Untick a model to retire it from new picks without touching items already tagged with it.'))}
@@ -5787,7 +5787,7 @@ function expenseFormHtml(form, categories, methods) {
         <div class="grid-3">
           <label class="field"><span>Service Provider / Supplier *</span><input id="ex-supplier" value="${escapeAttr(form.supplier)}" /></label>
           <label class="field"><span>Date Purchased</span><input id="ex-date" type="date" value="${escapeAttr(form.purchaseDate || '')}" /></label>
-          <label class="field"><span>Paid Via</span>
+          <label class="field"><span>Paid From</span>
             <select id="ex-method">
               <option value="">—</option>
               ${methods.map((m) => `<option value="${escapeAttr(m)}" ${form.paymentMethod === m ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')}
@@ -5914,7 +5914,7 @@ async function renderExpenses() {
     ${state.editingExpense ? expenseFormHtml(state.editingExpense, categories, methods) : ''}
     <div class="panel table-wrap">
       <table class="catalog">
-        <thead><tr>${sortableTh(st, 'date', 'Date')}${sortableTh(st, 'supplier', 'Service Provider')}<th>Items</th>${sortableTh(st, 'method', 'Paid Via')}${sortableTh(st, 'total', 'Total')}<th></th></tr></thead>
+        <thead><tr>${sortableTh(st, 'date', 'Date')}${sortableTh(st, 'supplier', 'Service Provider')}<th>Items</th>${sortableTh(st, 'method', 'Paid From')}${sortableTh(st, 'total', 'Total')}<th></th></tr></thead>
         <tbody>${rows || '<tr><td colspan="6"><div class="empty">No expenses captured yet — click + Expense to log the first one</div></td></tr>'}</tbody>
       </table>
     </div>`;
@@ -6120,7 +6120,7 @@ async function renderFinanceOverview() {
         <table class="catalog"><tbody>${categoryRows || '<tr><td><div class="empty">No expenses yet</div></td></tr>'}</tbody></table>
       </div>
       <div class="panel table-wrap">
-        <div class="section-head"><h3>Per card / account</h3><span class="muted" style="font-size:0.8rem">last 12 months</span></div>
+        <div class="section-head"><h3>Per Paid From account</h3><span class="muted" style="font-size:0.8rem">last 12 months</span></div>
         <table class="catalog"><tbody>${methodRows || '<tr><td><div class="empty">No expenses yet</div></td></tr>'}</tbody></table>
       </div>
     </div>
