@@ -125,6 +125,50 @@ test('getReorderReport lists at/below-threshold items with 30-day sales, cancell
   assert.ok(!report.find((r) => r.sku === 'PLA-FINE'), 'healthy stock excluded');
 });
 
+test('listInventory: category items default to madeToOrder true with manufacturingCost 0; filament rows are always not-applicable', async (t) => {
+  await withTempCwd(t);
+  const { createFilament, addColour } = await import(`./filaments.js?t=${Date.now()}`);
+  const { upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+  const { listInventory } = await import(`./inventory.js?t=${Date.now()}`);
+
+  const f = createFilament({ name: 'PLA' });
+  addColour(f.id, { name: 'White', sku: 'SKU-1', stockQty: 5 });
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', items: [{ id: 'i1', name: 'Dino', sku: 'SKU-2', stockQty: 3 }] });
+
+  const rows = listInventory();
+  const filamentRow = rows.find((r) => r.kind === 'filament');
+  const categoryRow = rows.find((r) => r.kind === 'category');
+
+  assert.strictEqual(filamentRow.madeToOrder, false);
+  assert.strictEqual(filamentRow.manufacturingCost, null);
+  // Default true -- most of the catalog is printed on demand today, so an
+  // item with no explicit flag yet must not silently count as real stock on
+  // hand in the Stock Value totals.
+  assert.strictEqual(categoryRow.madeToOrder, true);
+  assert.strictEqual(categoryRow.manufacturingCost, 0);
+});
+
+test('bulkUpdateInventory writes manufacturingCost and madeToOrder onto a category item and rejects a negative cost', async (t) => {
+  await withTempCwd(t);
+  const { upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+  const { listInventory, bulkUpdateInventory } = await import(`./inventory.js?t=${Date.now()}`);
+
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', items: [{ id: 'i1', name: 'Dino', sku: 'SKU-2', stockQty: 3, price: 'R150' }] });
+
+  const [result] = bulkUpdateInventory([{ kind: 'category', id: 'i1', parentId: 'p1', manufacturingCost: 42.5, madeToOrder: false }]);
+  assert.strictEqual(result.ok, true);
+  const row = listInventory().find((r) => r.id === 'i1');
+  assert.strictEqual(row.manufacturingCost, 42.5);
+  assert.strictEqual(row.madeToOrder, false);
+
+  const [rejected] = bulkUpdateInventory([{ kind: 'category', id: 'i1', parentId: 'p1', manufacturingCost: -5 }]);
+  assert.strictEqual(rejected.ok, false);
+  assert.match(rejected.error, /cannot be negative/);
+  // The bad write must not have touched the row -- manufacturingCost from
+  // the prior successful save is still there.
+  assert.strictEqual(listInventory().find((r) => r.id === 'i1').manufacturingCost, 42.5);
+});
+
 test('bulkUpdateInventory rejects a stock write whose expectedStockQty no longer matches live stock', async (t) => {
   // Regression (launch-audit): the grid posts absolute quantities captured
   // at page load -- a save from a panel left open all day silently reverted

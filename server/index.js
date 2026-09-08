@@ -3398,6 +3398,16 @@ function normalizeItem(item, i) {
     // Owner request (2026-09-07): cost price for the Stock Value sheet.
     // Admin-only -- export.js's public field lists deliberately omit it.
     buyingPrice: Math.max(0, Math.round((Number(item.buyingPrice) || 0) * 100) / 100),
+    // Owner request (2026-09-08): printed items are costed by manufacturing
+    // cost (from the costing sheet), not a buying price -- kept distinct
+    // since some items (bought hardware/inserts) genuinely use buyingPrice
+    // instead. madeToOrder defaults true (item.madeToOrder !== false) since
+    // most category items today are printed on demand, not real stock on
+    // hand -- Stock Value excludes made-to-order rows from its totals so the
+    // "value of stock on hand" figure stops overstating printed-on-demand
+    // items. Also admin-only -- omitted from export.js's public field lists.
+    manufacturingCost: Math.max(0, Math.round((Number(item.manufacturingCost) || 0) * 100) / 100),
+    madeToOrder: item.madeToOrder !== false,
     sku: item.sku || '',
     imageUrl: item.imageUrl || '',
     videoUrl: item.videoUrl || '', // review #25 (todo #164)

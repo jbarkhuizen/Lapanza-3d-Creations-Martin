@@ -33,6 +33,12 @@ export function listInventory(db = getDb()) {
         stockQty: colour.stockQty,
         price: colour.priceRand,
         buyingPrice: colour.buyingPriceRand || 0,
+        // Manufacturing cost / made-to-order only apply to printed category
+        // items -- filament rolls are always genuinely bought stock on hand.
+        // null (not 0) marks the column as not applicable for this row, same
+        // convention as remainingG/percentLeft below for non-filament rows.
+        manufacturingCost: null,
+        madeToOrder: false,
         weight: colour.shippingWeightG ?? colour.weightG,
         // Phase 3 spool tracking -- read-only here, written only by logging
         // a print job (see print-jobs.js / filaments.js's incrementFilamentUsage).
@@ -63,6 +69,17 @@ export function listInventory(db = getDb()) {
         stockQty: Number(item.stockQty) || 0,
         price: parseRand(item.price),
         buyingPrice: Number(item.buyingPrice) || 0,
+        // Owner request (2026-09-08): printed items are costed by
+        // manufacturing cost, not a buying price -- kept as a distinct field
+        // since some category items (bought hardware/inserts) genuinely do
+        // use buyingPrice instead. madeToOrder defaults true (undefined ->
+        // true) because today almost everything in the catalog is printed on
+        // demand, not real stock on hand -- the owner flips a specific item
+        // to false once they actually keep that one stocked. This default is
+        // what makes Stock Value's totals honest out of the box instead of
+        // requiring every existing item to be flagged by hand first.
+        manufacturingCost: Number(item.manufacturingCost) || 0,
+        madeToOrder: item.madeToOrder !== false,
         weight: Number(item.shippingWeight ?? item.weight) || 0,
         listed: item.listed !== false,
       });
@@ -72,7 +89,7 @@ export function listInventory(db = getDb()) {
   return rows;
 }
 
-function updateCategoryItemStock(productId, itemId, { stockQty, price, buyingPrice, listed }) {
+function updateCategoryItemStock(productId, itemId, { stockQty, price, buyingPrice, manufacturingCost, madeToOrder, listed }) {
   const product = getProduct(productId);
   if (!product) throw new Error('Product not found');
   const item = (product.items || []).find((i) => i.id === itemId);
@@ -80,6 +97,8 @@ function updateCategoryItemStock(productId, itemId, { stockQty, price, buyingPri
   if (stockQty !== undefined) item.stockQty = Math.max(0, Number(stockQty) || 0);
   if (price !== undefined) item.price = formatRand(Math.max(0, Number(price) || 0));
   if (buyingPrice !== undefined) item.buyingPrice = Math.max(0, Math.round((Number(buyingPrice) || 0) * 100) / 100);
+  if (manufacturingCost !== undefined) item.manufacturingCost = Math.max(0, Math.round((Number(manufacturingCost) || 0) * 100) / 100);
+  if (madeToOrder !== undefined) item.madeToOrder = Boolean(madeToOrder);
   if (listed !== undefined) item.listed = Boolean(listed);
   upsertProduct(product);
 }
@@ -98,7 +117,7 @@ export function bulkUpdateInventory(updates, db = getDb()) {
   // clobbered. Older clients that don't send it keep the old last-write-wins.
   const liveStock = new Map(listInventory(db).map((row) => [row.id, row.stockQty]));
   for (const update of updates) {
-    const { kind, id, parentId, stockQty, price, buyingPrice, listed, expectedStockQty } = update;
+    const { kind, id, parentId, stockQty, price, buyingPrice, manufacturingCost, madeToOrder, listed, expectedStockQty } = update;
     if (stockQty !== undefined && Number(stockQty) < 0) {
       results.push({ id, ok: false, error: 'Stock cannot be negative' });
       continue;
@@ -118,11 +137,15 @@ export function bulkUpdateInventory(updates, db = getDb()) {
       results.push({ id, ok: false, error: 'Buying price cannot be negative' });
       continue;
     }
+    if (manufacturingCost !== undefined && Number(manufacturingCost) < 0) {
+      results.push({ id, ok: false, error: 'Manufacturing cost cannot be negative' });
+      continue;
+    }
     try {
       if (kind === 'filament') {
         updateColour(parentId, id, { stockQty, priceRand: price, buyingPriceRand: buyingPrice, listed }, db);
       } else if (kind === 'category') {
-        updateCategoryItemStock(parentId, id, { stockQty, price, buyingPrice, listed });
+        updateCategoryItemStock(parentId, id, { stockQty, price, buyingPrice, manufacturingCost, madeToOrder, listed });
       } else {
         throw new Error('Unknown inventory kind');
       }

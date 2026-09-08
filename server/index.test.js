@@ -579,6 +579,37 @@ test('category product items support creator/models (car-parts only) and keep so
   assert.strictEqual(syncedItem.sourceUrl, undefined);
 });
 
+test('category product items round-trip manufacturingCost/madeToOrder (owner request 2026-09-08), default madeToOrder true, keep both out of the public export', async (t) => {
+  const { app, tmpRoot, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const created = await request(app)
+    .post('/api/products')
+    .set('Cookie', cookie)
+    .send({
+      name: 'Toys',
+      items: [
+        { name: 'UNo Box', manufacturingCost: 65.5, madeToOrder: false },
+        { name: 'Widget' }, // no flag sent -- must default to made-to-order
+      ],
+    });
+  const product = created.body.product;
+  assert.strictEqual(product.items[0].manufacturingCost, 65.5);
+  assert.strictEqual(product.items[0].madeToOrder, false);
+  assert.strictEqual(product.items[1].madeToOrder, true);
+  assert.strictEqual(product.items[1].manufacturingCost, 0);
+
+  const categoriesSrc = JSON.parse(fs.readFileSync(path.join(tmpRoot, 'src', 'data', 'categories.json'), 'utf8'));
+  const syncedItem = categoriesSrc['toys'].items.find((i) => i.name === 'UNo Box');
+  // Admin-only costing fields -- same discipline as buyingPrice/sourceUrl,
+  // never shipped to the customer-facing categories.json export.
+  assert.strictEqual(syncedItem.manufacturingCost, undefined);
+  assert.strictEqual(syncedItem.madeToOrder, undefined);
+});
+
 test('PUT /api/settings with a non-array homeTiles is rejected/ignored instead of 500ing', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

@@ -5681,10 +5681,26 @@ async function renderExpenses() {
   if (state.editingExpense) bindExpenseForm(state.editingExpense);
 }
 
-// ---- Stock Value (owner request 2026-09-07) ----
-// True value of stock on hand: quantity x buying price, from the same
-// /api/inventory list Stock Management edits. Client-side compute; items
-// without a buying price yet are flagged so the number is honest.
+// ---- Stock Value (owner request 2026-09-07; made-to-order split 2026-09-08) ----
+// True value of stock on hand: quantity x cost, from the same /api/inventory
+// list Stock Management edits. Client-side compute; items without a cost
+// yet are flagged so the number is honest.
+//
+// Owner request (2026-09-08): most category items are printed on demand, not
+// real stock on hand -- a stockQty of 5 on a made-to-order item doesn't mean
+// 5 physical units are sitting on a shelf, so counting it toward "stock
+// value (at cost)" overstated the true figure. Made-to-order rows (see
+// listInventory/normalizeItem's madeToOrder, default true) are now excluded
+// from every total on this page but still listed in the table -- their
+// manufacturing cost is still worth seeing, it just isn't inventory value
+// until the owner starts keeping that specific item genuinely stocked
+// (flips it to "Stocked" on the Stock management page).
+// effectiveCost: manufacturing cost for printed items, buying price for
+// filament and any bought-in category item (hardware/inserts) that uses
+// buyingPrice instead -- whichever of the two is actually set on that row.
+function effectiveCost(i) {
+  return i.manufacturingCost > 0 ? i.manufacturingCost : i.buyingPrice || 0;
+}
 
 const STOCK_VALUE_SORT_ACCESSORS = {
   name: (i) => i.name || '',
@@ -5692,30 +5708,35 @@ const STOCK_VALUE_SORT_ACCESSORS = {
   category: (i) => i.category || '',
   stock: (i) => Number(i.stockQty),
   buying: (i) => Number(i.buyingPrice),
-  value: (i) => Number(i.stockQty) * Number(i.buyingPrice),
+  manufacturing: (i) => (i.kind === 'filament' ? null : Number(i.manufacturingCost)),
+  value: (i) => (i.madeToOrder ? -1 : Number(i.stockQty) * effectiveCost(i)),
 };
 
 async function renderStockValue() {
   state.stockValueSort = state.stockValueSort || { key: 'value', dir: 'desc' };
   const { items } = await api('/api/inventory');
   const inStock = items.filter((i) => Number(i.stockQty) > 0);
-  const costValue = inStock.reduce((sum, i) => sum + i.stockQty * (i.buyingPrice || 0), 0);
-  const saleValue = inStock.reduce((sum, i) => sum + i.stockQty * (i.price || 0), 0);
-  const unpriced = inStock.filter((i) => !(i.buyingPrice > 0));
+  const heldStock = inStock.filter((i) => !i.madeToOrder);
+  const madeToOrderStock = inStock.filter((i) => i.madeToOrder);
+  const costValue = heldStock.reduce((sum, i) => sum + i.stockQty * effectiveCost(i), 0);
+  const saleValue = heldStock.reduce((sum, i) => sum + i.stockQty * (i.price || 0), 0);
+  const unpriced = heldStock.filter((i) => !(effectiveCost(i) > 0));
 
   const st = state.stockValueSort;
   const rows = applySort(inStock, st, STOCK_VALUE_SORT_ACCESSORS)
-    .map(
-      (i) => `<tr>
-        <td>${escapeHtml(i.name)}</td>
+    .map((i) => {
+      const cost = effectiveCost(i);
+      return `<tr${i.madeToOrder ? ' style="opacity:0.65"' : ''}>
+        <td>${escapeHtml(i.name)}${i.madeToOrder ? ' <span class="badge draft" style="font-size:0.7rem">Made to order</span>' : ''}</td>
         <td><code>${escapeHtml(i.sku || '—')}</code></td>
         <td>${escapeHtml(i.category)}</td>
         <td style="text-align:right">${escapeHtml(String(i.stockQty))}</td>
         <td style="text-align:right;${i.buyingPrice > 0 ? '' : 'color:var(--danger,#c24b28)'}">${i.buyingPrice > 0 ? formatRand(i.buyingPrice) : 'not set'}</td>
+        <td style="text-align:right;${i.kind === 'filament' ? '' : i.manufacturingCost > 0 ? '' : 'color:var(--danger,#c24b28)'}">${i.kind === 'filament' ? '—' : i.manufacturingCost > 0 ? formatRand(i.manufacturingCost) : 'not set'}</td>
         <td style="text-align:right">${formatRand(i.price)}</td>
-        <td style="text-align:right;font-weight:600">${formatRand(i.stockQty * (i.buyingPrice || 0))}</td>
-      </tr>`,
-    )
+        <td style="text-align:right;font-weight:600">${i.madeToOrder ? '<span class="muted" style="font-weight:400">not counted</span>' : formatRand(i.stockQty * cost)}</td>
+      </tr>`;
+    })
     .join('');
 
   $('#view-stock-value').innerHTML = `
@@ -5723,13 +5744,15 @@ async function renderStockValue() {
       <div class="stat-card"><div class="label">Stock value (at cost)</div><div class="value">${formatRand(costValue)}</div></div>
       <div class="stat-card"><div class="label">Potential sale value</div><div class="value">${formatRand(saleValue)}</div></div>
       <div class="stat-card"><div class="label">Potential margin</div><div class="value" style="${saleValue - costValue < 0 ? 'color:var(--danger,#c24b28)' : ''}">${formatRand(saleValue - costValue)}</div></div>
-      <div class="stat-card"><div class="label">Items missing buying price</div><div class="value" style="${unpriced.length ? 'color:var(--danger,#c24b28)' : ''}">${escapeHtml(String(unpriced.length))}</div></div>
+      <div class="stat-card"><div class="label">Items missing a cost</div><div class="value" style="${unpriced.length ? 'color:var(--danger,#c24b28)' : ''}">${escapeHtml(String(unpriced.length))}</div></div>
+      <div class="stat-card"><div class="label">Made-to-order items (excluded)</div><div class="value">${escapeHtml(String(madeToOrderStock.length))}</div></div>
     </div>
-    ${unpriced.length ? `<p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0">Stock value only counts items with a buying price — set the missing ones on the Stock management page and this number becomes the true cost of stock on hand.</p>` : ''}
+    ${unpriced.length ? `<p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0">Stock value only counts stocked items with a buying price or manufacturing cost — set the missing ones on the Stock management page and this number becomes the true cost of stock on hand.</p>` : ''}
+    ${madeToOrderStock.length ? `<p class="muted" style="font-size:0.85rem;margin:0.5rem 0 0">${escapeHtml(String(madeToOrderStock.length))} made-to-order item(s) are shown below but excluded from every total — their stock number isn't real stock on hand. Flip an item to "Stocked" on the Stock management page once you actually keep it printed and ready.</p>` : ''}
     <div class="panel table-wrap" style="margin-top:0.75rem">
       <table class="catalog">
-        <thead><tr>${sortableTh(st, 'name', 'Item')}${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'category', 'Category')}${sortableTh(st, 'stock', 'In Stock')}${sortableTh(st, 'buying', 'Buying Price')}<th style="text-align:right">Selling Price</th>${sortableTh(st, 'value', 'Stock Value')}</tr></thead>
-        <tbody>${rows || '<tr><td colspan="7"><div class="empty">Nothing in stock right now</div></td></tr>'}</tbody>
+        <thead><tr>${sortableTh(st, 'name', 'Item')}${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'category', 'Category')}${sortableTh(st, 'stock', 'In Stock')}${sortableTh(st, 'buying', 'Buying Price')}${sortableTh(st, 'manufacturing', 'Manufacturing Cost')}<th style="text-align:right">Selling Price</th>${sortableTh(st, 'value', 'Stock Value')}</tr></thead>
+        <tbody>${rows || '<tr><td colspan="8"><div class="empty">Nothing in stock right now</div></td></tr>'}</tbody>
       </table>
     </div>`;
 
@@ -6429,14 +6452,31 @@ function stockRowHtml(item) {
   const stockVal = edit.stockQty ?? item.stockQty;
   const priceVal = edit.price ?? item.price;
   const buyingVal = edit.buyingPrice ?? item.buyingPrice ?? 0;
+  const manufacturingVal = edit.manufacturingCost ?? item.manufacturingCost ?? 0;
   const listedVal = edit.listed ?? item.listed !== false;
-  const dirty = edit.stockQty !== undefined || edit.price !== undefined || edit.listed !== undefined;
+  const madeToOrderVal = edit.madeToOrder ?? item.madeToOrder;
+  const dirty = edit.stockQty !== undefined || edit.price !== undefined || edit.buyingPrice !== undefined
+    || edit.manufacturingCost !== undefined || edit.madeToOrder !== undefined || edit.listed !== undefined;
   // Phase 3: spool-level fields only exist for filament rows -- read-only
   // here, written only by logging a print job (see renderPrintJobs()).
   const spoolCell = item.kind === 'filament'
     ? `${escapeHtml(item.remainingG != null ? item.remainingG.toFixed(0) : '—')}g / ${escapeHtml(item.percentLeft != null ? Math.round(item.percentLeft * 100) : '—')}%`
     : '—';
   const radioName = `listed-${escapeAttr(item.id)}`;
+  const madeToOrderName = `mto-${escapeAttr(item.id)}`;
+  // Manufacturing cost / made-to-order only apply to printed category items
+  // -- filament rolls are always genuinely bought stock on hand (see
+  // inventory.js's listInventory, which sends manufacturingCost: null /
+  // madeToOrder: false for filament rows specifically so this can tell
+  // "not applicable" apart from "0 / not flagged").
+  const manufacturingCell = item.kind === 'filament'
+    ? '<span class="muted">—</span>'
+    : `<input type="number" min="0" step="0.01" class="stock-input" data-field="manufacturingCost" value="${escapeAttr(String(manufacturingVal))}" style="width:6rem" />`;
+  const madeToOrderCell = item.kind === 'filament'
+    ? '<span class="muted">—</span>'
+    : `
+      <label style="margin-right:0.75rem"><input type="radio" class="stock-mto" name="${madeToOrderName}" data-field="madeToOrder" value="1" ${madeToOrderVal ? 'checked' : ''} /> Made to order</label>
+      <label><input type="radio" class="stock-mto" name="${madeToOrderName}" data-field="madeToOrder" value="0" ${madeToOrderVal ? '' : 'checked'} /> Stocked</label>`;
   return `
         <tr data-id="${escapeAttr(item.id)}" class="${dirty ? 'row-dirty' : ''}">
           <td><code>${escapeHtml(item.sku || '—')}</code></td>
@@ -6444,8 +6484,10 @@ function stockRowHtml(item) {
           <td>${escapeHtml(item.category)}</td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="stockQty" value="${escapeAttr(String(stockVal))}" style="width:5rem" /></td>
           <td><input type="number" min="0" step="0.01" class="stock-input" data-field="buyingPrice" value="${escapeAttr(String(buyingVal))}" style="width:6rem" /></td>
+          <td>${manufacturingCell}</td>
           <td><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></td>
           <td class="muted" style="font-size:0.85rem">${spoolCell}</td>
+          <td style="white-space:nowrap;font-size:0.85rem">${madeToOrderCell}</td>
           <td style="white-space:nowrap;font-size:0.85rem">
             <label style="margin-right:0.75rem"><input type="radio" class="stock-listed" name="${radioName}" data-field="listed" value="1" ${listedVal ? 'checked' : ''} /> Listed</label>
             <label><input type="radio" class="stock-listed" name="${radioName}" data-field="listed" value="0" ${listedVal ? '' : 'checked'} /> Not listed</label>
@@ -6489,13 +6531,15 @@ const STOCK_SORT_ACCESSORS = {
   stock: (i) => Number(i.stockQty),
   price: (i) => Number(i.price),
   buying: (i) => Number(i.buyingPrice),
+  manufacturing: (i) => (i.kind === 'filament' ? null : Number(i.manufacturingCost)),
   remaining: (i) => (i.kind === 'filament' ? i.remainingG : null),
+  mto: (i) => (i.kind === 'filament' ? null : (i.madeToOrder ? 0 : 1)), // Made to order before Stocked on asc
   listed: (i) => (i.listed !== false ? 0 : 1), // Listed before Not listed on asc
 };
 
 function stockTableHead() {
   const st = state.stockSort;
-  return `<thead><tr>${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'name', 'Name')}<th>Category</th>${sortableTh(st, 'stock', 'Stock')}${sortableTh(st, 'buying', 'Buying Price (R)')}${sortableTh(st, 'price', 'Selling Price (R)')}${sortableTh(st, 'remaining', 'Remaining (filament)')}${sortableTh(st, 'listed', 'Products page')}<th></th></tr></thead>`;
+  return `<thead><tr>${sortableTh(st, 'sku', 'SKU')}${sortableTh(st, 'name', 'Name')}<th>Category</th>${sortableTh(st, 'stock', 'Stock')}${sortableTh(st, 'buying', 'Buying Price (R)')}${sortableTh(st, 'manufacturing', 'Manufacturing Cost (R)')}${sortableTh(st, 'price', 'Selling Price (R)')}${sortableTh(st, 'remaining', 'Remaining (filament)')}${sortableTh(st, 'mto', 'Made to Order')}${sortableTh(st, 'listed', 'Products page')}<th></th></tr></thead>`;
 }
 
 // Renders one leaf section (a real <details> with its own mini-table).
@@ -6515,7 +6559,7 @@ function stockSectionHtml(key, label, items, forceOpen) {
       <div class="panel table-wrap">
         <table class="catalog">
           ${stockTableHead()}
-          <tbody>${rows || '<tr><td colspan="9"><div class="empty">No items</div></td></tr>'}</tbody>
+          <tbody>${rows || '<tr><td colspan="11"><div class="empty">No items</div></td></tr>'}</tbody>
         </table>
       </div>
     </details>`;
@@ -6667,6 +6711,24 @@ async function renderStock() {
       const statusEl = tr.querySelector('[data-status]');
       state.stockEdits[id] = state.stockEdits[id] || {};
       state.stockEdits[id].listed = radio.value === '1';
+      tr.classList.add('row-dirty');
+      statusEl.textContent = 'Edited';
+      statusEl.className = 'muted';
+      statusEl.style.fontSize = '0.8rem';
+      const saveBtn = $('#save-stock');
+      saveBtn.disabled = false;
+      saveBtn.textContent = `Save Changes (${Object.keys(state.stockEdits).length})`;
+    });
+  });
+
+  $$('#view-stock .stock-mto').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      const tr = radio.closest('tr');
+      const id = tr.dataset.id;
+      const statusEl = tr.querySelector('[data-status]');
+      state.stockEdits[id] = state.stockEdits[id] || {};
+      state.stockEdits[id].madeToOrder = radio.value === '1';
       tr.classList.add('row-dirty');
       statusEl.textContent = 'Edited';
       statusEl.className = 'muted';
