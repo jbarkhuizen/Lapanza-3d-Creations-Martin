@@ -10,7 +10,7 @@ import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 import { getSettings, updateSettings } from './settings.js';
 import { FONT_OPTIONS, DEFAULT_SETTINGS } from './settings-defaults.js';
-import { hasAnyAdmin, listAdmins, createAdmin, deleteAdmin, resetPassword, verifyLogin } from './admins.js';
+import { hasAnyAdmin, listAdmins, createAdmin, deleteAdmin, resetPassword, verifyLogin, updateAdminEmail } from './admins.js';
 import { AUDIT_EVENTS, recordAuditEvent, listAuditLog } from './audit-log.js';
 import {
   listFilaments,
@@ -1143,6 +1143,17 @@ app.post('/api/admins', requireAuth, (req, res) => {
     const admin = createAdmin(req.body || {});
     recordAuditEvent({ eventType: AUDIT_EVENTS.ADMIN_CREATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created admin "${admin.username}"` });
     res.status(201).json({ admin });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.patch('/api/admins/:id/email', requireAuth, (req, res) => {
+  try {
+    const ok = updateAdminEmail(req.params.id, req.body?.email);
+    if (!ok) return res.status(404).json({ error: 'Admin not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated login email for admin account ${req.params.id}` });
+    res.json({ ok: true });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -246,6 +246,32 @@ test('admins panel: list, add, refuse removing the last admin', async (t) => {
   assert.strictEqual(removed.status, 200);
 });
 
+test('admin login accepts either the username or the login email set via PATCH /api/admins/:id/email (owner request 2026-09-08)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+  const { body: { admins } } = await request(app).get('/api/admins').set('Cookie', cookie);
+  const adminId = admins[0].id;
+
+  const patched = await request(app).patch(`/api/admins/${adminId}/email`).set('Cookie', cookie).send({ email: 'johan@example.com' });
+  assert.strictEqual(patched.status, 200);
+
+  const byEmail = await request(app).post('/api/auth/login').send({ username: 'JOHAN@example.com', password: 'correcthorsebattery' });
+  assert.strictEqual(byEmail.status, 200);
+
+  const byUsername = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  assert.strictEqual(byUsername.status, 200);
+
+  // A second admin can't steal the first one's email.
+  await request(app).post('/api/admins').set('Cookie', cookie).send({ username: 'linandi', password: 'correcthorsebattery2' });
+  const { body: { admins: after } } = await request(app).get('/api/admins').set('Cookie', cookie);
+  const linandiId = after.find((a) => a.username === 'linandi').id;
+  const stolen = await request(app).patch(`/api/admins/${linandiId}/email`).set('Cookie', cookie).send({ email: 'johan@example.com' });
+  assert.strictEqual(stolen.status, 400);
+});
+
 test('settings PUT/GET round-trip has no adminPassword field anymore', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

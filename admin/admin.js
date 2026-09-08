@@ -50,17 +50,35 @@ function handleSessionExpired() {
 }
 
 // ---- Unsaved-changes navigation guard (owner request 2026-09-08) ----
-// Stock management (state.stockEdits) and the product catalog editor
-// (state.draft, compared against a state.draftSaved snapshot -- see
-// markDraftSaved()) are the two pages that track a distinct "edited but not
-// yet saved" state; everywhere else in this admin writes straight into its
-// working state with no saved-vs-draft distinction to compare against, so
-// there's nothing real to detect there yet.
+// Four pages now track a distinct "edited but not yet saved" state:
+//   - Stock management: state.stockEdits (a map of only the rows touched)
+//   - Product catalog editor: state.draft, diffed against a state.draftSaved
+//     snapshot -- see markDraftSaved()
+//   - Expenses: state.editingExpense, diffed against state.editingExpenseSaved
+//     -- see markExpenseSaved()
+//   - Settings: state.settingsDirty, a plain boolean. Settings has no single
+//     in-memory form object the way the other three do -- its ~18 sections
+//     each read straight from the DOM at their own scoped Save click
+//     (scopedSettingFieldsPatch()), with nothing continuously mirroring that
+//     into JS state to diff. A delegated input/change listener on the
+//     static #view-settings container (wired once, in bindChrome()) sets
+//     this flag on ANY edit anywhere on the page; renderSettings() clears it
+//     on every fresh load AND after every scoped save (which already
+//     re-fetches and re-renders the whole page from server truth, so any
+//     other section's unsaved edit is visually gone at that point too --
+//     the flag reset just matches what the screen now shows).
+// Everywhere else in this admin still writes straight into its working
+// state with no saved-vs-draft distinction to compare against, so there's
+// nothing real to detect there yet.
 function hasUnsavedChanges() {
   if (Object.keys(state.stockEdits || {}).length > 0) return true;
   if (state.route === 'editor' && state.draft) {
     return JSON.stringify(state.draft) !== JSON.stringify(state.draftSaved);
   }
+  if (state.route === 'expenses' && state.editingExpense) {
+    return JSON.stringify(state.editingExpense) !== JSON.stringify(state.editingExpenseSaved);
+  }
+  if (state.route === 'settings' && state.settingsDirty) return true;
   return false;
 }
 
@@ -77,34 +95,46 @@ function markDraftSaved() {
   state.draftSaved = state.draft ? structuredClone(state.draft) : null;
 }
 
+// Same idea as markDraftSaved(), for the Expenses form -- call after
+// state.editingExpense is set from blankExpense()/a fresh GET, and after
+// saveExpenseForm() succeeds.
+function markExpenseSaved() {
+  state.editingExpenseSaved = state.editingExpense ? structuredClone(state.editingExpense) : null;
+}
+
 // Three-way choice a native confirm() can't give (Save / Discard / stay) --
 // a small overlay built on demand rather than a static element in
 // index.html, since it only ever needs to exist for the few seconds it's
-// asking the question.
-function showUnsavedChangesModal() {
+// asking the question. `allowSave` is false for Settings, which has no
+// single action this guard can trigger on the page's behalf (18 independent
+// scoped Save buttons, not one) -- the message and button set change to
+// match instead of offering a Save that can't actually do anything.
+function showUnsavedChangesModal({ allowSave = true } = {}) {
   return new Promise((resolve) => {
     const overlay = document.createElement('div');
     overlay.className = 'nav-guard-overlay';
     overlay.innerHTML = `
       <div class="nav-guard-modal" role="alertdialog" aria-modal="true" aria-labelledby="nav-guard-title">
         <h3 id="nav-guard-title">Unsaved changes</h3>
-        <p>You have edits on this page that haven't been saved yet. Save them before leaving, or discard them?</p>
+        <p>${allowSave
+          ? 'You have edits on this page that haven\'t been saved yet. Save them before leaving, or discard them?'
+          : 'You have edits somewhere on this page that haven\'t been saved yet. Go back and use that section\'s own Save button, or discard them and leave.'}</p>
         <div class="nav-guard-actions">
           <button type="button" class="btn" data-action="cancel">Stay here</button>
           <button type="button" class="btn btn-danger" data-action="discard">Discard changes</button>
-          <button type="button" class="btn btn-primary" data-action="save">Save changes</button>
+          ${allowSave ? '<button type="button" class="btn btn-primary" data-action="save">Save changes</button>' : ''}
         </div>
       </div>`;
     document.body.appendChild(overlay);
     const cleanup = (result) => { overlay.remove(); resolve(result); };
     overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => cleanup('cancel'));
     overlay.querySelector('[data-action="discard"]').addEventListener('click', () => cleanup('discard'));
-    overlay.querySelector('[data-action="save"]').addEventListener('click', () => cleanup('save'));
+    overlay.querySelector('[data-action="save"]')?.addEventListener('click', () => cleanup('save'));
     // Clicking the dimmed backdrop (not the dialog itself) reads as "stay",
     // same as pressing Escape -- neither is a "discard my edits" gesture.
     overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup('cancel'); });
     overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') cleanup('cancel'); });
-    overlay.querySelector('[data-action="save"]').focus();
+    (overlay.querySelector('[data-action="save"]') || overlay.querySelector('[data-action="cancel"]')).focus();
   });
 }
 
@@ -115,14 +145,19 @@ function showUnsavedChangesModal() {
 // screen is safer than losing it mid-navigation).
 async function guardNavigation() {
   if (!hasUnsavedChanges()) return true;
-  const choice = await showUnsavedChangesModal();
+  const isSettings = state.route === 'settings';
+  const choice = await showUnsavedChangesModal({ allowSave: !isSettings });
   if (choice === 'discard') {
     state.stockEdits = {};
     if (state.route === 'editor') { state.draft = null; state.draftSaved = null; }
+    if (state.route === 'expenses') { state.editingExpense = null; state.editingExpenseSaved = null; }
+    if (isSettings) state.settingsDirty = false;
     return true;
   }
   if (choice === 'save') {
-    return state.route === 'editor' ? saveProductDraft() : saveStockEdits();
+    if (state.route === 'editor') return saveProductDraft();
+    if (state.route === 'expenses') return saveExpenseForm();
+    return saveStockEdits();
   }
   return false;
 }
@@ -532,9 +567,13 @@ function ensureLoginUsernameField() {
   const form = $('#login-form');
   if (!form || form.querySelector('[name="username"]')) return;
   const passwordLabel = form.querySelector('label.field');
-  const usernameLabel = buildFieldLabel('Username', 'text', 'username', {
+  // Owner request (2026-09-08): login accepts either the username or the
+  // account's email (server/admins.js's verifyLogin checks both) -- the
+  // field name stays "username" (that's what /api/auth/login reads), only
+  // the label/placeholder tell the admin both work.
+  const usernameLabel = buildFieldLabel('Username or Email', 'text', 'username', {
     autocomplete: 'username',
-    placeholder: 'Enter username',
+    placeholder: 'Enter username or email',
     required: true,
   });
   form.insertBefore(usernameLabel, passwordLabel);
@@ -571,6 +610,17 @@ function bindChrome() {
       err.classList.remove('hidden');
     }
   });
+
+  // Settings has no single in-memory form object the way Stock management/
+  // the editor/Expenses do -- every section reads straight from the DOM at
+  // its own scoped Save click. #view-settings itself is a static container
+  // (only its innerHTML gets replaced by renderSettings()), so one delegated
+  // listener wired here, once, survives every re-render and just flags
+  // "something changed" without needing to know which section or field --
+  // renderSettings() clears the flag on every fresh load and after every
+  // scoped save (see its own comment).
+  $('#view-settings').addEventListener('input', () => { state.settingsDirty = true; });
+  $('#view-settings').addEventListener('change', () => { state.settingsDirty = true; });
 
   // Browser Back/Forward: replay the popped route through the same
   // guard+dispatch path a sidebar click uses (see replayHistoryRoute above)
@@ -3377,6 +3427,12 @@ function scopedSettingFieldsPatch(container) {
 
 async function renderSettings() {
   state.settingsCollapsed = state.settingsCollapsed || new Set();
+  // A fresh load always reflects real server state, so nothing on screen is
+  // unsaved yet -- and this same call also runs right after every scoped
+  // Save succeeds (wireScopedSettingsSave), which is exactly when any OTHER
+  // section's still-typed-but-unsaved edit gets wiped by the re-render
+  // anyway (see the guard's own comment above hasUnsavedChanges()).
+  state.settingsDirty = false;
   const data = await api('/api/settings');
   state.settings = data.settings;
   // Same combined filament+category list New Order's product picker and
@@ -3474,7 +3530,7 @@ async function renderSettings() {
       ${settingsSectionWrap('admin-accounts', 'Admin Accounts', `
       <div class="panel stack gap-3">
         <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">
-          Everyone listed here has full access to this admin portal.
+          Everyone listed here has full access to this admin portal. Signing in accepts either the username or the email set here.
         </p>
         <div id="admins-list">
           ${admins.map((a) => `
@@ -3486,12 +3542,19 @@ async function renderSettings() {
                 <button class="btn small btn-danger" data-remove-admin="${a.id}" type="button" ${admins.length <= 1 ? 'disabled' : ''}>Remove</button>
               </div>
             </div>
+            <label class="field" style="max-width:320px"><span>Login Email (Optional)</span>
+              <div style="display:flex;gap:0.5rem">
+                <input class="admin-email-input" type="email" value="${escapeAttr(a.email || '')}" placeholder="Not set" />
+                <button class="btn small" data-save-admin-email="${a.id}" type="button">Save</button>
+              </div>
+            </label>
           </div>`).join('')}
         </div>
         <div class="grid-2">
           <label class="field"><span>New Admin Username</span><input id="new-admin-username" type="text" /></label>
           <label class="field"><span>New Admin Password</span><input id="new-admin-password" type="password" placeholder="8+ characters" /></label>
         </div>
+        <label class="field"><span>New Admin Email (Optional)</span><input id="new-admin-email" type="email" placeholder="Lets this account sign in with either" /></label>
         <div><button class="btn" id="add-admin" type="button">Add admin</button></div>
       </div>`)}
 
@@ -3713,13 +3776,27 @@ async function renderSettings() {
   $('#add-admin').addEventListener('click', async () => {
     const username = $('#new-admin-username').value.trim();
     const password = $('#new-admin-password').value;
+    const email = $('#new-admin-email').value.trim();
     try {
-      await api('/api/admins', { method: 'POST', body: JSON.stringify({ username, password }) });
+      await api('/api/admins', { method: 'POST', body: JSON.stringify({ username, password, email }) });
       toast('Admin added');
       await renderSettings();
     } catch (ex) {
       toast(ex.message);
     }
+  });
+
+  $$('[data-save-admin-email]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const email = btn.closest('label').querySelector('.admin-email-input').value.trim();
+      try {
+        await api(`/api/admins/${btn.dataset.saveAdminEmail}/email`, { method: 'PATCH', body: JSON.stringify({ email }) });
+        toast(email ? 'Login email saved' : 'Login email cleared');
+        await renderSettings();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
   });
 
   $$('[data-reset-admin]').forEach((btn) => {
@@ -5764,25 +5841,39 @@ function bindExpenseForm(form) {
     });
   });
   $('#ex-add-item').addEventListener('click', async () => { form.items.push(blankExpenseItem()); await renderExpenses(); });
-  $('#cancel-expense').addEventListener('click', async () => { state.editingExpense = null; await renderExpenses(); });
-  $('#save-expense').addEventListener('click', async () => {
-    const payload = {
-      supplier: form.supplier,
-      purchaseDate: form.purchaseDate,
-      paymentMethod: form.paymentMethod,
-      notes: form.notes,
-      items: form.items.map((i) => ({ description: i.description, category: i.category, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0 })),
-    };
-    try {
-      if (form.id) await api(`/api/expenses/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
-      else await api('/api/expenses', { method: 'POST', body: JSON.stringify(payload) });
-      toast('Expense saved');
-      state.editingExpense = null;
-      await renderExpenses();
-    } catch (ex) {
-      toast(ex.message);
-    }
+  $('#cancel-expense').addEventListener('click', async () => {
+    state.editingExpense = null;
+    state.editingExpenseSaved = null;
+    await renderExpenses();
   });
+  $('#save-expense').addEventListener('click', () => saveExpenseForm());
+}
+
+// Extracted from the #save-expense click handler (same reasoning as
+// saveProductDraft() above) so the unsaved-changes nav guard can trigger a
+// real save and get a real success/failure result back.
+async function saveExpenseForm() {
+  const form = state.editingExpense;
+  if (!form) return true;
+  const payload = {
+    supplier: form.supplier,
+    purchaseDate: form.purchaseDate,
+    paymentMethod: form.paymentMethod,
+    notes: form.notes,
+    items: form.items.map((i) => ({ description: i.description, category: i.category, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) || 0 })),
+  };
+  try {
+    if (form.id) await api(`/api/expenses/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+    else await api('/api/expenses', { method: 'POST', body: JSON.stringify(payload) });
+    toast('Expense saved');
+    state.editingExpense = null;
+    state.editingExpenseSaved = null;
+    await renderExpenses();
+    return true;
+  } catch (ex) {
+    toast(ex.message);
+    return false;
+  }
 }
 
 async function renderExpenses() {
@@ -5842,11 +5933,16 @@ async function renderExpenses() {
     state.expenseQ = $('#expense-q').value.trim();
     await renderExpenses();
   });
-  $('#new-expense').addEventListener('click', async () => { state.editingExpense = blankExpense(); await renderExpenses(); });
+  $('#new-expense').addEventListener('click', async () => {
+    state.editingExpense = blankExpense();
+    markExpenseSaved();
+    await renderExpenses();
+  });
   $$('#view-expenses tbody tr[data-id]').forEach((tr) => {
     tr.querySelector('[data-action="edit"]').addEventListener('click', async () => {
       const { expense } = await api(`/api/expenses/${tr.dataset.id}`);
       state.editingExpense = expense;
+      markExpenseSaved();
       await renderExpenses();
       $('#ex-supplier')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });

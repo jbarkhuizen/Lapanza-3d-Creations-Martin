@@ -599,6 +599,7 @@ export function ensureSchema(db) {
   ensureShippingCategoryColumn(db);
   ensureClientDisabledColumn(db);
   ensureSpecialsColumns(db);
+  ensureAdminEmailColumn(db);
   seedTodoItems(db);
   backfillAnalyticsTotals(db);
 }
@@ -810,6 +811,28 @@ function ensureSpecialsColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'special_initial_qty')) {
     db.exec('ALTER TABLE filament_colours ADD COLUMN special_initial_qty INTEGER');
   }
+}
+
+// Owner request (2026-09-08): admin login accepts either the username or the
+// email address. Every existing admin account predates this column, so it
+// stays nullable rather than required -- login-by-email simply isn't
+// available for an account until someone sets one (Settings -> Admin
+// Accounts). Uniqueness is enforced by a partial index rather than a plain
+// UNIQUE column constraint, both because SQLite's ALTER TABLE can't add a
+// UNIQUE constraint in one step (only CREATE TABLE can) and because a plain
+// UNIQUE column would reject every admin past the first for having the same
+// NULL email -- the `WHERE email IS NOT NULL AND email <> ''` clause is what
+// lets any number of accounts stay email-less while still blocking two
+// accounts from claiming the same real one. COLLATE NOCASE matches the
+// case-insensitive email lookup convention already used everywhere else in
+// this codebase (clients.js's `LOWER(email) = LOWER(?)`).
+function ensureAdminEmailColumn(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(admins)', 'email')) {
+    db.exec('ALTER TABLE admins ADD COLUMN email TEXT');
+  }
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_email ON admins(email COLLATE NOCASE) WHERE email IS NOT NULL AND email <> ''",
+  );
 }
 
 function ensureClientDisabledColumn(db) {
