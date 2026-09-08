@@ -5,9 +5,17 @@ import { getProduct, upsertProduct } from './store.js';
 import { readCategoryProducts } from './export.js';
 import { formatRand } from './money.js';
 
+// Bug fix (owner report 2026-09-08): this used to Math.round() the parsed
+// value, silently dropping cents every time a category item's price was
+// read for Stock Management -- the item's own stored price (catalog.json,
+// written via formatRand() in updateCategoryItemStock below) keeps cents
+// just fine, and filament colours' price_rand column always has, so this
+// was the one place in the read path throwing them away. A round-trip
+// through Stock Management (load -> edit something unrelated -> Save) would
+// then silently overwrite a real "R199.99" back down to "R199".
 function parseRand(value) {
   const n = parseFloat(String(value ?? '').replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? Math.round(n) : 0;
+  return Number.isFinite(n) ? n : 0;
 }
 
 // Unifies the two separate product storage systems (filament_colours in

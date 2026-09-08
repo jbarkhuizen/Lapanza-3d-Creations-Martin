@@ -64,6 +64,23 @@ test('listInventory rows carry the same productId scheme resolveProductSnapshot 
   assert.strictEqual(resolveProductSnapshot(categoryRow.productId).name, 'Dino');
 });
 
+// Regression (owner report 2026-09-08): listInventory's category-item price
+// used to Math.round() away any cents on every read, so a real "R199.99"
+// price displayed (and, if the Stock Management grid was then saved with
+// even one unrelated edit, persisted) as "R199" -- filament colours never
+// had this problem since price_rand is a raw REAL column, only category
+// items' text-price parsing rounded.
+test('listInventory keeps cents on a category item price -- does not round it away', async (t) => {
+  await withTempCwd(t);
+  const { upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+  const { listInventory } = await import(`./inventory.js?t=${Date.now()}`);
+
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', items: [{ id: 'i1', name: 'Dino', sku: 'SKU-2', stockQty: 3, price: 'R199.99' }] });
+
+  const row = listInventory().find((r) => r.id === 'i1');
+  assert.strictEqual(row.price, 199.99);
+});
+
 test('bulkUpdateInventory can pull a filament colour off the products page and back on', async (t) => {
   await withTempCwd(t);
   const { createFilament, addColour } = await import(`./filaments.js?t=${Date.now()}`);

@@ -6764,7 +6764,7 @@ function stockRowHtml(item) {
           <td><input type="number" min="0" step="1" class="stock-input" data-field="stockQty" value="${escapeAttr(String(stockVal))}" style="width:5rem" /></td>
           <td><span class="rand-input"><input type="number" min="0" step="0.01" class="stock-input" data-field="buyingPrice" value="${escapeAttr(Number(buyingVal).toFixed(2))}" style="width:6rem" /></span></td>
           <td>${manufacturingCell}</td>
-          <td><span class="rand-input"><input type="number" min="0" step="1" class="stock-input" data-field="price" value="${escapeAttr(String(priceVal))}" style="width:6rem" /></span></td>
+          <td><span class="rand-input"><input type="number" min="0" step="0.01" class="stock-input" data-field="price" value="${escapeAttr(Number(priceVal).toFixed(2))}" style="width:6rem" /></span></td>
           <td class="muted" style="font-size:0.85rem">${spoolCell}</td>
           <td style="white-space:nowrap;font-size:0.85rem">${madeToOrderCell}</td>
           <td style="white-space:nowrap;font-size:0.85rem">
