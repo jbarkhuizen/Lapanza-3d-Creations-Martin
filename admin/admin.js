@@ -142,6 +142,7 @@ function setRoute(route, { id } = {}) {
   show($('#view-registered-users'), route === 'registered-users');
   show($('#view-shipping'), route === 'shipping');
   show($('#view-promos'), route === 'promos');
+  show($('#view-specials'), route === 'specials');
   show($('#view-stock'), route === 'stock');
   show($('#view-reorder-report'), route === 'reorder-report');
   show($('#view-instruction-files'), route === 'instruction-files');
@@ -179,6 +180,7 @@ function setRoute(route, { id } = {}) {
     'registered-users': ['Client Side', 'Registered users'],
     shipping: ['Client Side', 'Shipping options'],
     promos: ['Client Side', 'Promo codes'],
+    specials: ['Client Side', 'Specials'],
     resources: ['Client Side', '3D Resources'],
     testimonials: ['Client Side', 'Testimonials'],
     'design-requests': ['Client Side', 'Design requests'],
@@ -508,6 +510,9 @@ function bindChrome() {
       } else if (btn.dataset.route === 'promos') {
         setRoute('promos');
         await renderPromos();
+      } else if (btn.dataset.route === 'specials') {
+        setRoute('specials');
+        await renderSpecials();
       } else if (btn.dataset.route === 'stock') {
         setRoute('stock');
         await renderStock();
@@ -6279,6 +6284,122 @@ async function renderPromos() {
         toast('Promo code saved');
         state.editingPromo = null;
         await renderPromos();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  }
+}
+
+// ---- Flash Stock Specials ----
+// A special is its own filament_colours row (see server/db.js's
+// ensureSpecialsColumns comment) -- this page is the only place to
+// start/end one; the colour it was split from just shows less stock,
+// nothing about its own editor changes.
+
+function blankSpecial() {
+  return { colourId: '', specialPriceRand: '', quantity: '', days: 2, buyingPriceRand: '' };
+}
+
+function specialTimeLeftLabel(endsAt) {
+  const ms = new Date(endsAt).getTime() - Date.now();
+  if (ms <= 0) return 'ending soon';
+  const hours = Math.floor(ms / 3600000);
+  const days = Math.floor(hours / 24);
+  return days > 0 ? `${days}d ${hours % 24}h left` : `${hours}h left`;
+}
+
+async function renderSpecials() {
+  state.newSpecial = state.newSpecial || null;
+  const [{ specials }, { candidates }] = await Promise.all([api('/api/specials'), api('/api/specials/candidates')]);
+  const form = state.newSpecial;
+  const activeCount = specials.filter((s) => s.specialStatus === 'active').length;
+
+  const rows = specials
+    .map(
+      (s) => `
+      <tr data-id="${escapeAttr(s.id)}">
+        <td><strong>${escapeHtml(s.baseColourName || s.name)}</strong><div class="muted" style="font-size:0.8rem">${escapeHtml(s.filamentName)} · ${escapeHtml(s.sku)}</div></td>
+        <td>${formatRand(s.priceRand)}${s.specialWasPriceRand ? ` <span class="muted" style="text-decoration:line-through">${formatRand(s.specialWasPriceRand)}</span>` : ''}</td>
+        <td>${escapeHtml(String(s.stockQty))} of ${escapeHtml(String(s.specialInitialQty ?? '—'))} left</td>
+        <td>${s.specialStatus === 'active' ? `<span class="badge published">Active</span> <span class="muted" style="font-size:0.82rem">${escapeHtml(specialTimeLeftLabel(s.specialEndsAt))}</span>` : '<span class="badge draft">Ended</span>'}</td>
+        <td>${escapeHtml(formatDate(s.specialStartedAt))}</td>
+        <td>${s.specialStatus === 'active' ? '<button class="btn small btn-danger" data-action="end" type="button">End Special Now</button>' : ''}</td>
+      </tr>`,
+    )
+    .join('');
+
+  $('#view-specials').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-special" type="button">+ Start Special</button>
+      <span class="muted">${activeCount} active · ${specials.length - activeCount} past</span>
+    </div>
+    ${form ? `
+      <div class="panel stack gap-3" style="max-width:620px">
+        <div class="section-head"><h3>Start A Special</h3></div>
+        <p class="muted" style="margin:0">Splits the quantity off this colour's own stock at a reduced price, for however many days you set. Unsold units rejoin standard-price stock the moment it ends.</p>
+        <label class="field"><span>Colour</span>
+          <select id="sp-colour">
+            <option value="">Choose a colour…</option>
+            ${candidates.map((c) => `<option value="${escapeAttr(c.id)}" ${form.colourId === c.id ? 'selected' : ''}>${escapeHtml(c.filamentName)} — ${escapeHtml(c.name)} (${escapeHtml(String(c.stockQty))} in stock @ ${formatRand(c.priceRand)})</option>`).join('')}
+          </select>
+        </label>
+        <div class="grid-3">
+          <label class="field"><span>Special Price (R)</span><input id="sp-price" type="number" min="1" step="1" value="${escapeAttr(String(form.specialPriceRand))}" /></label>
+          <label class="field"><span>Quantity For Special</span><input id="sp-qty" type="number" min="1" step="1" value="${escapeAttr(String(form.quantity))}" /></label>
+          <label class="field"><span>Runs For (Days)</span><input id="sp-days" type="number" min="1" step="1" value="${escapeAttr(String(form.days))}" /></label>
+        </div>
+        <label class="field"><span>Buying Price For This Batch (R, Optional)</span><input id="sp-buying" type="number" min="0" step="0.01" value="${escapeAttr(String(form.buyingPriceRand))}" placeholder="Defaults to the colour's own buying price" /></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-special" type="button">Start Special</button>
+          <button class="btn btn-ghost" id="cancel-special" type="button">Cancel</button>
+        </div>
+      </div>` : ''}
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th>Colour</th><th>Price</th><th>Stock</th><th>Status</th><th>Started</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No specials yet — start one from a colour with stock on hand</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $('#new-special').addEventListener('click', async () => {
+    state.newSpecial = blankSpecial();
+    await renderSpecials();
+  });
+  $$('#view-specials tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="end"]')?.addEventListener('click', async () => {
+      if (!confirm('End this special now? Any unsold units return to standard-price stock immediately.')) return;
+      try {
+        const res = await api(`/api/specials/${tr.dataset.id}/end`, { method: 'POST' });
+        toast(res.publishWarning || 'Special ended and published live');
+        await renderSpecials();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (form) {
+    $('#cancel-special').addEventListener('click', async () => {
+      state.newSpecial = null;
+      await renderSpecials();
+    });
+    $('#save-special').addEventListener('click', async () => {
+      const colourId = $('#sp-colour').value;
+      if (!colourId) return toast('Pick a colour first');
+      const buyingRaw = $('#sp-buying').value;
+      const payload = {
+        colourId,
+        specialPriceRand: Number($('#sp-price').value) || 0,
+        quantity: Number($('#sp-qty').value) || 0,
+        days: Number($('#sp-days').value) || 0,
+        ...(buyingRaw !== '' ? { buyingPriceRand: Number(buyingRaw) || 0 } : {}),
+      };
+      try {
+        const res = await api('/api/specials', { method: 'POST', body: JSON.stringify(payload) });
+        toast(res.publishWarning || 'Special started and published live');
+        state.newSpecial = null;
+        await renderSpecials();
       } catch (ex) {
         toast(ex.message);
       }

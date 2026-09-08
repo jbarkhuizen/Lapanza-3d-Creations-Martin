@@ -16,6 +16,11 @@ import {
   removeColourImage,
   reorderColourImages,
   colourGalleryPaths,
+  startSpecial,
+  endSpecial,
+  listSpecials,
+  listSpecialCandidates,
+  endExpiredAndSoldOutSpecials,
 } from './filaments.js';
 
 test('createFilament + getFilament round-trip', () => {
@@ -297,5 +302,174 @@ test('buying price round-trips through addColour/updateColour, defaults 0', () =
 
   const plain = addColour(filament.id, { name: 'Blue', sku: 'BUY-2', priceRand: 300, weightG: 1000 }, db);
   assert.strictEqual(plain.colours.find((c) => c.sku === 'BUY-2').buyingPriceRand, 0);
+  db.close();
+});
+
+// ---- Flash Stock Specials ----
+
+function seedBaseColour(db, overrides = {}) {
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const withColour = addColour(
+    filament.id,
+    { name: 'Black', sku: 'PLA-BLK-100', priceRand: 349, weightG: 1000, stockQty: 40, buyingPriceRand: 180, ...overrides },
+    db,
+  );
+  return { filament, base: withColour.colours[0] };
+}
+
+test('startSpecial splits stock off the base colour into a new, separately-priced row', () => {
+  const db = openDb(':memory:');
+  const { base, filament } = seedBaseColour(db);
+
+  const special = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+  assert.strictEqual(special.priceRand, 249);
+  assert.strictEqual(special.stockQty, 10);
+  assert.strictEqual(special.specialInitialQty, 10);
+  assert.strictEqual(special.specialStatus, 'active');
+  assert.strictEqual(special.specialSourceColourId, base.id);
+  assert.strictEqual(special.specialWasPriceRand, 349);
+  assert.strictEqual(special.name, 'Black (Special)');
+  assert.strictEqual(special.sku, 'PLA-BLK-100-SPECIAL');
+  // Buying price defaults from the base colour when none is supplied.
+  assert.strictEqual(special.buyingPriceRand, 180);
+  assert.ok(special.specialEndsAt);
+
+  const baseAfter = getFilament(filament.id, db).colours.find((c) => c.id === base.id);
+  assert.strictEqual(baseAfter.stockQty, 30);
+  db.close();
+});
+
+test('startSpecial rejects allocating more than what is actually in stock', () => {
+  const db = openDb(':memory:');
+  const { base } = seedBaseColour(db, { stockQty: 5 });
+  assert.throws(() => startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db), /Only 5 in stock/);
+  db.close();
+});
+
+test('startSpecial refuses a second active special while one is already running, and refuses special-of-a-special', () => {
+  const db = openDb(':memory:');
+  const { base } = seedBaseColour(db);
+  const special = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+  assert.throws(() => startSpecial(base.id, { specialPriceRand: 199, quantity: 5, days: 1 }, db), /already has an active special/);
+  assert.throws(() => startSpecial(special.id, { specialPriceRand: 150, quantity: 2, days: 1 }, db), /already a special/);
+  db.close();
+});
+
+test('endSpecial (early end, leftover stock) rejoins the unsold units at the base colour\'s standard price', () => {
+  const db = openDb(':memory:');
+  const { base, filament } = seedBaseColour(db);
+  const special = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+
+  // Simulate 4 sold during the special (the same generic UPDATE
+  // decrementStockForOrder would run -- no special-aware code involved).
+  db.prepare('UPDATE filament_colours SET stock_qty = stock_qty - 4 WHERE id = ?').run(special.id);
+
+  const ended = endSpecial(special.id, db);
+  assert.strictEqual(ended.specialStatus, 'ended');
+  assert.strictEqual(ended.stockQty, 0);
+  assert.strictEqual(ended.listed, false);
+
+  const baseAfter = getFilament(filament.id, db).colours.find((c) => c.id === base.id);
+  // Started at 40, 10 split off (30), 6 unsold rejoin (36) -- the 4 sold
+  // during the special are gone for good, same as any other sale.
+  assert.strictEqual(baseAfter.stockQty, 36);
+  db.close();
+});
+
+test('endSpecial on a sold-out special (0 remaining) ends cleanly with no merge needed', () => {
+  const db = openDb(':memory:');
+  const { base, filament } = seedBaseColour(db);
+  const special = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+  db.prepare('UPDATE filament_colours SET stock_qty = 0 WHERE id = ?').run(special.id);
+
+  endSpecial(special.id, db);
+  const baseAfter = getFilament(filament.id, db).colours.find((c) => c.id === base.id);
+  assert.strictEqual(baseAfter.stockQty, 30); // unchanged -- nothing left to rejoin
+  db.close();
+});
+
+test('endSpecial rejects an id that is not an active special', () => {
+  const db = openDb(':memory:');
+  const { base } = seedBaseColour(db);
+  assert.throws(() => endSpecial(base.id, db), /Active special not found/);
+  db.close();
+});
+
+test('endExpiredAndSoldOutSpecials ends a sold-out one and a time-expired one, leaves a healthy one running', () => {
+  const db = openDb(':memory:');
+  const filament = createFilament({ name: 'PLA', slug: 'pla' }, db);
+  const addBase = (sku) => addColour(filament.id, { name: sku, sku, priceRand: 349, weightG: 1000, stockQty: 40 }, db).colours.find((c) => c.sku === sku);
+
+  const soldOutBase = addBase('A-1');
+  const soldOut = startSpecial(soldOutBase.id, { specialPriceRand: 100, quantity: 5, days: 2 }, db);
+  db.prepare('UPDATE filament_colours SET stock_qty = 0 WHERE id = ?').run(soldOut.id);
+
+  const expiredBase = addBase('A-2');
+  const expired = startSpecial(expiredBase.id, { specialPriceRand: 100, quantity: 5, days: 2 }, db);
+  db.prepare("UPDATE filament_colours SET special_ends_at = '2000-01-01T00:00:00.000Z' WHERE id = ?").run(expired.id);
+
+  const healthyBase = addBase('A-3');
+  const healthy = startSpecial(healthyBase.id, { specialPriceRand: 100, quantity: 5, days: 2 }, db);
+
+  const ended = endExpiredAndSoldOutSpecials(db);
+  assert.deepStrictEqual(new Set(ended.map((s) => s.id)), new Set([soldOut.id, expired.id]));
+
+  const stillActive = db.prepare("SELECT special_status FROM filament_colours WHERE id = ?").get(healthy.id);
+  assert.strictEqual(stillActive.special_status, 'active');
+  db.close();
+});
+
+test('listSpecials returns active and ended specials newest first, with filament/base names attached', () => {
+  const db = openDb(':memory:');
+  const { base } = seedBaseColour(db);
+  const special = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+  const list = listSpecials(db);
+  assert.strictEqual(list.length, 1);
+  assert.strictEqual(list[0].id, special.id);
+  assert.strictEqual(list[0].filamentName, 'PLA');
+  assert.strictEqual(list[0].baseColourName, 'Black');
+
+  endSpecial(special.id, db);
+  const afterEnd = listSpecials(db);
+  assert.strictEqual(afterEnd.length, 1);
+  assert.strictEqual(afterEnd[0].specialStatus, 'ended');
+  db.close();
+});
+
+test('listSpecialCandidates excludes out-of-stock colours and specials themselves', () => {
+  const db = openDb(':memory:');
+  const { filament, base } = seedBaseColour(db);
+  addColour(filament.id, { name: 'Empty', sku: 'EMPTY-1', priceRand: 300, weightG: 1000, stockQty: 0 }, db);
+  const special = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+
+  const candidates = listSpecialCandidates(db);
+  const skus = candidates.map((c) => c.sku);
+  assert.ok(skus.includes('PLA-BLK-100'));
+  assert.ok(!skus.includes('EMPTY-1'));
+  assert.ok(!skus.includes(special.sku));
+  db.close();
+});
+
+test('deleteColour refuses to delete an active special (would silently skip the merge-back), allows it once ended', () => {
+  const db = openDb(':memory:');
+  const { filament, base } = seedBaseColour(db);
+  const special = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+
+  assert.throws(() => deleteColour(filament.id, special.id, db), /active special/);
+  // The base colour itself is never blocked -- only the special row is.
+  assert.strictEqual(deleteColour(filament.id, base.id, db), true);
+
+  endSpecial(special.id, db);
+  assert.strictEqual(deleteColour(filament.id, special.id, db), true);
+  db.close();
+});
+
+test('starting a second special on the same colour after the first ended gets a distinct SKU', () => {
+  const db = openDb(':memory:');
+  const { base } = seedBaseColour(db);
+  const first = startSpecial(base.id, { specialPriceRand: 249, quantity: 10, days: 2 }, db);
+  endSpecial(first.id, db);
+  const second = startSpecial(base.id, { specialPriceRand: 199, quantity: 5, days: 1 }, db);
+  assert.notStrictEqual(second.sku, first.sku);
   db.close();
 });

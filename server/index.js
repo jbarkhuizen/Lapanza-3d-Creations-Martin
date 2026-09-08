@@ -26,6 +26,10 @@ import {
   addColourImage,
   removeColourImage,
   reorderColourImages,
+  listSpecials,
+  listSpecialCandidates,
+  startSpecial,
+  endSpecial,
 } from './filaments.js';
 import multer from 'multer';
 import {
@@ -134,7 +138,7 @@ import {
   sendCampaign as sendWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
-import { startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob } from './jobs.js';
+import { startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob, startSpecialsSweepJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary, getTopPages } from './analytics.js';
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
@@ -1296,13 +1300,20 @@ app.put('/api/filaments/:filamentId/colours/:colourId', requireAuth, async (req,
 });
 
 app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, async (req, res) => {
-  const existing = getFilament(req.params.filamentId);
-  const colour = existing?.colours.find((c) => c.id === req.params.colourId);
-  const ok = deleteColour(req.params.filamentId, req.params.colourId);
-  if (!ok) return res.status(404).json({ error: 'Colour not found' });
-  const publishWarning = await publishCatalog();
-  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted colour "${colour?.name || req.params.colourId}" from "${existing?.name || req.params.filamentId}"` });
-  res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
+  try {
+    const existing = getFilament(req.params.filamentId);
+    const colour = existing?.colours.find((c) => c.id === req.params.colourId);
+    const ok = deleteColour(req.params.filamentId, req.params.colourId);
+    if (!ok) return res.status(404).json({ error: 'Colour not found' });
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted colour "${colour?.name || req.params.colourId}" from "${existing?.name || req.params.filamentId}"` });
+    res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    // Active-special guard (filaments.js's deleteColour) surfaces here --
+    // everything else this route can throw is either the 404 above or a
+    // genuine bug, so 400 with the message is the right shape either way.
+    res.status(400).json({ error: err.message });
+  }
 });
 
 app.post(
@@ -2711,6 +2722,42 @@ app.put('/api/promo-codes/:id', requireAuth, (req, res) => {
   }
 });
 
+// ---- Flash Stock Specials ----
+// See db.js's ensureSpecialsColumns / filaments.js's startSpecial+endSpecial
+// for why a special is its own filament_colours row, not a state overlay --
+// that's also why there's no dedicated checkout/cart wiring here: it's
+// already just a colour as far as every other route is concerned.
+
+app.get('/api/specials', requireAuth, (_req, res) => {
+  res.json({ specials: listSpecials() });
+});
+
+app.get('/api/specials/candidates', requireAuth, (_req, res) => {
+  res.json({ candidates: listSpecialCandidates() });
+});
+
+app.post('/api/specials', requireAuth, async (req, res) => {
+  try {
+    const colour = startSpecial((req.body || {}).colourId, req.body || {});
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Started special "${colour.name}" (${colour.sku}): ${colour.stockQty} @ R${colour.priceRand}, ends ${colour.specialEndsAt}` });
+    res.status(201).json({ colour, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/specials/:id/end', requireAuth, async (req, res) => {
+  try {
+    const colour = endSpecial(req.params.id);
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Ended special "${colour.name}" (${colour.sku})` });
+    res.json({ colour, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Duplicate-order fix (2026-09-03): a customer bounced back from Payfast
 // (cancel_url) can retry payment on their EXISTING pending order instead of
 // placing a new one. The order id is an unguessable UUID handed to that
@@ -3467,6 +3514,7 @@ if (isMainModule) {
   startAuditLogPruneJob();
   startPageViewsPruneJob();
   startDesignFilePruneJob(); // #90 design-file retention
+  startSpecialsSweepJob(publishCatalog); // Flash Stock Specials -- catches sell-out/expiry
   // #43 safety net: catches restocks whose trigger path was missed (e.g.
   // direct DB edits) -- daily, same idiom as the
   // other in-process jobs.

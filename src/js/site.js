@@ -236,6 +236,38 @@ function ensureDesktopThemeToggle() {
   document.body.appendChild(btn);
 }
 
+// Flash Stock Specials: the countdown text on a special's card is computed
+// here from data-special-ends (an ISO timestamp baked in at publish time),
+// not baked in as static text -- a static "Ends in 1d 14h" would freeze at
+// whatever it read at the last publish, which is wrong for anyone still
+// looking at the page an hour later. Ticks down for as long as the tab
+// stays open; the actual cutoff is still enforced server-side regardless
+// (see server/jobs.js's startSpecialsSweepJob and orders.js's normal stock
+// check) -- this is display only.
+function hydrateSpecialCountdowns() {
+  const els = document.querySelectorAll('[data-special-countdown]');
+  if (!els.length) return;
+  function render() {
+    const now = Date.now();
+    els.forEach((el) => {
+      const ends = Date.parse(el.dataset.specialEnds);
+      if (!ends) return;
+      const ms = ends - now;
+      if (ms <= 0) {
+        el.textContent = 'Special ending soon…';
+        return;
+      }
+      const totalHours = Math.floor(ms / 3600000);
+      const days = Math.floor(totalHours / 24);
+      const hours = totalHours % 24;
+      const mins = Math.floor((ms % 3600000) / 60000);
+      el.textContent = days > 0 ? `Ends in ${days}d ${hours}h` : totalHours > 0 ? `Ends in ${hours}h ${mins}m` : `Ends in ${mins}m`;
+    });
+  }
+  render();
+  setInterval(render, 60 * 1000);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   await initAppearance();
   mountNav();
@@ -255,6 +287,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // "Continue shopping"; a fresh checkout load re-reads everything.
   if (window.__PAGE_PATH__ !== 'checkout.html') mountCartUI();
   enhanceColourCards();
+  hydrateSpecialCountdowns();
   mountCarPartsFilter();
   mountFilamentFilter();
   mountRestockNotify();

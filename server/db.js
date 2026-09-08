@@ -598,6 +598,7 @@ export function ensureSchema(db) {
   ensureFilamentColourImagesTable(db);
   ensureShippingCategoryColumn(db);
   ensureClientDisabledColumn(db);
+  ensureSpecialsColumns(db);
   seedTodoItems(db);
   backfillAnalyticsTotals(db);
 }
@@ -773,6 +774,44 @@ function ensureManagementColumns(db) {
 // Registered Users: an admin-facing kill switch distinct from Delete --
 // blocks login without touching password_hash, order history, or the
 // account itself, so it's trivially reversible (unlike delete/revoke).
+// Flash Stock Specials: a special is its OWN filament_colours row (own SKU,
+// own stock_qty, own price_rand, own buying_price_rand -- the last of these
+// already existed) split off from a base colour, not a temporary state on
+// the base row itself. That choice is what lets checkout/cart/invoices need
+// zero new code -- resolveProductSnapshot() and every stock function in
+// orders.js already handle any filament_colours row generically by sku, so
+// a special is invisible to them as a concept; it's just another colour.
+// special_status is NULL for an ordinary colour, 'active' while a special
+// is running, 'ended' afterward (kept, not deleted, for history/reporting
+// -- see filaments.js's endSpecial). special_was_price_rand is a snapshot
+// of the base colour's price at the moment the special started, purely for
+// the storefront's "was RXXX" display -- not read back for anything else,
+// so it staying stale if the base price later changes is correct, not a bug.
+function ensureSpecialsColumns(db) {
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'special_status')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN special_status TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'special_source_colour_id')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN special_source_colour_id TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'special_started_at')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN special_started_at TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'special_ends_at')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN special_ends_at TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'special_was_price_rand')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN special_was_price_rand INTEGER');
+  }
+  // The quantity allocated at start time, fixed -- stock_qty on this same
+  // row already tracks what's LEFT (it decrements on every sale like any
+  // other colour's stock_qty does), so this is the only place "N of
+  // special_initial_qty left" can be computed from.
+  if (!hasColumn(db, 'PRAGMA table_info(filament_colours)', 'special_initial_qty')) {
+    db.exec('ALTER TABLE filament_colours ADD COLUMN special_initial_qty INTEGER');
+  }
+}
+
 function ensureClientDisabledColumn(db) {
   if (!hasColumn(db, 'PRAGMA table_info(clients)', 'disabled')) {
     db.exec('ALTER TABLE clients ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');

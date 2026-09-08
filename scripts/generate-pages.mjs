@@ -491,14 +491,40 @@ function colourCards(colours, filament) {
     .map((c) => {
       const stock = stockMessage(c.stockQty);
       const galleryImages = galleryFirstImages(c);
-      return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4" data-colour-name="${c.name}" data-price="${escapeAttr(String(parsePrice(c.price) || 0))}" data-instock="${Number(c.stockQty) > 0 ? 1 : 0}">
+      // Flash Stock Specials -- a special is its own colour row (see
+      // db.js's ensureSpecialsColumns comment), so it's really just a
+      // second card for the same shade; the badge/was-price/countdown
+      // below are the only things that mark it out as one. The countdown
+      // text itself is filled in client-side (src/js/site.js's
+      // hydrateSpecialCountdowns) from data-special-ends, not baked in
+      // here, so it never freezes at whatever it read at the last publish.
+      const specialBadge = c.isSpecial
+        ? `<span class="inline-block text-[0.62rem] font-bold uppercase tracking-wide bg-lime text-charcoal px-2 py-0.5 rounded-sm mb-2">Flash Sale</span>`
+        : '';
+      const priceLine = c.isSpecial && c.specialWasPrice
+        ? `<p class="text-terracotta font-semibold">${c.specialWasPrice ? `<span class="line-through text-espresso/40 font-normal mr-1.5 text-[0.85em]">${c.specialWasPrice}</span>` : ''}${c.price}</p>`
+        : `<p class="text-terracotta font-semibold">${c.price}</p>`;
+      const countdown = c.isSpecial && c.specialEndsAt
+        ? `<p class="text-[0.68rem] font-mono text-terracotta/80 mt-0.5" data-special-countdown data-special-ends="${escapeAttr(c.specialEndsAt)}"></p>`
+        : '';
+      const stockBar = c.isSpecial && c.specialInitialQty
+        ? (() => {
+            const pct = Math.max(0, Math.min(100, Math.round((Number(c.stockQty) / c.specialInitialQty) * 100)));
+            return `<div class="h-1 rounded-full bg-charcoal/10 overflow-hidden mt-1.5 mb-0.5"><div class="h-full bg-lime" style="width:${pct}%"></div></div>
+                  <p class="text-[0.68rem] text-espresso/50">${c.stockQty} of ${c.specialInitialQty} left at this price</p>`;
+          })()
+        : '';
+      return `<div id="${itemAnchorId(c.sku, c.name)}" class="swatch-card border border-charcoal/10 rounded-sm p-4${c.isSpecial ? ' border-terracotta/40' : ''}" data-colour-name="${c.name}" data-price="${escapeAttr(String(parsePrice(c.price) || 0))}" data-instock="${Number(c.stockQty) > 0 ? 1 : 0}">
                   <a href="${colourDetailSlug(filament.slug, c.sku)}.html" class="block mb-3" aria-label="View ${escapeAttr(c.name)} details">
                     ${productGalleryHtml({ images: galleryImages, alt: c.name, mode: 'compact' })}
                   </a>
+                  ${specialBadge}
                   <p class="font-medium mb-1 tracking-tight">${c.name}</p>
                   <p class="text-espresso/45 text-[0.7rem] mb-2 font-mono">${c.sku}</p>
-                  <p class="text-terracotta font-semibold">${c.price}</p>
+                  ${priceLine}
                   <p class="text-[0.72rem] mt-0.5 ${stock.className}">${stock.label}</p>
+                  ${countdown}
+                  ${stockBar}
                   ${Number(c.stockQty) <= 0 ? `<button type="button" class="restock-notify text-xs font-semibold text-terracotta hover:underline mt-1" data-restock-product="filament:${escapeAttr(filament.slug)}:${escapeAttr(c.sku)}">Email me when it's back</button>` : ''}
                   ${Number(c.stockQty) > 0 ? addToCartButton({
                     productId: `filament:${filament.slug}:${c.sku}`,

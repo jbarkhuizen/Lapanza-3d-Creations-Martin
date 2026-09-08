@@ -115,6 +115,17 @@ export function syncPublicJson(db, paths = defaultPaths()) {
       imageUrl: c.imagePath || '',
       images: colourGalleryPaths(c, db),
       listed: c.listed !== false,
+      // Flash Stock Specials -- public-safe subset only (never buying price
+      // or the internal source-colour id, same "explicit field list, not a
+      // spread" discipline this export already applies to buyingPrice).
+      ...(c.specialStatus === 'active'
+        ? {
+            isSpecial: true,
+            specialEndsAt: c.specialEndsAt,
+            specialWasPrice: c.specialWasPriceRand ? formatRand(c.specialWasPriceRand) : null,
+            specialInitialQty: c.specialInitialQty || null,
+          }
+        : {}),
     })),
   }));
 

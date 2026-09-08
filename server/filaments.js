@@ -39,6 +39,14 @@ function rowToColour(row) {
     // Stock Management "Listed on site" radio -- excludes just this colour
     // from the filament's public colour grid (see export.js/generate-pages.mjs).
     listed: row.listed !== 0,
+    // Flash Stock Specials -- see db.js's ensureSpecialsColumns comment for
+    // why a special is its own row rather than a field overlay.
+    specialStatus: row.special_status || null,
+    specialSourceColourId: row.special_source_colour_id || null,
+    specialStartedAt: row.special_started_at || null,
+    specialEndsAt: row.special_ends_at || null,
+    specialWasPriceRand: row.special_was_price_rand ?? null,
+    specialInitialQty: row.special_initial_qty ?? null,
   };
 }
 
@@ -254,6 +262,15 @@ export function incrementFilamentUsage(colourId, { usedM = 0, usedG = 0 }, db = 
 export function deleteColour(filamentTypeId, colourId, db = getDb()) {
   const existing = db.prepare('SELECT * FROM filament_colours WHERE id = ? AND filament_type_id = ?').get(colourId, filamentTypeId);
   if (!existing) return false;
+  // A special row is still just a colour to this generic editor's Remove
+  // button -- but deleting it here would skip endSpecial()'s merge-back of
+  // any unsold units to the base colour, silently losing real stock. Force
+  // it through "End Special Now" (the Specials page) first; a colour that
+  // was ONCE a special but has already ended ('ended', not 'active') is
+  // just ordinary history at that point and deletes like any other colour.
+  if (existing.special_status === 'active') {
+    throw new Error('This is an active special -- end it from the Specials page before deleting it');
+  }
   deleteImageFile(existing.image_path);
   db.prepare('DELETE FROM filament_colours WHERE id = ?').run(colourId);
   return true;
@@ -319,4 +336,176 @@ export function colourGalleryPaths(colour, db = getDb()) {
   const images = listColourImages(colour.id, db);
   if (images.length) return images.map((i) => i.imagePath);
   return colour.imagePath ? [colour.imagePath] : [];
+}
+
+// ---- Flash Stock Specials ----
+// See db.js's ensureSpecialsColumns comment for the "a special is its own
+// row" design and why that keeps checkout/cart/invoices untouched.
+
+function rowToColourRaw(row) {
+  return row ? rowToColour(row) : null;
+}
+
+// Every row that is or ever was a special, newest first -- the admin
+// Specials page's whole list (active and ended alike; ended rows are the
+// only "how did that batch do" history this feature keeps).
+export function listSpecials(db = getDb()) {
+  const rows = db
+    .prepare(
+      `SELECT fc.*, ft.name AS filament_name, ft.slug AS filament_slug, base.name AS base_name
+       FROM filament_colours fc
+       JOIN filament_types ft ON ft.id = fc.filament_type_id
+       LEFT JOIN filament_colours base ON base.id = fc.special_source_colour_id
+       WHERE fc.special_status IS NOT NULL
+       ORDER BY fc.special_started_at DESC`,
+    )
+    .all();
+  return rows.map((row) => ({
+    ...rowToColour(row),
+    filamentName: row.filament_name,
+    filamentSlug: row.filament_slug,
+    baseColourName: row.base_name || null,
+  }));
+}
+
+// Colours eligible to START a new special from: real, non-special,
+// in-stock colours (a colour already mid-special is excluded by the
+// "one active special per colour at a time" rule below, and by having
+// nothing left to sensibly offer while it's already running one).
+export function listSpecialCandidates(db = getDb()) {
+  const rows = db
+    .prepare(
+      `SELECT fc.*, ft.name AS filament_name, ft.slug AS filament_slug
+       FROM filament_colours fc
+       JOIN filament_types ft ON ft.id = fc.filament_type_id
+       WHERE fc.special_status IS NULL AND fc.stock_qty > 0
+       ORDER BY ft.name ASC, fc.name ASC`,
+    )
+    .all();
+  return rows.map((row) => ({ ...rowToColour(row), filamentName: row.filament_name, filamentSlug: row.filament_slug }));
+}
+
+// Starts a special: splits `quantity` units off the base colour's own
+// stock_qty into a brand-new filament_colours row at the special price,
+// running for `days`. All in one transaction so a concurrent edit to the
+// base colour's stock can't be split against stale numbers.
+export function startSpecial(baseColourId, data, db = getDb()) {
+  const specialPriceRand = Math.max(1, Math.round(Number(data.specialPriceRand) || 0));
+  const quantity = Math.max(1, Math.floor(Number(data.quantity) || 0));
+  const days = Math.max(1, Math.floor(Number(data.days) || 0));
+  // Optional -- defaults to the base colour's own buying price so Stock
+  // Value has *something* correct to compute margin from even if the admin
+  // doesn't know the supplier's discounted cost yet; editable afterward
+  // like any other colour's buying price.
+  const buyingPriceRandRaw = data.buyingPriceRand;
+
+  const tx = db.transaction(() => {
+    const base = db.prepare('SELECT * FROM filament_colours WHERE id = ?').get(baseColourId);
+    if (!base) throw new Error('Colour not found');
+    if (base.special_status) throw new Error('This is already a special -- start the special from the original colour, not this one');
+    if (quantity > base.stock_qty) throw new Error(`Only ${base.stock_qty} in stock -- can't allocate ${quantity} to a special`);
+    const alreadyActive = db
+      .prepare("SELECT id FROM filament_colours WHERE special_source_colour_id = ? AND special_status = 'active'")
+      .get(baseColourId);
+    if (alreadyActive) throw new Error('This colour already has an active special -- end it before starting another');
+
+    const now = new Date();
+    const startedAt = now.toISOString();
+    const endsAt = new Date(now.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
+
+    db.prepare('UPDATE filament_colours SET stock_qty = stock_qty - ?, updated_at = ? WHERE id = ?').run(quantity, startedAt, baseColourId);
+
+    // sku is UNIQUE NOT NULL -- a colour that's had a special before (now
+    // ended) has already used the plain "-SPECIAL" suffix, so fall back to
+    // a short random one to guarantee this insert can never collide.
+    let sku = `${base.sku}-SPECIAL`;
+    if (db.prepare('SELECT 1 FROM filament_colours WHERE sku = ?').get(sku)) {
+      sku = `${base.sku}-SP-${randomUUID().slice(0, 4).toUpperCase()}`;
+    }
+    const maxSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) AS m FROM filament_colours WHERE filament_type_id = ?').get(base.filament_type_id).m;
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO filament_colours
+        (id, filament_type_id, name, hex, sku, weight_g, shipping_weight_g, roll_length_m, price_rand, buying_price_rand,
+         stock_qty, image_path, notes, sort_order, listed, special_status, special_source_colour_id, special_started_at,
+         special_ends_at, special_was_price_rand, special_initial_qty, created_at, updated_at)
+       VALUES
+        (@id, @filament_type_id, @name, @hex, @sku, @weight_g, @shipping_weight_g, @roll_length_m, @price_rand, @buying_price_rand,
+         @stock_qty, @image_path, @notes, @sort_order, 1, 'active', @special_source_colour_id, @special_started_at,
+         @special_ends_at, @special_was_price_rand, @special_initial_qty, @created_at, @updated_at)`,
+    ).run({
+      id,
+      filament_type_id: base.filament_type_id,
+      // " (Special)" suffix disambiguates it from the base colour on any
+      // shared surface (cart, invoice, admin lists) that shows plain names
+      // side by side -- the storefront's own Flash Sale badge does the rest.
+      name: `${base.name} (Special)`,
+      hex: base.hex,
+      sku,
+      weight_g: base.weight_g,
+      shipping_weight_g: base.shipping_weight_g,
+      roll_length_m: base.roll_length_m,
+      price_rand: specialPriceRand,
+      buying_price_rand: buyingPriceRandRaw != null && buyingPriceRandRaw !== '' ? Number(buyingPriceRandRaw) || 0 : base.buying_price_rand,
+      stock_qty: quantity,
+      image_path: base.image_path,
+      notes: `Flash special split from "${base.name}" (${base.sku}).`,
+      sort_order: maxSort + 1,
+      special_source_colour_id: baseColourId,
+      special_started_at: startedAt,
+      special_ends_at: endsAt,
+      special_was_price_rand: base.price_rand,
+      special_initial_qty: quantity,
+      created_at: startedAt,
+      updated_at: startedAt,
+    });
+    return id;
+  });
+
+  const id = tx();
+  return rowToColourRaw(db.prepare('SELECT * FROM filament_colours WHERE id = ?').get(id));
+}
+
+// Ends a special by any route (sold out, expired, or an admin's "End Special
+// Now") -- whatever units are still unsold rejoin the base colour's own
+// stock_qty at its standard price ("if sold go back to standard pricing"
+// literally means the UNSOLD ones do; the sold ones are just sold). The
+// special row is kept, not deleted, marked 'ended' and unlisted, so it
+// still shows in the Specials page's history and in past order/invoice
+// records exactly as it was at the time.
+export function endSpecial(specialColourId, db = getDb()) {
+  const tx = db.transaction(() => {
+    const special = db.prepare("SELECT * FROM filament_colours WHERE id = ? AND special_status = 'active'").get(specialColourId);
+    if (!special) throw new Error('Active special not found');
+    const remaining = special.stock_qty;
+    const now = new Date().toISOString();
+    if (remaining > 0 && special.special_source_colour_id) {
+      const base = db.prepare('SELECT id FROM filament_colours WHERE id = ?').get(special.special_source_colour_id);
+      // Base colour may itself have been deleted since the special started
+      // -- the leftover units then simply have nowhere to rejoin; the
+      // special's own row still correctly shows what was never sold.
+      if (base) {
+        db.prepare('UPDATE filament_colours SET stock_qty = stock_qty + ?, updated_at = ? WHERE id = ?').run(remaining, now, base.id);
+      }
+    }
+    db.prepare("UPDATE filament_colours SET stock_qty = 0, listed = 0, special_status = 'ended', updated_at = ? WHERE id = ?").run(now, specialColourId);
+  });
+  tx();
+  return rowToColourRaw(db.prepare('SELECT * FROM filament_colours WHERE id = ?').get(specialColourId));
+}
+
+// Sweep-job helper: every special still marked 'active' whose stock ran out
+// (a normal sale, same generic decrementStockForOrder every colour already
+// goes through -- no special-aware code needed there, see db.js's comment)
+// or whose window has passed. Called on an interval by
+// jobs.js's startSpecialsSweepJob, and once from the start/end routes'
+// own immediate paths is unnecessary since those already call endSpecial
+// directly -- this is purely for the two triggers nothing else observes
+// synchronously.
+export function endExpiredAndSoldOutSpecials(db = getDb()) {
+  const nowIso = new Date().toISOString();
+  const due = db
+    .prepare("SELECT id FROM filament_colours WHERE special_status = 'active' AND (stock_qty <= 0 OR special_ends_at <= ?)")
+    .all(nowIso);
+  return due.map((row) => endSpecial(row.id, db));
 }

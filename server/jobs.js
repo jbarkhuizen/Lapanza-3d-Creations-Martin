@@ -5,12 +5,14 @@ import { alertBackupFailure } from './alerts.js';
 import { pruneExpiredDesignFiles } from './design-requests.js';
 import { deleteDesignRequestFile } from './uploads.js';
 import { getSettings } from './settings.js';
+import { endExpiredAndSoldOutSpecials } from './filaments.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const BACKUP_INTERVAL_MS = 24 * HOUR_MS; // daily
 const BACKUP_RETENTION_COUNT = 30; // ~1 month of daily backups
 const AUDIT_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 const PAGE_VIEWS_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
+const SPECIALS_SWEEP_INTERVAL_MS = 15 * 60 * 1000; // every 15 min
 
 // G.2: this project has no external process manager, cron, or container
 // orchestrator -- it runs as a single persistent `node server/index.js`
@@ -78,6 +80,38 @@ export function startPageViewsPruneJob(intervalMs = PAGE_VIEWS_PRUNE_INTERVAL_MS
       if (pruned > 0) console.log(`Page-views prune: removed ${pruned} row(s) older than ${monthsToKeep} months`);
     } catch (err) {
       console.error('Page-views prune job failed:', err);
+    }
+  }
+  run();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
+  return timer;
+}
+
+// Flash Stock Specials: catches the two endings nothing else observes
+// synchronously -- the admin's own "Start"/"End Special Now" actions call
+// endSpecial() (server/filaments.js) directly and republish immediately, so
+// this only ever has to notice a special selling out via an ordinary sale
+// (decrementStockForOrder has no special-aware code at all, by design --
+// see db.js's ensureSpecialsColumns comment) or its days running out with
+// nobody watching. `publish` is passed in rather than imported so this file
+// never needs to import from server/index.js (which already imports this
+// one) -- same reasoning as every other cross-module wiring in this app.
+export function startSpecialsSweepJob(publish, intervalMs = SPECIALS_SWEEP_INTERVAL_MS) {
+  async function run() {
+    let ended;
+    try {
+      ended = endExpiredAndSoldOutSpecials();
+    } catch (err) {
+      console.error('Specials sweep failed:', err);
+      return;
+    }
+    if (!ended.length) return;
+    console.log(`Specials sweep: ended ${ended.length} special(s) — ${ended.map((s) => s.sku).join(', ')}`);
+    try {
+      await publish();
+    } catch (err) {
+      console.error('Specials sweep: publish after ending special(s) failed:', err.message);
     }
   }
   run();
