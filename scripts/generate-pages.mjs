@@ -1181,10 +1181,14 @@ const categoryPages = [
   // status only — a draft category stays admin-only until it's published.
   // vite.config's htmlEntries scans the root for *.html, so these need no
   // hand-listing there (the trap that 404'd new pages three times before).
+  // Draft is no longer filtered out here -- every dynamic category becomes
+  // a candidate, same as the core three/car-brands above, so the loop
+  // below's single draft/featured skip-and-cleanup check covers all of
+  // them uniformly instead of the draft case alone silently bypassing the
+  // stale-page removal that check does (see removeStaleCategoryPage).
   ...Object.values(categories)
     .filter((c) => !['toys', 'homeware', 'phones'].includes(c.slug))
     .filter((c) => !CAR_PART_BRANDS.some((b) => brandSlug(b.name) === c.slug))
-    .filter((c) => (c.status || 'published') !== 'draft')
     .map((c) => ({
       slug: c.slug,
       file: `${c.slug}.html`,
@@ -1195,23 +1199,39 @@ const categoryPages = [
     })),
 ];
 
+// A category page already on disk from a PRIOR run (back when it was
+// published+featured) never got deleted just because this run skips
+// regenerating it -- draft/unfeatured only stopped it being written, not
+// the stale copy from before being served forever after. Caught live
+// 2026-09-09 testing the featured-gate: unfeaturing a category left its
+// old page reachable and served exactly the stale content it had before.
+function removeStaleCategoryPage(page) {
+  const abs = path.join(root, page.file);
+  if (fs.existsSync(abs)) {
+    fs.unlinkSync(abs);
+    console.log('pruned stale category page', page.file);
+  }
+}
+
 const skippedCategories = [];
 for (const page of categoryPages) {
   const category = categories[page.slug];
   if (!category) {
     console.warn(`generate-pages: skipping ${page.file} — no category data for slug "${page.slug}" in categories.json`);
     skippedCategories.push(page.slug);
+    removeStaleCategoryPage(page);
     continue;
   }
-  // Owner request (2026-09-09): "Featured on Homepage Cues" now gates
-  // whether a category gets a public page at all -- same treatment as
-  // draft status just above, and deliberately applied here uniformly
-  // (core three, car-part brands, AND dynamic categories all funnel
-  // through this one loop) rather than only on the dynamic-category
-  // filter the way status historically was, so unfeaturing ANY category
-  // consistently takes it fully offline, not just out of the sidebar.
-  if (category.featured === false) {
+  // Owner request (2026-09-09): draft status and "Featured on Homepage
+  // Cues" both gate whether a category gets a public page at all, applied
+  // uniformly here (core three, car-part brands, AND dynamic categories
+  // all funnel through this one loop) -- draft status used to be filtered
+  // out earlier, before the candidate list was even built, which meant a
+  // newly-drafted category's stale old page never got the cleanup below
+  // either; now both checks live in the same place as the same problem.
+  if ((category.status || 'published') === 'draft' || category.featured === false) {
     skippedCategories.push(page.slug);
+    removeStaleCategoryPage(page);
     continue;
   }
   generateCategoryPage({
