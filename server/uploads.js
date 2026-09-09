@@ -287,6 +287,34 @@ export function deleteCategoryItemImage(imagePath) {
   if (fs.existsSync(abs)) fs.unlinkSync(abs);
 }
 
+// Advertise module (owner request 2026-09-09): one creative image per
+// advert. Same random-filename/validated-mimetype discipline as every
+// other uploader in this file.
+export const ADVERT_UPLOAD_DIR = path.join(root, 'public', 'uploads', 'adverts');
+
+function ensureAdvertUploadDir() {
+  if (!fs.existsSync(ADVERT_UPLOAD_DIR)) fs.mkdirSync(ADVERT_UPLOAD_DIR, { recursive: true });
+}
+
+export const uploadAdvertImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      ensureAdvertUploadDir();
+      cb(null, ADVERT_UPLOAD_DIR);
+    },
+    filename: (_req, file, cb) => cb(null, randomCategoryItemFilename(MIME_EXTENSIONS[file.mimetype] || '.jpg')),
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => cb(null, ALLOWED_TYPES.has(file.mimetype)),
+});
+
+export function deleteAdvertImage(imagePath) {
+  if (!imagePath) return;
+  const filename = path.basename(imagePath);
+  const abs = path.join(ADVERT_UPLOAD_DIR, filename);
+  if (fs.existsSync(abs)) fs.unlinkSync(abs);
+}
+
 // Review #25 (todo #164): short product videos on category items. Same
 // random-name/extension-from-validated-mimetype discipline as the image
 // uploaders above; 50MB cap matches nginx's client_max_body_size. MP4 and

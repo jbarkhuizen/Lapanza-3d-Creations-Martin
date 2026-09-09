@@ -371,6 +371,64 @@ export function ensureSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_account_repayments_account ON account_repayments (account);
 
+    -- Advertise module (owner request 2026-09-09): plan/schedule ad
+    -- creative across platforms and track each platform's own posting
+    -- rules. has_groups is a per-platform flag rather than hardcoded to
+    -- "Facebook Groups"/"WhatsApp Groups" by name, so a future group-based
+    -- platform (e.g. a LinkedIn Groups) can opt into the same sub-group
+    -- capture UI without a code change -- only the two seeded group
+    -- platforms start with it on. active (not a hard delete) is how a
+    -- platform gets retired without orphaning adverts that reference it;
+    -- deletePlatform() in advertising.js still refuses when any advert or
+    -- group actually depends on it, matching this project's existing
+    -- "retire, don't silently delete referenced data" convention.
+    CREATE TABLE IF NOT EXISTS advert_platforms (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      has_groups INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
+      active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    -- Only meaningful under a has_groups platform, but nothing here
+    -- enforces that at the DB level -- same soft-rule-not-hard-constraint
+    -- pattern the rest of this schema uses for cross-field relationships.
+    -- allowed_days stored as a plain comma-separated list of 3-letter
+    -- weekday codes (e.g. "Mon,Thu") -- simple, human-readable straight in
+    -- the DB, trivial to split/join in JS, no need for a JSON column type.
+    CREATE TABLE IF NOT EXISTS advert_platform_groups (
+      id TEXT PRIMARY KEY,
+      platform_id TEXT NOT NULL REFERENCES advert_platforms(id) ON DELETE CASCADE,
+      group_name TEXT NOT NULL,
+      allowed_days TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_advert_platform_groups_platform ON advert_platform_groups (platform_id);
+
+    -- One row per scheduled advert instance -- a campaign running on 3
+    -- platforms is 3 rows, since each platform has its own timing and
+    -- rules to plan against (see advert_platforms above). duration_days
+    -- combines with publish_date to define the run window the Calendar
+    -- page (a -7/+21 day agenda, computed client-side from these two
+    -- fields, not stored) displays as a date range per entry.
+    CREATE TABLE IF NOT EXISTS adverts (
+      id TEXT PRIMARY KEY,
+      platform_id TEXT NOT NULL REFERENCES advert_platforms(id),
+      image_path TEXT NOT NULL DEFAULT '',
+      caption TEXT NOT NULL DEFAULT '',
+      publish_date TEXT NOT NULL,
+      publish_time TEXT NOT NULL DEFAULT '',
+      duration_days INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_adverts_publish_date ON adverts (publish_date);
+
     -- Phase 4: marketing campaigns. Separate from newsletter_subscribers
     -- (the audience list) -- these are the actual messages sent, with a
     -- compose -> approve -> send lifecycle.
@@ -621,6 +679,7 @@ export function ensureSchema(db) {
   ensureSpecialsColumns(db);
   ensureAdminEmailColumn(db);
   seedTodoItems(db);
+  seedAdvertPlatforms(db);
   backfillAnalyticsTotals(db);
 }
 
@@ -1163,6 +1222,42 @@ function seedTodoItems(db) {
       description,
       status,
       date_added: now,
+      created_at: now,
+      updated_at: now,
+    });
+  });
+}
+
+// Owner request (2026-09-09): the 7 platforms named at the time -- seeded
+// once, same "only if the table is genuinely empty" idempotency as
+// seedTodoItems above, so an owner who deletes/retires one doesn't get it
+// silently recreated on the next boot. hasGroups true only for the two
+// platforms that actually have a named-group sub-list in the admin UI.
+function seedAdvertPlatforms(db) {
+  const { count } = db.prepare('SELECT COUNT(*) AS count FROM advert_platforms').get();
+  if (count > 0) return;
+
+  const seed = [
+    ['Facebook', false],
+    ['Facebook Groups', true],
+    ['TikTok', false],
+    ['Direct Email', false],
+    ['Direct WhatsApp', false],
+    ['Instagram', false],
+    ['WhatsApp Groups', true],
+  ];
+
+  const now = new Date().toISOString();
+  const insert = db.prepare(
+    `INSERT INTO advert_platforms (id, name, has_groups, notes, active, sort_order, created_at, updated_at)
+     VALUES (@id, @name, @has_groups, '', 1, @sort_order, @created_at, @updated_at)`,
+  );
+  seed.forEach(([name, hasGroups], i) => {
+    insert.run({
+      id: randomUUID(),
+      name,
+      has_groups: hasGroups ? 1 : 0,
+      sort_order: i,
       created_at: now,
       updated_at: now,
     });

@@ -48,6 +48,8 @@ import {
   uploadTestimonialImage,
   deleteTestimonialImage,
   deleteImageFile,
+  uploadAdvertImage,
+  deleteAdvertImage,
 } from './uploads.js';
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { formatRand } from './money.js';
@@ -171,6 +173,23 @@ import {
 } from './in-house-filament.js';
 import { listExpenses, getExpense, createExpense, updateExpense, deleteExpense, migratePurchasesToExpenses, getFinancialOverview } from './expenses.js';
 import { listRepayments, createRepayment, updateRepayment, deleteRepayment, getAdvancesSummary } from './account-repayments.js';
+import {
+  listPlatforms,
+  getPlatform,
+  createPlatform,
+  updatePlatform,
+  deletePlatform,
+  listPlatformGroups,
+  getPlatformGroup,
+  createPlatformGroup,
+  updatePlatformGroup,
+  deletePlatformGroup,
+  listAdverts,
+  getAdvert,
+  createAdvert,
+  updateAdvert,
+  deleteAdvert,
+} from './advertising.js';
 import { getVersion, listVersions } from './version-history.js';
 import { getReleaseDetails } from './release-details.js';
 import { listTodos, createTodo, updateTodo } from './todos.js';
@@ -2505,6 +2524,133 @@ app.delete('/api/account-repayments/:id', requireAuth, (req, res) => {
   recordAuditEvent({ eventType: AUDIT_EVENTS.SETTINGS_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted repayment to ${existing?.account || req.params.id}: ${formatRand(existing?.amount || 0)}` });
   res.json({ ok: true });
 });
+
+// ---- Advertise (owner request 2026-09-09): Adverts + configurable Platform
+// Rules (with a nested group sub-list for Facebook/WhatsApp Groups) + a
+// -7/+21 day agenda Calendar built client-side from the /api/adverts list. ----
+
+app.get('/api/advert-platforms', requireAuth, (req, res) => {
+  res.json({ platforms: listPlatforms({}) });
+});
+
+app.post('/api/advert-platforms', requireAuth, (req, res) => {
+  try {
+    const platform = createPlatform(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Created advertising platform "${platform.name}"` });
+    res.status(201).json({ platform });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/advert-platforms/:id', requireAuth, (req, res) => {
+  try {
+    const platform = updatePlatform(req.params.id, req.body || {});
+    if (!platform) return res.status(404).json({ error: 'Platform not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated advertising platform "${platform.name}"` });
+    res.json({ platform });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/advert-platforms/:id', requireAuth, (req, res) => {
+  try {
+    const existing = getPlatform(req.params.id);
+    const ok = deletePlatform(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Platform not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted advertising platform "${existing?.name || req.params.id}"` });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/advert-platforms/:platformId/groups', requireAuth, (req, res) => {
+  res.json({ groups: listPlatformGroups(req.params.platformId) });
+});
+
+app.post('/api/advert-platforms/:platformId/groups', requireAuth, (req, res) => {
+  try {
+    const group = createPlatformGroup(req.params.platformId, req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Added group "${group.groupName}"` });
+    res.status(201).json({ group });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/advert-platform-groups/:id', requireAuth, (req, res) => {
+  try {
+    const group = updatePlatformGroup(req.params.id, req.body || {});
+    if (!group) return res.status(404).json({ error: 'Group not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated group "${group.groupName}"` });
+    res.json({ group });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/advert-platform-groups/:id', requireAuth, (req, res) => {
+  const existing = getPlatformGroup(req.params.id);
+  const ok = deletePlatformGroup(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Group not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted group "${existing?.groupName || req.params.id}"` });
+  res.json({ ok: true });
+});
+
+app.get('/api/adverts', requireAuth, (req, res) => {
+  res.json({ adverts: listAdverts({ from: req.query.from, to: req.query.to }) });
+});
+
+app.post('/api/adverts', requireAuth, (req, res) => {
+  try {
+    const advert = createAdvert(req.body || {});
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Scheduled advert "${advert.caption || advert.platformName}" for ${advert.publishDate}` });
+    res.status(201).json({ advert });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/adverts/:id', requireAuth, (req, res) => {
+  try {
+    const advert = updateAdvert(req.params.id, req.body || {});
+    if (!advert) return res.status(404).json({ error: 'Advert not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated advert "${advert.caption || advert.platformName}"` });
+    res.json({ advert });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/adverts/:id', requireAuth, (req, res) => {
+  const existing = getAdvert(req.params.id);
+  const ok = deleteAdvert(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Advert not found' });
+  if (existing?.imagePath) deleteAdvertImage(existing.imagePath);
+  recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted advert "${existing?.caption || existing?.platformName || req.params.id}"` });
+  res.json({ ok: true });
+});
+
+app.post(
+  '/api/adverts/:id/image',
+  requireAuth,
+  uploadAdvertImage.single('image'),
+  (req, res, next) => {
+    if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
+    const existing = getAdvert(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Advert not found' });
+    if (existing.imagePath) deleteAdvertImage(existing.imagePath);
+    const advert = updateAdvert(req.params.id, { imagePath: `/uploads/adverts/${req.file.filename}` });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.MARKETING_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated image for advert "${advert.caption || advert.platformName}"` });
+    res.json({ advert });
+  },
+  (err, _req, res, next) => {
+    if (err instanceof multer.MulterError) return res.status(400).json({ error: 'Image must be under 5MB' });
+    next(err);
+  },
+);
 
 app.get('/api/expenses/:id', requireAuth, (req, res) => {
   const expense = getExpense(req.params.id);

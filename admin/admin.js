@@ -309,6 +309,9 @@ function setRoute(route, { id } = {}) {
   show($('#view-finance-overview'), route === 'finance-overview');
   show($('#view-stock-value'), route === 'stock-value');
   show($('#view-account-repayments'), route === 'account-repayments');
+  show($('#view-adverts'), route === 'adverts');
+  show($('#view-platform-rules'), route === 'platform-rules');
+  show($('#view-ad-calendar'), route === 'ad-calendar');
   show($('#view-print-jobs'), route === 'print-jobs');
   show($('#view-in-house-filament'), route === 'in-house-filament');
   show($('#view-backups'), route === 'backups');
@@ -348,6 +351,9 @@ function setRoute(route, { id } = {}) {
     'finance-overview': ['Financial', 'Financial Overview'],
     'stock-value': ['Financial', 'Stock Value'],
     'account-repayments': ['Financial', 'Advances & Repayments'],
+    adverts: ['Advertise', 'Adverts'],
+    'platform-rules': ['Advertise', 'Platform Rules'],
+    'ad-calendar': ['Advertise', 'Calendar'],
     'print-jobs': ['Local Management', 'Print Job Costing'],
     'in-house-filament': ['Local Management', 'In-House Filament'],
     backups: ['Settings', 'Backups'],
@@ -803,6 +809,15 @@ function bindChrome() {
       } else if (btn.dataset.route === 'account-repayments') {
         setRoute('account-repayments');
         await renderAccountRepayments();
+      } else if (btn.dataset.route === 'adverts') {
+        setRoute('adverts');
+        await renderAdverts();
+      } else if (btn.dataset.route === 'platform-rules') {
+        setRoute('platform-rules');
+        await renderPlatformRules();
+      } else if (btn.dataset.route === 'ad-calendar') {
+        setRoute('ad-calendar');
+        await renderAdCalendar();
       } else if (btn.dataset.route === 'print-jobs') {
         setRoute('print-jobs');
         await renderPrintJobs();
@@ -6406,6 +6421,393 @@ async function renderAccountRepayments() {
   });
 
   if (state.editingRepayment) bindRepaymentForm(state.editingRepayment);
+}
+
+// ---- Advertise: Adverts / Platform Rules / Calendar (owner request
+// 2026-09-09). Three related but separate admin pages sharing one backend
+// module (server/advertising.js): adverts reference a platform id, platforms
+// are an owner-configurable list (not the fixed 7 they were seeded with --
+// owner chose "configurable" when asked), and platforms flagged has_groups
+// (Facebook Groups, WhatsApp Groups) carry a nested Group sub-list. ----
+
+const AD_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+function blankAdvert() {
+  return { id: null, platformId: '', imagePath: '', caption: '', publishDate: new Date().toISOString().slice(0, 10), publishTime: '', durationDays: 1 };
+}
+
+const ADVERT_SORT_ACCESSORS = {
+  date: (a) => a.publishDate || '',
+  platform: (a) => a.platformName || '',
+};
+
+function advertFormHtml(form, platforms) {
+  return `
+      <div class="panel stack gap-3" style="max-width:700px">
+        <div class="section-head"><h3>${form.id ? 'Edit advert' : 'Schedule an advert'}</h3></div>
+        <div class="grid-2">
+          <label class="field"><span>Platform *</span>
+            <select id="ad-platform">
+              <option value="">— choose —</option>
+              ${platforms.map((p) => `<option value="${escapeAttr(p.id)}" ${form.platformId === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="field"><span>Caption (optional)</span><input id="ad-caption" value="${escapeAttr(form.caption || '')}" placeholder="What this advert says" /></label>
+        </div>
+        <div class="grid-3">
+          <label class="field"><span>Publish Date *</span><input id="ad-date" type="date" value="${escapeAttr(form.publishDate || '')}" /></label>
+          <label class="field"><span>Publish Time</span><input id="ad-time" type="time" value="${escapeAttr(form.publishTime || '')}" /></label>
+          <label class="field"><span>Duration (days)</span><input id="ad-duration" type="number" min="1" step="1" value="${escapeAttr(String(form.durationDays || 1))}" /></label>
+        </div>
+        ${form.id ? `
+          <div class="field">
+            <span>Advert Image (optional) ${form.imagePath ? '(replace)' : ''}</span>
+            <label class="btn small" for="ad-image-upload">Choose File</label>
+            <input type="file" class="hidden" accept="image/jpeg,image/png,image/webp" id="ad-image-upload" />
+            ${form.imagePath ? `<img src="${escapeAttr(form.imagePath)}" alt="" style="width:80px;height:80px;object-fit:cover;border-radius:4px;margin-top:0.5rem;display:block" />` : ''}
+          </div>` : '<p class="muted" style="font-size:0.85rem">Save the advert first to enable an image upload.</p>'}
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-advert" type="button">${form.id ? 'Save changes' : 'Schedule advert'}</button>
+          <button class="btn btn-ghost" id="cancel-advert" type="button">Cancel</button>
+        </div>
+      </div>`;
+}
+
+async function renderAdverts() {
+  state.editingAdvert = state.editingAdvert || null;
+  state.advertSort = state.advertSort || { key: 'date', dir: 'desc' };
+  const [{ platforms }, { adverts }] = await Promise.all([api('/api/advert-platforms'), api('/api/adverts')]);
+  const activePlatforms = platforms.filter((p) => p.active);
+  const form = state.editingAdvert;
+
+  const st = state.advertSort;
+  const rows = applySort(adverts, st, ADVERT_SORT_ACCESSORS)
+    .map(
+      (a) => `
+        <tr data-id="${escapeAttr(a.id)}">
+          <td>${a.imagePath ? `<img src="${escapeAttr(a.imagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px" />` : '—'}</td>
+          <td>${escapeHtml(a.platformName)}</td>
+          <td>${escapeHtml(truncate(a.caption, 50) || '—')}</td>
+          <td style="white-space:nowrap">${escapeHtml(a.publishDate)}${a.publishTime ? ` ${escapeHtml(a.publishTime)}` : ''}</td>
+          <td style="white-space:nowrap">${a.durationDays} day${a.durationDays === 1 ? '' : 's'} (ends ${escapeHtml(a.endDate)})</td>
+          <td style="white-space:nowrap">
+            <button class="btn small" data-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-adverts').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-advert" type="button">+ Schedule Advert</button>
+      <span class="muted">${escapeHtml(String(adverts.length))} advert${adverts.length === 1 ? '' : 's'} scheduled</span>
+    </div>
+    ${form ? advertFormHtml(form, activePlatforms) : ''}
+    <div class="panel table-wrap" style="margin-top:0.75rem">
+      <table class="catalog">
+        <thead><tr><th></th>${sortableTh(st, 'platform', 'Platform')}<th>Caption</th>${sortableTh(st, 'date', 'Publish')}<th>Duration</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No adverts scheduled yet</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $$('#view-adverts th.sort-th').forEach((th) => {
+    th.addEventListener('click', async () => {
+      const key = th.dataset.sort;
+      state.advertSort = state.advertSort?.key === key ? { key, dir: state.advertSort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' };
+      await renderAdverts();
+    });
+  });
+
+  $('#new-advert').addEventListener('click', async () => {
+    if (!activePlatforms.length) return toast('Add an active platform under Platform Rules first');
+    state.editingAdvert = blankAdvert();
+    await renderAdverts();
+  });
+
+  $$('#view-adverts tbody tr[data-id]').forEach((tr) => {
+    tr.querySelector('[data-action="edit"]')?.addEventListener('click', async () => {
+      const a = adverts.find((x) => x.id === tr.dataset.id);
+      state.editingAdvert = { ...a };
+      await renderAdverts();
+      $('#ad-platform')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    tr.querySelector('[data-action="delete"]')?.addEventListener('click', async () => {
+      if (!confirm('Delete this advert? This cannot be undone.')) return;
+      try {
+        await api(`/api/adverts/${tr.dataset.id}`, { method: 'DELETE' });
+        toast('Advert deleted');
+        await renderAdverts();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  if (!form) return;
+
+  $('#cancel-advert').addEventListener('click', async () => { state.editingAdvert = null; await renderAdverts(); });
+  $('#save-advert').addEventListener('click', async () => {
+    const payload = {
+      platformId: $('#ad-platform').value,
+      caption: $('#ad-caption').value,
+      publishDate: $('#ad-date').value,
+      publishTime: $('#ad-time').value,
+      durationDays: Number($('#ad-duration').value) || 1,
+    };
+    try {
+      if (form.id) await api(`/api/adverts/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      else await api('/api/adverts', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Advert saved');
+      state.editingAdvert = null;
+      await renderAdverts();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  const imageInput = $('#ad-image-upload');
+  imageInput?.addEventListener('change', async () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const data = await uploadFormData(`/api/adverts/${form.id}/image`, formData);
+      state.editingAdvert = data.advert;
+      toast('Uploaded');
+      await renderAdverts();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+}
+
+// ---- Platform Rules: the owner-configurable platform list, each with a
+// Notes area; platforms flagged hasGroups (Facebook Groups, WhatsApp Groups
+// today, any future platform going forward) get a nested Group sub-list
+// (Group Name, Allowed Posting Days, Notes) rendered inline below it. ----
+
+function blankPlatform() {
+  return { id: null, name: '', hasGroups: false, notes: '' };
+}
+
+function blankPlatformGroup(platformId) {
+  return { id: null, platformId, groupName: '', allowedDays: [], notes: '' };
+}
+
+function platformFormHtml(form) {
+  return `
+      <div class="panel stack gap-3" style="max-width:600px">
+        <div class="section-head"><h3>${form.id ? 'Edit platform' : 'Add platform'}</h3></div>
+        <label class="field"><span>Platform Name *</span><input id="pf-name" value="${escapeAttr(form.name || '')}" /></label>
+        <label class="field checkbox"><input id="pf-has-groups" type="checkbox" ${form.hasGroups ? 'checked' : ''} /><span>This platform has Groups (adds a Group Name / Allowed Days / Notes sub-list)</span></label>
+        <label class="field"><span>Notes -- basic rules for posting here</span><textarea id="pf-notes" rows="3">${escapeHtml(form.notes || '')}</textarea></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-platform" type="button">${form.id ? 'Save changes' : 'Add platform'}</button>
+          <button class="btn btn-ghost" id="cancel-platform" type="button">Cancel</button>
+        </div>
+      </div>`;
+}
+
+function platformGroupFormHtml(form) {
+  return `
+      <div class="panel stack gap-3" style="margin-top:0.5rem">
+        <div class="section-head"><h3>${form.id ? 'Edit group' : 'Add group'}</h3></div>
+        <label class="field"><span>Group Name *</span><input id="pg-name" value="${escapeAttr(form.groupName || '')}" /></label>
+        <div class="field">
+          <span>Allowed Posting Days</span>
+          <div class="row-card-actions" style="flex-wrap:wrap">
+            ${AD_WEEKDAYS.map((d) => `<label class="field checkbox" style="margin:0"><input type="checkbox" data-pg-day="${d}" ${form.allowedDays.includes(d) ? 'checked' : ''} /><span>${d}</span></label>`).join('')}
+          </div>
+        </div>
+        <label class="field"><span>Notes</span><textarea id="pg-notes" rows="2">${escapeHtml(form.notes || '')}</textarea></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="save-platform-group" type="button">${form.id ? 'Save changes' : 'Add group'}</button>
+          <button class="btn btn-ghost" id="cancel-platform-group" type="button">Cancel</button>
+        </div>
+      </div>`;
+}
+
+function platformCardHtml(platform, groups, groupForm) {
+  const groupRows = groups
+    .map(
+      (g) => `
+        <tr data-group-id="${escapeAttr(g.id)}">
+          <td>${escapeHtml(g.groupName)}</td>
+          <td>${g.allowedDays.length ? escapeHtml(g.allowedDays.join(', ')) : '—'}</td>
+          <td>${escapeHtml(g.notes || '—')}</td>
+          <td style="white-space:nowrap">
+            <button class="btn small" data-group-action="edit" type="button">Edit</button>
+            <button class="btn small btn-danger" data-group-action="delete" type="button">Delete</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  return `
+    <div class="panel stack gap-2" data-platform-id="${escapeAttr(platform.id)}" style="margin-bottom:0.75rem">
+      <div class="row-card-actions">
+        <span>${escapeHtml(platform.name)} ${platform.active ? '' : '<span class="badge draft">Inactive</span>'}</span>
+        <button class="btn small" data-platform-action="edit" type="button">Edit</button>
+        <button class="btn small btn-danger" data-platform-action="delete" type="button">Delete</button>
+      </div>
+      <p class="muted" style="margin:0;font-size:0.85rem">${escapeHtml(platform.notes || 'No notes yet')}</p>
+      ${platform.hasGroups ? `
+        <div class="table-wrap" style="margin-top:0.5rem">
+          <table class="catalog">
+            <thead><tr><th>Group Name</th><th>Allowed Posting Days</th><th>Notes</th><th></th></tr></thead>
+            <tbody>${groupRows || '<tr><td colspan="4"><div class="empty">No groups added yet</div></td></tr>'}</tbody>
+          </table>
+        </div>
+        <div class="row-card-actions">
+          <button class="btn small" data-platform-action="add-group" type="button">+ Add Group</button>
+        </div>
+        ${groupForm ? platformGroupFormHtml(groupForm) : ''}` : ''}
+    </div>`;
+}
+
+async function renderPlatformRules() {
+  state.editingPlatform = state.editingPlatform || null;
+  state.editingPlatformGroup = state.editingPlatformGroup || null;
+  const { platforms } = await api('/api/advert-platforms');
+  const groupsByPlatform = {};
+  await Promise.all(
+    platforms.filter((p) => p.hasGroups).map(async (p) => {
+      const { groups } = await api(`/api/advert-platforms/${p.id}/groups`);
+      groupsByPlatform[p.id] = groups;
+    }),
+  );
+
+  const cards = platforms
+    .map((p) => platformCardHtml(p, groupsByPlatform[p.id] || [], state.editingPlatformGroup?.platformId === p.id ? state.editingPlatformGroup : null))
+    .join('');
+
+  $('#view-platform-rules').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="new-platform" type="button">+ Add Platform</button>
+      <span class="muted">${escapeHtml(String(platforms.length))} platform${platforms.length === 1 ? '' : 's'}</span>
+    </div>
+    ${state.editingPlatform ? platformFormHtml(state.editingPlatform) : ''}
+    <div style="margin-top:0.75rem">${cards || '<div class="empty">No platforms yet</div>'}</div>`;
+
+  $('#new-platform').addEventListener('click', async () => { state.editingPlatform = blankPlatform(); await renderPlatformRules(); });
+  $('#cancel-platform')?.addEventListener('click', async () => { state.editingPlatform = null; await renderPlatformRules(); });
+  $('#save-platform')?.addEventListener('click', async () => {
+    const form = state.editingPlatform;
+    const payload = { name: $('#pf-name').value, hasGroups: $('#pf-has-groups').checked, notes: $('#pf-notes').value };
+    try {
+      if (form.id) await api(`/api/advert-platforms/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      else await api('/api/advert-platforms', { method: 'POST', body: JSON.stringify(payload) });
+      toast('Platform saved');
+      state.editingPlatform = null;
+      await renderPlatformRules();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+
+  $$('#view-platform-rules [data-platform-id]').forEach((card) => {
+    const platformId = card.dataset.platformId;
+    const platform = platforms.find((p) => p.id === platformId);
+    card.querySelector('[data-platform-action="edit"]')?.addEventListener('click', async () => {
+      state.editingPlatform = { ...platform };
+      await renderPlatformRules();
+    });
+    card.querySelector('[data-platform-action="delete"]')?.addEventListener('click', async () => {
+      if (!confirm(`Delete "${platform.name}"? This only works if it has no scheduled adverts.`)) return;
+      try {
+        await api(`/api/advert-platforms/${platformId}`, { method: 'DELETE' });
+        toast('Platform deleted');
+        await renderPlatformRules();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    card.querySelector('[data-platform-action="add-group"]')?.addEventListener('click', async () => {
+      state.editingPlatformGroup = blankPlatformGroup(platformId);
+      await renderPlatformRules();
+    });
+    card.querySelector('#cancel-platform-group')?.addEventListener('click', async () => { state.editingPlatformGroup = null; await renderPlatformRules(); });
+    card.querySelector('#save-platform-group')?.addEventListener('click', async () => {
+      const form = state.editingPlatformGroup;
+      const allowedDays = $$(`[data-pg-day]`, card).filter((cb) => cb.checked).map((cb) => cb.dataset.pgDay);
+      const payload = { groupName: card.querySelector('#pg-name').value, allowedDays, notes: card.querySelector('#pg-notes').value };
+      try {
+        if (form.id) await api(`/api/advert-platform-groups/${form.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+        else await api(`/api/advert-platforms/${form.platformId}/groups`, { method: 'POST', body: JSON.stringify(payload) });
+        toast('Group saved');
+        state.editingPlatformGroup = null;
+        await renderPlatformRules();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    (groupsByPlatform[platformId] || []).forEach((g) => {
+      const row = card.querySelector(`tr[data-group-id="${g.id}"]`);
+      row?.querySelector('[data-group-action="edit"]')?.addEventListener('click', async () => {
+        state.editingPlatformGroup = { ...g, platformId };
+        await renderPlatformRules();
+      });
+      row?.querySelector('[data-group-action="delete"]')?.addEventListener('click', async () => {
+        if (!confirm(`Delete group "${g.groupName}"?`)) return;
+        try {
+          await api(`/api/advert-platform-groups/${g.id}`, { method: 'DELETE' });
+          toast('Group deleted');
+          await renderPlatformRules();
+        } catch (ex) {
+          toast(ex.message);
+        }
+      });
+    });
+  });
+}
+
+// ---- Calendar: agenda list, -7 to +21 days from today, of scheduled
+// adverts from item 1 (owner picked "agenda list" over a month grid). ----
+
+function toLocalYMD(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+async function renderAdCalendar() {
+  const today = new Date();
+  const todayStr = toLocalYMD(today);
+  const from = new Date(today); from.setDate(from.getDate() - 7);
+  const to = new Date(today); to.setDate(to.getDate() + 21);
+  const fromStr = toLocalYMD(from);
+  const toStr = toLocalYMD(to);
+
+  const { adverts } = await api(`/api/adverts?from=${fromStr}&to=${toStr}`);
+
+  const days = [];
+  for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) days.push(toLocalYMD(d));
+
+  const blocks = days
+    .map((dStr) => {
+      const active = adverts.filter((a) => a.publishDate <= dStr && a.endDate >= dStr);
+      if (!active.length && dStr !== todayStr) return '';
+      const label = new Date(`${dStr}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+      const items = active
+        .map(
+          (a) => `
+          <div class="row-card-actions" style="justify-content:flex-start;gap:0.75rem">
+            ${a.imagePath ? `<img src="${escapeAttr(a.imagePath)}" alt="" style="width:32px;height:32px;object-fit:cover;border-radius:4px" />` : ''}
+            <span><strong>${escapeHtml(a.platformName)}</strong>${a.publishTime ? ` · ${escapeHtml(a.publishTime)}` : ''}${a.caption ? ` — ${escapeHtml(a.caption)}` : ''}${a.durationDays > 1 && a.publishDate === dStr ? ` <span class="muted">(runs ${a.durationDays} days)</span>` : ''}</span>
+          </div>`,
+        )
+        .join('');
+      return `
+        <div class="panel stack gap-2" style="margin-bottom:0.5rem;${dStr === todayStr ? 'border-color:var(--accent,#c24b28)' : ''}">
+          <div class="section-head"><h3>${escapeHtml(label)}${dStr === todayStr ? ' — Today' : ''}</h3></div>
+          ${items || '<p class="muted" style="margin:0;font-size:0.85rem">No adverts scheduled</p>'}
+        </div>`;
+    })
+    .join('');
+
+  $('#view-ad-calendar').innerHTML = `
+    <p class="muted" style="margin:0 0 0.75rem;font-size:0.88rem">Showing ${escapeHtml(fromStr)} to ${escapeHtml(toStr)} (7 days back, 21 days ahead).</p>
+    ${blocks || '<div class="empty">No adverts scheduled in this window</div>'}`;
 }
 
 // ---- Newsletter campaigns: compose -> approve -> send (Phase 4) ----
