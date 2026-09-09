@@ -1480,19 +1480,27 @@ function renderFilamentSections(p) {
         ${richTextField('data-field="colourNote"', p.colourNote || '')}
       </div>
       <div id="colours-list">
+        <!-- Row-card action-button standard (owner request 2026-09-09):
+             one row-card-actions line, left-to-right = '#N label', then
+             buttons in safe-to-dangerous order -- primary save action(s)
+             first (btn-primary), any neutral action next (plain btn),
+             destructive last (btn-danger) -- all 'btn small'. Gallery/
+             upload UI gets its OWN row-card-actions line below, never
+             mixed into the button line. This mirrors the item row-card
+             right below (Catalog Items) -- match new row-card sections to
+             this shape rather than inventing a new layout. -->
         ${(p.colours || []).map((c, i) => `
           <div class="row-card" data-colour-index="${i}">
             <div class="row-card-actions">
-              <div class="flex items-center gap-3">
-                ${c._isNew
-                  ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
-                  : galleryPanelHtml('colour', c.id, c.images || [], c.imagePath)}
-              </div>
+              <strong>#${i + 1} ${escapeHtml(c.name || 'Untitled')}</strong>
+              <button class="btn small btn-primary" data-save-colour type="button">Save roll</button>
               ${c._isNew ? '' : '<button class="btn small" data-move-colour type="button">Move To</button>'}
               <button class="btn small btn-danger" data-remove-colour type="button">Remove</button>
             </div>
-            <div class="row-card-actions" style="justify-content:flex-end">
-              <button class="btn small btn-primary" data-save-colour type="button">Save roll</button>
+            <div class="row-card-actions">
+              ${c._isNew
+                ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
+                : galleryPanelHtml('colour', c.id, c.images || [], c.imagePath)}
             </div>
             <div class="grid-3">
               <label class="field"><span>Colour Name</span><input data-colour="name" value="${escapeAttr(c.name)}" /></label>
