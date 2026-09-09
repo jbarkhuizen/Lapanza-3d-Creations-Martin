@@ -1255,6 +1255,29 @@ for (const page of categoryPages) {
   (category.items || []).filter((item) => item.listed !== false).forEach((item, i) => generateItemDetailPage(page.slug, page.name || category.name, item, i));
 }
 
+// removeStaleCategoryPage (above) only fires for a slug that's still a
+// CANDIDATE this run (present in categoryPages but gated draft/unfeatured,
+// or missing its category data) -- a category deleted outright (renamed,
+// or merged away entirely, e.g. the 2026-09-09 Esquire umbrella-category
+// migration collapsing 652 old per-supplier-category pages into ~19) was
+// never a candidate at all, so its stale page was never touched and kept
+// serving 200 forever. Fixed by remembering every category page this run
+// (and every prior run) actually owned, in a small manifest on disk --
+// anything in last run's manifest that isn't in THIS run's categoryPages
+// list has been genuinely removed, not just gated, and gets pruned too.
+const categoryManifestPath = path.join(root, 'data', 'category-pages-manifest.json');
+try {
+  const previousManifest = JSON.parse(fs.readFileSync(categoryManifestPath, 'utf8'));
+  const currentSlugs = new Set(categoryPages.map((p) => p.slug));
+  for (const entry of previousManifest) {
+    if (!currentSlugs.has(entry.slug)) removeStaleCategoryPage(entry);
+  }
+} catch {
+  // First run ever, or a corrupt/missing manifest -- nothing to diff
+  // against yet; this run's own write below establishes the baseline.
+}
+fs.writeFileSync(categoryManifestPath, JSON.stringify(categoryPages.map((p) => ({ slug: p.slug, file: p.file })), null, 2));
+
 // ---- I5: prune stale generated detail pages ----
 // Renaming an item, changing its SKU, or unlisting it left the old
 // products/*.html or filament/<slug>-<sku>.html file on disk forever --

@@ -396,3 +396,35 @@ test('generate-pages gives a NEW published category its own root page, nav data,
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
   }
 });
+
+// Owner report (2026-09-09), found migrating Esquire dropship categories:
+// removeStaleCategoryPage only ever fires for a slug that's still a
+// CANDIDATE this run (present in categoryPages but gated draft/unfeatured,
+// or missing its own category data) -- a category deleted outright
+// (renamed, or merged away entirely) was never a candidate at all, so its
+// old page kept serving 200 forever. Fixed via a small on-disk manifest of
+// every category page the PREVIOUS run owned, diffed against this run's
+// own candidate list.
+test('generate-pages prunes a category page whose category was deleted outright, not just drafted/unfeatured', () => {
+  const categoriesPath = path.join(root, 'src', 'data', 'categories.json');
+  const backup = fs.readFileSync(categoriesPath, 'utf8');
+  const gonePage = path.join(root, 'gone-shoppe.html');
+  try {
+    const withIt = JSON.parse(backup);
+    withIt['gone-shoppe'] = { slug: 'gone-shoppe', name: 'Gone Shoppe', description: '', crumbs: '', status: 'published', featured: true, items: [] };
+    fs.writeFileSync(categoriesPath, JSON.stringify(withIt));
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+    assert.ok(fs.existsSync(gonePage), 'gone-shoppe.html exists while the category is still published+featured');
+
+    // Next run: the category is gone entirely (not drafted, not
+    // unfeatured -- deleted, same as the umbrella-category migration
+    // collapsing old per-supplier categories away).
+    fs.writeFileSync(categoriesPath, backup);
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+    assert.ok(!fs.existsSync(gonePage), 'the now-nonexistent category\'s stale page is pruned, not left serving 200 forever');
+  } finally {
+    fs.writeFileSync(categoriesPath, backup);
+    fs.rmSync(gonePage, { force: true });
+    execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
+  }
+});
