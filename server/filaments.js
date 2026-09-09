@@ -276,6 +276,33 @@ export function deleteColour(filamentTypeId, colourId, db = getDb()) {
   return true;
 }
 
+// Owner request (2026-09-09): a colour captured under the wrong filament
+// type (e.g. a PETG roll added under PLA by mistake) -- "Move To" next to
+// the colour's own Remove button on the filament editor. sku is globally
+// UNIQUE across every filament_colours row regardless of type, so there's
+// no collision risk moving between types; nothing else about the row needs
+// to change. Same active-special guard as deleteColour() -- a special's
+// pricing/countdown context is tied to the type it was started on, and
+// moving it out from under that is more likely a mistake than an intent.
+export function moveColourToFilament(currentFilamentTypeId, colourId, targetFilamentTypeId, db = getDb()) {
+  if (targetFilamentTypeId === currentFilamentTypeId) {
+    throw new Error('Choose a different filament type to move to');
+  }
+  const target = db.prepare('SELECT id FROM filament_types WHERE id = ?').get(targetFilamentTypeId);
+  if (!target) throw new Error('Target filament type not found');
+  const existing = db.prepare('SELECT * FROM filament_colours WHERE id = ? AND filament_type_id = ?').get(colourId, currentFilamentTypeId);
+  if (!existing) return null;
+  if (existing.special_status === 'active') {
+    throw new Error('This is an active special -- end it from the Specials page before moving it');
+  }
+  db.prepare('UPDATE filament_colours SET filament_type_id = ?, updated_at = ? WHERE id = ?').run(
+    targetFilamentTypeId,
+    new Date().toISOString(),
+    colourId,
+  );
+  return getFilament(currentFilamentTypeId, db);
+}
+
 export function setColourImage(filamentTypeId, colourId, imagePath, db = getDb()) {
   const existing = db.prepare('SELECT * FROM filament_colours WHERE id = ? AND filament_type_id = ?').get(colourId, filamentTypeId);
   if (!existing) return null;

@@ -10,6 +10,7 @@ import {
   addColour,
   updateColour,
   deleteColour,
+  moveColourToFilament,
   setColourImage,
   listColourImages,
   addColourImage,
@@ -90,6 +91,55 @@ test('deleteColour removes just that colour', () => {
   const colourId = withColour.colours[0].id;
   assert.strictEqual(deleteColour(f.id, colourId, db), true);
   assert.strictEqual(getFilament(f.id, db).colours.length, 0);
+  db.close();
+});
+
+// Owner request (2026-09-09): "Move To" fixes a roll captured under the
+// wrong filament type without a delete-and-recreate.
+test('moveColourToFilament moves a colour to a different filament type, keeping its sku/stock/price', () => {
+  const db = openDb(':memory:');
+  const pla = createFilament({ name: 'PLA' }, db);
+  const petg = createFilament({ name: 'PETG' }, db);
+  const withColour = addColour(pla.id, { name: 'Black', sku: 'SKU-1', stockQty: 5, priceRand: 225 }, db);
+  const colourId = withColour.colours[0].id;
+
+  const source = moveColourToFilament(pla.id, colourId, petg.id, db);
+  assert.strictEqual(source.colours.length, 0, 'moved colour no longer on the source type');
+
+  const target = getFilament(petg.id, db);
+  assert.strictEqual(target.colours.length, 1);
+  assert.strictEqual(target.colours[0].id, colourId);
+  assert.strictEqual(target.colours[0].sku, 'SKU-1');
+  assert.strictEqual(target.colours[0].stockQty, 5);
+  assert.strictEqual(target.colours[0].priceRand, 225);
+  db.close();
+});
+
+test('moveColourToFilament rejects moving to the same type, an unknown type, or an unknown colour', () => {
+  const db = openDb(':memory:');
+  const pla = createFilament({ name: 'PLA' }, db);
+  const petg = createFilament({ name: 'PETG' }, db);
+  const withColour = addColour(pla.id, { name: 'Black', sku: 'SKU-1' }, db);
+  const colourId = withColour.colours[0].id;
+
+  assert.throws(() => moveColourToFilament(pla.id, colourId, pla.id, db), /different filament type/);
+  assert.throws(() => moveColourToFilament(pla.id, colourId, 'unknown-type-id', db), /Target filament type not found/);
+  assert.strictEqual(moveColourToFilament(pla.id, 'unknown-colour-id', petg.id, db), null);
+  db.close();
+});
+
+test('moveColourToFilament refuses to move an active special (mirrors deleteColour\'s guard)', () => {
+  const db = openDb(':memory:');
+  const pla = createFilament({ name: 'PLA' }, db);
+  const other = createFilament({ name: 'PETG' }, db);
+  const withBase = addColour(pla.id, { name: 'Black', sku: 'SKU-1', stockQty: 10, priceRand: 225 }, db);
+  const baseId = withBase.colours[0].id;
+  const special = startSpecial(baseId, { specialPriceRand: 199, quantity: 2, days: 2 }, db);
+  assert.strictEqual(special.specialStatus, 'active');
+
+  assert.throws(() => moveColourToFilament(pla.id, special.id, other.id, db), /active special/);
+  // The base colour itself (not special) still moves freely.
+  assert.doesNotThrow(() => moveColourToFilament(pla.id, baseId, other.id, db));
   db.close();
 });
 

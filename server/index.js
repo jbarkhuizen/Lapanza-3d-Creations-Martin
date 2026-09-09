@@ -21,6 +21,7 @@ import {
   addColour,
   updateColour,
   deleteColour,
+  moveColourToFilament,
   setColourImage,
   listColourImages,
   addColourImage,
@@ -1324,6 +1325,29 @@ app.delete('/api/filaments/:filamentId/colours/:colourId', requireAuth, async (r
     // Active-special guard (filaments.js's deleteColour) surfaces here --
     // everything else this route can throw is either the 404 above or a
     // genuine bug, so 400 with the message is the right shape either way.
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Owner request (2026-09-09): "Move To" next to a colour's own Remove
+// button on the filament editor -- fixes a roll captured under the wrong
+// filament type without a delete-and-recreate (which would lose its SKU
+// history, stock, and images). Returns the SOURCE filament (now missing
+// this colour) so the editor can drop it from the list it's currently
+// showing without a full page reload.
+app.post('/api/filaments/:filamentId/colours/:colourId/move', requireAuth, async (req, res) => {
+  try {
+    const targetFilamentTypeId = req.body?.targetFilamentTypeId;
+    if (!targetFilamentTypeId) return res.status(400).json({ error: 'targetFilamentTypeId is required' });
+    const existing = getFilament(req.params.filamentId);
+    const colour = existing?.colours.find((c) => c.id === req.params.colourId);
+    const filament = moveColourToFilament(req.params.filamentId, req.params.colourId, targetFilamentTypeId);
+    if (!filament) return res.status(404).json({ error: 'Colour not found' });
+    const target = getFilament(targetFilamentTypeId);
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Moved colour "${colour?.name || req.params.colourId}" from "${existing?.name}" to "${target?.name || targetFilamentTypeId}"` });
+    res.json({ filament: attachColourImages(filament), ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });

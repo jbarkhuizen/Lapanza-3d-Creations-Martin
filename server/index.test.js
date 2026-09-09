@@ -225,6 +225,44 @@ test('filament create/update/colour flow end to end through the API', async (t) 
   assert.strictEqual(deleted.status, 200);
 });
 
+test('"Move To" moves a colour to a different filament type through the real route (owner request 2026-09-09)', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const pla = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PLA' });
+  const petg = await request(app).post('/api/filaments').set('Cookie', cookie).send({ name: 'PETG' });
+  const withColour = await request(app)
+    .post(`/api/filaments/${pla.body.filament.id}/colours`)
+    .set('Cookie', cookie)
+    .send({ name: 'Black', sku: 'SKU-MOVE-1', priceRand: 225, stockQty: 5 });
+  const colourId = withColour.body.filament.colours[0].id;
+
+  const missingTarget = await request(app)
+    .post(`/api/filaments/${pla.body.filament.id}/colours/${colourId}/move`)
+    .set('Cookie', cookie)
+    .send({});
+  assert.strictEqual(missingTarget.status, 400);
+
+  const moved = await request(app)
+    .post(`/api/filaments/${pla.body.filament.id}/colours/${colourId}/move`)
+    .set('Cookie', cookie)
+    .send({ targetFilamentTypeId: petg.body.filament.id });
+  assert.strictEqual(moved.status, 200);
+  assert.strictEqual(moved.body.filament.colours.length, 0, 'response is the SOURCE filament, now missing the colour');
+
+  const target = await request(app).get(`/api/filaments/${petg.body.filament.id}`).set('Cookie', cookie);
+  assert.strictEqual(target.body.filament.colours.length, 1);
+  assert.strictEqual(target.body.filament.colours[0].id, colourId);
+  assert.strictEqual(target.body.filament.colours[0].sku, 'SKU-MOVE-1');
+  assert.strictEqual(target.body.filament.colours[0].stockQty, 5);
+
+  const unauth = await request(app).post(`/api/filaments/${pla.body.filament.id}/colours/${colourId}/move`).send({ targetFilamentTypeId: petg.body.filament.id });
+  assert.strictEqual(unauth.status, 401);
+});
+
 test('admins panel: list, add, refuse removing the last admin', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);

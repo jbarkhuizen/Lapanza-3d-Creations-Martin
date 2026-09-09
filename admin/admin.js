@@ -143,6 +143,37 @@ function showUnsavedChangesModal({ allowSave = true } = {}) {
   });
 }
 
+// Owner request (2026-09-09): "Move To" next to a colour's Remove button on
+// the filament editor -- fixes a roll captured under the wrong filament
+// type. Same on-demand-overlay pattern as showUnsavedChangesModal above.
+// Resolves the chosen target filament type id, or null if cancelled.
+function showMoveColourModal(colour, otherTypes) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'nav-guard-overlay';
+    overlay.innerHTML = `
+      <div class="nav-guard-modal" role="alertdialog" aria-modal="true" aria-labelledby="move-colour-title">
+        <h3 id="move-colour-title">Move “${escapeHtml(colour.name || 'Untitled')}” to a different filament type</h3>
+        <label class="field"><span>Move to</span>
+          <select id="move-colour-target">
+            ${otherTypes.map((f) => `<option value="${escapeAttr(f.id)}">${escapeHtml(f.name)}</option>`).join('')}
+          </select>
+        </label>
+        <div class="nav-guard-actions">
+          <button type="button" class="btn" data-action="cancel">Cancel</button>
+          <button type="button" class="btn btn-primary" data-action="move">Move</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const cleanup = (result) => { overlay.remove(); resolve(result); };
+    overlay.querySelector('[data-action="cancel"]').addEventListener('click', () => cleanup(null));
+    overlay.querySelector('[data-action="move"]').addEventListener('click', () => cleanup(overlay.querySelector('#move-colour-target').value));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(null); });
+    overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') cleanup(null); });
+    overlay.querySelector('#move-colour-target').focus();
+  });
+}
+
 // Call before any in-app navigation actually happens. Resolves true when
 // it's safe to proceed (nothing dirty, or the user explicitly saved/
 // discarded), false when the navigation should be aborted (user chose to
@@ -1457,6 +1488,7 @@ function renderFilamentSections(p) {
                   ? '<span class="muted" style="font-size:0.78rem">Save to Enable Photo Upload</span>'
                   : galleryPanelHtml('colour', c.id, c.images || [], c.imagePath)}
               </div>
+              ${c._isNew ? '' : '<button class="btn small" data-move-colour type="button">Move To</button>'}
               <button class="btn small btn-danger" data-remove-colour type="button">Remove</button>
             </div>
             <div class="row-card-actions" style="justify-content:flex-end">
@@ -1727,6 +1759,27 @@ function bindEditorEvents() {
       }
       p.colours.splice(idx, 1);
       renderEditor();
+    });
+  });
+  $$('[data-move-colour]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      syncNestedFromDom();
+      const idx = Number(btn.closest('[data-colour-index]').dataset.colourIndex);
+      const colour = p.colours[idx];
+      if (!colour) return;
+      const otherTypes = state.products.filter((prod) => prod.kind === 'filament' && prod.id !== p.id);
+      if (!otherTypes.length) return toast('No other filament types to move to');
+      const targetId = await showMoveColourModal(colour, otherTypes);
+      if (!targetId) return;
+      try {
+        const res = await api(`/api/filaments/${p.id}/colours/${colour.id}/move`, { method: 'POST', body: JSON.stringify({ targetFilamentTypeId: targetId }) });
+        toast(res.publishWarning || 'Colour moved and published live');
+        state.draft = res.filament;
+        markDraftSaved();
+        renderEditor();
+      } catch (ex) {
+        toast(ex.message);
+      }
     });
   });
   $$('[data-save-colour]').forEach((btn) => {
