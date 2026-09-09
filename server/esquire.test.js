@@ -261,7 +261,17 @@ test('resyncDropshipListings keeps an owner-uploaded custom photo, but refreshes
   db.close();
 });
 
-test('bulkImportRemainingProducts imports every still-available cached product not already listed, one category per Esquire category', async (t) => {
+test('classifyEsquireCategory buckets raw Esquire category names into umbrella groups, falling back to General Merchandise', async () => {
+  const { classifyEsquireCategory } = await import(`./esquire.js?t=${Date.now()}`);
+  assert.strictEqual(classifyEsquireCategory('Wireless Mouse').slug, 'computer-accessories-peripherals');
+  assert.strictEqual(classifyEsquireCategory('Web Camera').slug, 'computer-accessories-peripherals');
+  assert.strictEqual(classifyEsquireCategory('Cable: HDMI').slug, 'cables-adaptors-chargers');
+  assert.strictEqual(classifyEsquireCategory('CCTV (Dome Camera)').slug, 'networking-security');
+  assert.strictEqual(classifyEsquireCategory('Scented Candles').slug, 'general-merchandise', 'nothing about candles matches any umbrella keyword');
+  assert.strictEqual(classifyEsquireCategory('').slug, 'general-merchandise');
+});
+
+test('bulkImportRemainingProducts imports every still-available cached product not already listed, grouped into umbrella categories', async (t) => {
   await withTempCwd(t);
   const db = openDb(':memory:');
   const { syncEsquireProducts, bulkImportRemainingProducts, createDropshipListing } = await import(`./esquire.js?t=${Date.now()}`);
@@ -270,7 +280,7 @@ test('bulkImportRemainingProducts imports every still-available cached product n
   await syncEsquireProducts({
     fetcher: fakeFetcher(sampleFeedXml([
       { code: 'A1', name: 'Mouse', category: 'Wireless Mouse', cost: 100 },
-      { code: 'A2', name: 'Mouse 2', category: 'Wireless Mouse', cost: 200 },
+      { code: 'A2', name: 'Mouse 2', category: 'Bluetooth Mouse', cost: 200 },
       { code: 'B1', name: 'Cable', category: 'Cable: HDMI', cost: 50 },
       { code: 'C1', name: 'No Category', category: '', cost: 10 },
     ])),
@@ -283,25 +293,25 @@ test('bulkImportRemainingProducts imports every still-available cached product n
 
   const result = bulkImportRemainingProducts(db);
   assert.strictEqual(result.imported, 3, 'A2, B1, C1 -- A1 already listed');
-  assert.strictEqual(result.categoriesCreated, 3, 'wireless-mouse, cable-hdmi, uncategorized');
+  assert.strictEqual(result.categoriesCreated, 3, 'computer-accessories-peripherals, cables-adaptors-chargers, general-merchandise');
 
   const catalog = loadCatalog();
-  const wirelessMouse = catalog.products.find((p) => p.slug === 'wireless-mouse');
-  assert.ok(wirelessMouse, 'category named after the Esquire category is created');
-  assert.strictEqual(wirelessMouse.items.length, 1, 'only A2 -- A1 lives in computer-accessories instead');
-  assert.strictEqual(wirelessMouse.items[0].sku, 'A2');
-  assert.strictEqual(wirelessMouse.items[0].price, '220', '200 cost + default 10% margin');
-  assert.strictEqual(wirelessMouse.items[0].dropship, true);
-  assert.strictEqual(wirelessMouse.status, 'published');
-  assert.strictEqual(wirelessMouse.featured, true);
+  const peripherals = catalog.products.find((p) => p.slug === 'computer-accessories-peripherals');
+  assert.ok(peripherals, 'Wireless/Bluetooth Mouse both land in the same umbrella group, not two separate categories');
+  assert.strictEqual(peripherals.items.length, 1, 'only A2 -- A1 lives in the manually-curated computer-accessories category instead');
+  assert.strictEqual(peripherals.items[0].sku, 'A2');
+  assert.strictEqual(peripherals.items[0].price, '220', '200 cost + default 10% margin');
+  assert.strictEqual(peripherals.items[0].dropship, true);
+  assert.strictEqual(peripherals.status, 'published');
+  assert.strictEqual(peripherals.featured, true);
 
-  const hdmiCable = catalog.products.find((p) => p.slug === 'cable-hdmi');
-  assert.ok(hdmiCable);
-  assert.strictEqual(hdmiCable.items[0].sku, 'B1');
+  const cables = catalog.products.find((p) => p.slug === 'cables-adaptors-chargers');
+  assert.ok(cables);
+  assert.strictEqual(cables.items[0].sku, 'B1');
 
-  const uncategorized = catalog.products.find((p) => p.slug === 'uncategorized');
-  assert.ok(uncategorized, 'a blank Esquire category falls back to Uncategorized rather than crashing');
-  assert.strictEqual(uncategorized.items[0].sku, 'C1');
+  const general = catalog.products.find((p) => p.slug === 'general-merchandise');
+  assert.ok(general, 'a blank Esquire category falls back to General Merchandise rather than crashing');
+  assert.strictEqual(general.items[0].sku, 'C1');
 
   const computerAccessories = catalog.products.find((p) => p.slug === 'computer-accessories');
   assert.strictEqual(computerAccessories.items.length, 1, 'A1 untouched by the bulk import');
@@ -313,16 +323,16 @@ test('bulkImportRemainingProducts imports every still-available cached product n
   db.close();
 });
 
-test('bulkImportRemainingProducts adds a new item to an EXISTING category rather than creating a duplicate', async (t) => {
+test('bulkImportRemainingProducts adds a new item to an EXISTING umbrella category rather than creating a duplicate', async (t) => {
   await withTempCwd(t);
   const db = openDb(':memory:');
   const { syncEsquireProducts, bulkImportRemainingProducts } = await import(`./esquire.js?t=${Date.now()}`);
   const { loadCatalog, upsertProduct } = await import(`./store.js?t=${Date.now()}`);
   updateSettings({ esquireFeedUrl: 'https://api.esquire.co.za/api/DataFeed?u=x&p=y&t=xml&m=10' }, db);
 
-  // A category named "Toys/Misc" (slug toys-misc) already exists with an
-  // unrelated hand-made item in it.
-  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys-misc', name: 'Toys/Misc', status: 'published', featured: true, items: [{ id: 'i1', name: 'Handmade Toy', sku: 'HAND-1', price: '50' }] }, db);
+  // The umbrella category "Toys, Gifts & Seasonal" (slug toys-gifts-seasonal)
+  // already exists with an unrelated hand-made item in it.
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys-gifts-seasonal', name: 'Toys, Gifts & Seasonal', status: 'published', featured: true, items: [{ id: 'i1', name: 'Handmade Toy', sku: 'HAND-1', price: '50' }] }, db);
 
   await syncEsquireProducts({
     fetcher: fakeFetcher(sampleFeedXml([{ code: 'T1', name: 'Toy Widget', category: 'Toys/Misc', cost: 30 }])),
@@ -330,13 +340,64 @@ test('bulkImportRemainingProducts adds a new item to an EXISTING category rather
   });
   const result = bulkImportRemainingProducts(db);
   assert.strictEqual(result.imported, 1);
-  assert.strictEqual(result.categoriesCreated, 0, 'toys-misc already existed');
+  assert.strictEqual(result.categoriesCreated, 0, 'toys-gifts-seasonal already existed');
 
   const catalog = loadCatalog();
-  const toysMisc = catalog.products.filter((p) => p.slug === 'toys-misc');
-  assert.strictEqual(toysMisc.length, 1, 'no duplicate category created');
-  assert.strictEqual(toysMisc[0].items.length, 2, 'existing hand-made item preserved, new one added');
-  assert.ok(toysMisc[0].items.some((i) => i.sku === 'HAND-1'));
-  assert.ok(toysMisc[0].items.some((i) => i.sku === 'T1'));
+  const toys = catalog.products.filter((p) => p.slug === 'toys-gifts-seasonal');
+  assert.strictEqual(toys.length, 1, 'no duplicate category created');
+  assert.strictEqual(toys[0].items.length, 2, 'existing hand-made item preserved, new one added');
+  assert.ok(toys[0].items.some((i) => i.sku === 'HAND-1'));
+  assert.ok(toys[0].items.some((i) => i.sku === 'T1'));
+  db.close();
+});
+
+test('migrateGranularCategoriesToGroups regroups old one-per-Esquire-category listings into their umbrella, leaves curated listings alone, and is safe to re-run', async (t) => {
+  await withTempCwd(t);
+  const db = openDb(':memory:');
+  const { syncEsquireProducts, createDropshipListing, migrateGranularCategoriesToGroups, getDropshipListing } = await import(`./esquire.js?t=${Date.now()}`);
+  const { loadCatalog } = await import(`./store.js?t=${Date.now()}`);
+  updateSettings({ esquireFeedUrl: 'https://api.esquire.co.za/api/DataFeed?u=x&p=y&t=xml&m=10' }, db);
+  await syncEsquireProducts({
+    fetcher: fakeFetcher(sampleFeedXml([
+      { code: 'A1', name: 'Mouse', category: 'Wireless Mouse', cost: 100 },
+      { code: 'A2', name: 'Mouse 2', category: 'Bluetooth Mouse', cost: 200 },
+      { code: 'B1', name: 'Curated Widget', category: 'Some Weird Category', cost: 50 },
+    ])),
+    db,
+  });
+
+  // Simulate the OLD (pre-grouping) bulk import behaviour directly: one
+  // Lapanza category per raw Esquire category, slug = slugify(category).
+  const oldListingA1 = createDropshipListing({ esquireProductCode: 'A1', categorySlug: 'wireless-mouse', categoryName: 'Wireless Mouse' }, db).listing;
+  const oldListingA2 = createDropshipListing({ esquireProductCode: 'A2', categorySlug: 'bluetooth-mouse', categoryName: 'Bluetooth Mouse' }, db).listing;
+  // B1 is a curated listing -- its category_slug was hand-chosen and does
+  // NOT match slugify(its own raw category) ("some-weird-category") --
+  // migration must leave it exactly where it is.
+  const curatedListing = createDropshipListing({ esquireProductCode: 'B1', categorySlug: 'computer-accessories', categoryName: 'Computer Accessories' }, db).listing;
+
+  const result = migrateGranularCategoriesToGroups(db);
+  assert.strictEqual(result.migrated, 2, 'A1 and A2, both old auto-created per-category listings');
+  assert.strictEqual(result.categoriesRemoved, 2, 'wireless-mouse and bluetooth-mouse are now empty');
+
+  const catalog = loadCatalog();
+  assert.strictEqual(catalog.products.some((p) => p.slug === 'wireless-mouse'), false, 'empty old category removed');
+  assert.strictEqual(catalog.products.some((p) => p.slug === 'bluetooth-mouse'), false);
+  const peripherals = catalog.products.find((p) => p.slug === 'computer-accessories-peripherals');
+  assert.ok(peripherals, 'umbrella category created to receive the migrated items');
+  assert.strictEqual(peripherals.items.length, 2);
+  assert.ok(peripherals.items.some((i) => i.sku === 'A1'));
+  assert.ok(peripherals.items.some((i) => i.sku === 'A2'));
+
+  assert.strictEqual(getDropshipListing(oldListingA1.id, db).categorySlug, 'computer-accessories-peripherals');
+  assert.strictEqual(getDropshipListing(oldListingA2.id, db).categorySlug, 'computer-accessories-peripherals');
+  assert.strictEqual(getDropshipListing(curatedListing.id, db).categorySlug, 'computer-accessories', 'curated listing untouched');
+  const computerAccessories = catalog.products.find((p) => p.slug === 'computer-accessories');
+  assert.strictEqual(computerAccessories.items.length, 1, 'curated category still has exactly its own item');
+
+  // Re-running is a no-op -- everything left already sits in its umbrella
+  // (or was never an auto-created listing in the first place).
+  const second = migrateGranularCategoriesToGroups(db);
+  assert.strictEqual(second.migrated, 0);
+  assert.strictEqual(second.categoriesRemoved, 0);
   db.close();
 });

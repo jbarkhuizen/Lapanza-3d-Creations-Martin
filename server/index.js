@@ -184,6 +184,7 @@ import {
   updateDropshipListing,
   deleteDropshipListing,
   bulkImportRemainingProducts,
+  migrateGranularCategoriesToGroups,
 } from './esquire.js';
 import {
   listPlatforms,
@@ -2711,6 +2712,27 @@ app.post('/api/esquire/bulk-import', requireAuth, async (req, res) => {
       username: req.adminUsername,
       ...requestMeta(req),
       detail: `Esquire bulk import: ${result.imported} product(s) imported across ${result.categoriesTouched} categor${result.categoriesTouched === 1 ? 'y' : 'ies'} (${result.categoriesCreated} new)`,
+    });
+    res.json({ ...result, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// One-time cleanup route (owner report 2026-09-09: 653 sidebar entries
+// from the old one-category-per-Esquire-category bulk import). Safe to
+// call again -- a no-op once every listing already sits in its umbrella
+// group.
+app.post('/api/esquire/migrate-categories', requireAuth, async (req, res) => {
+  try {
+    const result = migrateGranularCategoriesToGroups();
+    const publishWarning = result.migrated > 0 ? await publishCatalog() : undefined;
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.CATALOG_UPDATED,
+      adminId: req.adminId,
+      username: req.adminUsername,
+      ...requestMeta(req),
+      detail: `Esquire category migration: ${result.migrated} listing(s) regrouped into umbrella categories, ${result.categoriesRemoved} empty per-supplier-category page(s) removed`,
     });
     res.json({ ...result, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {

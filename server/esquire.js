@@ -329,19 +329,53 @@ export function resyncDropshipListings(db = getDb()) {
   return { changed, delisted };
 }
 
-// Same slug shape server/index.js's own slugify() produces -- duplicated
-// here (not imported) for the same reason normalizeItem was moved TO
-// store.js rather than esquire.js importing it FROM index.js: index.js
-// already imports this module for its routes, so the reverse import would
-// be circular.
-function slugify(value) {
-  return (
-    String(value || '')
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || 'uncategorized'
-  );
+// Owner report (2026-09-09): the supplier's feed has 673 of its OWN
+// categories -- one Lapanza category per Esquire category (the original
+// bulkImportRemainingProducts behaviour) meant 653 new sidebar entries,
+// unusable. This groups every raw Esquire category name into one of ~19
+// umbrella storefront categories instead, via ordered keyword rules
+// (first match wins, most specific groups checked first so e.g. "Digital
+// Camera Bag" lands in Cameras, not Bags). A rule set over 673 individual
+// strings can never be perfect -- any item that lands in the wrong bucket
+// is still just one "Move To" click away from the right one (the same
+// admin feature built for a miscategorised filament colour).
+// EXPORTED so tests and any future admin "reclassify" tool can reuse the
+// exact same grouping without drifting from what the import actually did.
+export const ESQUIRE_CATEGORY_GROUPS = [
+  { slug: 'gaming', name: 'Gaming', keywords: ['gaming', 'joystick', 'game controller', 'ips gaming monitor', 'vr glasses'] },
+  { slug: 'mobile-tablet-accessories', name: 'Mobile & Tablet Accessories', keywords: ['iphone', 'samsung', 'blackberry', 'google nexus', 'screen protector', 'mobile phone', 'mobile smart phone', 'various phone', 'cell phone case', 'ipad', 'ipod', 'tablet', 'selfie monopod', 'smart watch', 'smartphone'] },
+  { slug: 'cameras-photography', name: 'Cameras & Photography', keywords: ['digital camera', 'digital photo frame', 'photo frame'] },
+  { slug: 'bags-luggage', name: 'Bags & Luggage', keywords: ['backpack', 'bag', 'luggage', 'chair bag', 'padlock', 'carry case', 'carry folder'] },
+  { slug: 'networking-security', name: 'Networking & Security', keywords: ['network', 'ethernet', 'broadband router', 'modem', 'range extender', 'access point', 'wireless antenna', 'wireless adaptor', 'kvm', 'cctv', 'ip camera', 'ip dome camera', 'security and alarm', 'poe'] },
+  { slug: 'computer-accessories-peripherals', name: 'Computer Accessories & Peripherals', keywords: ['mouse', 'keyboard', 'webcam', 'web camera'] },
+  { slug: 'storage-memory', name: 'Storage & Memory', keywords: ['hard disk', 'ssd', 'memory (', 'usb flash', 'storage box', 'disk box', 'media (cd', 'disks: cd'] },
+  { slug: 'computers-laptops', name: 'Computers & Laptops', keywords: ['notebook-', 'notebooks', 'desktop systems', 'pc workstation', 'motherboard', 'cpu', 'graphics card', 'monitor', 'server (', 'server component', 'sound card', 'controller (', 'pc fan', 'optical drive', 'intel', 'input device'] },
+  { slug: 'printers-office-machines', name: 'Printers, Ink & Office Machines', keywords: ['printer', 'ink cartridge', 'ink and toner', 'toner', 'laminat', 'pos ', 'point of sale', 'hand held scanner', 'document scanner', 'office equipment', 'office supplies'] },
+  { slug: 'tv-audio-entertainment', name: 'TVs, Audio & Entertainment', keywords: ['television', 'tv stand', 'home theater', 'bluetooth speaker', 'soundbar', 'hi-fi', 'party speaker', 'multimedia', 'portable speaker', 'professional microphone', 'projector'] },
+  { slug: 'power-solar-batteries', name: 'Power, Solar & Batteries', keywords: ['power ', 'power(', 'power bank', 'power distribution', 'power inverter', 'power supply', 'power ups', 'solar', 'inverter', 'battery', 'batteries', 'ups accessories'] },
+  { slug: 'cables-adaptors-chargers', name: 'Cables, Adaptors & Chargers', keywords: ['cable', 'hdmi', 'usb (', 'usb charger', 'usb ethernet', 'usb mini', 'usb otg', 'molex', 'rca ', 'vga', 'display port', 'parallel/serial', 'multiplug', 'charger', 'sync & charge', 'sync and charge'] },
+  { slug: 'kitchen-appliances', name: 'Kitchen Appliances', keywords: ['air fryer', 'blender', 'coffee', 'kettle', 'toaster', 'microwave', 'food mixer', 'food processor', 'juicer', 'ice cream maker', 'sandwich', 'waffle', 'crepe', 'grill', 'griddle', 'pressure cooker', 'induction cooker', 'milk frother', 'dessert maker', 'beverage carbonator', 'chafing dish', 'deep fryer', 'frying pan', 'can opener', 'food machine'] },
+  { slug: 'home-appliances-cleaning', name: 'Home Appliances & Cleaning', keywords: ['vacuum', 'washing machine', 'clothing dryer', 'steam iron', 'ironing board', 'garment steamer', 'fan', 'heater', 'air purifier', 'cooler', 'humidifier', 'airconditioning', 'electric blanket', 'water dispenser', 'fridge', 'freezer', 'pressure washer', 'cleaning', 'floor cleaner', 'window cleaner', 'carpet cleaner', 'white board cleaner', 'white board duster', 'surface wipe', 'waste bin', 'dish rack', 'kitchen scale', 'kitchen utensil', 'bread bin', 'pots & pans', 'cutlery', 'knife set', 'salt & pepper', 'urn', 'water jug', 'water bottle', 'vacuum flask', 'bathroom'] },
+  { slug: 'personal-care-health', name: 'Personal Care & Health', keywords: ['hair ', 'shaver', 'nail clipper', 'body massager', 'scalp massager', 'foot warmer', 'facial cleanser', 'health patch', 'heatpad', 'compression sock', 'ankle support', 'elbow support', 'wrist support', 'knee strap', 'waist belt', 'oximeter', 'thermometer', 'oxygen therapy', 'hand sanitizer', 'protective clothing', 'protective eyewear', 'protective facial mask', 'protective barrier', 'nitrile glove', 'latex glove', 'bathroom scale', 'baby bathing', 'baby maternity'] },
+  { slug: 'office-stationery', name: 'Office & Stationery', keywords: ['pen', 'pencil', 'highlighter', 'eraser', 'sharpener', 'ruler', 'stapler', 'staple', 'punch', 'clip', 'file divider', 'ring binder', 'display book', 'flip file', 'report folder', 'magazine holder', 'desk organiser', 'desk cube', 'clip board', 'planning board', 'drawing', 'whiteboard', 'chalk board', 'a4 ', 'a5 ', 'counter book', 'examination pad', 'adhesive', 'glue', 'tape ', 'book cover', 'book label', 'scientific calculator', 'maths set', 'dictionary', 'star label', 'photo paper', 'stylus', 'pen caddy', 'colour pencil', 'coloured pencil'] },
+  { slug: 'toys-gifts-seasonal', name: 'Toys, Gifts & Seasonal', keywords: ['kids puzzle', 'toy ', 'toys/', 'disney', 'tweety', 'fifa licensed', 'birthday', 'colouring book', 'educational board', 'magnetic drawing', 'fidget', 'kids swimming', 'gadgets and gifts', 'acrylic colour', 'oil colour', 'poster colour', 'water colour', 'water paint', 'clay', 'dough', 'glitter glue', 'keyring', 'wax crayon'] },
+  { slug: 'car-tools-outdoor', name: 'Car, Tools & Outdoor', keywords: ['car accessor', 'car air freshener', 'car signal processor', 'bluetooth car kit', 'bike', 'camping', 'outdoor', 'grass trimmer', 'braai', 'rope', 'tape measure', 'ratchet', 'screw driver', 'pliers', 'hand drill', 'metal cutter', 'silicone gun', 'silicone sealant', 'general purpose tool', 'toolkit', 'test equipment'] },
+  { slug: 'electrical-lighting', name: 'Electrical & Lighting', keywords: ['flush switch', 'surface switch', 'isolator switch', 'latch', 'plug top', 'insulation tape', 'door chime', 'home safe', 'led ', 'rechargeable led'] },
+  { slug: 'software', name: 'Software', keywords: ['software'] },
+];
+
+// Fallback for anything none of the ordered groups above matched (a
+// genuinely new Esquire category the rules haven't seen yet, or one
+// specific enough it doesn't fit any umbrella) -- one catch-all rather
+// than silently creating yet another 1-item category.
+const ESQUIRE_FALLBACK_GROUP = { slug: 'general-merchandise', name: 'General Merchandise' };
+
+export function classifyEsquireCategory(rawCategoryName) {
+  const needle = String(rawCategoryName || '').toLowerCase();
+  for (const group of ESQUIRE_CATEGORY_GROUPS) {
+    if (group.keywords.some((kw) => needle.includes(kw))) return group;
+  }
+  return ESQUIRE_FALLBACK_GROUP;
 }
 
 // Owner request (2026-09-09): "import everything" -- every still-available
@@ -356,13 +390,12 @@ function slugify(value) {
 // generates pages or builds, same division of responsibility as every
 // other route that mutates the catalog).
 //
-// Each Esquire category becomes its own Lapanza category (slugified from
-// the supplier's own category name) rather than one giant dumping-ground
-// category -- mirrors how the supplier's own catalog is organised, and
-// keeps any one category page from trying to render thousands of items.
-// Re-running this after a later sync only picks up genuinely new codes
-// (already-imported ones, active or not, are skipped by code) -- safe to
-// call again, not a one-shot script.
+// Every candidate is bucketed into one of ESQUIRE_CATEGORY_GROUPS' ~19
+// umbrella categories (not one Lapanza category per Esquire category --
+// owner report 2026-09-09: that made 653 sidebar entries). Re-running this
+// after a later sync only picks up genuinely new codes (already-imported
+// ones, active or not, are skipped by code) -- safe to call again, not a
+// one-shot script.
 export function bulkImportRemainingProducts(db = getDb()) {
   const defaultMargin = Number(getSettings(db).esquireDefaultMarginPercent) || 10;
   const alreadyImported = new Set(db.prepare('SELECT esquire_product_code FROM dropship_listings').all().map((r) => r.esquire_product_code));
@@ -386,18 +419,17 @@ export function bulkImportRemainingProducts(db = getDb()) {
 
   const txn = db.transaction((items) => {
     for (const esquireProduct of items) {
-      const categoryName = esquireProduct.category || 'Uncategorized';
-      const slug = slugify(categoryName);
-      let product = bySlug.get(slug);
+      const group = classifyEsquireCategory(esquireProduct.category);
+      let product = bySlug.get(group.slug);
       if (!product) {
         product = {
-          id: randomUUID(), kind: 'category', slug, name: categoryName, description: '', crumbs: '', parent: null,
+          id: randomUUID(), kind: 'category', slug: group.slug, name: group.name, description: '', crumbs: '', parent: null,
           items: [], status: 'published', featured: true, sortOrder: 0, seoTitle: '', seoDescription: '', internalNotes: '',
         };
-        bySlug.set(slug, product);
+        bySlug.set(group.slug, product);
         categoriesCreated += 1;
       }
-      touchedSlugs.add(slug);
+      touchedSlugs.add(group.slug);
       const item = normalizeItem(
         {
           name: esquireProduct.name,
@@ -416,7 +448,7 @@ export function bulkImportRemainingProducts(db = getDb()) {
         product.items.length,
       );
       product.items.push(item);
-      insertListing.run({ id: randomUUID(), code: esquireProduct.code, slug, item_id: item.id, margin: defaultMargin, now });
+      insertListing.run({ id: randomUUID(), code: esquireProduct.code, slug: group.slug, item_id: item.id, margin: defaultMargin, now });
     }
   });
   txn(candidates);
@@ -430,4 +462,92 @@ export function bulkImportRemainingProducts(db = getDb()) {
   saveCatalog(catalog, db);
 
   return { imported: candidates.length, categoriesCreated, categoriesTouched: touchedSlugs.size };
+}
+
+// One-time migration (owner report 2026-09-09, same day as the bulk import
+// itself): bulkImportRemainingProducts originally created one Lapanza
+// category PER ESQUIRE CATEGORY -- 653 of them, an unusable sidebar. This
+// re-buckets every listing that's still sitting in one of those original
+// auto-created per-category products into its ESQUIRE_CATEGORY_GROUPS
+// umbrella instead, deletes the now-empty originals, and leaves anything
+// else (a hand-curated import like the first "Computer Accessories" batch,
+// whose category_slug was chosen explicitly and never matched
+// slugify(its own Esquire category)) untouched -- that distinction IS the
+// signal used to tell "auto-created by the old bulk import" apart from
+// "the owner/an admin deliberately chose this category", since nothing
+// else in the schema tracks it. Safe to re-run: once migrated, a row's
+// category_slug already equals its umbrella group's slug, so the
+// early-exit guard skips it on a second pass.
+export function migrateGranularCategoriesToGroups(db = getDb()) {
+  const catalog = loadCatalog();
+  const bySlug = new Map(catalog.products.filter((p) => p.kind === 'category').map((p) => [p.slug, p]));
+  const listings = db.prepare('SELECT * FROM dropship_listings').all();
+  const now = new Date().toISOString();
+  const updateSlug = db.prepare('UPDATE dropship_listings SET category_slug = @slug, updated_at = @now WHERE id = @id');
+  const touchedSourceSlugs = new Set();
+  let migrated = 0;
+
+  const txn = db.transaction((rows) => {
+    for (const row of rows) {
+      const esquireProduct = getEsquireProduct(row.esquire_product_code, db);
+      const rawCategory = esquireProduct?.category || 'Uncategorized';
+      const autoSlug = slugifyFallback(rawCategory);
+      if (row.category_slug !== autoSlug) continue; // a curated/manual listing, not one of the old auto-created ones
+      const group = classifyEsquireCategory(rawCategory);
+      if (row.category_slug === group.slug) continue; // already an umbrella slug (re-run safety)
+
+      const source = bySlug.get(row.category_slug);
+      const idx = source?.items?.findIndex((i) => i.id === row.item_id);
+      if (!source || idx == null || idx < 0) continue;
+      const [item] = source.items.splice(idx, 1);
+      touchedSourceSlugs.add(row.category_slug);
+
+      let target = bySlug.get(group.slug);
+      if (!target) {
+        target = {
+          id: randomUUID(), kind: 'category', slug: group.slug, name: group.name, description: '', crumbs: '', parent: null,
+          items: [], status: 'published', featured: true, sortOrder: 0, seoTitle: '', seoDescription: '', internalNotes: '',
+        };
+        bySlug.set(group.slug, target);
+      }
+      target.items.push(item);
+      updateSlug.run({ slug: group.slug, now, id: row.id });
+      migrated += 1;
+    }
+  });
+  txn(listings);
+
+  let categoriesRemoved = 0;
+  for (const slug of touchedSourceSlugs) {
+    const product = bySlug.get(slug);
+    if (product && product.items.length === 0) {
+      bySlug.delete(slug);
+      categoriesRemoved += 1;
+    }
+  }
+
+  catalog.products = catalog.products.filter((p) => p.kind !== 'category' || bySlug.has(p.slug) || !touchedSourceSlugs.has(p.slug));
+  for (const product of bySlug.values()) {
+    const idx = catalog.products.findIndex((p) => p.id === product.id);
+    if (idx === -1) catalog.products.push(product);
+    else catalog.products[idx] = product;
+  }
+  saveCatalog(catalog, db);
+
+  return { migrated, categoriesRemoved };
+}
+
+// Local, migration-only re-derivation of the slug bulkImportRemainingProducts
+// used to generate before umbrella grouping existed -- kept separate from
+// classifyEsquireCategory precisely because it must NOT change: it's the
+// fingerprint that tells an old auto-created category apart from a
+// deliberately-chosen one.
+function slugifyFallback(value) {
+  return (
+    String(value || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'uncategorized'
+  );
 }

@@ -2171,7 +2171,7 @@ test('dropship-listings CRUD via the real routes, against a pre-seeded esquire_p
   assert.strictEqual(afterDelete.body.listings.length, 0);
 });
 
-test('POST /api/esquire/bulk-import requires auth and imports every remaining cached product, one category per Esquire category', async (t) => {
+test('POST /api/esquire/bulk-import requires auth and imports every remaining cached product, grouped into umbrella categories', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
   assert.strictEqual((await request(app).post('/api/esquire/bulk-import')).status, 401);
@@ -2193,8 +2193,8 @@ test('POST /api/esquire/bulk-import requires auth and imports every remaining ca
   assert.strictEqual(res.body.categoriesCreated, 2);
 
   const products = await request(app).get('/api/products').set('Cookie', adminCookie);
-  const mouseCategory = products.body.products.find((p) => p.slug === 'wireless-mouse');
-  assert.ok(mouseCategory, 'a new category is created and published, named after the Esquire category');
+  const mouseCategory = products.body.products.find((p) => p.slug === 'computer-accessories-peripherals');
+  assert.ok(mouseCategory, 'a new umbrella category is created and published, not one named after the raw Esquire category');
   assert.strictEqual(mouseCategory.status, 'published');
   assert.strictEqual(mouseCategory.items[0].sku, 'BI1');
   assert.strictEqual(mouseCategory.items[0].dropship, true);
