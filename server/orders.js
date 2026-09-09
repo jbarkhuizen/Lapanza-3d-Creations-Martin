@@ -84,6 +84,13 @@ export function resolveProductSnapshot(productId, db = getDb()) {
     const skuOrIndex = rest.slice(1).join(':');
     const category = readCategoryProducts().find((c) => c.slug === slug);
     if (!category) return null;
+    // Owner request (2026-09-09): unfeaturing a category (or drafting it)
+    // must actually block a purchase, not just hide the page/nav link --
+    // otherwise a stale cached page, an old bookmark, or a direct API call
+    // could still complete an order for something the storefront no longer
+    // shows anywhere. Same gate generate-pages.mjs's categoryPages loop and
+    // site.js's CORE_CATEGORY_NAV use, enforced here as the real backstop.
+    if ((category.status || 'published') === 'draft' || category.featured === false) return null;
     const items = category.items || [];
     const item = skuOrIndex && items.some((i) => i.sku === skuOrIndex)
       ? items.find((i) => i.sku === skuOrIndex)

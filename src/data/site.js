@@ -81,29 +81,46 @@ const rawBrands = Array.isArray(siteSettings.carPartBrands) && siteSettings.carP
 // category exists -- a Settings-only brand (no +Category yet) used to
 // render a link straight to a 404. The generator skips the page for the
 // same reason; this keeps nav and pages in lockstep.
+// Owner request (2026-09-09): "Featured on Homepage Cues" now gates whether
+// a category's page/nav-link exists at all (see generate-pages.mjs's
+// categoryPages loop, which this must stay in lockstep with the same way it
+// already had to for existence) -- applied here alongside the pre-existing
+// draft check so an unfeatured brand never leaves a dead nav link pointing
+// at a page the generator has stopped producing.
+const categoryIsLive = (slug) => {
+  const c = categories[slug];
+  return Boolean(c) && (c.status || 'published') !== 'draft' && c.featured !== false;
+};
 export const CAR_BRANDS_NAV = rawBrands
   .map((b) => ({
     slug: String(b.name).toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
     label: b.name,
   }))
-  .filter((b) => Boolean(categories[b.slug]));
+  .filter((b) => categoryIsLive(b.slug));
 
 // Review #14 (todo #153): the three core category links carry the
 // category's CURRENT name (admin-editable, e.g. Homeware -> Home & School)
 // while the page slug/file stays stable -- renaming a category updates the
 // sidebar on the next publish, no code change.
 export const CORE_CATEGORY_NAV = [
-  ...['toys', 'homeware', 'phones'].map((slug) => ({
-    slug,
-    label: categories[slug]?.name || slug.charAt(0).toUpperCase() + slug.slice(1),
-  })),
+  // Owner request (2026-09-09): the core three used to be unconditional --
+  // now gated by draft/featured exactly like every other category, via the
+  // same categoryIsLive() check CAR_BRANDS_NAV above uses (must stay in
+  // lockstep with generate-pages.mjs's categoryPages loop, which decides
+  // whether the page itself even gets produced).
+  ...['toys', 'homeware', 'phones']
+    .filter((slug) => categoryIsLive(slug))
+    .map((slug) => ({
+      slug,
+      label: categories[slug]?.name || slug.charAt(0).toUpperCase() + slug.slice(1),
+    })),
   // Dynamic categories (2026-09-02): any published non-core, non-brand
   // category gets its own root page from the generator — link it here too,
   // after the core three, in catalog order.
   ...Object.values(categories)
     .filter((c) => !['toys', 'homeware', 'phones'].includes(c.slug))
     .filter((c) => !CAR_BRANDS_NAV.some((b) => b.slug === c.slug))
-    .filter((c) => (c.status || 'published') !== 'draft')
+    .filter((c) => categoryIsLive(c.slug))
     .map((c) => ({ slug: c.slug, label: c.name })),
 ];
 

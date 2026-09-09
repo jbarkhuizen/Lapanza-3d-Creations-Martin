@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { openDb } from './db.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { openDb, closeAllCachedDbs } from './db.js';
 import { updateSettings } from './settings.js';
 import { createFilament, addColour, getFilament } from './filaments.js';
 import { createOrder, createManualOrder, updateOrderStatus, markOrderPaid, cancelOrderByClient, deleteOrder, listOrders, resolveProductSnapshot, setOrderCollected, setOrderPacked, setOrderInstructionFiles } from './orders.js';
@@ -8,6 +11,25 @@ import { createShippingOption } from './shipping.js';
 
 function colourStock(filamentId, sku, db) {
   return getFilament(filamentId, db).colours.find((c) => c.sku === sku).stockQty;
+}
+
+// Category-kind products live in catalog.json (a real file), not SQLite --
+// same isolation inventory.test.js already uses for the same reason.
+async function withTempCwd(t) {
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'orders-test-'));
+  const originalCwd = process.cwd();
+  fs.mkdirSync(path.join(tmpRoot, 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'src', 'data'), { recursive: true });
+  fs.mkdirSync(path.join(tmpRoot, 'public'), { recursive: true });
+  process.chdir(tmpRoot);
+
+  t.after(() => {
+    closeAllCachedDbs();
+    process.chdir(originalCwd);
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  return tmpRoot;
 }
 
 test('resolveProductSnapshot includes stockQty for filament products', () => {
@@ -24,6 +46,26 @@ test('resolveProductSnapshot includes stockQty for filament products', () => {
   assert.strictEqual(snapshot.stockQty, 5);
   assert.strictEqual(snapshot.price, 299);
   db.close();
+});
+
+// Owner request (2026-09-09): "Featured on Homepage Cues" now blocks a
+// purchase, not just the storefront page/nav link -- same gate a stale
+// cached page or a direct API call must not be able to route around.
+test('resolveProductSnapshot rejects a category item when its category is draft or unfeatured, even with a valid sku', async (t) => {
+  await withTempCwd(t);
+  const { upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+  const { resolveProductSnapshot } = await import(`./orders.js?t=${Date.now()}`);
+
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', status: 'published', featured: true, items: [{ id: 'i1', name: 'Dino', sku: 'SKU-1', price: '150', stockQty: 5 }] });
+  const live = resolveProductSnapshot('category:toys:SKU-1');
+  assert.ok(live, 'published + featured category resolves normally');
+  assert.strictEqual(live.name, 'Dino');
+
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', status: 'draft', featured: true, items: [{ id: 'i1', name: 'Dino', sku: 'SKU-1', price: '150', stockQty: 5 }] });
+  assert.strictEqual(resolveProductSnapshot('category:toys:SKU-1'), null, 'draft category blocks the purchase');
+
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys', name: 'Toys', status: 'published', featured: false, items: [{ id: 'i1', name: 'Dino', sku: 'SKU-1', price: '150', stockQty: 5 }] });
+  assert.strictEqual(resolveProductSnapshot('category:toys:SKU-1'), null, 'unfeatured category blocks the purchase even though it is published');
 });
 
 test('createOrder succeeds when quantity <= stockQty', () => {

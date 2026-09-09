@@ -372,6 +372,10 @@ test('generate-pages gives a NEW published category its own root page, nav data,
     };
     // a DRAFT category must stay page-less
     cats['draft-shoppe'] = { slug: 'draft-shoppe', name: 'Draft Shoppe', description: '', crumbs: '', status: 'draft', items: [] };
+    // Owner request (2026-09-09): an unfeatured category, even PUBLISHED,
+    // must also stay page-less -- "Featured on Homepage Cues" now gates
+    // page generation the same way draft status already did.
+    cats['unfeatured-shoppe'] = { slug: 'unfeatured-shoppe', name: 'Unfeatured Shoppe', description: '', crumbs: '', status: 'published', featured: false, items: [] };
     fs.writeFileSync(categoriesPath, JSON.stringify(cats));
 
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
@@ -381,12 +385,14 @@ test('generate-pages gives a NEW published category its own root page, nav data,
     assert.match(html, /Test Shoppe/);
     assert.match(html, /Widget/);
     assert.ok(!fs.existsSync(path.join(root, 'draft-shoppe.html')), 'draft category gets no page');
+    assert.ok(!fs.existsSync(path.join(root, 'unfeatured-shoppe.html')), 'unfeatured category gets no page even though published');
     const sitemap = fs.readFileSync(path.join(root, 'public', 'sitemap.xml'), 'utf8');
     assert.match(sitemap, /test-shoppe\.html/);
   } finally {
     fs.writeFileSync(categoriesPath, backup);
     fs.rmSync(newPage, { force: true });
     fs.rmSync(path.join(root, 'draft-shoppe.html'), { force: true });
+    fs.rmSync(path.join(root, 'unfeatured-shoppe.html'), { force: true });
     execFileSync(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], { cwd: root });
   }
 });

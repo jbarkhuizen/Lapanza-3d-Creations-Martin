@@ -1203,6 +1203,17 @@ for (const page of categoryPages) {
     skippedCategories.push(page.slug);
     continue;
   }
+  // Owner request (2026-09-09): "Featured on Homepage Cues" now gates
+  // whether a category gets a public page at all -- same treatment as
+  // draft status just above, and deliberately applied here uniformly
+  // (core three, car-part brands, AND dynamic categories all funnel
+  // through this one loop) rather than only on the dynamic-category
+  // filter the way status historically was, so unfeaturing ANY category
+  // consistently takes it fully offline, not just out of the sidebar.
+  if (category.featured === false) {
+    skippedCategories.push(page.slug);
+    continue;
+  }
   generateCategoryPage({
     file: page.file,
     depth: page.depth,

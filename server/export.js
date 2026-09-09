@@ -142,6 +142,12 @@ export function syncPublicJson(db, paths = defaultPaths()) {
         // public export needs the status (it's not sensitive — published/
         // draft only).
         status: p.status || 'published',
+        // Owner request (2026-09-09): "Featured on Homepage Cues" now also
+        // gates whether this category gets a public page / nav link at all
+        // (see generate-pages.mjs's categoryPages loop and site.js's
+        // CORE_CATEGORY_NAV) -- same not-sensitive published/draft-style
+        // reasoning as status above.
+        featured: p.featured !== false,
         ...(p.parent ? { parent: p.parent } : {}),
         items: (p.items || []).map((item) => ({
           name: item.name,

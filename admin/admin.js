@@ -1403,9 +1403,10 @@ function renderEditor() {
             <label class="field"><span>Sort Order</span><input data-field="sortOrder" type="number" value="${p.sortOrder ?? 0}" /></label>
             <label class="field checkbox" style="margin-top:1.5rem">
               <input data-field="featured" type="checkbox" ${p.featured ? 'checked' : ''} />
-              <span>Featured on Homepage Cues</span>
+              <span>${isFilament ? 'Featured on Homepage Cues' : 'Featured (Live — Sidebar & Purchasable)'}</span>
             </label>
           </div>
+          ${isFilament ? '' : `<p class="muted" style="margin:0;font-size:0.8rem">Owner request (2026-09-09): unticking this takes the whole category offline immediately — removed from the sidebar, its public page stops generating on the next publish, and its items can no longer be purchased even via a direct link or an old bookmark. Draft status has the same effect right now; use whichever reads more naturally for what you're doing.</p>`}
         </div>
 
         ${isFilament ? renderFilamentSections(p) : renderCategorySections(p)}
