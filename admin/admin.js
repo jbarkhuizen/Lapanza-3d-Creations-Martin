@@ -1590,6 +1590,11 @@ function renderCategorySections(p) {
       </div>
       <p class="muted" style="margin-top:0;font-size:0.85rem">Printed products shown on Toys / Homeware / Phones / Car Parts pages.</p>
       <div id="items-list">
+        <!-- Row-card action-button standard -- see the identical comment
+             above colours-list. Each action line: label, then buttons
+             safe-to-dangerous left to right, danger always last; every
+             other kind of row-card-actions line (gallery, video) stays
+             its own line, never mixed with the button line. -->
         ${(p.items || []).map((item, i) => `
           <div class="row-card" data-item-index="${i}">
             <div class="row-card-actions">
@@ -1602,8 +1607,9 @@ function renderCategorySections(p) {
             </div>
             ${item._isNew ? '' : `
             <div class="row-card-actions" data-video-panel="${escapeAttr(item.id)}">
-              ${item.videoUrl ? `<a class="btn small btn-ghost" href="${escapeAttr(item.videoUrl)}" target="_blank" rel="noopener">View video</a><button class="btn small btn-danger" data-action="video-remove" type="button">Remove video</button>` : ''}
+              ${item.videoUrl ? `<a class="btn small btn-ghost" href="${escapeAttr(item.videoUrl)}" target="_blank" rel="noopener">View video</a>` : ''}
               <button class="btn small" data-action="video-add" type="button">${item.videoUrl ? 'Replace video' : '+ Add video (MP4/WebM, max 50MB)'}</button>
+              ${item.videoUrl ? '<button class="btn small btn-danger" data-action="video-remove" type="button">Remove video</button>' : ''}
               <input type="file" class="hidden" accept="video/mp4,video/webm" data-video-input="${escapeAttr(item.id)}" />
             </div>`}
             <div class="grid-2">
