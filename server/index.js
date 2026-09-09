@@ -185,6 +185,7 @@ import {
   deleteDropshipListing,
   bulkImportRemainingProducts,
   migrateGranularCategoriesToGroups,
+  disableAllDropshipItems,
 } from './esquire.js';
 import {
   listPlatforms,
@@ -2733,6 +2734,29 @@ app.post('/api/esquire/migrate-categories', requireAuth, async (req, res) => {
       username: req.adminUsername,
       ...requestMeta(req),
       detail: `Esquire category migration: ${result.migrated} listing(s) regrouped into umbrella categories, ${result.categoriesRemoved} empty per-supplier-category page(s) removed`,
+    });
+    res.json({ ...result, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Kill switch (owner report 2026-09-09: the full Esquire import appears to
+// have crashed the site). Disables everything at both menu level (every
+// category holding a dropship item -> draft, hidden from nav/no page/
+// blocked at checkout) and product level (every dropship item unlisted +
+// unavailable) -- reversible, not a delete, so a "re-enable" pass later
+// only needs to flip statuses back.
+app.post('/api/esquire/disable-all', requireAuth, async (req, res) => {
+  try {
+    const result = disableAllDropshipItems();
+    const publishWarning = result.categoriesDisabled > 0 || result.itemsDisabled > 0 ? await publishCatalog() : undefined;
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.CATALOG_UPDATED,
+      adminId: req.adminId,
+      username: req.adminUsername,
+      ...requestMeta(req),
+      detail: `Esquire kill switch: ${result.categoriesDisabled} categor${result.categoriesDisabled === 1 ? 'y' : 'ies'} set to draft, ${result.itemsDisabled} item(s) unlisted/unavailable, ${result.listingsDisabled} listing(s) deactivated`,
     });
     res.json({ ...result, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {

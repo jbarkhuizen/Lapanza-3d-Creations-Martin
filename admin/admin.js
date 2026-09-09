@@ -6638,12 +6638,29 @@ async function renderDropshipListings() {
 
   $('#view-dropship-listings').innerHTML = `
     <p class="muted" style="margin:0 0 0.75rem;font-size:0.88rem">Everything currently offered for sale from Esquire. Cost/availability refresh automatically on every sync (daily, or Refresh from Esquire on the Browse Feed page) -- a supplier-side out-of-stock auto-deactivates the row here and unlists the item on the site.</p>
+    <div class="panel stack gap-2" style="border-color:var(--danger,#c24b28);margin-bottom:0.75rem">
+      <div class="section-head"><h3>Kill Switch</h3></div>
+      <p class="muted" style="margin:0;font-size:0.85rem">Immediately disables EVERY dropship item and category from the site (drafted, unlisted, unavailable, blocked at checkout) without deleting anything -- for when something needs to come down fast. Reversible: re-publish each category and re-activate each listing individually once ready.</p>
+      <div><button class="btn btn-danger" id="esquire-disable-all" type="button">Disable ALL Esquire items now</button></div>
+    </div>
     <div class="panel table-wrap">
       <table class="catalog">
         <thead><tr><th></th><th>Product</th><th>Code</th><th style="text-align:right">Cost</th><th style="text-align:right">Margin</th><th style="text-align:right">Selling Price</th><th>Status</th><th></th></tr></thead>
         <tbody>${rows || '<tr><td colspan="8"><div class="empty">Nothing imported yet -- use Browse Feed</div></td></tr>'}</tbody>
       </table>
     </div>`;
+
+  $('#esquire-disable-all').addEventListener('click', async () => {
+    if (!confirm('Disable EVERY Esquire item and category right now? This drafts every dropship category and unlists/unavailables every dropship item, site-wide. Reversible, but immediate and total.')) return;
+    try {
+      const result = await api('/api/esquire/disable-all', { method: 'POST' });
+      toast(`Disabled ${result.categoriesDisabled} categor${result.categoriesDisabled === 1 ? 'y' : 'ies'}, ${result.itemsDisabled} item(s), ${result.listingsDisabled} listing(s)`);
+      await refreshProducts();
+      await renderDropshipListings();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
 
   $$('#view-dropship-listings .dl-margin').forEach((input) => {
     input.addEventListener('change', async () => {

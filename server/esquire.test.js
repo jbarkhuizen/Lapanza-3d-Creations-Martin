@@ -401,3 +401,49 @@ test('migrateGranularCategoriesToGroups regroups old one-per-Esquire-category li
   assert.strictEqual(second.categoriesRemoved, 0);
   db.close();
 });
+
+test('disableAllDropshipItems drafts every category holding a dropship item, unlists+unavailables every dropship item, and deactivates every listing -- reversibly, not a delete', async (t) => {
+  await withTempCwd(t);
+  const db = openDb(':memory:');
+  const { syncEsquireProducts, createDropshipListing, disableAllDropshipItems, listDropshipListings } = await import(`./esquire.js?t=${Date.now()}`);
+  const { loadCatalog, upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+  updateSettings({ esquireFeedUrl: 'https://api.esquire.co.za/api/DataFeed?u=x&p=y&t=xml&m=10' }, db);
+  await syncEsquireProducts({
+    fetcher: fakeFetcher(sampleFeedXml([{ code: 'A1', name: 'Mouse', category: 'Wireless Mouse', cost: 100 }])),
+    db,
+  });
+  createDropshipListing({ esquireProductCode: 'A1', categorySlug: 'computer-accessories', categoryName: 'Computer Accessories', marginPercent: 10 }, db);
+
+  // An unrelated, entirely hand-made category with no dropship items in
+  // it must be left completely untouched.
+  upsertProduct({ id: 'p2', kind: 'category', slug: 'toys', name: 'Toys', status: 'published', featured: true, items: [{ id: 'i1', name: 'Handmade Toy', sku: 'HAND-1', price: '50' }] }, db);
+
+  const result = disableAllDropshipItems(db);
+  assert.strictEqual(result.categoriesDisabled, 1);
+  assert.strictEqual(result.itemsDisabled, 1);
+  assert.strictEqual(result.listingsDisabled, 1);
+
+  const catalog = loadCatalog();
+  const computerAccessories = catalog.products.find((p) => p.slug === 'computer-accessories');
+  assert.strictEqual(computerAccessories.status, 'draft');
+  assert.strictEqual(computerAccessories.items[0].listed, false);
+  assert.strictEqual(computerAccessories.items[0].available, false);
+  // Not a delete -- the item, its sku/price/dropship flag, and the
+  // category's name/slug are all still exactly there.
+  assert.strictEqual(computerAccessories.items[0].sku, 'A1');
+  assert.strictEqual(computerAccessories.items[0].dropship, true);
+  assert.strictEqual(computerAccessories.name, 'Computer Accessories');
+
+  const toys = catalog.products.find((p) => p.slug === 'toys');
+  assert.strictEqual(toys.status, 'published', 'a category with no dropship items is untouched');
+  assert.strictEqual(toys.items[0].listed !== false, true);
+
+  assert.strictEqual(listDropshipListings(db)[0].active, false);
+
+  // Re-running is a no-op -- already disabled.
+  const second = disableAllDropshipItems(db);
+  assert.strictEqual(second.categoriesDisabled, 0);
+  assert.strictEqual(second.itemsDisabled, 0);
+  assert.strictEqual(second.listingsDisabled, 0);
+  db.close();
+});

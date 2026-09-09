@@ -551,3 +551,46 @@ function slugifyFallback(value) {
       .replace(/^-|-$/g, '') || 'uncategorized'
   );
 }
+
+// Kill switch (owner report 2026-09-09: the full Esquire import appears to
+// have crashed the site -- disabling everything at both levels while that
+// gets investigated, without deleting any data). "Menu level" = every
+// category that holds a dropship item goes to `status: 'draft'` (the same
+// gate generate-pages.mjs/site.js's nav/orders.js's checkout backstop
+// already enforce for any other draft category -- hidden from the
+// sidebar, no public page, blocked at checkout even via a stale link).
+// "Product level" = every dropship item itself, in EVERY category
+// regardless of its dropship_listings row (belt-and-suspenders against
+// any drift between the two), gets unlisted + unavailable. Every
+// dropship_listings row is marked inactive too, so the daily sync job's
+// resyncDropshipListings() (which only touches active rows) leaves
+// everything alone until the owner deliberately re-enables it -- this is
+// reversible, not a delete.
+export function disableAllDropshipItems(db = getDb()) {
+  const catalog = loadCatalog();
+  let categoriesDisabled = 0;
+  let itemsDisabled = 0;
+
+  for (const product of catalog.products) {
+    if (product.kind !== 'category') continue;
+    const items = product.items || [];
+    const hasDropship = items.some((i) => i.dropship === true);
+    if (!hasDropship) continue;
+    if (product.status !== 'draft') {
+      product.status = 'draft';
+      categoriesDisabled += 1;
+    }
+    product.items = items.map((item, i) => {
+      if (!item.dropship) return item;
+      if (item.listed === false && item.available === false) return item;
+      itemsDisabled += 1;
+      return normalizeItem({ ...item, listed: false, available: false }, i);
+    });
+  }
+  saveCatalog(catalog, db);
+
+  const now = new Date().toISOString();
+  const { changes: listingsDisabled } = db.prepare("UPDATE dropship_listings SET active = 0, updated_at = ? WHERE active = 1").run(now);
+
+  return { categoriesDisabled, itemsDisabled, listingsDisabled };
+}

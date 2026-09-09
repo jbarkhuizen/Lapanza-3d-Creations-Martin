@@ -2204,6 +2204,36 @@ test('POST /api/esquire/bulk-import requires auth and imports every remaining ca
   assert.strictEqual(second.body.imported, 0);
 });
 
+test('POST /api/esquire/disable-all requires auth and drafts every dropship category + unlists/unavailables every dropship item, reversibly', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  assert.strictEqual((await request(app).post('/api/esquire/disable-all')).status, 401);
+
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  await request(app).post('/api/products').set('Cookie', adminCookie).send({
+    name: 'Computer Accessories',
+    slug: 'computer-accessories',
+    status: 'published',
+    featured: true,
+    items: [{ name: 'Test Widget', sku: 'DA-1', price: '110', stockQty: 999, available: true, listed: true, dropship: true, esquireProductCode: 'DA1' }],
+  });
+
+  const res = await request(app).post('/api/esquire/disable-all').set('Cookie', adminCookie);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.categoriesDisabled, 1);
+  assert.strictEqual(res.body.itemsDisabled, 1);
+
+  const products = await request(app).get('/api/products').set('Cookie', adminCookie);
+  const category = products.body.products.find((p) => p.slug === 'computer-accessories');
+  assert.strictEqual(category.status, 'draft');
+  assert.strictEqual(category.items[0].listed, false);
+  assert.strictEqual(category.items[0].available, false);
+  assert.strictEqual(category.items[0].sku, 'DA-1', 'not deleted -- still there, just disabled');
+});
+
 test('checkout adds the flat dropship fee for a cart containing a dropship item, on top of any courier fee, and the supplier-ordered tick works', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
