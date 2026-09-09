@@ -390,6 +390,25 @@ table.catalog tbody tr:hover { background: var(--bg-soft); }
 table.todo-table th, table.todo-table td { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
 table.todo-table .todo-inline-control { padding: 0.28rem 0.4rem; font-size: 0.82rem; }
 table.todo-table th[data-sort] { cursor: pointer; user-select: none; white-space: nowrap; }
+
+/* Product Catalog table (owner report 2026-09-09): auto table-layout gave
+   short-content columns (Kind/Status/Updated -- a single word, a badge, a
+   date) the same leftover-width share as the content-heavy ones, so on a
+   wide screen every row's real information sat bunched at the left of
+   each oversized cell with dead space stretching off to the right --
+   table.catalog itself WAS already full-width, this is about how that
+   width got divided up. table-layout: fixed with explicit percentages
+   fixes the proportions; scoped to #view-catalog specifically so every
+   other table.catalog page (Orders, Clients, Stock Management, ...) keeps
+   its own auto-sized columns untouched. */
+#view-catalog table.catalog { table-layout: fixed; }
+#view-catalog table.catalog th:nth-child(1), #view-catalog table.catalog td:nth-child(1) { width: 28%; }
+#view-catalog table.catalog th:nth-child(2), #view-catalog table.catalog td:nth-child(2) { width: 10%; }
+#view-catalog table.catalog th:nth-child(3), #view-catalog table.catalog td:nth-child(3) { width: 10%; }
+#view-catalog table.catalog th:nth-child(4), #view-catalog table.catalog td:nth-child(4) { width: 32%; }
+#view-catalog table.catalog th:nth-child(5), #view-catalog table.catalog td:nth-child(5) { width: 15%; }
+#view-catalog table.catalog th:nth-child(6), #view-catalog table.catalog td:nth-child(6) { width: 5%; }
+#view-catalog table.catalog td { word-wrap: break-word; }
 table.todo-table th[data-sort]:hover { color: var(--text); }
 table.todo-table th.sort-active { color: var(--text); }
 table.todo-table .sort-arrow { font-size: 0.65em; opacity: 0.7; }
