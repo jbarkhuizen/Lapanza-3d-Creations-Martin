@@ -321,16 +321,21 @@ function escapeAttr(value) {
   })[c]);
 }
 
-function addToCartButton({ productId, name, price, image, weight, extraClass = 'w-full' }) {
+function addToCartButton({ productId, name, price, image, weight, dropship = false, extraClass = 'w-full' }) {
   // Weight is grams end to end (matches filament_colours.weight_g /
   // order_items.weight / cart.js) so the cart's total-weight math and the
   // server's shipping-bracket matching agree with what's shown here.
+  // dropship (owner request 2026-09-09): read by cart.js to store the flag
+  // on the cart line, so checkout-entry.js's client-side total preview can
+  // add the flat dropship shipping fee BEFORE the customer submits --
+  // without it, the price shown here would silently disagree with what
+  // createOrder actually charges server-side.
   return `<button type="button" class="${extraClass} mt-2 text-xs font-semibold bg-charcoal text-cream rounded-full px-3 py-2 hover:bg-terracotta transition-colors"
             data-add-to-cart
             data-product-id="${escapeAttr(productId)}"
             data-name="${escapeAttr(name)}"
             data-price="${parsePrice(price)}"
-            data-weight="${Number(weight) || 0}"
+            data-weight="${Number(weight) || 0}"${dropship ? '\n            data-dropship="true"' : ''}
             data-image="${escapeAttr(image || '')}">Add to Cart</button>`;
 }
 
@@ -628,6 +633,7 @@ function catalogueItems(label, items, categorySlug, depth = 0) {
                         price: item.price,
                         image: galleryImages[0] || '',
                         weight: item.shippingWeight ?? item.weight,
+                        dropship: item.dropship === true,
                       })
                     : ''
                 }
@@ -976,6 +982,7 @@ ${shellStart({ depth: 1 })}
             price: item.price,
             image: images[0] || '',
             weight: item.shippingWeight ?? item.weight,
+            dropship: item.dropship === true,
           }) : ''}
         </div>
       </div>

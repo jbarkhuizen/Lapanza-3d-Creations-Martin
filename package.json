@@ -3,7 +3,7 @@
   "private": true,
   "version": "2.0.0",
   "type": "module",
-  "description": "Lapanza 3D Creative Lab \u2014 professional site",
+  "description": "Lapanza 3D Creative Lab — professional site",
   "scripts": {
     "dev": "vite",
     "dev:site": "vite",
@@ -24,6 +24,7 @@
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
+    "fast-xml-parser": "^5.11.1",
     "gsap": "^3.12.7",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.5",

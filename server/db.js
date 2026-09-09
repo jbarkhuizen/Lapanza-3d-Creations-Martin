@@ -429,6 +429,44 @@ export function ensureSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_adverts_publish_date ON adverts (publish_date);
 
+    -- Dropship (Esquire) module (owner request 2026-09-09). esquire_products
+    -- is a plain cache of the supplier's XML feed -- refreshed wholesale on
+    -- every sync (server/esquire.js), never hand-edited. cost_rand is always
+    -- fetched with the feed's own m= margin param forced to 0, so this is
+    -- true supplier cost, never a pre-marked-up price (the owner sets his
+    -- own margin, see dropship_listings below). available reflects whether
+    -- the SKU was present in the most recent sync -- this supplier's feed
+    -- appears to omit out-of-stock items entirely rather than flagging them,
+    -- so "missing from the latest pull" IS the out-of-stock signal here.
+    CREATE TABLE IF NOT EXISTS esquire_products (
+      code TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT '',
+      summary TEXT NOT NULL DEFAULT '',
+      cost_rand REAL NOT NULL DEFAULT 0,
+      image_url TEXT NOT NULL DEFAULT '',
+      available INTEGER NOT NULL DEFAULT 1,
+      last_synced_at TEXT NOT NULL
+    );
+
+    -- The owner's curated subset actually offered for sale -- importing one
+    -- of these creates/updates a real item inside a catalog.json category
+    -- product (server/store.js), tagged with esquireProductCode so a later
+    -- sync can find it again and refresh cost/availability/image. Deleting
+    -- a listing here never deletes the esquire_products cache row it points
+    -- at, only the owner's decision to sell it.
+    CREATE TABLE IF NOT EXISTS dropship_listings (
+      id TEXT PRIMARY KEY,
+      esquire_product_code TEXT NOT NULL REFERENCES esquire_products(code),
+      category_slug TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      margin_percent REAL NOT NULL DEFAULT 10,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_dropship_listings_code ON dropship_listings (esquire_product_code);
+
     -- Phase 4: marketing campaigns. Separate from newsletter_subscribers
     -- (the audience list) -- these are the actual messages sent, with a
     -- compose -> approve -> send lifecycle.
@@ -736,6 +774,17 @@ function ensurePromoColumns(db) {
     db.exec("ALTER TABLE orders ADD COLUMN pudo_locker_name TEXT NOT NULL DEFAULT ''");
     db.exec("ALTER TABLE orders ADD COLUMN pudo_locker_address TEXT NOT NULL DEFAULT ''");
     db.exec("ALTER TABLE orders ADD COLUMN customer_notes TEXT NOT NULL DEFAULT ''");
+  }
+  // Owner request (2026-09-09): dropship (Esquire) orders. dropship_fee is
+  // the flat add-on already folded into shipping_price at order creation --
+  // kept as its own column too so the order detail/invoice/packing-slip can
+  // show it as a separate line instead of an opaque shipping total.
+  // supplier_ordered_at is a manual tick (same independent-fact pattern as
+  // collected_at/packed_at) for "I've actually placed this with Esquire" --
+  // there's no order-submission API in the feed, so this stays human-only.
+  if (!hasColumn(db, 'PRAGMA table_info(orders)', 'dropship_fee')) {
+    db.exec('ALTER TABLE orders ADD COLUMN dropship_fee REAL NOT NULL DEFAULT 0');
+    db.exec('ALTER TABLE orders ADD COLUMN supplier_ordered_at TEXT');
   }
 }
 

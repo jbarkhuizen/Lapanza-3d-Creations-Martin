@@ -251,6 +251,7 @@ export function mountCartUI() {
       price: btn.dataset.price,
       image: btn.dataset.image,
       weight: btn.dataset.weight,
+      dropship: btn.dataset.dropship === 'true',
     });
     gsap.fromTo(badge, { scale: 1.5 }, { scale: 1, duration: 0.3, ease: 'back.out(3)' });
     showAddedToCartToast();

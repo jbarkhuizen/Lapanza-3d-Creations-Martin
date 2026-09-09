@@ -54,7 +54,7 @@ import {
 import { syncPublicJson, readCategoryProducts } from './export.js';
 import { formatRand } from './money.js';
 import { renderInvoiceHtml } from './invoice.js';
-import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, removeItemImage, reorderItemImages } from './store.js';
+import { saveCatalog, getProduct, upsertProduct, deleteProduct, addItemImage, removeItemImage, reorderItemImages, normalizeItem, normalizeItems } from './store.js';
 import { sanitizeRichText } from './rich-text.js';
 import { renderPackingSlipHtml } from './packing-slip.js';
 import { listInstructionFiles, deleteInstructionFile, uploadInstructionFile } from './instruction-files.js';
@@ -96,6 +96,7 @@ import {
   updateOrderStatus,
   setOrderCollected,
   setOrderPacked,
+  setOrderSupplierOrdered,
   setOrderInstructionFiles,
   updateOrderTracking,
   markOrderPaid,
@@ -141,7 +142,7 @@ import {
   sendCampaign as sendWhatsAppCampaign,
 } from './whatsapp-campaigns.js';
 import { isWhatsAppConfigured } from './whatsapp.js';
-import { startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob, startSpecialsSweepJob } from './jobs.js';
+import { startAutoBackupJob, startAuditLogPruneJob, startPageViewsPruneJob, startDesignFilePruneJob, startSpecialsSweepJob, startEsquireSyncJob } from './jobs.js';
 import { createBackup, listBackups, deleteBackup, getBackupPath, syncOffsite } from './backups.js';
 import { recordPageView, touchActiveVisitor, getActiveVisitors, getVisitSummary, recordEvent, getEventSummary, getTopPages } from './analytics.js';
 import { listInventory, bulkUpdateInventory, getReorderReport } from './inventory.js';
@@ -173,6 +174,16 @@ import {
 } from './in-house-filament.js';
 import { listExpenses, getExpense, createExpense, updateExpense, deleteExpense, migratePurchasesToExpenses, getFinancialOverview } from './expenses.js';
 import { listRepayments, createRepayment, updateRepayment, deleteRepayment, getAdvancesSummary } from './account-repayments.js';
+import {
+  syncEsquireProducts,
+  listEsquireProducts,
+  listEsquireCategories,
+  listDropshipListings,
+  getDropshipListing,
+  createDropshipListing,
+  updateDropshipListing,
+  deleteDropshipListing,
+} from './esquire.js';
 import {
   listPlatforms,
   getPlatform,
@@ -2652,6 +2663,90 @@ app.post(
   },
 );
 
+// ---- Dropship (Esquire) module (owner request 2026-09-09) ----
+// esquire_products is a plain cache of the supplier's feed, refreshed by
+// POST /api/esquire/sync (manual trigger here, also run automatically by
+// startEsquireSyncJob). dropship_listings is the owner's curated subset
+// actually offered for sale -- importing one creates a real item inside a
+// catalog.json category product (server/esquire.js), so it needs the same
+// publishCatalog() as every other catalog-mutating route.
+
+app.get('/api/esquire/categories', requireAuth, (_req, res) => {
+  res.json({ categories: listEsquireCategories() });
+});
+
+app.get('/api/esquire/products', requireAuth, (req, res) => {
+  res.json(listEsquireProducts({ q: req.query.q, category: req.query.category, page: req.query.page, pageSize: req.query.pageSize }));
+});
+
+app.post('/api/esquire/sync', requireAuth, async (req, res) => {
+  try {
+    const result = await syncEsquireProducts();
+    if (result.catalogChanged) await publishCatalog();
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.CATALOG_UPDATED,
+      adminId: req.adminId,
+      username: req.adminUsername,
+      ...requestMeta(req),
+      detail: `Esquire feed sync: ${result.syncedCount} products refreshed${result.delisted ? `, ${result.delisted} listing(s) auto-delisted (no longer available from supplier)` : ''}`,
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.get('/api/dropship-listings', requireAuth, (_req, res) => {
+  res.json({ listings: listDropshipListings() });
+});
+
+app.post('/api/dropship-listings', requireAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const categorySlug = body.categorySlug ? slugify(body.categorySlug) : slugify(body.categoryName || 'dropship');
+    const { listing } = createDropshipListing({
+      esquireProductCode: body.esquireProductCode,
+      categorySlug,
+      categoryName: body.categoryName,
+      marginPercent: body.marginPercent,
+    });
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Imported Esquire product "${listing.esquireProduct?.name}" into "${categorySlug}"` });
+    res.status(201).json({ listing, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.put('/api/dropship-listings/:id', requireAuth, async (req, res) => {
+  try {
+    const listing = updateDropshipListing(req.params.id, req.body || {});
+    if (!listing) return res.status(404).json({ error: 'Listing not found' });
+    const publishWarning = await publishCatalog();
+    recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Updated dropship listing "${listing.esquireProduct?.name}" (margin ${listing.marginPercent}%, ${listing.active ? 'active' : 'inactive'})` });
+    res.json({ listing, ...(publishWarning ? { publishWarning } : {}) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.delete('/api/dropship-listings/:id', requireAuth, async (req, res) => {
+  const existing = getDropshipListing(req.params.id);
+  const ok = deleteDropshipListing(req.params.id);
+  if (!ok) return res.status(404).json({ error: 'Listing not found' });
+  const publishWarning = await publishCatalog();
+  recordAuditEvent({ eventType: AUDIT_EVENTS.CATALOG_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Removed dropship listing "${existing?.esquireProduct?.name || req.params.id}"` });
+  res.json({ ok: true, ...(publishWarning ? { publishWarning } : {}) });
+});
+
+// Public (no auth) -- checkout needs this to display the flat dropship
+// shipping add-on before the customer is an authenticated admin, same
+// reasoning as /api/shipping-match. Only the computed fee, nothing else in
+// settings.
+app.get('/api/dropship-shipping-fee', (_req, res) => {
+  res.json({ fee: Number(getSettings().esquireFlatShippingFee) || 0 });
+});
+
 app.get('/api/expenses/:id', requireAuth, (req, res) => {
   const expense = getExpense(req.params.id);
   if (!expense) return res.status(404).json({ error: 'Expense not found' });
@@ -2775,6 +2870,17 @@ app.patch('/api/orders/:id/packed', requireAuth, (req, res) => {
   const order = setOrderPacked(req.params.id, packed);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.invoiceNumber || order.id}: marked ${packed ? 'packed' : 'NOT packed'}` });
+  res.json({ order });
+});
+
+// Owner request (2026-09-09): the Orders page's "Ordered from Esquire" tick
+// for dropship line items -- there's no order-submission API in the feed,
+// this is the only record that fulfillment was actually placed manually.
+app.patch('/api/orders/:id/supplier-ordered', requireAuth, (req, res) => {
+  const ordered = Boolean((req.body || {}).ordered);
+  const order = setOrderSupplierOrdered(req.params.id, ordered);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.invoiceNumber || order.id}: marked ${ordered ? 'ordered from Esquire' : 'NOT yet ordered from Esquire'}` });
   res.json({ order });
 });
 
@@ -3274,6 +3380,9 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'alertEmailFallbackEnabled', 'alertEmailFallbackThreshold', 'alertEmailFallbackWhatsappNumber',
     'alertEmailFallbackWhatsappTemplateName',
     'alertSecuritySpikeEnabled', 'alertSecuritySpikeThreshold', 'alertSecuritySpikeWindowMinutes',
+    // Dropship (Esquire) module (owner request 2026-09-09). All three are
+    // plain scalars, no shape guard needed.
+    'esquireFeedUrl', 'esquireFlatShippingFee', 'esquireDefaultMarginPercent',
   ];
   const patch = {};
   for (const key of allowed) {
@@ -3606,73 +3715,6 @@ function slugify(value) {
   );
 }
 
-// Single-item shape, shared by the bulk normalizeItems() below and the
-// per-item POST/PUT routes (so "Save item" on one GWM/Landrover/Toys/etc
-// row produces byte-identical output to what the old full-array
-// "Save product" always did -- no separate, driftable validation path).
-function normalizeItem(item, i) {
-  return {
-    id: item.id || randomUUID(),
-    name: item.name || `Item ${i + 1}`,
-    details: sanitizeRichText(item.details || ''),
-    material: item.material || '',
-    size: item.size || '',
-    finish: item.finish || '',
-    price: item.price || '',
-    // Owner request (2026-09-07): cost price for the Stock Value sheet.
-    // Admin-only -- export.js's public field lists deliberately omit it.
-    buyingPrice: Math.max(0, Math.round((Number(item.buyingPrice) || 0) * 100) / 100),
-    // Owner request (2026-09-08): printed items are costed by manufacturing
-    // cost (from the costing sheet), not a buying price -- kept distinct
-    // since some items (bought hardware/inserts) genuinely use buyingPrice
-    // instead. madeToOrder defaults true (item.madeToOrder !== false) since
-    // most category items today are printed on demand, not real stock on
-    // hand -- Stock Value excludes made-to-order rows from its totals so the
-    // "value of stock on hand" figure stops overstating printed-on-demand
-    // items. Also admin-only -- omitted from export.js's public field lists.
-    manufacturingCost: Math.max(0, Math.round((Number(item.manufacturingCost) || 0) * 100) / 100),
-    madeToOrder: item.madeToOrder !== false,
-    sku: item.sku || '',
-    imageUrl: item.imageUrl || '',
-    videoUrl: item.videoUrl || '', // review #25 (todo #164)
-    images: Array.isArray(item.images) ? item.images.filter(Boolean).slice(0, 5) : [],
-    // Car-parts only (GWM/Landrover) -- who designed the printable part, and
-    // which vehicle model(s) it fits. Stored as plain name strings (not ids
-    // into settings.carPartModelsLandrover/carPartModelsGwm), same
-    // convention as in_house_filament.brand/todo_items.category: renaming a
-    // list entry later must not retroactively change what's already saved
-    // on an item.
-    creator: item.creator || '',
-    models: Array.isArray(item.models) ? item.models.filter(Boolean) : [],
-    // Admin-only reference back to the original design's source page --
-    // never sent to the public categories.json export (see export.js).
-    sourceUrl: item.sourceUrl || '',
-    // Grams -- matches filament_colours.weight_g and every other weight
-    // field end to end (order_items.weight, cart.js, data-weight attrs).
-    weight: Number(item.weight) || 0,
-    // Separate from weight -- what actually drives shipping-bracket
-    // matching, so packaging etc can differ from the item's own weight.
-    shippingWeight: item.shippingWeight != null && item.shippingWeight !== '' ? Number(item.shippingWeight) : undefined,
-    // Unified with filament_colours.stock_qty for the Stock Management grid
-    // and inventory decrement -- category items had no numeric stock count
-    // before, only the `available` boolean.
-    stockQty: Math.max(0, Number(item.stockQty) || 0),
-    available: item.available !== false,
-    // Whether this item shows on its category page at all -- separate from
-    // `available` (which only controls whether the Add to Cart button shows;
-    // an unavailable-but-listed item still displays with an Enquire link).
-    // scripts/generate-pages.mjs and export.js's syncPublicJson() already
-    // filter/pass this through; it was just never settable from the admin UI.
-    listed: item.listed !== false,
-    sortOrder: item.sortOrder ?? i,
-  };
-}
-
-function normalizeItems(list) {
-  if (!Array.isArray(list)) return [];
-  return list.map((item, i) => normalizeItem(item, i));
-}
-
 function runGenerate() {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [path.join(root, 'scripts', 'generate-pages.mjs')], {
@@ -3749,6 +3791,7 @@ if (isMainModule) {
   startPageViewsPruneJob();
   startDesignFilePruneJob(); // #90 design-file retention
   startSpecialsSweepJob(publishCatalog); // Flash Stock Specials -- catches sell-out/expiry
+  startEsquireSyncJob(publishCatalog); // Dropship (Esquire) -- daily feed refresh
   // #43 safety net: catches restocks whose trigger path was missed (e.g.
   // direct DB edits) -- daily, same idiom as the
   // other in-process jobs.

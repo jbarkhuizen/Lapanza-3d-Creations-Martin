@@ -770,6 +770,31 @@ test('PUT /api/settings persists inHouseFilamentBrands -- previously allowlist-m
   assert.deepStrictEqual(getRes.body.settings.inHouseFilamentBrands, [{ id: 'sunlu', name: 'SunLu', active: true }]);
 });
 
+test('PUT /api/settings persists esquireFeedUrl/esquireFlatShippingFee/esquireDefaultMarginPercent -- same allowlist-missing bug, caught during this feature\'s own sandbox browser test', async (t) => {
+  // Regression test: the fee (99) and margin (10) defaults happened to
+  // match what the sandbox browser test tried to save, so a first pass
+  // looked successful even though the PUT route silently dropped all three
+  // fields (missing from the allowlist below) -- only checking the feed URL
+  // (empty by default, unlike the other two) actually caught it.
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const res = await request(app)
+    .put('/api/settings')
+    .set('Cookie', cookie)
+    .send({ esquireFeedUrl: 'https://api.esquire.co.za/api/DataFeed?u=me&p=secret&t=xml', esquireFlatShippingFee: 150, esquireDefaultMarginPercent: 15 });
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.settings.esquireFeedUrl, 'https://api.esquire.co.za/api/DataFeed?u=me&p=secret&t=xml');
+  assert.strictEqual(res.body.settings.esquireFlatShippingFee, 150);
+  assert.strictEqual(res.body.settings.esquireDefaultMarginPercent, 15);
+
+  const getRes = await request(app).get('/api/settings').set('Cookie', cookie);
+  assert.strictEqual(getRes.body.settings.esquireFeedUrl, 'https://api.esquire.co.za/api/DataFeed?u=me&p=secret&t=xml');
+});
+
 test('PUT /api/settings persists carPartModelsLandrover/carPartModelsGwm -- same allowlist-missing bug, caught during the add-flow browser test that added them', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
@@ -2079,4 +2104,136 @@ test('category item gallery: upload, delete by path, reorder; whole-item PUT can
     .send({ imagePath: second.body.images[1] });
   assert.strictEqual(removed.status, 200);
   assert.strictEqual(removed.body.images.length, 1);
+});
+
+// ---- Dropship (Esquire) module (owner request 2026-09-09) ----
+
+test('dropship-listings + esquire routes require admin auth; the shipping-fee lookup is public', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  assert.strictEqual((await request(app).get('/api/esquire/products')).status, 401);
+  assert.strictEqual((await request(app).get('/api/esquire/categories')).status, 401);
+  assert.strictEqual((await request(app).post('/api/esquire/sync')).status, 401);
+  assert.strictEqual((await request(app).get('/api/dropship-listings')).status, 401);
+  assert.strictEqual((await request(app).post('/api/dropship-listings')).status, 401);
+
+  const fee = await request(app).get('/api/dropship-shipping-fee');
+  assert.strictEqual(fee.status, 200);
+  assert.strictEqual(fee.body.fee, 99, 'matches the owner-set default in settings-defaults.js');
+});
+
+test('POST /api/esquire/sync fails cleanly with a clear error when no feed URL is configured yet', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const res = await request(app).post('/api/esquire/sync').set('Cookie', adminCookie);
+  assert.strictEqual(res.status, 400);
+  assert.match(res.body.error, /No Esquire feed URL configured/);
+});
+
+test('dropship-listings CRUD via the real routes, against a pre-seeded esquire_products cache row', async (t) => {
+  const { app, cleanup, tmpRoot } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  // Seed the cache directly rather than hitting the real supplier network
+  // from a test -- esquire.test.js already covers syncEsquireProducts()
+  // itself in full via an injected fetcher.
+  getDb().prepare(
+    `INSERT INTO esquire_products (code, name, category, summary, cost_rand, image_url, available, last_synced_at)
+     VALUES ('T1', 'Test Widget', 'Test Cat', 'A widget', 100, 'https://api.esquire.co.za/img/t1.jpg', 1, ?)`,
+  ).run(new Date().toISOString());
+
+  const created = await request(app).post('/api/dropship-listings').set('Cookie', adminCookie).send({
+    esquireProductCode: 'T1',
+    categoryName: 'Computer Gear',
+    marginPercent: 15,
+  });
+  assert.strictEqual(created.status, 201);
+  assert.strictEqual(created.body.listing.sellingPrice, 115);
+  const listingId = created.body.listing.id;
+
+  const list = await request(app).get('/api/dropship-listings').set('Cookie', adminCookie);
+  assert.strictEqual(list.body.listings.length, 1);
+
+  const updated = await request(app).put(`/api/dropship-listings/${listingId}`).set('Cookie', adminCookie).send({ marginPercent: 25 });
+  assert.strictEqual(updated.status, 200);
+  assert.strictEqual(updated.body.listing.sellingPrice, 125);
+
+  const deleted = await request(app).delete(`/api/dropship-listings/${listingId}`).set('Cookie', adminCookie);
+  assert.strictEqual(deleted.status, 200);
+  const afterDelete = await request(app).get('/api/dropship-listings').set('Cookie', adminCookie);
+  assert.strictEqual(afterDelete.body.listings.length, 0);
+});
+
+test('checkout adds the flat dropship fee for a cart containing a dropship item, on top of any courier fee, and the supplier-ordered tick works', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  // A dropship item created the same way esquire.js would (its own unit
+  // tests already cover the import path in full) -- this test's job is
+  // proving the checkout-side wiring, not re-proving the import itself.
+  const product = await request(app).post('/api/products').set('Cookie', adminCookie).send({
+    name: 'Computer Gear',
+    slug: 'computer-gear-99',
+    status: 'published',
+    featured: true,
+    items: [{ name: 'Test Widget', sku: 'T1-SKU', price: '115', stockQty: 999, available: true, listed: true, dropship: true, esquireProductCode: 'T1' }],
+  });
+  assert.strictEqual(product.body.product.items[0].dropship, true, 'dropship survives normalizeItem');
+  const productId = `category:computer-gear-99:T1-SKU`;
+
+  const checkout = await request(app).post('/api/checkout').send({
+    client: { firstName: 'Drop', lastName: 'Ship', email: 'dropship-fee@example.com' },
+    items: [{ productId, quantity: 1 }],
+    shippingMethod: 'collect', // R0 courier -- isolates the dropship fee itself
+    paymentMethod: 'manual_eft',
+  });
+  assert.strictEqual(checkout.status, 201);
+  const order = checkout.body.order;
+  assert.strictEqual(order.dropshipFee, 99);
+  assert.strictEqual(order.total, 115 + 99);
+  assert.strictEqual(order.supplierOrderedAt, null);
+
+  const ticked = await request(app).patch(`/api/orders/${order.id}/supplier-ordered`).set('Cookie', adminCookie).send({ ordered: true });
+  assert.strictEqual(ticked.status, 200);
+  assert.ok(ticked.body.order.supplierOrderedAt);
+
+  const unticked = await request(app).patch(`/api/orders/${order.id}/supplier-ordered`).set('Cookie', adminCookie).send({ ordered: false });
+  assert.strictEqual(unticked.body.order.supplierOrderedAt, null);
+
+  assert.strictEqual((await request(app).patch(`/api/orders/${order.id}/supplier-ordered`).send({ ordered: true })).status, 401);
+});
+
+test('an order with only non-dropship items never carries the flat dropship fee', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/filaments').set('Cookie', adminCookie).send({ name: 'PLA-DS', slug: 'pla-ds' });
+  const colour = await request(app)
+    .post(`/api/filaments/${filament.body.filament.id}/colours`)
+    .set('Cookie', adminCookie)
+    .send({ name: 'Red', sku: 'PLADS-RED', priceRand: 100, weightG: 100, stockQty: 10 });
+  const productId = `filament:pla-ds:${colour.body.filament.colours[0].sku}`;
+
+  const checkout = await request(app).post('/api/checkout').send({
+    client: { firstName: 'No', lastName: 'Dropship', email: 'no-dropship@example.com' },
+    items: [{ productId, quantity: 1 }],
+    shippingMethod: 'collect',
+    paymentMethod: 'manual_eft',
+  });
+  assert.strictEqual(checkout.status, 201);
+  assert.strictEqual(checkout.body.order.dropshipFee, 0);
+  assert.strictEqual(checkout.body.order.total, 100);
 });

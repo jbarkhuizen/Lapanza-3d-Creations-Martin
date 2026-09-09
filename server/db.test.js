@@ -24,6 +24,8 @@ test('ensureSchema creates every expected table', () => {
     'clients',
     'design_request_files',
     'design_requests',
+    'dropship_listings',
+    'esquire_products',
     'expense_invoices',
     'expense_items',
     'filament_colour_images',

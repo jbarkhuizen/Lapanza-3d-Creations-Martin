@@ -82,6 +82,24 @@ export const DEFAULT_SETTINGS = {
   expenseCategories: ['Printers & Equipment', 'Filament & Stock', 'Consumables', 'Operating Costs'],
   expensePaymentMethods: ['Absa Credit Card', 'Linandi Nedcard', 'Johan Nedcard', 'Johan FNB Card', 'Cheque ACC'],
 
+  // Dropship (Esquire) module (owner request 2026-09-09). esquireFeedUrl
+  // carries the owner's own u=/p= credentials embedded in the query string
+  // -- server-side only, NEVER added to PUBLIC_SETTINGS_KEYS in settings.js.
+  // The stored URL's own `m=` param is always overridden to 0 before the
+  // feed is actually fetched (server/esquire.js), so this is always true
+  // supplier cost, never a pre-marked-up price -- the owner wants to set and
+  // adjust the margin himself per item, not trust Esquire's own margin param.
+  esquireFeedUrl: '',
+  // Flat shipping add-on charged whenever a cart contains a dropship item,
+  // ON TOP OF the existing weight-bracket/fixed courier fee for any printed
+  // items in the same order (owner decision -- the feed has no per-item
+  // weight/dimensions, so there is no bracket to match against). Applied in
+  // orders.js's createOrder/createManualOrder regardless of shipping method.
+  esquireFlatShippingFee: 99,
+  // Pre-filled margin% when importing a new item from the Browse Feed page
+  // -- fully editable per item afterward, same as buyingPrice/manufacturingCost.
+  esquireDefaultMarginPercent: 10,
+
   // Phase 3: Print Job Costing tool (server/print-jobs.js) -- internal-only,
   // never affects storefront product pricing.
   markupPct: 0,

@@ -171,6 +171,13 @@ export function syncPublicJson(db, paths = defaultPaths()) {
           stockQty: Number(item.stockQty) || 0,
           available: item.available !== false,
           listed: item.listed !== false,
+          // Dropship (Esquire) module (owner request 2026-09-09): the flag
+          // alone is public-safe (it's what the generator uses to add
+          // data-dropship to the Add to Cart button, so checkout-entry.js
+          // can price the flat dropship fee in BEFORE the customer submits)
+          // -- esquireProductCode and marginPercent stay admin-only, never
+          // exported, so the supplier and margin are never exposed.
+          dropship: item.dropship === true,
         })),
       };
     });

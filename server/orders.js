@@ -102,6 +102,9 @@ export function resolveProductSnapshot(productId, db = getDb()) {
       price: parseRand(item.price),
       weight: Number(item.shippingWeight ?? item.weight) || 0,
       stockQty: Number(item.stockQty) || 0,
+      // Dropship (Esquire) module (owner request 2026-09-09) -- drives the
+      // flat dropship shipping fee below; never true for filament.
+      dropship: item.dropship === true,
     };
   }
   return null;
@@ -129,6 +132,8 @@ function rowToOrder(row) {
     trackingNumber: row.tracking_number,
     collectedAt: row.collected_at || null,
     packedAt: row.packed_at || null,
+    dropshipFee: row.dropship_fee || 0,
+    supplierOrderedAt: row.supplier_ordered_at || null,
     instructionFiles: (() => { try { return JSON.parse(row.instruction_files || '[]'); } catch { return []; } })(),
     pudoLockerName: row.pudo_locker_name || '',
     pudoLockerAddress: row.pudo_locker_address || '',
@@ -182,6 +187,18 @@ export function setOrderPacked(id, packed, db = getDb()) {
   const res = db
     .prepare('UPDATE orders SET packed_at = ?, updated_at = ? WHERE id = ?')
     .run(packed ? new Date().toISOString() : null, new Date().toISOString(), id);
+  return res.changes > 0 ? getOrder(id, db) : null;
+}
+
+// Owner request (2026-09-09): the Orders page's "Ordered from Esquire" tick
+// for dropship line items. Same independent-timestamp shape as
+// setOrderCollected/setOrderPacked -- there's no order-submission API in
+// the feed, so this is the only record that the owner actually placed the
+// order with the supplier.
+export function setOrderSupplierOrdered(id, ordered, db = getDb()) {
+  const res = db
+    .prepare('UPDATE orders SET supplier_ordered_at = ?, updated_at = ? WHERE id = ?')
+    .run(ordered ? new Date().toISOString() : null, new Date().toISOString(), id);
   return res.changes > 0 ? getOrder(id, db) : null;
 }
 
@@ -287,6 +304,15 @@ export function createOrder(
 
   const shippingPrice = shippingOption?.price || 0;
 
+  // Dropship (Esquire) module (owner request 2026-09-09): a flat add-on
+  // charged whenever the cart has any dropship item, ON TOP OF the
+  // courier/fixed fee above regardless of shipping method (owner decision --
+  // the supplier still has to ship it somewhere even on a "collect from
+  // store" or "own courier" order). Kept as its own column/variable rather
+  // than folded into shippingPrice so the invoice/packing-slip can show it
+  // as its own line instead of one opaque shipping total.
+  const dropshipFee = resolved.some((i) => i.dropship) ? Number(getSettings(db).esquireFlatShippingFee) || 0 : 0;
+
   // Backlog #60 (SITE-026): volume price breaks on filament. Configured
   // tiers (settings.volumeDiscounts, empty by default so the feature is
   // inert until the owner sets real numbers) apply the best matching
@@ -316,7 +342,7 @@ export function createOrder(
     promoDiscountAmount = computePromoDiscount(promo, subtotal - discountAmount);
   }
 
-  const total = Math.max(0, subtotal - discountAmount - promoDiscountAmount + shippingPrice);
+  const total = Math.max(0, subtotal - discountAmount - promoDiscountAmount + shippingPrice + dropshipFee);
 
   // Go-live duplicate guard (2026-09-03): an abandoned Payfast attempt sends
   // the customer back to checkout with a full cart, and each retry used to
@@ -359,10 +385,10 @@ export function createOrder(
     const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO orders
-        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, promo_code, promo_discount_amount, shipping_option_id, shipping_price, shipping_method, total, total_weight,
+        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, promo_code, promo_discount_amount, shipping_option_id, shipping_price, dropship_fee, shipping_method, total, total_weight,
          payment_method, payment_status, tracking_number, pudo_locker_name, pudo_locker_address, customer_notes, created_at, updated_at)
        VALUES
-        (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @discount_pct, @discount_amount, @promo_code, @promo_discount_amount, @shipping_option_id, @shipping_price, @shipping_method, @total, @total_weight,
+        (@id, @invoice_number, @client_id, 'pending_payment', @subtotal, @discount_pct, @discount_amount, @promo_code, @promo_discount_amount, @shipping_option_id, @shipping_price, @dropship_fee, @shipping_method, @total, @total_weight,
          @payment_method, 'pending', '', @pudo_locker_name, @pudo_locker_address, @customer_notes, @created_at, @updated_at)`,
     ).run({
       id: orderId,
@@ -373,6 +399,7 @@ export function createOrder(
       discount_amount: discountAmount,
       promo_code: promo ? promo.code : '',
       promo_discount_amount: promoDiscountAmount,
+      dropship_fee: dropshipFee,
       pudo_locker_name: cleanText(pudoLockerName, 200),
       pudo_locker_address: cleanText(pudoLockerAddress, 400),
       customer_notes: cleanText(customerNotes, 1000),
@@ -434,7 +461,7 @@ export function createManualOrder(
       const snap = resolveProductSnapshot(line.productId, db);
       if (!snap) throw new Error(`Product no longer available: ${line.productId}`);
       const quantity = Math.max(1, Number(line.quantity) || 1);
-      return { productId: line.productId, name: snap.name, price: snap.price, weight: snap.weight, quantity };
+      return { productId: line.productId, name: snap.name, price: snap.price, weight: snap.weight, quantity, dropship: snap.dropship };
     }
     // Free-text line (a one-off custom job not in the catalog) -- price is
     // admin-entered and trusted as-is. No stock is tracked for these: the
@@ -444,7 +471,7 @@ export function createManualOrder(
     if (!description) throw new Error('Each line item needs either a product or a description');
     const quantity = Math.max(1, Number(line.quantity) || 1);
     const price = Math.max(0, Math.round(Number(line.unitPrice) || 0));
-    return { productId: `manual:${randomUUID()}`, name: description, price, weight: 0, quantity };
+    return { productId: `manual:${randomUUID()}`, name: description, price, weight: 0, quantity, dropship: false };
   });
 
   const subtotal = resolved.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -472,9 +499,13 @@ export function createManualOrder(
     shippingPrice = Math.max(0, Math.round(Number(manualShippingPrice) || 0));
   }
 
+  // Same flat dropship add-on as online checkout (createOrder above) --
+  // manual orders (walk-in/WhatsApp) can include a dropship item too.
+  const dropshipFee = resolved.some((i) => i.dropship) ? Number(getSettings(db).esquireFlatShippingFee) || 0 : 0;
+
   const discountPctClamped = Math.min(100, Math.max(0, Number(discountPct) || 0));
   const discountAmount = Math.round(subtotal * (discountPctClamped / 100));
-  const total = Math.max(0, subtotal - discountAmount + shippingPrice);
+  const total = Math.max(0, subtotal - discountAmount + shippingPrice + dropshipFee);
 
   let clientDataUpdated = false;
   const tx = db.transaction(() => {
@@ -488,10 +519,10 @@ export function createManualOrder(
     const paymentStatus = alreadyPaid ? 'paid' : 'pending';
     db.prepare(
       `INSERT INTO orders
-        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, shipping_option_id, shipping_price,
+        (id, invoice_number, client_id, status, subtotal, discount_pct, discount_amount, shipping_option_id, shipping_price, dropship_fee,
          shipping_method, total, total_weight, payment_method, payment_status, tracking_number, created_at, updated_at)
        VALUES
-        (@id, @invoice_number, @client_id, @status, @subtotal, @discount_pct, @discount_amount, @shipping_option_id, @shipping_price,
+        (@id, @invoice_number, @client_id, @status, @subtotal, @discount_pct, @discount_amount, @shipping_option_id, @shipping_price, @dropship_fee,
          @shipping_method, @total, @total_weight, @payment_method, @payment_status, '', @created_at, @updated_at)`,
     ).run({
       id: orderId,
@@ -503,6 +534,7 @@ export function createManualOrder(
       discount_amount: discountAmount,
       shipping_option_id: shippingOption?.id || null,
       shipping_price: shippingPrice,
+      dropship_fee: dropshipFee,
       shipping_method: resolvedShippingMethod,
       total,
       total_weight: totalWeight,

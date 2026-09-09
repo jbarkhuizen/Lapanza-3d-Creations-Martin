@@ -251,6 +251,18 @@ async function init() {
       if (siteSettings.googleMapsApiKey) initAddressAutocomplete(siteSettings.googleMapsApiKey);
     }
   } catch { /* no discount display -- server remains the authority */ }
+  // Dropship (Esquire) module (owner request 2026-09-09): a flat add-on
+  // createOrder charges whenever the cart has any dropship item, on top of
+  // the courier/fixed fee -- fetched here so the displayed total never
+  // disagrees with what checkout will actually charge. Fetch failure means
+  // 0 shown here; the server remains the authority regardless.
+  let dropshipFee = 0;
+  if (items.some((i) => i.dropship)) {
+    try {
+      const res = await fetch('/api/dropship-shipping-fee');
+      if (res.ok) dropshipFee = Number((await res.json()).fee) || 0;
+    } catch { /* server remains the authority */ }
+  }
   // Backlog #99: applied promo code. Like the volume discount above, this is
   // a display mirror -- the server re-validates the code and computes the
   // authoritative discount inside createOrder(). lastShippingPrice remembers
@@ -260,10 +272,15 @@ async function init() {
   let lastShippingPrice = 0;
   const orderTotal = (shippingPrice) => {
     lastShippingPrice = shippingPrice;
-    return Math.max(0, subtotal - volumeDiscountAmount - (appliedPromo?.discountAmount || 0) + shippingPrice);
+    return Math.max(0, subtotal - volumeDiscountAmount - (appliedPromo?.discountAmount || 0) + shippingPrice + dropshipFee);
   };
   document.getElementById('checkout-weight').textContent = `${weight}g`;
   document.getElementById('checkout-subtotal').textContent = formatPrice(subtotal);
+  const dropshipFeeRow = document.getElementById('checkout-dropship-fee-row');
+  if (dropshipFee > 0 && dropshipFeeRow) {
+    document.getElementById('checkout-dropship-fee').textContent = formatPrice(dropshipFee);
+    dropshipFeeRow.classList.remove('hidden');
+  }
 
   const promoInput = document.getElementById('checkout-promo-input');
   const promoNote = document.getElementById('checkout-promo-note');

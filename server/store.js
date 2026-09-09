@@ -3,6 +3,7 @@ import path from 'path';
 import { randomUUID } from 'crypto';
 import { getDb } from './db.js';
 import { syncPublicJson } from './export.js';
+import { sanitizeRichText } from './rich-text.js';
 
 // cwd-based (not __dirname) so tests can isolate via process.chdir() --
 // computed fresh on every call (not cached at module scope) because a
@@ -140,6 +141,87 @@ export function reorderItemImages(productId, itemId, orderedPaths, db = getDb())
 export function itemGalleryPaths(item) {
   if (Array.isArray(item.images) && item.images.length) return item.images;
   return item.imageUrl ? [item.imageUrl] : [];
+}
+
+// Single-item shape, shared by index.js's bulk normalizeItems() below, its
+// per-item POST/PUT routes (so "Save item" on one GWM/Landrover/Toys/etc
+// row produces byte-identical output to what the old full-array "Save
+// product" always did), and esquire.js's dropship import/resync -- moved
+// here (out of index.js) specifically so esquire.js can normalize an item
+// without importing index.js itself, which would create a circular import
+// (index.js already imports esquire.js for its routes; every other
+// cross-module wiring in this app avoids importing back into index.js the
+// same way, see jobs.js's `publish` parameter).
+export function normalizeItem(item, i) {
+  return {
+    id: item.id || randomUUID(),
+    name: item.name || `Item ${i + 1}`,
+    details: sanitizeRichText(item.details || ''),
+    material: item.material || '',
+    size: item.size || '',
+    finish: item.finish || '',
+    price: item.price || '',
+    // Owner request (2026-09-07): cost price for the Stock Value sheet.
+    // Admin-only -- export.js's public field lists deliberately omit it.
+    buyingPrice: Math.max(0, Math.round((Number(item.buyingPrice) || 0) * 100) / 100),
+    // Owner request (2026-09-08): printed items are costed by manufacturing
+    // cost (from the costing sheet), not a buying price -- kept distinct
+    // since some items (bought hardware/inserts) genuinely use buyingPrice
+    // instead. madeToOrder defaults true (item.madeToOrder !== false) since
+    // most category items today are printed on demand, not real stock on
+    // hand -- Stock Value excludes made-to-order rows from its totals so the
+    // "value of stock on hand" figure stops overstating printed-on-demand
+    // items. Also admin-only -- omitted from export.js's public field lists.
+    manufacturingCost: Math.max(0, Math.round((Number(item.manufacturingCost) || 0) * 100) / 100),
+    madeToOrder: item.madeToOrder !== false,
+    sku: item.sku || '',
+    imageUrl: item.imageUrl || '',
+    videoUrl: item.videoUrl || '', // review #25 (todo #164)
+    images: Array.isArray(item.images) ? item.images.filter(Boolean).slice(0, 5) : [],
+    // Car-parts only (GWM/Landrover) -- who designed the printable part, and
+    // which vehicle model(s) it fits. Stored as plain name strings (not ids
+    // into settings.carPartModelsLandrover/carPartModelsGwm), same
+    // convention as in_house_filament.brand/todo_items.category: renaming a
+    // list entry later must not retroactively change what's already saved
+    // on an item.
+    creator: item.creator || '',
+    models: Array.isArray(item.models) ? item.models.filter(Boolean) : [],
+    // Admin-only reference back to the original design's source page --
+    // never sent to the public categories.json export (see export.js).
+    sourceUrl: item.sourceUrl || '',
+    // Grams -- matches filament_colours.weight_g and every other weight
+    // field end to end (order_items.weight, cart.js, data-weight attrs).
+    weight: Number(item.weight) || 0,
+    // Separate from weight -- what actually drives shipping-bracket
+    // matching, so packaging etc can differ from the item's own weight.
+    shippingWeight: item.shippingWeight != null && item.shippingWeight !== '' ? Number(item.shippingWeight) : undefined,
+    // Unified with filament_colours.stock_qty for the Stock Management grid
+    // and inventory decrement -- category items had no numeric stock count
+    // before, only the `available` boolean.
+    stockQty: Math.max(0, Number(item.stockQty) || 0),
+    available: item.available !== false,
+    // Whether this item shows on its category page at all -- separate from
+    // `available` (which only controls whether the Add to Cart button shows;
+    // an unavailable-but-listed item still displays with an Enquire link).
+    // scripts/generate-pages.mjs and export.js's syncPublicJson() already
+    // filter/pass this through; it was just never settable from the admin UI.
+    listed: item.listed !== false,
+    sortOrder: item.sortOrder ?? i,
+    // Dropship (Esquire) module (owner request 2026-09-09). dropship marks
+    // an item as supplier-fulfilled rather than printed/stocked in-house;
+    // esquireProductCode/marginPercent are admin-only (never in export.js's
+    // public field lists, same as buyingPrice/manufacturingCost) so a
+    // customer or competitor can never see which items are dropshipped, the
+    // supplier's product code, or the margin applied over its cost.
+    dropship: item.dropship === true,
+    esquireProductCode: item.esquireProductCode || '',
+    marginPercent: Number(item.marginPercent) || 0,
+  };
+}
+
+export function normalizeItems(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((item, i) => normalizeItem(item, i));
 }
 
 export { now, randomUUID };

@@ -56,7 +56,7 @@ export function getCartTotalWeight() {
   return readRaw().reduce((sum, item) => sum + (Number(item.weight) || 0) * item.quantity, 0);
 }
 
-export function addItem({ productId, name, price, image, weight, quantity = 1 }) {
+export function addItem({ productId, name, price, image, weight, quantity = 1, dropship = false }) {
   if (!productId) return getCart();
   // Backlog #113: decoupled event dispatch -- analytics.js listens for
   // 'lapanza:track' when loaded; on pages without it this is a no-op.
@@ -75,6 +75,11 @@ export function addItem({ productId, name, price, image, weight, quantity = 1 })
       image: image || '',
       weight: Number(weight) || 0,
       quantity: Math.max(1, quantity),
+      // Dropship (Esquire) module (owner request 2026-09-09): read by
+      // checkout-entry.js to add the flat dropship shipping fee to the
+      // client-side total preview, so it matches what createOrder actually
+      // charges server-side.
+      dropship: Boolean(dropship),
     });
   }
   writeRaw(items);

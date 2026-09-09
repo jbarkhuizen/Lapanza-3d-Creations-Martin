@@ -309,6 +309,8 @@ function setRoute(route, { id } = {}) {
   show($('#view-finance-overview'), route === 'finance-overview');
   show($('#view-stock-value'), route === 'stock-value');
   show($('#view-account-repayments'), route === 'account-repayments');
+  show($('#view-dropship-browse'), route === 'dropship-browse');
+  show($('#view-dropship-listings'), route === 'dropship-listings');
   show($('#view-adverts'), route === 'adverts');
   show($('#view-platform-rules'), route === 'platform-rules');
   show($('#view-ad-calendar'), route === 'ad-calendar');
@@ -351,6 +353,8 @@ function setRoute(route, { id } = {}) {
     'finance-overview': ['Financial', 'Financial Overview'],
     'stock-value': ['Financial', 'Stock Value'],
     'account-repayments': ['Financial', 'Advances & Repayments'],
+    'dropship-browse': ['Dropship (Esquire)', 'Browse Feed'],
+    'dropship-listings': ['Dropship (Esquire)', 'Listings'],
     adverts: ['Advertise', 'Adverts'],
     'platform-rules': ['Advertise', 'Platform Rules'],
     'ad-calendar': ['Advertise', 'Calendar'],
@@ -809,6 +813,12 @@ function bindChrome() {
       } else if (btn.dataset.route === 'account-repayments') {
         setRoute('account-repayments');
         await renderAccountRepayments();
+      } else if (btn.dataset.route === 'dropship-browse') {
+        setRoute('dropship-browse');
+        await renderDropshipBrowse();
+      } else if (btn.dataset.route === 'dropship-listings') {
+        setRoute('dropship-listings');
+        await renderDropshipListings();
       } else if (btn.dataset.route === 'adverts') {
         setRoute('adverts');
         await renderAdverts();
@@ -3464,6 +3474,7 @@ const SETTINGS_SECTIONS = [
   { key: 'deposit-tiers', label: 'Quote Deposit Tiers' },
   { key: 'featured-products', label: 'Featured Products' },
   { key: 'print-costing', label: 'Print Job Costing Rates' },
+  { key: 'dropship', label: 'Dropship (Esquire)' },
 ];
 
 function settingsSectionWrap(key, label, innerHtml) {
@@ -3757,6 +3768,16 @@ async function renderSettings() {
           <button class="btn btn-primary" id="save-settings-print-costing" type="button">Save Print Job Costing Rates</button>
         </div>
       </div>`)}
+      ${settingsSectionWrap('dropship', 'Dropship (Esquire)', `
+      <div class="panel stack gap-3">
+        <p class="muted" style="margin:0;font-size:0.88rem;line-height:1.5">Powers Dropship (Esquire) → Browse Feed / Listings. The feed URL carries your own login credentials in it (from Esquire) — never share it. Sync always requests true supplier cost regardless of any margin in the URL itself; your margin is set per item under Listings (default below only pre-fills a new import).</p>
+        <label class="field"><span>Esquire Feed URL</span><input data-setting="esquireFeedUrl" type="password" autocomplete="off" value="${escapeAttr(s.esquireFeedUrl || '')}" placeholder="https://api.esquire.co.za/api/DataFeed?u=...&amp;p=...&amp;t=xml" /></label>
+        <div class="grid-2">
+          <label class="field"><span>Flat Dropship Shipping Fee (R)</span><span class="rand-input"><input data-setting="esquireFlatShippingFee" type="number" min="0" step="1" value="${escapeAttr(String(s.esquireFlatShippingFee ?? 99))}" /></span></label>
+          <label class="field"><span>Default Margin % (New Imports)</span><input data-setting="esquireDefaultMarginPercent" type="number" min="0" step="0.5" value="${escapeAttr(String(s.esquireDefaultMarginPercent ?? 10))}" /></label>
+        </div>
+        <div><button class="btn btn-primary" id="save-settings-dropship" type="button">Save Dropship (Esquire)</button></div>
+      </div>`)}
     </div>
   `;
 
@@ -3846,6 +3867,7 @@ async function renderSettings() {
   });
   wireScopedSettingsSave('operational-alerts', 'save-settings-operational-alerts', scopedSettingFieldsPatch);
   wireScopedSettingsSave('print-costing', 'save-settings-print-costing', scopedSettingFieldsPatch);
+  wireScopedSettingsSave('dropship', 'save-settings-dropship', scopedSettingFieldsPatch);
 
   // #60: tier add/remove -- static template, values typed by the admin.
   $('#vd-add')?.addEventListener('click', () => {
@@ -4195,10 +4217,17 @@ async function renderOrderDetail(id, editClient = false) {
           <tbody>${itemRows}</tbody>
         </table>
         <p style="text-align:right;margin-top:0.5rem">
-          Subtotal: ${formatRand(order.subtotal)} &middot; Shipping (${escapeHtml(order.shippingOption?.name || SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}): ${formatRand(order.shippingPrice)} &middot;
+          Subtotal: ${formatRand(order.subtotal)} &middot; Shipping (${escapeHtml(order.shippingOption?.name || SHIPPING_METHOD_LABELS[order.shippingMethod] || order.shippingMethod || '—')}): ${formatRand(order.shippingPrice)}${order.dropshipFee > 0 ? ` &middot; Dropship fee: ${formatRand(order.dropshipFee)}` : ''} &middot;
           <strong>Total: ${formatRand(order.total)}</strong> &middot; Weight: ${escapeHtml(String(order.totalWeight))}g
         </p>
       </div>
+
+      ${order.dropshipFee > 0 ? `
+      <div class="panel stack gap-2">
+        <div class="section-head"><h3>Dropship (Esquire)</h3></div>
+        <p class="muted" style="margin:0;font-size:0.85rem">This order includes at least one Esquire dropship item. There's no order-submission API for this supplier -- place the order yourself through Esquire's site, then tick below.</p>
+        <label class="field checkbox" style="margin:0"><input type="checkbox" id="order-supplier-ordered" ${order.supplierOrderedAt ? 'checked' : ''} /><span>Ordered from Esquire${order.supplierOrderedAt ? ` (${escapeHtml(formatDate(order.supplierOrderedAt))})` : ''}</span></label>
+      </div>` : ''}
 
       <div class="panel table-wrap">
         <div class="section-head"><h3>Payment Transactions</h3></div>
@@ -4210,6 +4239,17 @@ async function renderOrderDetail(id, editClient = false) {
     </div>`;
 
   $('#back-to-orders').addEventListener('click', async () => { setRoute('orders'); await renderOrders(); });
+
+  $('#order-supplier-ordered')?.addEventListener('change', async (e) => {
+    e.target.disabled = true;
+    try {
+      await api(`/api/orders/${order.id}/supplier-ordered`, { method: 'PATCH', body: JSON.stringify({ ordered: e.target.checked }) });
+      await renderOrderDetail(order.id);
+    } catch (ex) {
+      toast(ex.message);
+      e.target.disabled = false;
+    }
+  });
 
   // Client edit (owner request 2026-09-03): fixes wrong names/details right
   // from the order. Saves to the client RECORD (PUT /api/clients/:id,
@@ -6421,6 +6461,211 @@ async function renderAccountRepayments() {
   });
 
   if (state.editingRepayment) bindRepaymentForm(state.editingRepayment);
+}
+
+// ---- Dropship (Esquire) module (owner request 2026-09-09). Browse Feed
+// searches the synced supplier cache and imports a chosen product into an
+// existing (or brand-new) Lapanza category with an editable margin%;
+// Listings manages what's already been imported (margin, active/inactive,
+// remove). Both pages are read-mostly against server/esquire.js, which
+// already carries all the business logic -- these render functions are
+// just search/pagination/import-form plumbing on top. ----
+
+function blankImportForm(code) {
+  return { esquireProductCode: code, categorySlug: '', categoryName: '', marginPercent: Number(state.settings?.esquireDefaultMarginPercent) || 10 };
+}
+
+async function renderDropshipBrowse() {
+  state.dropshipBrowse = state.dropshipBrowse || { q: '', category: '', page: 1 };
+  state.importingCode = state.importingCode || null;
+  const st = state.dropshipBrowse;
+
+  const [{ categories }, results, { products: existingCategories }] = await Promise.all([
+    api('/api/esquire/categories'),
+    api(`/api/esquire/products?q=${encodeURIComponent(st.q)}&category=${encodeURIComponent(st.category)}&page=${st.page}&pageSize=30`),
+    api('/api/products'),
+  ]);
+
+  const form = state.importingCode ? blankImportForm(state.importingCode) : null;
+  if (form && state.importForm?.esquireProductCode === state.importingCode) Object.assign(form, state.importForm);
+  state.importForm = form;
+
+  const totalPages = Math.max(1, Math.ceil(results.total / results.pageSize));
+  const rows = results.products
+    .map(
+      (p) => `
+        <tr data-code="${escapeAttr(p.code)}">
+          <td>${p.imageUrl ? `<img src="${escapeAttr(p.imageUrl)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px" />` : '—'}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td class="muted" style="font-size:0.85rem">${escapeHtml(p.code)}</td>
+          <td>${escapeHtml(p.category)}</td>
+          <td style="text-align:right;white-space:nowrap">${formatRand(p.cost)}</td>
+          <td style="white-space:nowrap"><button class="btn small btn-primary" data-action="import" type="button">+ Import</button></td>
+        </tr>`,
+    )
+    .join('');
+
+  const importFormHtml = form
+    ? `
+      <div class="panel stack gap-3" style="max-width:600px;margin-top:0.75rem">
+        <div class="section-head"><h3>Import "${escapeHtml(results.products.find((p) => p.code === form.esquireProductCode)?.name || form.esquireProductCode)}"</h3></div>
+        <label class="field"><span>Category</span>
+          <select id="import-category">
+            <option value="">— new category —</option>
+            ${existingCategories.filter((p) => p.kind === 'category').map((p) => `<option value="${escapeAttr(p.slug)}" ${form.categorySlug === p.slug ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+          </select>
+        </label>
+        ${!form.categorySlug ? `<label class="field"><span>New Category Name</span><input id="import-category-name" value="${escapeAttr(form.categoryName)}" /></label>` : ''}
+        <label class="field" style="max-width:200px"><span>Margin %</span><input id="import-margin" type="number" min="0" step="0.5" value="${escapeAttr(String(form.marginPercent))}" /></label>
+        <div class="row-card-actions">
+          <button class="btn btn-primary" id="confirm-import" type="button">Import</button>
+          <button class="btn btn-ghost" id="cancel-import" type="button">Cancel</button>
+        </div>
+      </div>` : '';
+
+  $('#view-dropship-browse').innerHTML = `
+    <div class="toolbar">
+      <button class="btn btn-primary" id="esquire-sync-now" type="button">Refresh from Esquire</button>
+      <span class="muted">${escapeHtml(String(results.total))} product${results.total === 1 ? '' : 's'} in the synced cache</span>
+    </div>
+    <div class="grid-3" style="margin-top:0.75rem">
+      <label class="field"><span>Search</span><input id="db-search" value="${escapeAttr(st.q)}" placeholder="Name or code" /></label>
+      <label class="field"><span>Category</span>
+        <select id="db-category">
+          <option value="">All categories (${escapeHtml(String(categories.reduce((s, c) => s + c.count, 0)))})</option>
+          ${categories.map((c) => `<option value="${escapeAttr(c.category)}" ${st.category === c.category ? 'selected' : ''}>${escapeHtml(c.category)} (${c.count})</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    ${importFormHtml}
+    <div class="panel table-wrap" style="margin-top:0.75rem">
+      <table class="catalog">
+        <thead><tr><th></th><th>Name</th><th>Code</th><th>Category</th><th style="text-align:right">Cost</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="6"><div class="empty">No products match -- try Refresh from Esquire first if the cache is empty</div></td></tr>'}</tbody>
+      </table>
+    </div>
+    <div class="row-card-actions" style="justify-content:center;margin-top:0.5rem">
+      <button class="btn small" id="db-prev" type="button" ${st.page <= 1 ? 'disabled' : ''}>&larr; Prev</button>
+      <span class="muted">Page ${st.page} of ${totalPages}</span>
+      <button class="btn small" id="db-next" type="button" ${st.page >= totalPages ? 'disabled' : ''}>Next &rarr;</button>
+    </div>`;
+
+  $('#esquire-sync-now').addEventListener('click', async () => {
+    try {
+      const result = await api('/api/esquire/sync', { method: 'POST' });
+      toast(`Synced ${result.syncedCount} products${result.delisted ? `, ${result.delisted} listing(s) auto-delisted` : ''}`);
+      await renderDropshipBrowse();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+  $('#db-search').addEventListener('change', async (e) => { st.q = e.target.value; st.page = 1; await renderDropshipBrowse(); });
+  $('#db-category').addEventListener('change', async (e) => { st.category = e.target.value; st.page = 1; await renderDropshipBrowse(); });
+  $('#db-prev').addEventListener('click', async () => { st.page = Math.max(1, st.page - 1); await renderDropshipBrowse(); });
+  $('#db-next').addEventListener('click', async () => { st.page = Math.min(totalPages, st.page + 1); await renderDropshipBrowse(); });
+
+  $$('#view-dropship-browse tbody tr[data-code]').forEach((tr) => {
+    tr.querySelector('[data-action="import"]').addEventListener('click', async () => {
+      state.importingCode = tr.dataset.code;
+      state.importForm = null;
+      await renderDropshipBrowse();
+      $('#import-category')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  });
+
+  if (!form) return;
+  $('#cancel-import').addEventListener('click', async () => { state.importingCode = null; state.importForm = null; await renderDropshipBrowse(); });
+  $('#import-category').addEventListener('change', async (e) => { form.categorySlug = e.target.value; state.importForm = form; await renderDropshipBrowse(); });
+  $('#import-category-name')?.addEventListener('input', (e) => { form.categoryName = e.target.value; state.importForm = form; });
+  $('#import-margin').addEventListener('input', (e) => { form.marginPercent = e.target.value; state.importForm = form; });
+  $('#confirm-import').addEventListener('click', async () => {
+    if (!form.categorySlug && !form.categoryName.trim()) return toast('Pick an existing category or name a new one');
+    try {
+      await api('/api/dropship-listings', {
+        method: 'POST',
+        body: JSON.stringify({
+          esquireProductCode: form.esquireProductCode,
+          categorySlug: form.categorySlug || undefined,
+          categoryName: form.categorySlug ? undefined : form.categoryName,
+          marginPercent: Number(form.marginPercent) || 0,
+        }),
+      });
+      toast('Imported');
+      state.importingCode = null;
+      state.importForm = null;
+      await refreshProducts();
+      await renderDropshipBrowse();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+}
+
+async function renderDropshipListings() {
+  const { listings } = await api('/api/dropship-listings');
+
+  const rows = listings
+    .map(
+      (l) => `
+        <tr data-id="${escapeAttr(l.id)}">
+          <td>${l.esquireProduct?.imageUrl ? `<img src="${escapeAttr(l.esquireProduct.imageUrl)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px" />` : '—'}</td>
+          <td>${escapeHtml(l.esquireProduct?.name || '(product no longer in cache)')}</td>
+          <td class="muted" style="font-size:0.85rem">${escapeHtml(l.esquireProductCode)}</td>
+          <td style="text-align:right">${formatRand(l.esquireProduct?.cost || 0)}</td>
+          <td style="text-align:right;white-space:nowrap"><input class="dl-margin" data-id="${escapeAttr(l.id)}" type="number" min="0" step="0.5" value="${escapeAttr(String(l.marginPercent))}" style="width:70px" /> %</td>
+          <td style="text-align:right">${formatRand(l.sellingPrice ?? 0)}</td>
+          <td>${l.esquireProduct?.available === false ? '<span class="badge draft">Out of stock at supplier</span>' : (l.active ? '<span class="badge published">Active</span>' : '<span class="badge draft">Inactive</span>')}</td>
+          <td style="white-space:nowrap">
+            <button class="btn small" data-action="toggle" type="button">${l.active ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn small btn-danger" data-action="delete" type="button">Remove</button>
+          </td>
+        </tr>`,
+    )
+    .join('');
+
+  $('#view-dropship-listings').innerHTML = `
+    <p class="muted" style="margin:0 0 0.75rem;font-size:0.88rem">Everything currently offered for sale from Esquire. Cost/availability refresh automatically on every sync (daily, or Refresh from Esquire on the Browse Feed page) -- a supplier-side out-of-stock auto-deactivates the row here and unlists the item on the site.</p>
+    <div class="panel table-wrap">
+      <table class="catalog">
+        <thead><tr><th></th><th>Product</th><th>Code</th><th style="text-align:right">Cost</th><th style="text-align:right">Margin</th><th style="text-align:right">Selling Price</th><th>Status</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="8"><div class="empty">Nothing imported yet -- use Browse Feed</div></td></tr>'}</tbody>
+      </table>
+    </div>`;
+
+  $$('#view-dropship-listings .dl-margin').forEach((input) => {
+    input.addEventListener('change', async () => {
+      try {
+        await api(`/api/dropship-listings/${input.dataset.id}`, { method: 'PUT', body: JSON.stringify({ marginPercent: Number(input.value) || 0 }) });
+        toast('Margin updated');
+        await renderDropshipListings();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
+
+  $$('#view-dropship-listings tbody tr[data-id]').forEach((tr) => {
+    const listing = listings.find((l) => l.id === tr.dataset.id);
+    tr.querySelector('[data-action="toggle"]').addEventListener('click', async () => {
+      try {
+        await api(`/api/dropship-listings/${listing.id}`, { method: 'PUT', body: JSON.stringify({ active: !listing.active }) });
+        toast(listing.active ? 'Deactivated' : 'Activated');
+        await renderDropshipListings();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+    tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
+      if (!confirm(`Remove "${listing.esquireProduct?.name || listing.esquireProductCode}" from the site? This deletes the item, not just the listing.`)) return;
+      try {
+        await api(`/api/dropship-listings/${listing.id}`, { method: 'DELETE' });
+        toast('Removed');
+        await renderDropshipListings();
+      } catch (ex) {
+        toast(ex.message);
+      }
+    });
+  });
 }
 
 // ---- Advertise: Adverts / Platform Rules / Calendar (owner request

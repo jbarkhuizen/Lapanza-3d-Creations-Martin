@@ -6,6 +6,7 @@ import { pruneExpiredDesignFiles } from './design-requests.js';
 import { deleteDesignRequestFile } from './uploads.js';
 import { getSettings } from './settings.js';
 import { endExpiredAndSoldOutSpecials } from './filaments.js';
+import { syncEsquireProducts } from './esquire.js';
 
 const HOUR_MS = 60 * 60 * 1000;
 const BACKUP_INTERVAL_MS = 24 * HOUR_MS; // daily
@@ -13,6 +14,7 @@ const BACKUP_RETENTION_COUNT = 30; // ~1 month of daily backups
 const AUDIT_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 const PAGE_VIEWS_PRUNE_INTERVAL_MS = 24 * HOUR_MS; // daily
 const SPECIALS_SWEEP_INTERVAL_MS = 15 * 60 * 1000; // every 15 min
+const ESQUIRE_SYNC_INTERVAL_MS = 24 * HOUR_MS; // daily -- 4MB/~3800-item feed, no need to poll tighter
 
 // G.2: this project has no external process manager, cron, or container
 // orchestrator -- it runs as a single persistent `node server/index.js`
@@ -125,6 +127,39 @@ export function startSpecialsSweepJob(publish, intervalMs = SPECIALS_SWEEP_INTER
 // (admin-editable; the privacy policy states the same figure). Same
 // in-process shape as every other job here; audit-logged per batch so the
 // deletion trail is inspectable.
+// Dropship (Esquire) module (owner request 2026-09-09): keeps the
+// esquire_products cache and every already-imported listing's cost/
+// availability/image current without the owner having to remember to click
+// Sync. `publish` is passed in rather than imported, same reasoning as
+// startSpecialsSweepJob above -- and, unlike that job, only called when a
+// sync actually touched an already-imported item (syncEsquireProducts'
+// catalogChanged flag), not on every run -- most syncs of a feed this size
+// only refresh the cache, not anything a customer would see change.
+// Silently no-ops (not an error) until the owner sets settings.esquireFeedUrl.
+export function startEsquireSyncJob(publish, intervalMs = ESQUIRE_SYNC_INTERVAL_MS) {
+  async function run() {
+    let result;
+    try {
+      result = await syncEsquireProducts();
+    } catch (err) {
+      if (!/No Esquire feed URL configured/.test(err.message)) console.error('Esquire sync job failed:', err.message);
+      return;
+    }
+    console.log(`Esquire sync: ${result.syncedCount} products refreshed${result.delisted ? `, ${result.delisted} listing(s) auto-delisted` : ''}`);
+    if (result.catalogChanged) {
+      try {
+        await publish();
+      } catch (err) {
+        console.error('Esquire sync: publish after catalog change failed:', err.message);
+      }
+    }
+  }
+  run();
+  const timer = setInterval(run, intervalMs);
+  timer.unref?.();
+  return timer;
+}
+
 export function startDesignFilePruneJob(intervalMs = 24 * 60 * 60 * 1000) {
   function run() {
     try {
