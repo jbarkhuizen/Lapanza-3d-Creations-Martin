@@ -32,7 +32,7 @@ function sampleFeedXml(products) {
       (p) => `<product>
         <ProductName><![CDATA[${p.name}]]></ProductName>
         <ProductCode><![CDATA[${p.code}]]></ProductCode>
-        <Category><![CDATA[${p.category || 'Misc'}]]></Category>
+        <Category><![CDATA[${p.category != null ? p.category : 'Misc'}]]></Category>
         <ProductSummary><![CDATA[${p.summary || ''}]]></ProductSummary>
         <Price>${p.cost}</Price>
         <AvailableQty>Yes</AvailableQty>
@@ -258,5 +258,85 @@ test('resyncDropshipListings keeps an owner-uploaded custom photo, but refreshes
     db,
   });
   assert.strictEqual(getProduct(product.id).items[0].imageUrl, '/uploads/category-items/owner-photo.jpg', 'owner photo must survive a sync');
+  db.close();
+});
+
+test('bulkImportRemainingProducts imports every still-available cached product not already listed, one category per Esquire category', async (t) => {
+  await withTempCwd(t);
+  const db = openDb(':memory:');
+  const { syncEsquireProducts, bulkImportRemainingProducts, createDropshipListing } = await import(`./esquire.js?t=${Date.now()}`);
+  const { loadCatalog } = await import(`./store.js?t=${Date.now()}`);
+  updateSettings({ esquireFeedUrl: 'https://api.esquire.co.za/api/DataFeed?u=x&p=y&t=xml&m=10', esquireDefaultMarginPercent: 10 }, db);
+  await syncEsquireProducts({
+    fetcher: fakeFetcher(sampleFeedXml([
+      { code: 'A1', name: 'Mouse', category: 'Wireless Mouse', cost: 100 },
+      { code: 'A2', name: 'Mouse 2', category: 'Wireless Mouse', cost: 200 },
+      { code: 'B1', name: 'Cable', category: 'Cable: HDMI', cost: 50 },
+      { code: 'C1', name: 'No Category', category: '', cost: 10 },
+    ])),
+    db,
+  });
+
+  // A1 already hand-imported into a differently-named custom category --
+  // bulk import must skip it (by code), not double-import.
+  createDropshipListing({ esquireProductCode: 'A1', categorySlug: 'computer-accessories', categoryName: 'Computer Accessories', marginPercent: 15 }, db);
+
+  const result = bulkImportRemainingProducts(db);
+  assert.strictEqual(result.imported, 3, 'A2, B1, C1 -- A1 already listed');
+  assert.strictEqual(result.categoriesCreated, 3, 'wireless-mouse, cable-hdmi, uncategorized');
+
+  const catalog = loadCatalog();
+  const wirelessMouse = catalog.products.find((p) => p.slug === 'wireless-mouse');
+  assert.ok(wirelessMouse, 'category named after the Esquire category is created');
+  assert.strictEqual(wirelessMouse.items.length, 1, 'only A2 -- A1 lives in computer-accessories instead');
+  assert.strictEqual(wirelessMouse.items[0].sku, 'A2');
+  assert.strictEqual(wirelessMouse.items[0].price, '220', '200 cost + default 10% margin');
+  assert.strictEqual(wirelessMouse.items[0].dropship, true);
+  assert.strictEqual(wirelessMouse.status, 'published');
+  assert.strictEqual(wirelessMouse.featured, true);
+
+  const hdmiCable = catalog.products.find((p) => p.slug === 'cable-hdmi');
+  assert.ok(hdmiCable);
+  assert.strictEqual(hdmiCable.items[0].sku, 'B1');
+
+  const uncategorized = catalog.products.find((p) => p.slug === 'uncategorized');
+  assert.ok(uncategorized, 'a blank Esquire category falls back to Uncategorized rather than crashing');
+  assert.strictEqual(uncategorized.items[0].sku, 'C1');
+
+  const computerAccessories = catalog.products.find((p) => p.slug === 'computer-accessories');
+  assert.strictEqual(computerAccessories.items.length, 1, 'A1 untouched by the bulk import');
+  assert.strictEqual(computerAccessories.items[0].sku, 'A1');
+
+  // Re-running immediately is a no-op -- everything is already listed.
+  const second = bulkImportRemainingProducts(db);
+  assert.strictEqual(second.imported, 0);
+  db.close();
+});
+
+test('bulkImportRemainingProducts adds a new item to an EXISTING category rather than creating a duplicate', async (t) => {
+  await withTempCwd(t);
+  const db = openDb(':memory:');
+  const { syncEsquireProducts, bulkImportRemainingProducts } = await import(`./esquire.js?t=${Date.now()}`);
+  const { loadCatalog, upsertProduct } = await import(`./store.js?t=${Date.now()}`);
+  updateSettings({ esquireFeedUrl: 'https://api.esquire.co.za/api/DataFeed?u=x&p=y&t=xml&m=10' }, db);
+
+  // A category named "Toys/Misc" (slug toys-misc) already exists with an
+  // unrelated hand-made item in it.
+  upsertProduct({ id: 'p1', kind: 'category', slug: 'toys-misc', name: 'Toys/Misc', status: 'published', featured: true, items: [{ id: 'i1', name: 'Handmade Toy', sku: 'HAND-1', price: '50' }] }, db);
+
+  await syncEsquireProducts({
+    fetcher: fakeFetcher(sampleFeedXml([{ code: 'T1', name: 'Toy Widget', category: 'Toys/Misc', cost: 30 }])),
+    db,
+  });
+  const result = bulkImportRemainingProducts(db);
+  assert.strictEqual(result.imported, 1);
+  assert.strictEqual(result.categoriesCreated, 0, 'toys-misc already existed');
+
+  const catalog = loadCatalog();
+  const toysMisc = catalog.products.filter((p) => p.slug === 'toys-misc');
+  assert.strictEqual(toysMisc.length, 1, 'no duplicate category created');
+  assert.strictEqual(toysMisc[0].items.length, 2, 'existing hand-made item preserved, new one added');
+  assert.ok(toysMisc[0].items.some((i) => i.sku === 'HAND-1'));
+  assert.ok(toysMisc[0].items.some((i) => i.sku === 'T1'));
   db.close();
 });

@@ -183,6 +183,7 @@ import {
   createDropshipListing,
   updateDropshipListing,
   deleteDropshipListing,
+  bulkImportRemainingProducts,
 } from './esquire.js';
 import {
   listPlatforms,
@@ -2691,6 +2692,27 @@ app.post('/api/esquire/sync', requireAuth, async (req, res) => {
       detail: `Esquire feed sync: ${result.syncedCount} products refreshed${result.delisted ? `, ${result.delisted} listing(s) auto-delisted (no longer available from supplier)` : ''}`,
     });
     res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Owner request (2026-09-09): "import all the rest" -- every still-
+// available cached product not already imported, one Lapanza category per
+// Esquire category. Safe to call again after a later sync (only genuinely
+// new codes get imported) -- not a one-shot migration script.
+app.post('/api/esquire/bulk-import', requireAuth, async (req, res) => {
+  try {
+    const result = bulkImportRemainingProducts();
+    const publishWarning = result.imported > 0 ? await publishCatalog() : undefined;
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.CATALOG_UPDATED,
+      adminId: req.adminId,
+      username: req.adminUsername,
+      ...requestMeta(req),
+      detail: `Esquire bulk import: ${result.imported} product(s) imported across ${result.categoriesTouched} categor${result.categoriesTouched === 1 ? 'y' : 'ies'} (${result.categoriesCreated} new)`,
+    });
+    res.json({ ...result, ...(publishWarning ? { publishWarning } : {}) });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

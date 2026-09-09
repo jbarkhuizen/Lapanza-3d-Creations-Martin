@@ -6526,8 +6526,10 @@ async function renderDropshipBrowse() {
   $('#view-dropship-browse').innerHTML = `
     <div class="toolbar">
       <button class="btn btn-primary" id="esquire-sync-now" type="button">Refresh from Esquire</button>
+      <button class="btn btn-danger" id="esquire-bulk-import" type="button">Import ALL remaining</button>
       <span class="muted">${escapeHtml(String(results.total))} product${results.total === 1 ? '' : 's'} in the synced cache</span>
     </div>
+    <p class="muted" style="margin:0.35rem 0 0;font-size:0.82rem">"Import ALL remaining" adds every still-available cached product not already listed -- one new category per Esquire category, across every category in the feed (not just computer/homeware). Safe to re-run after a sync; only genuinely new items get added.</p>
     <div class="grid-3" style="margin-top:0.75rem">
       <label class="field"><span>Search</span><input id="db-search" value="${escapeAttr(st.q)}" placeholder="Name or code" /></label>
       <label class="field"><span>Category</span>
@@ -6554,6 +6556,17 @@ async function renderDropshipBrowse() {
     try {
       const result = await api('/api/esquire/sync', { method: 'POST' });
       toast(`Synced ${result.syncedCount} products${result.delisted ? `, ${result.delisted} listing(s) auto-delisted` : ''}`);
+      await renderDropshipBrowse();
+    } catch (ex) {
+      toast(ex.message);
+    }
+  });
+  $('#esquire-bulk-import').addEventListener('click', async () => {
+    if (!confirm(`Import all ${results.total} remaining cached products as real, live, sellable items across their own Esquire categories? This is not limited to computer/homeware -- everything still in the cache gets imported.`)) return;
+    try {
+      const result = await api('/api/esquire/bulk-import', { method: 'POST' });
+      toast(`Imported ${result.imported} product(s) across ${result.categoriesTouched} categor${result.categoriesTouched === 1 ? 'y' : 'ies'} (${result.categoriesCreated} new)`);
+      await refreshProducts();
       await renderDropshipBrowse();
     } catch (ex) {
       toast(ex.message);

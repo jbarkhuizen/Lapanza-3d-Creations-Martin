@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { XMLParser } from 'fast-xml-parser';
 import { getDb } from './db.js';
 import { getSettings } from './settings.js';
-import { upsertProduct, normalizeItem } from './store.js';
+import { loadCatalog, saveCatalog, upsertProduct, normalizeItem } from './store.js';
 import { readCategoryProducts } from './export.js';
 
 // A dropship item with no real supplier quantity (the feed is Yes/No, not a
@@ -327,4 +327,107 @@ export function resyncDropshipListings(db = getDb()) {
 
   for (const product of byProduct.values()) upsertProduct(product, db);
   return { changed, delisted };
+}
+
+// Same slug shape server/index.js's own slugify() produces -- duplicated
+// here (not imported) for the same reason normalizeItem was moved TO
+// store.js rather than esquire.js importing it FROM index.js: index.js
+// already imports this module for its routes, so the reverse import would
+// be circular.
+function slugify(value) {
+  return (
+    String(value || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'uncategorized'
+  );
+}
+
+// Owner request (2026-09-09): "import everything" -- every still-available
+// cached product that isn't already an active dropship_listings row, in
+// ONE pass. Deliberately bypasses createDropshipListing()'s one-item-at-a-
+// time shape (which calls upsertProduct -> saveCatalog -> syncPublicJson
+// per item): at full-feed scale (thousands of items) that would mean
+// thousands of catalog.json rewrites for one operation. Instead this loads
+// the catalog once, mutates every affected category product in memory,
+// and calls saveCatalog() exactly once at the end -- the caller is still
+// responsible for publishCatalog() afterwards (this function never
+// generates pages or builds, same division of responsibility as every
+// other route that mutates the catalog).
+//
+// Each Esquire category becomes its own Lapanza category (slugified from
+// the supplier's own category name) rather than one giant dumping-ground
+// category -- mirrors how the supplier's own catalog is organised, and
+// keeps any one category page from trying to render thousands of items.
+// Re-running this after a later sync only picks up genuinely new codes
+// (already-imported ones, active or not, are skipped by code) -- safe to
+// call again, not a one-shot script.
+export function bulkImportRemainingProducts(db = getDb()) {
+  const defaultMargin = Number(getSettings(db).esquireDefaultMarginPercent) || 10;
+  const alreadyImported = new Set(db.prepare('SELECT esquire_product_code FROM dropship_listings').all().map((r) => r.esquire_product_code));
+  const candidates = db
+    .prepare('SELECT * FROM esquire_products WHERE available = 1')
+    .all()
+    .map(rowToEsquireProduct)
+    .filter((p) => !alreadyImported.has(p.code));
+  if (candidates.length === 0) return { imported: 0, categoriesCreated: 0, categoriesTouched: 0 };
+
+  const catalog = loadCatalog();
+  const bySlug = new Map(catalog.products.filter((p) => p.kind === 'category').map((p) => [p.slug, p]));
+  const touchedSlugs = new Set();
+  let categoriesCreated = 0;
+
+  const now = new Date().toISOString();
+  const insertListing = db.prepare(
+    `INSERT INTO dropship_listings (id, esquire_product_code, category_slug, item_id, margin_percent, active, created_at, updated_at)
+     VALUES (@id, @code, @slug, @item_id, @margin, 1, @now, @now)`,
+  );
+
+  const txn = db.transaction((items) => {
+    for (const esquireProduct of items) {
+      const categoryName = esquireProduct.category || 'Uncategorized';
+      const slug = slugify(categoryName);
+      let product = bySlug.get(slug);
+      if (!product) {
+        product = {
+          id: randomUUID(), kind: 'category', slug, name: categoryName, description: '', crumbs: '', parent: null,
+          items: [], status: 'published', featured: true, sortOrder: 0, seoTitle: '', seoDescription: '', internalNotes: '',
+        };
+        bySlug.set(slug, product);
+        categoriesCreated += 1;
+      }
+      touchedSlugs.add(slug);
+      const item = normalizeItem(
+        {
+          name: esquireProduct.name,
+          details: esquireProduct.summary,
+          sku: esquireProduct.code,
+          price: String(computeSellingPrice(esquireProduct.cost, defaultMargin)),
+          buyingPrice: esquireProduct.cost,
+          imageUrl: esquireProduct.imageUrl,
+          stockQty: DROPSHIP_NOMINAL_STOCK,
+          available: true,
+          listed: true,
+          dropship: true,
+          esquireProductCode: esquireProduct.code,
+          marginPercent: defaultMargin,
+        },
+        product.items.length,
+      );
+      product.items.push(item);
+      insertListing.run({ id: randomUUID(), code: esquireProduct.code, slug, item_id: item.id, margin: defaultMargin, now });
+    }
+  });
+  txn(candidates);
+
+  for (const slug of touchedSlugs) {
+    const product = bySlug.get(slug);
+    const idx = catalog.products.findIndex((p) => p.id === product.id);
+    if (idx === -1) catalog.products.push(product);
+    else catalog.products[idx] = product;
+  }
+  saveCatalog(catalog, db);
+
+  return { imported: candidates.length, categoriesCreated, categoriesTouched: touchedSlugs.size };
 }

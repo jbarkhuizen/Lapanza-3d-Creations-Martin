@@ -2171,6 +2171,39 @@ test('dropship-listings CRUD via the real routes, against a pre-seeded esquire_p
   assert.strictEqual(afterDelete.body.listings.length, 0);
 });
 
+test('POST /api/esquire/bulk-import requires auth and imports every remaining cached product, one category per Esquire category', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  assert.strictEqual((await request(app).post('/api/esquire/bulk-import')).status, 401);
+
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminLogin = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const adminCookie = adminLogin.headers['set-cookie'];
+
+  const now = new Date().toISOString();
+  const insert = getDb().prepare(
+    `INSERT INTO esquire_products (code, name, category, summary, cost_rand, image_url, available, last_synced_at) VALUES (?, ?, ?, '', ?, '', 1, ?)`,
+  );
+  insert.run('BI1', 'Bulk Mouse', 'Wireless Mouse', 100, now);
+  insert.run('BI2', 'Bulk Cable', 'Cable: HDMI', 50, now);
+
+  const res = await request(app).post('/api/esquire/bulk-import').set('Cookie', adminCookie);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.body.imported, 2);
+  assert.strictEqual(res.body.categoriesCreated, 2);
+
+  const products = await request(app).get('/api/products').set('Cookie', adminCookie);
+  const mouseCategory = products.body.products.find((p) => p.slug === 'wireless-mouse');
+  assert.ok(mouseCategory, 'a new category is created and published, named after the Esquire category');
+  assert.strictEqual(mouseCategory.status, 'published');
+  assert.strictEqual(mouseCategory.items[0].sku, 'BI1');
+  assert.strictEqual(mouseCategory.items[0].dropship, true);
+
+  // Re-running is a no-op -- nothing left to import.
+  const second = await request(app).post('/api/esquire/bulk-import').set('Cookie', adminCookie);
+  assert.strictEqual(second.body.imported, 0);
+});
+
 test('checkout adds the flat dropship fee for a cart containing a dropship item, on top of any courier fee, and the supplier-ordered tick works', async (t) => {
   const { app, cleanup } = await freshApp();
   t.after(cleanup);
