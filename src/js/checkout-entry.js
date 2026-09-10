@@ -764,10 +764,16 @@ async function init() {
   function collectMissingFields() {
     const missing = [];
     form.querySelectorAll('[required]').forEach((input) => {
-      const ok = input.type === 'email' ? input.checkValidity() : String(input.value || '').trim() !== '';
+      // Trim in place before checkValidity() -- a pasted email with a stray
+      // leading/trailing space fails the browser's native email pattern and
+      // gets reported as "Email" missing, indistinguishable from an empty
+      // field (this is what a client reported as "can't capture my email").
+      if (input.type === 'email') input.value = input.value.trim();
+      const wasEmpty = String(input.value || '').trim() === '';
+      const ok = input.type === 'email' ? input.checkValidity() : !wasEmpty;
       if (ok) return;
       const label = input.closest('label')?.querySelector('span')?.textContent?.replace(/\s*\*\s*$/, '').trim() || input.name;
-      missing.push(label);
+      missing.push(input.type === 'email' && !wasEmpty ? `${label} (check the format)` : label);
     });
     return missing;
   }
