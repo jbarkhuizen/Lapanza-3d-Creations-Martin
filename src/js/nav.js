@@ -15,7 +15,6 @@ function isActive(href, current) {
 export function renderSidebar({ current = '', openGroups = [] } = {}) {
   const p = depthPrefix();
   const filamentOpen = openGroups.includes('Filament') || current.startsWith('filament/');
-  const carOpen = openGroups.includes('Car Parts') || current.startsWith('car-parts/');
 
   // #130: brand links come from the admin-configurable list (bundled at
   // build via src/data/site.js) -- same pattern as filamentLinks below.
@@ -48,8 +47,12 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
   <input type="search" class="side-search-input w-full border border-charcoal/20 rounded-sm px-3 py-2 text-sm bg-transparent" placeholder="Search products…" aria-label="Search products" />
   <div class="side-search-results absolute left-0 right-0 top-full mt-1 z-50 bg-cream border border-charcoal/15 rounded-sm shadow-lg empty:hidden max-h-80 overflow-y-auto"></div>
 </div>
-<a href="${p}story.html" class="side-link ${isActive('story.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10 mt-6">Our Story</a>
-<a href="${p}get-in-touch.html" class="side-link ${isActive('get-in-touch.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Get in Touch</a>
+<details class="rot-open border-t border-charcoal/10 py-2 mt-6" data-nav-key="Car Parts" open>
+  <summary class="flex items-center justify-between uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors py-1.5 font-semibold"><span>Car Parts</span><span class="chev transition-transform duration-200 text-terracotta">&#8250;</span></summary>
+  <div class="pl-3 mt-1 space-y-0.5 border-l border-charcoal/10">
+    ${carBrandLinks}
+  </div>
+</details>
 <details class="rot-open border-t border-charcoal/10 py-2" data-nav-key="Filament" ${filamentOpen ? 'open' : ''}>
   <summary class="flex items-center justify-between uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors py-1.5 font-semibold"><span>Filament</span><span class="chev transition-transform duration-200 text-terracotta">&#8250;</span></summary>
   <div class="pl-3 mt-1 space-y-0.5 border-l border-charcoal/10">
@@ -57,16 +60,12 @@ export function renderSidebar({ current = '', openGroups = [] } = {}) {
   </div>
 </details>
 <a href="${p}materials-guide.html" class="side-link ${isActive('materials-guide.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Materials Guide</a>
-<details class="rot-open border-t border-charcoal/10 py-2" data-nav-key="Car Parts" ${carOpen ? 'open' : ''}>
-  <summary class="flex items-center justify-between uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors py-1.5 font-semibold"><span>Car Parts</span><span class="chev transition-transform duration-200 text-terracotta">&#8250;</span></summary>
-  <div class="pl-3 mt-1 space-y-0.5 border-l border-charcoal/10">
-    ${carBrandLinks}
-  </div>
-</details>
 ${CORE_CATEGORY_NAV.map((c) => `<a href="${p}${c.slug}.html" class="side-link ${isActive(`${c.slug}.html`, current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">${c.label}</a>`).join('')}
 <a href="${p}resources.html" class="side-link ${isActive('resources.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">3D Resources</a>
 <a href="${p}design-request.html" class="side-link ${isActive('design-request.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Custom Design and Print Request</a>
-<a href="${p}account.html" class="side-link ${isActive('account.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-b border-charcoal/10">My Account</a>
+<a href="${p}account.html" class="side-link ${isActive('account.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">My Account</a>
+<a href="${p}story.html" class="side-link ${isActive('story.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10">Our Story</a>
+<a href="${p}get-in-touch.html" class="side-link ${isActive('get-in-touch.html', current) ? 'active' : ''} block py-2.5 uppercase text-[0.68rem] tracking-[0.18em] text-espresso/80 hover:text-terracotta transition-colors border-t border-charcoal/10 border-b">Get in Touch</a>
 `.trim();
 }
 
