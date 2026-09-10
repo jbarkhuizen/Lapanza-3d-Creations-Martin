@@ -602,6 +602,48 @@ test('uploading a print job model file/photo records the original filename, not 
   assert.strictEqual(fetched.body.printJob.referenceImageOriginalName, 'bench photo.jpg');
 });
 
+// Owner report (2026-09-10): duplicate/mis-captured in-house filament rows
+// the normal DELETE refuses once a logged print job references them --
+// /usage names what's affected, /force removes it anyway.
+test('a normal DELETE on an in-house filament used by a print job fails; GET usage + DELETE force succeed and remove its cost line from that job', async (t) => {
+  const { app, cleanup } = await freshApp();
+  t.after(cleanup);
+  await request(app).post('/api/setup').send({ username: 'johan', password: 'correcthorsebattery' });
+  const login = await request(app).post('/api/auth/login').send({ username: 'johan', password: 'correcthorsebattery' });
+  const cookie = login.headers['set-cookie'];
+
+  const filament = await request(app).post('/api/in-house-filament').set('Cookie', cookie).send({
+    filamentType: 'PLA', colorName: 'Duplicate Black', rollsAvailable: 5, weightG: 1000, rollLengthM: 335, costPerRollRand: 300,
+  });
+  const filamentId = filament.body.filament.id;
+  const job = await request(app)
+    .post('/api/print-jobs')
+    .set('Cookie', cookie)
+    .send({ itemName: 'Test Widget', filaments: [{ inHouseFilamentId: filamentId, grams: 50, meters: 16.75 }] });
+
+  assert.strictEqual((await request(app).get(`/api/in-house-filament/${filamentId}/usage`)).status, 401);
+  assert.strictEqual((await request(app).delete(`/api/in-house-filament/${filamentId}/force`)).status, 401);
+
+  const normalDelete = await request(app).delete(`/api/in-house-filament/${filamentId}`).set('Cookie', cookie);
+  assert.strictEqual(normalDelete.status, 400);
+  assert.match(normalDelete.body.error, /Cannot delete/);
+
+  const usage = await request(app).get(`/api/in-house-filament/${filamentId}/usage`).set('Cookie', cookie);
+  assert.strictEqual(usage.status, 200);
+  assert.strictEqual(usage.body.usage.length, 1);
+  assert.strictEqual(usage.body.usage[0].jobId, job.body.printJob.id);
+  assert.strictEqual(usage.body.usage[0].itemName, 'Test Widget');
+
+  const forced = await request(app).delete(`/api/in-house-filament/${filamentId}/force`).set('Cookie', cookie);
+  assert.strictEqual(forced.status, 200);
+  assert.strictEqual(forced.body.removedUsageCount, 1);
+
+  const gone = await request(app).get(`/api/in-house-filament/${filamentId}`).set('Cookie', cookie);
+  assert.strictEqual(gone.status, 404);
+  const jobStillExists = await request(app).get(`/api/print-jobs/${job.body.printJob.id}`).set('Cookie', cookie);
+  assert.strictEqual(jobStillExists.status, 200, 'the print job itself survives, only its slot for the deleted filament is gone');
+});
+
 test('category product items support photo upload/remove and a "listed" visibility flag', async (t) => {
   const { app, tmpRoot, cleanup } = await freshApp();
   t.after(cleanup);

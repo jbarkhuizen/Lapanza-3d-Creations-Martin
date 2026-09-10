@@ -135,6 +135,41 @@ export function deleteInHouseFilament(id, db = getDb()) {
   }
 }
 
+// Owner request (2026-09-10): duplicate/mis-captured in-house filament
+// rows that can't be deleted normally because a print job's cost
+// breakdown already references them. Surfaced by the admin UI so a
+// force-delete confirm can name exactly what's about to be lost, instead
+// of the owner guessing from a bare "N jobs" count.
+export function getInHouseFilamentUsage(id, db = getDb()) {
+  return db
+    .prepare(
+      `SELECT pj.id, pj.item_name, pj.date_printed, pj.created_at, pjf.grams, pjf.cost
+       FROM print_job_filaments pjf
+       JOIN print_jobs pj ON pj.id = pjf.print_job_id
+       WHERE pjf.in_house_filament_id = ?
+       ORDER BY pj.created_at DESC`,
+    )
+    .all(id)
+    .map((r) => ({ jobId: r.id, itemName: r.item_name, datePrinted: r.date_printed, createdAt: r.created_at, grams: r.grams, cost: r.cost }));
+}
+
+// The override itself: deliberately a SEPARATE function from
+// deleteInHouseFilament (never a silent `force` flag on the normal delete)
+// so this destructive path is its own distinct, auditable action. Removes
+// this filament's line from every print job's cost breakdown that used it
+// (the print_jobs row itself, and every OTHER filament slot on it, are
+// untouched) before removing the filament -- the only way to satisfy the
+// FK without leaving orphaned print_job_filaments rows behind.
+export function forceDeleteInHouseFilament(id, db = getDb()) {
+  return db.transaction(() => {
+    const filament = db.prepare('SELECT * FROM in_house_filament WHERE id = ?').get(id);
+    if (!filament) throw new Error('In-house filament not found');
+    const { changes: removedUsageCount } = db.prepare('DELETE FROM print_job_filaments WHERE in_house_filament_id = ?').run(id);
+    db.prepare('DELETE FROM in_house_filament WHERE id = ?').run(id);
+    return { deleted: true, removedUsageCount, filament: rowToFilament(filament) };
+  })();
+}
+
 // Called when a print job using this filament is logged (not on validate --
 // see print-jobs.js). The only writer of used_g/used_m.
 export function incrementInHouseFilamentUsage(id, { usedG = 0, usedM = 0 }, db = getDb()) {

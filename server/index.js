@@ -171,6 +171,8 @@ import {
   deleteInHouseFilament,
   transferStockRoll,
   setInHouseFilamentArchived,
+  getInHouseFilamentUsage,
+  forceDeleteInHouseFilament,
 } from './in-house-filament.js';
 import { listExpenses, getExpense, createExpense, updateExpense, deleteExpense, migratePurchasesToExpenses, getFinancialOverview } from './expenses.js';
 import { listRepayments, createRepayment, updateRepayment, deleteRepayment, getAdvancesSummary } from './account-repayments.js';
@@ -2480,6 +2482,37 @@ app.delete('/api/in-house-filament/:id', requireAuth, (req, res) => {
     if (!ok) return res.status(404).json({ error: 'Filament not found' });
     recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Deleted in-house filament "${existing ? `${existing.filamentType} — ${existing.colorName}` : req.params.id}"` });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Owner request (2026-09-10): which logged print jobs reference this
+// filament, so a force-delete confirm can name them instead of just
+// saying "N jobs". Read-only -- deletes nothing.
+app.get('/api/in-house-filament/:id/usage', requireAuth, (req, res) => {
+  res.json({ usage: getInHouseFilamentUsage(req.params.id) });
+});
+
+// The override: deliberately a separate, explicit route from the normal
+// DELETE above (never a silent ?force=true on it) -- removes this
+// filament's line from every print job that used it (the jobs themselves,
+// and their other filament slots, are untouched), then the filament
+// itself. For duplicate/mis-captured entries the normal delete refuses to
+// touch because real print-job history already references them.
+app.delete('/api/in-house-filament/:id/force', requireAuth, (req, res) => {
+  try {
+    const existing = getInHouseFilament(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Filament not found' });
+    const result = forceDeleteInHouseFilament(req.params.id);
+    recordAuditEvent({
+      eventType: AUDIT_EVENTS.STOCK_UPDATED,
+      adminId: req.adminId,
+      username: req.adminUsername,
+      ...requestMeta(req),
+      detail: `Force-deleted in-house filament "${existing.filamentType} — ${existing.colorName}" -- removed its cost line from ${result.removedUsageCount} logged print job(s)`,
+    });
+    res.json({ ok: true, removedUsageCount: result.removedUsageCount });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

@@ -10,7 +10,10 @@ import {
   incrementInHouseFilamentUsage,
   transferStockRoll,
   setInHouseFilamentArchived,
+  getInHouseFilamentUsage,
+  forceDeleteInHouseFilament,
 } from './in-house-filament.js';
+import { createPrintJob } from './print-jobs.js';
 
 test('createInHouseFilament requires filament type and color name', () => {
   const db = openDb(':memory:');
@@ -92,5 +95,44 @@ test('setInHouseFilamentArchived flags a roll and unarchives it again', () => {
   const back = setInHouseFilamentArchived(f.id, false, db);
   assert.strictEqual(back.archived, false);
   assert.strictEqual(setInHouseFilamentArchived('nope', true, db), null);
+  db.close();
+});
+
+// Owner report (2026-09-10): duplicate/mis-captured in-house filament rows
+// blocked from a normal delete once a real logged print job references
+// them -- the override lets an admin remove them anyway, naming exactly
+// what it costs (the referencing jobs lose this filament's cost line).
+test('deleteInHouseFilament refuses once a print job references it; forceDeleteInHouseFilament removes it and that job\'s slot for it', () => {
+  const db = openDb(':memory:');
+  const f = createInHouseFilament({ filamentType: 'PLA', colorName: 'Duplicate Black', rollsAvailable: 5, weightG: 1000, rollLengthM: 335, costPerRollRand: 300 }, db);
+  const job = createPrintJob({ itemName: 'Test Widget', filaments: [{ inHouseFilamentId: f.id, grams: 50, meters: 16.75 }], printTimeMinutes: 20 }, db);
+
+  assert.throws(() => deleteInHouseFilament(f.id, db), /Cannot delete — this filament has been used in a logged print job\./);
+
+  const usage = getInHouseFilamentUsage(f.id, db);
+  assert.strictEqual(usage.length, 1);
+  assert.strictEqual(usage[0].jobId, job.id);
+  assert.strictEqual(usage[0].itemName, 'Test Widget');
+  assert.strictEqual(usage[0].grams, 50);
+
+  const result = forceDeleteInHouseFilament(f.id, db);
+  assert.strictEqual(result.removedUsageCount, 1);
+  assert.strictEqual(getInHouseFilament(f.id, db), null, 'the filament itself is gone');
+  // The print job ROW survives -- only its filament slot referencing the
+  // now-deleted filament is gone, not the whole job's history.
+  assert.ok(db.prepare('SELECT id FROM print_jobs WHERE id = ?').get(job.id), 'print job itself is untouched');
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM print_job_filaments WHERE in_house_filament_id = ?').get(f.id).n, 0);
+
+  assert.throws(() => forceDeleteInHouseFilament(f.id, db), /In-house filament not found/, 'cannot force-delete something already gone');
+  db.close();
+});
+
+test('getInHouseFilamentUsage returns an empty list for a filament with no print-job history, and forceDeleteInHouseFilament still works (0 jobs removed)', () => {
+  const db = openDb(':memory:');
+  const f = createInHouseFilament({ filamentType: 'PLA', colorName: 'Never Used', rollsAvailable: 1, weightG: 1000, rollLengthM: 335 }, db);
+  assert.deepStrictEqual(getInHouseFilamentUsage(f.id, db), []);
+  const result = forceDeleteInHouseFilament(f.id, db);
+  assert.strictEqual(result.removedUsageCount, 0);
+  assert.strictEqual(getInHouseFilament(f.id, db), null);
   db.close();
 });

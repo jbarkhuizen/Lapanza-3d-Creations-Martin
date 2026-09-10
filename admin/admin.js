@@ -5730,6 +5730,36 @@ function blankInHouseFilament() {
   return { id: null, brand: '', filamentType: '', colorName: '', rollsAvailable: 0, weightG: 1000, rollLengthM: 335, costPerRollRand: 0 };
 }
 
+// Owner request (2026-09-10): duplicate/mis-captured in-house filament
+// entries the normal Delete refuses to touch because a print job's cost
+// breakdown already references them. Names exactly what will be lost
+// (which jobs, dated) rather than a bare confirm -- this is a real,
+// irreversible override, not a toggle.
+async function offerForceDeleteInHouseFilament(id, filament) {
+  let usage;
+  try {
+    ({ usage } = await api(`/api/in-house-filament/${id}/usage`));
+  } catch (ex) {
+    return toast(ex.message);
+  }
+  const jobList = usage
+    .map((u) => `  • ${u.itemName} (${formatDate(u.datePrinted || u.createdAt)}) — ${u.grams}g, ${formatRand(u.cost)}`)
+    .join('\n');
+  const proceed = confirm(
+    `"${filament.brand} — ${filament.filamentType} — ${filament.colorName}" is used in ${usage.length} logged print job${usage.length === 1 ? '' : 's'} -- a normal delete refuses to remove it for exactly that reason.\n\n` +
+      `Force delete will remove THIS FILAMENT'S LINE from each of these jobs' cost breakdown (the jobs themselves, and their other filament slots, are kept):\n${jobList}\n\n` +
+      `This cannot be undone. Force delete anyway?`,
+  );
+  if (!proceed) return;
+  try {
+    const result = await api(`/api/in-house-filament/${id}/force`, { method: 'DELETE' });
+    toast(`Force-deleted -- removed from ${result.removedUsageCount} print job(s)`);
+    await renderInHouseFilament();
+  } catch (ex) {
+    toast(ex.message);
+  }
+}
+
 async function renderInHouseFilament() {
   state.editingInHouseFilament = state.editingInHouseFilament || null;
   state.inHouseFilters = state.inHouseFilters || { q: '', brand: '' };
@@ -5827,13 +5857,19 @@ async function renderInHouseFilament() {
       }
     });
     tr.querySelector('[data-action="delete"]').addEventListener('click', async () => {
-      if (!confirm('Delete this in-house filament?')) return;
+      const f = filaments.find((x) => x.id === tr.dataset.id);
+      if (!confirm(`Delete "${f.brand} — ${f.filamentType} — ${f.colorName}"?`)) return;
       try {
         await api(`/api/in-house-filament/${tr.dataset.id}`, { method: 'DELETE' });
         toast('Deleted');
         await renderInHouseFilament();
       } catch (ex) {
-        toast(ex.message === 'Cannot delete — this filament has been used in a logged print job.' ? ex.message + ' Use Archive instead.' : ex.message);
+        if (ex.message !== 'Cannot delete — this filament has been used in a logged print job.') return toast(ex.message);
+        // Owner request (2026-09-10): duplicate/mis-captured entries that
+        // real print-job history blocks from a normal delete -- offer the
+        // override, naming exactly what it will remove rather than a bare
+        // "N jobs" count.
+        await offerForceDeleteInHouseFilament(tr.dataset.id, f);
       }
     });
     tr.querySelector('[data-action="transfer"]').addEventListener('click', async () => {
