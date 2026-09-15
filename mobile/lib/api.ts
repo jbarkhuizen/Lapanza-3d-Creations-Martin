@@ -55,6 +55,11 @@ export async function apiRequest<T = unknown>(
 
   const res = await fetch(url, {
     method: options.method || 'GET',
+    // RN's native networking sends the session cookie automatically
+    // regardless of this option, but a browser (web target / this app's
+    // own dev verification) needs it explicit for a cross-origin request
+    // to include and accept cookies.
+    credentials: 'include',
     headers: {
       Accept: 'application/json',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
