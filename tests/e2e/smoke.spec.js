@@ -140,8 +140,12 @@ test('admin: Settings scoped save preserves keyboard focus and scroll position (
   await expect(page.locator('#toast')).not.toHaveClass(/hidden/); // the save round-trip has landed
 
   // Focus must land back on (the re-rendered) save button, not <body> --
-  // and scroll must stay where it was, not snap back to the page top.
-  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('save-settings-print-costing');
+  // and scroll must stay where it was, not snap back to the page top. A
+  // settings save awaits a full publishCatalog() round trip server-side
+  // (generate-pages.mjs + a real `vite build`, consistently ~4.5-5s on
+  // this machine) before the response -- and this render -- lands, so the
+  // default 5s poll timeout leaves it with no real margin.
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id), { timeout: 15_000 }).toBe('save-settings-print-costing');
   const scrollAfter = await page.evaluate(() => window.scrollY);
   expect(scrollAfter).toBeGreaterThan(0);
   expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(50);

@@ -1,12 +1,46 @@
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, '..');
+const realRoot = path.resolve(__dirname, '..');
+
+// generate-pages.mjs resolves its own root from import.meta.url (the
+// script file's own on-disk location -- see its `root` const), not
+// process.cwd(), and reads/rewrites real top-level HTML (filament/*,
+// products/*, car-parts/*, etc.) in place -- there's no output-directory
+// override to redirect it elsewhere. Every test below writes real-shaped
+// fixtures into src/data/*.json and lets it regenerate for real, so
+// running this file against the actual repo mutates dozens of tracked
+// files (confirmed: even a no-op run against the real checked-in data
+// diffs the tree, because public/uploads/ -- gitignored, not part of any
+// checkout -- is absent here, so the generator's own fs.existsSync-gated
+// <picture>/webp markup differs from what a checkout WITH the real
+// uploads produced when the committed pages were last generated).
+// Isolate by running against a scratch COPY of the repo (minus
+// node_modules/.git/dist/test-results) instead -- copying, not just
+// spawning with a different cwd, because import.meta.url only resolves
+// correctly if generate-pages.mjs and its two server/ dependencies
+// (money.js, item-anchor.js -- both plain, no npm deps of their own)
+// physically live under the scratch root too.
+const SKIP_COPY = /(?:^|[\\/])(node_modules|\.git|dist|test-results|playwright-report)(?:$|[\\/])/;
+let root;
+
+before(() => {
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'generate-pages-test-'));
+  fs.cpSync(realRoot, root, {
+    recursive: true,
+    filter: (src) => !SKIP_COPY.test(src.slice(realRoot.length)),
+  });
+});
+
+after(() => {
+  fs.rmSync(root, { recursive: true, force: true });
+});
 
 // C1: generate-pages.mjs's per-colour/per-item detail-page generator (#95)
 // also writes into filament/ and products/ using whatever
