@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Badge, Card, ErrorState, Label, LoadingState, PrimaryButton, SecondaryButton, TextField, Value } from '../../../components/UI';
 import { api, ApiError } from '../../../lib/api';
@@ -18,6 +18,7 @@ export default function PrintJobDetailScreen() {
   const queryClient = useQueryClient();
   const [price, setPrice] = useState('');
   const [priceDirty, setPriceDirty] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['print-job', id],
@@ -44,6 +45,15 @@ export default function PrintJobDetailScreen() {
     onError: (e) => Alert.alert('Could not save price', e instanceof ApiError ? e.message : 'Unknown error'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/api/print-jobs/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['print-jobs'] });
+      router.back();
+    },
+    onError: (e) => Alert.alert('Could not delete', e instanceof ApiError ? e.message : 'Unknown error'),
+  });
+
   if (isLoading) return <LoadingState />;
   if (isError || !data) return <ErrorState message={(error as Error)?.message || 'Print job not found.'} onRetry={() => refetch()} />;
 
@@ -52,7 +62,22 @@ export default function PrintJobDetailScreen() {
 
   return (
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title: job.itemName }} />
+      <Stack.Screen
+        options={{
+          title: job.itemName,
+          headerRight: () => (
+            <Pressable
+              onPress={() => {
+                setIsEditing((e) => !e);
+                setPriceDirty(false);
+              }}
+              hitSlop={8}
+            >
+              <Text style={{ color: colors.brand, fontWeight: '700', fontSize: 15 }}>{isEditing ? 'Done' : 'Edit'}</Text>
+            </Pressable>
+          ),
+        }}
+      />
 
       <Card>
         <View style={styles.headerRow}>
@@ -93,37 +118,68 @@ export default function PrintJobDetailScreen() {
 
       <Card>
         <Label>Final selling price</Label>
-        <TextField
-          value={priceValue}
-          onChangeText={(v) => {
-            setPrice(v);
-            setPriceDirty(true);
-          }}
-          keyboardType="decimal-pad"
-        />
-        <PrimaryButton
-          title="Save price"
-          loading={priceMutation.isPending}
-          disabled={!priceDirty}
-          onPress={() => {
-            const n = Number(priceValue);
-            if (!Number.isFinite(n) || n <= 0) {
-              Alert.alert('Invalid price', 'Enter a selling price greater than 0.');
-              return;
-            }
-            priceMutation.mutate(n);
-          }}
-        />
+        {isEditing ? (
+          <>
+            <TextField
+              value={priceValue}
+              onChangeText={(v) => {
+                setPrice(v);
+                setPriceDirty(true);
+              }}
+              keyboardType="decimal-pad"
+            />
+            <PrimaryButton
+              title="Save price"
+              loading={priceMutation.isPending}
+              disabled={!priceDirty}
+              onPress={() => {
+                const n = Number(priceValue);
+                if (!Number.isFinite(n) || n <= 0) {
+                  Alert.alert('Invalid price', 'Enter a selling price greater than 0.');
+                  return;
+                }
+                priceMutation.mutate(n);
+              }}
+            />
+          </>
+        ) : (
+          <Value>{formatRand(job.finalSellingPrice)}</Value>
+        )}
       </Card>
 
       <Card>
         <Label>Status</Label>
-        <View style={styles.statusGrid}>
-          {STATUSES.map((s) => (
-            <SecondaryButton key={s} title={s} disabled={s === job.status || statusMutation.isPending} onPress={() => statusMutation.mutate(s)} />
-          ))}
-        </View>
+        {isEditing ? (
+          <View style={styles.statusGrid}>
+            {STATUSES.map((s) => (
+              <SecondaryButton key={s} title={s} disabled={s === job.status || statusMutation.isPending} onPress={() => statusMutation.mutate(s)} />
+            ))}
+          </View>
+        ) : (
+          <Value>{job.status}</Value>
+        )}
       </Card>
+
+      {isEditing && (
+        <Card>
+          <Text style={{ color: colors.muted, fontSize: 12 }}>
+            Only the final selling price and status can be edited here — item name, quantity, print time, and
+            filament usage are locked once a job is logged (the system has no edit path for those, on mobile or
+            desktop, since changing them would need to reconcile the in-house filament stock this job already
+            used). To fix those, delete this job below and log it again with the correct figures.
+          </Text>
+          <SecondaryButton
+            title="Delete this print job"
+            disabled={deleteMutation.isPending}
+            onPress={() =>
+              Alert.alert('Delete print job?', `This permanently deletes "${job.itemName}". This cannot be undone.`, [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: () => deleteMutation.mutate() },
+              ])
+            }
+          />
+        </Card>
+      )}
 
       {job.listingItemId && (
         <Card>
