@@ -103,8 +103,20 @@ export const DEFAULT_SETTINGS = {
   // Phase 3: Print Job Costing tool (server/print-jobs.js) -- internal-only,
   // never affects storefront product pricing.
   markupPct: 0,
-  electricityRate: 3.85,
+  electricityRate: 4.97,
+  // Legacy single power draw (kW). Only used now when a job has no printer
+  // picked (e.g. scripts/import-historical-print-jobs.mjs) -- the admin form
+  // always sends one from `printers` below.
   printerPowerDraw: 0.15,
+  // {id,name,watts,active}[]: average draw per printer while printing, in
+  // WATTS (converted to kW at cost time). Seeded watts are rough averages
+  // for the owner to correct in Settings, not measured figures. 'active:
+  // false' hides a printer from the job form without touching jobs already
+  // logged on it (those snapshot printer_name/printer_watts).
+  printers: [
+    { id: 'bambu-lab-p2s', name: 'Bambu Lab P2S', watts: 150, active: true },
+    { id: 'snapmaker-u1', name: 'Snapmaker U1', watts: 200, active: true },
+  ],
   runningCostsPct: 0.25,
   designRate: 300,
   setupRate: 300,

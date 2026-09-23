@@ -8,6 +8,9 @@ import { getProduct, upsertProduct } from './store.js';
 
 const MAX_FILAMENT_SLOTS = 4;
 const STATUSES = ['Estimate', 'Printed'];
+// Per-colour usage roles (2026-09-23). Each slot's grams/meters is the SUM
+// of these four; they're stored alongside purely as a breakdown.
+const SLOT_ROLES = ['model', 'tower', 'purge', 'support'];
 
 function rowToJob(row, filamentRows = []) {
   if (!row) return null;
@@ -46,11 +49,20 @@ function rowToJob(row, filamentRows = []) {
     // listPrintJobForSale. Both null until then.
     listingCategoryId: row.listing_category_id,
     listingItemId: row.listing_item_id,
+    // Snapshotted at log time; all null on jobs logged before per-printer
+    // power draw existed.
+    printerId: row.printer_id ?? null,
+    printerName: row.printer_name ?? null,
+    printerWatts: row.printer_watts ?? null,
     filaments: filamentRows.map((f) => ({
       id: f.id,
       inHouseFilamentId: f.in_house_filament_id,
       grams: f.grams,
       meters: f.meters,
+      modelG: f.model_g ?? 0, modelM: f.model_m ?? 0,
+      towerG: f.tower_g ?? 0, towerM: f.tower_m ?? 0,
+      purgeG: f.purge_g ?? 0, purgeM: f.purge_m ?? 0,
+      supportG: f.support_g ?? 0, supportM: f.support_m ?? 0,
       cost: f.cost,
       slotOrder: f.slot_order,
     })),
@@ -78,8 +90,13 @@ export function computeJobCost(input, settings, resolvedSlots) {
   const slotCosts = resolvedSlots.map((s) => round2((Number(s.grams) || 0) * quantity * (s.costPerG || 0)));
   const filamentCost = round2(slotCosts.reduce((sum, c) => sum + c, 0));
 
+  // Power: print hours x the chosen printer's draw (watts -> kW) x R/kWh.
+  // No printer picked (historical import script, old callers) falls back to
+  // the legacy single printerPowerDraw setting, already in kW.
+  const printer = resolvePrinter(input.printerId, settings);
+  const powerDrawKw = printer ? printer.watts / 1000 : Number(settings.printerPowerDraw) || 0;
   const printTimeHours = ((Number(input.printTimeMinutes) || 0) / 60) * quantity;
-  const powerCost = round2(printTimeHours * (Number(settings.printerPowerDraw) || 0) * (Number(settings.electricityRate) || 0));
+  const powerCost = round2(printTimeHours * powerDrawKw * (Number(settings.electricityRate) || 0));
 
   const designHours = Number(input.designHours) || 0;
   const setupHours = Number(input.setupHours) || 0;
@@ -101,6 +118,9 @@ export function computeJobCost(input, settings, resolvedSlots) {
 
   return {
     quantity,
+    printer,
+    printTimeHours,
+    powerDrawKw,
     totalGrams,
     totalMeters,
     slotCosts,
@@ -119,6 +139,35 @@ function round2(value) {
   return Math.round(value * 100) / 100;
 }
 
+// Looks the job's printer up in Settings -> printers. Deliberately does NOT
+// require `active` -- retiring a printer only hides it from the form's
+// picker; a draft already pointing at it still costs correctly.
+function resolvePrinter(printerId, settings) {
+  if (!printerId) return null;
+  const printer = (settings.printers || []).find((p) => p.id === printerId);
+  if (!printer) throw new Error('Selected printer not found -- check Settings -> Print Job Costing Rates');
+  return { id: printer.id, name: printer.name, watts: Math.max(0, Number(printer.watts) || 0) };
+}
+
+// A slot either sends the per-role breakdown (modelG/towerG/purgeG/supportG
+// + the matching ...M), or -- older callers like the historical import
+// script -- a flat grams/meters, which is treated as all "model".
+function readSlotRoles(s) {
+  const hasRoles = SLOT_ROLES.some((r) => s[`${r}G`] !== undefined || s[`${r}M`] !== undefined);
+  const roles = {};
+  for (const r of SLOT_ROLES) {
+    roles[`${r}G`] = hasRoles ? Math.max(0, Number(s[`${r}G`]) || 0) : 0;
+    roles[`${r}M`] = hasRoles ? Math.max(0, Number(s[`${r}M`]) || 0) : 0;
+  }
+  if (!hasRoles) {
+    roles.modelG = Math.max(0, Number(s.grams) || 0);
+    roles.modelM = Math.max(0, Number(s.meters) || 0);
+  }
+  const grams = SLOT_ROLES.reduce((sum, r) => sum + roles[`${r}G`], 0);
+  const meters = SLOT_ROLES.reduce((sum, r) => sum + roles[`${r}M`], 0);
+  return { roles, grams, meters };
+}
+
 // Validates and resolves 1-4 filament slots against in_house_filament,
 // attaching each slot's costPerG. Shared by both the validate (preview) and
 // the real create path, so they can never disagree about what's valid.
@@ -129,11 +178,13 @@ function resolveSlots(items, db) {
   return list.map((s, idx) => {
     const filament = getInHouseFilament(s.inHouseFilamentId, db);
     if (!filament) throw new Error('Selected in-house filament not found');
+    const { roles, grams, meters } = readSlotRoles(s);
     return {
       inHouseFilamentId: filament.id,
       name: `${filament.filamentType} — ${filament.colorName}`,
-      grams: Math.max(0, Number(s.grams) || 0),
-      meters: Math.max(0, Number(s.meters) || 0),
+      grams,
+      meters,
+      roles,
       costPerG: filament.costPerG,
       remainingG: filament.remainingG,
       slotOrder: idx,
@@ -164,7 +215,7 @@ export function previewPrintJobCost(data, db = getDb()) {
   const cost = computeJobCost(data, settings, slots);
   return {
     ...cost,
-    filaments: slots.map((s, i) => ({ inHouseFilamentId: s.inHouseFilamentId, name: s.name, grams: s.grams, meters: s.meters, cost: cost.slotCosts[i] })),
+    filaments: slots.map((s, i) => ({ inHouseFilamentId: s.inHouseFilamentId, name: s.name, grams: s.grams, meters: s.meters, ...s.roles, cost: cost.slotCosts[i] })),
     stockWarnings: stockWarnings(slots, cost.quantity),
   };
 }
@@ -208,11 +259,11 @@ export function createPrintJob(data, db = getDb()) {
       `INSERT INTO print_jobs
         (id, item_name, quantity, total_grams, total_meters, print_time_minutes, design_hours, setup_hours, post_processing_hours,
          markup_pct, filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price,
-         final_selling_price, status, date_printed, created_at)
+         final_selling_price, status, date_printed, created_at, printer_id, printer_name, printer_watts)
        VALUES
         (@id, @item_name, @quantity, @total_grams, @total_meters, @print_time_minutes, @design_hours, @setup_hours, @post_processing_hours,
          @markup_pct, @filament_cost, @power_cost, @labour_cost, @running_cost, @total_cost, @markup_amount, @selling_price,
-         @final_selling_price, @status, @date_printed, @created_at)`,
+         @final_selling_price, @status, @date_printed, @created_at, @printer_id, @printer_name, @printer_watts)`,
     ).run({
       id,
       item_name: String(data.itemName).trim(),
@@ -235,17 +286,31 @@ export function createPrintJob(data, db = getDb()) {
       status: data.status === 'Estimate' ? 'Estimate' : 'Printed',
       date_printed: data.datePrinted || now,
       created_at: now,
+      printer_id: cost.printer?.id ?? null,
+      printer_name: cost.printer?.name ?? null,
+      printer_watts: cost.printer?.watts ?? null,
     });
 
     const insertSlot = db.prepare(
-      `INSERT INTO print_job_filaments (id, print_job_id, in_house_filament_id, grams, meters, cost, slot_order)
-       VALUES (@id, @print_job_id, @in_house_filament_id, @grams, @meters, @cost, @slot_order)`,
+      `INSERT INTO print_job_filaments
+        (id, print_job_id, in_house_filament_id, grams, meters, cost, slot_order,
+         model_g, model_m, tower_g, tower_m, purge_g, purge_m, support_g, support_m)
+       VALUES
+        (@id, @print_job_id, @in_house_filament_id, @grams, @meters, @cost, @slot_order,
+         @model_g, @model_m, @tower_g, @tower_m, @purge_g, @purge_m, @support_g, @support_m)`,
     );
     // Slot rows store what was PHYSICALLY consumed for the whole batch
     // (per-copy input x quantity) -- keeps every existing "grams used"
-    // reader truthful without needing to know about quantity.
+    // reader truthful without needing to know about quantity. The role
+    // breakdown follows the same rule (owner decision: tower/purge are
+    // entered per copy too, not per plate).
     slots.forEach((slot, i) => {
+      const q = cost.quantity;
       insertSlot.run({
+        model_g: slot.roles.modelG * q, model_m: slot.roles.modelM * q,
+        tower_g: slot.roles.towerG * q, tower_m: slot.roles.towerM * q,
+        purge_g: slot.roles.purgeG * q, purge_m: slot.roles.purgeM * q,
+        support_g: slot.roles.supportG * q, support_m: slot.roles.supportM * q,
         id: randomUUID(),
         print_job_id: id,
         in_house_filament_id: slot.inHouseFilamentId,
@@ -377,4 +442,4 @@ export function deletePrintJob(id, db = getDb()) {
   return true;
 }
 
-export { MAX_FILAMENT_SLOTS, STATUSES as PRINT_JOB_STATUSES };
+export { MAX_FILAMENT_SLOTS, SLOT_ROLES, STATUSES as PRINT_JOB_STATUSES };

@@ -80,7 +80,7 @@ test('the public site-settings.json is an allowlist — no banking, cost model, 
   // The regression that motivated this: publicSettings() was a pass-through.
   const forbidden = [
     'bankName', 'bankAccountName', 'bankAccountNumber', 'bankBranchCode',
-    'invoiceNumberSeed', 'markupPct', 'electricityRate', 'printerPowerDraw',
+    'invoiceNumberSeed', 'markupPct', 'electricityRate', 'printerPowerDraw', 'printers',
     'runningCostsPct', 'designRate', 'setupRate', 'postProcessingRate',
     'orderNotificationEmail', 'emailTemplates', 'todoCategories', 'todoPriorities',
     'inHouseFilamentBrands',

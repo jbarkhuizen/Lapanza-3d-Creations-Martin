@@ -3429,6 +3429,9 @@ app.put('/api/settings', requireAuth, async (req, res) => {
     'bankName', 'bankAccountName', 'bankAccountNumber', 'bankBranchCode', 'invoiceNumberSeed',
     'markupPct', 'electricityRate', 'printerPowerDraw', 'runningCostsPct',
     'designRate', 'setupRate', 'postProcessingRate',
+    // Per-printer power draw (2026-09-23) -- {id,name,watts,active}[],
+    // shape-guarded below.
+    'printers',
     // Phase 4
     'orderNotificationEmail',
     // SITE-027
@@ -3538,6 +3541,20 @@ app.put('/api/settings', requireAuth, async (req, res) => {
         active: t?.active !== false,
       }))
       .filter((t) => t.minQty >= 2 && t.pct > 0);
+  }
+  // Printers: same {id,name,active} guard as the configurable lists, plus a
+  // non-negative watts figure. Nameless rows are dropped (nothing to show
+  // in the job form's Printer picker).
+  if (patch.printers !== undefined) {
+    patch.printers = (Array.isArray(patch.printers) ? patch.printers : [])
+      .map((entry) => (entry && typeof entry === 'object' ? entry : {}))
+      .map((entry, i) => ({
+        id: String(entry.id || '').trim() || `printer-${i}-${Date.now()}`,
+        name: String(entry.name || '').trim(),
+        watts: Math.max(0, Number(entry.watts) || 0),
+        active: entry.active !== false,
+      }))
+      .filter((entry) => entry.name);
   }
   // Same shape-guard reasoning as the configurable lists above, but its own
   // block: a featured-product entry has no `name` field to require (the

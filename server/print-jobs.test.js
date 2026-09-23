@@ -343,3 +343,43 @@ test('updatePrintJobListing bumps stock ("printed 3 more") on the existing linke
     db.close();
   });
 });
+
+// Per-printer power draw (2026-09-23)
+test('computeJobCost uses the chosen printer\'s watts instead of the legacy printerPowerDraw', () => {
+  const settings = { ...SETTINGS, printers: [{ id: 'p2s', name: 'Bambu Lab P2S', watts: 150, active: true }] };
+  const cost = computeJobCost({ printerId: 'p2s', quantity: 2, printTimeMinutes: 120 }, settings, []);
+  assert.strictEqual(cost.printer.name, 'Bambu Lab P2S');
+  assert.strictEqual(cost.powerCost, 2.4); // 2h x 2 copies x 0.15kW x R4
+  // No printer -> legacy 0.2kW fallback, unchanged behaviour
+  assert.strictEqual(computeJobCost({ printTimeMinutes: 60 }, settings, []).powerCost, 0.8);
+});
+
+test('computeJobCost rejects a printer id that is not in Settings', () => {
+  assert.throws(() => computeJobCost({ printerId: 'gone', printTimeMinutes: 60 }, SETTINGS, []), /printer not found/);
+});
+
+test('createPrintJob sums model/tower/purge/support into the slot total, stores the breakdown x quantity, and snapshots the printer', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob(
+    {
+      itemName: 'Two-colour Widget',
+      quantity: 2,
+      printerId: 'snapmaker-u1', // seeded default, 200W
+      printTimeMinutes: 60,
+      filaments: [{ inHouseFilamentId: f.id, modelG: 40, modelM: 13.4, towerG: 3, towerM: 1, purgeG: 5, purgeM: 1.6, supportG: 2, supportM: 0.6 }],
+    },
+    db,
+  );
+  const slot = job.filaments[0];
+  assert.strictEqual(slot.grams, 100); // (40+3+5+2) x 2
+  assert.strictEqual(slot.towerG, 6);
+  assert.strictEqual(slot.purgeG, 10);
+  assert.strictEqual(slot.supportG, 4);
+  assert.strictEqual(job.totalGrams, 100);
+  assert.strictEqual(db.prepare('SELECT used_g FROM in_house_filament WHERE id = ?').get(f.id).used_g, 100);
+  assert.strictEqual(job.printerName, 'Snapmaker U1');
+  assert.strictEqual(job.printerWatts, 200);
+  assert.strictEqual(job.powerCost, 1.99); // 1h x 2 x 0.2kW x R4.97 = 1.988
+  db.close();
+});

@@ -3317,6 +3317,19 @@ function depositTierPanel(items) {
     </div>`;
 }
 
+// One editable printer row for Settings → Print Job Costing Rates. Unlike
+// the list panels above this saves with the section's own Save button
+// (like volume discounts), so watts can be tuned without a save per row.
+function printerSettingsRow(p) {
+  return `
+    <div class="row-card-actions" data-printer-row data-printer-id="${escapeAttr(p.id || '')}">
+      <label class="field checkbox" title="Active — shown in the Print Job printer picker"><input data-printer="active" type="checkbox" ${p.active !== false ? 'checked' : ''} /><span>Active</span></label>
+      <label class="field" style="flex:1;min-width:160px"><span>Printer</span><input data-printer="name" value="${escapeAttr(p.name || '')}" placeholder="e.g. Bambu Lab P2S" /></label>
+      <label class="field" style="max-width:140px"><span>Watts (Avg)</span><input data-printer="watts" type="number" min="0" step="1" value="${escapeAttr(String(p.watts ?? ''))}" /></label>
+      <button type="button" class="btn small btn-ghost" data-printer-remove>Remove</button>
+    </div>`;
+}
+
 function wireDepositTierPanel() {
   const panel = $('#deposit-tier-panel');
   if (!panel) return;
@@ -3756,14 +3769,21 @@ async function renderSettings() {
         <div class="grid-3">
           <label class="field"><span>Markup (Fraction)</span><input data-setting="markupPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.markupPct ?? 0))}" /></label>
           <label class="field"><span>Running Costs (Fraction)</span><input data-setting="runningCostsPct" type="number" min="0" step="0.05" value="${escapeAttr(String(s.runningCostsPct ?? 0))}" /></label>
-          <label class="field"><span>Electricity Rate (R/kWh)</span><input data-setting="electricityRate" type="number" min="0" step="0.01" value="${escapeAttr(String(s.electricityRate ?? 0))}" /></label>
+          <label class="field"><span>Electricity Price (R/kWh)</span><input data-setting="electricityRate" type="number" min="0" step="0.01" value="${escapeAttr(String(s.electricityRate ?? 0))}" /></label>
         </div>
         <div class="grid-3">
-          <label class="field"><span>Printer Power Draw (kWh/hr)</span><input data-setting="printerPowerDraw" type="number" min="0" step="0.01" value="${escapeAttr(String(s.printerPowerDraw ?? 0))}" /></label>
           <label class="field"><span>Design Rate (R/hr)</span><input data-setting="designRate" type="number" min="0" step="1" value="${escapeAttr(String(s.designRate ?? 0))}" /></label>
           <label class="field"><span>Setup Rate (R/hr)</span><input data-setting="setupRate" type="number" min="0" step="1" value="${escapeAttr(String(s.setupRate ?? 0))}" /></label>
+          <label class="field"><span>Post-processing Rate (R/hr)</span><input data-setting="postProcessingRate" type="number" min="0" step="1" value="${escapeAttr(String(s.postProcessingRate ?? 0))}" /></label>
         </div>
-        <label class="field" style="max-width:220px"><span>Post-processing Rate (R/hr)</span><input data-setting="postProcessingRate" type="number" min="0" step="1" value="${escapeAttr(String(s.postProcessingRate ?? 0))}" /></label>
+        <div class="stack gap-2">
+          <h4 style="margin:0">Printers — Average Power Draw</h4>
+          <p class="muted" style="margin:0;font-size:0.85rem">Average watts each printer pulls while printing. Power cost = print hours × watts ÷ 1000 × Electricity Rate. Untick to hide a printer from the job form — jobs already logged on it keep their cost.</p>
+          <div id="printer-rows" class="stack gap-2">
+            ${(s.printers || []).map((p) => printerSettingsRow(p)).join('')}
+          </div>
+          <div><button type="button" class="btn small" id="printer-add">+ Add Printer</button></div>
+        </div>
         <div>
           <button class="btn btn-primary" id="save-settings-print-costing" type="button">Save Print Job Costing Rates</button>
         </div>
@@ -3866,7 +3886,27 @@ async function renderSettings() {
     return { emailTemplates };
   });
   wireScopedSettingsSave('operational-alerts', 'save-settings-operational-alerts', scopedSettingFieldsPatch);
-  wireScopedSettingsSave('print-costing', 'save-settings-print-costing', scopedSettingFieldsPatch);
+  wireScopedSettingsSave('print-costing', 'save-settings-print-costing', (container) => ({
+    ...scopedSettingFieldsPatch(container),
+    printers: [...container.querySelectorAll('#printer-rows [data-printer-row]')].map((row) => {
+      const name = row.querySelector('[data-printer="name"]').value.trim();
+      return {
+        // New rows get an id from their name on first save; existing rows
+        // keep theirs so print jobs' printer_id links stay stable on rename.
+        id: row.dataset.printerId || `${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'printer'}-${Date.now().toString(36)}`,
+        name,
+        watts: Number(row.querySelector('[data-printer="watts"]').value) || 0,
+        active: row.querySelector('[data-printer="active"]').checked,
+      };
+    }),
+  }));
+  $('#printer-add')?.addEventListener('click', () => {
+    $('#printer-rows').insertAdjacentHTML('beforeend', printerSettingsRow({ id: '', name: '', watts: '', active: true }));
+  });
+  $('#printer-rows')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-printer-remove]');
+    if (btn) btn.closest('[data-printer-row]').remove();
+  });
   wireScopedSettingsSave('dropship', 'save-settings-dropship', scopedSettingFieldsPatch);
 
   // #60: tier add/remove -- static template, values typed by the admin.
@@ -5284,12 +5324,36 @@ async function renderNewOrder() {
 // the spreadsheet's Cost Calculator, computed server-side in print-jobs.js.
 
 const MAX_PRINT_JOB_FILAMENT_SLOTS = 4;
+// Per-colour usage roles (2026-09-23) -- mirrors SLOT_ROLES in
+// server/print-jobs.js. A slot's total grams/meters is the sum of all four.
+const PRINT_JOB_ROLES = [
+  { key: 'model', label: 'Model' },
+  { key: 'tower', label: 'Tower' },
+  { key: 'purge', label: 'Purge' },
+  { key: 'support', label: 'Supports' },
+];
+
+function blankPrintJobSlot() {
+  const slot = { inHouseFilamentId: '' };
+  PRINT_JOB_ROLES.forEach((r) => { slot[`${r.key}G`] = ''; slot[`${r.key}M`] = ''; });
+  return slot;
+}
+
+function printJobSlotTotals(slot) {
+  return PRINT_JOB_ROLES.reduce(
+    (acc, r) => ({ g: acc.g + (Number(slot[`${r.key}G`]) || 0), m: acc.m + (Number(slot[`${r.key}M`]) || 0) }),
+    { g: 0, m: 0 },
+  );
+}
 
 function blankPrintJob() {
   return {
     itemName: '',
     quantity: 1,
-    slots: Array.from({ length: MAX_PRINT_JOB_FILAMENT_SLOTS }, () => ({ inHouseFilamentId: '', grams: '', meters: '' })),
+    // '' = "use the first active printer" -- resolved at render time, since
+    // the printer list lives in Settings and isn't loaded yet here.
+    printerId: '',
+    slots: Array.from({ length: MAX_PRINT_JOB_FILAMENT_SLOTS }, blankPrintJobSlot),
     // Captured as separate hours/minutes fields for easier data entry --
     // combined into the single printTimeMinutes the API/DB actually store
     // (see readPrintJobPayload) only when the payload is built.
@@ -5309,10 +5373,18 @@ function printJobFilamentOptions(filaments, selectedId) {
 function readPrintJobPayload(draft) {
   const filaments = draft.slots
     .filter((s) => s.inHouseFilamentId)
-    .map((s) => ({ inHouseFilamentId: s.inHouseFilamentId, grams: Number(s.grams) || 0, meters: Number(s.meters) || 0 }));
+    .map((s) => {
+      const slot = { inHouseFilamentId: s.inHouseFilamentId };
+      PRINT_JOB_ROLES.forEach((r) => {
+        slot[`${r.key}G`] = Number(s[`${r.key}G`]) || 0;
+        slot[`${r.key}M`] = Number(s[`${r.key}M`]) || 0;
+      });
+      return slot;
+    });
   return {
     itemName: draft.itemName.trim(),
     quantity: Math.max(1, Math.round(Number(draft.quantity) || 1)),
+    printerId: draft.printerId || undefined,
     filaments,
     printTimeMinutes: (Number(draft.printTimeHours) || 0) * 60 + (Number(draft.printTimeMins) || 0),
     designHours: Number(draft.designHours) || 0,
@@ -5327,26 +5399,49 @@ function readPrintJobPayload(draft) {
 async function renderPrintJobs() {
   state.newPrintJob = state.newPrintJob || blankPrintJob();
   const draft = state.newPrintJob;
-  const [{ printJobs }, { filaments: allFilaments }] = await Promise.all([api('/api/print-jobs'), api('/api/in-house-filament')]);
+  const [{ printJobs }, { filaments: allFilaments }, { settings }] = await Promise.all([
+    api('/api/print-jobs'),
+    api('/api/in-house-filament'),
+    api('/api/settings'),
+  ]);
   // Review #5 (todo #144): archived rolls never appear in the picker.
   const filaments = allFilaments.filter((f) => !f.archived);
+  // Retired printers drop out of the picker, same rule as archived rolls --
+  // unless the current draft already points at one.
+  const printers = (settings.printers || []).filter((p) => p.active || p.id === draft.printerId);
+  if (!draft.printerId && printers.length) draft.printerId = printers[0].id;
 
+  // Compact single line per colour (owner choice): Model / Tower / Purge /
+  // Supports, each a grams + metres pair, all PER COPY like the rest of the
+  // form (quantity multiplies every role, tower and purge included).
   const slotRows = draft.slots
-    .map((slot, idx) => `
-        <div class="grid-4" data-slot-idx="${idx}" style="align-items:end">
-          <label class="field" style="grid-column:span 2"><span>Filament ${idx + 1}${idx === 0 ? '' : ' (optional)'}</span>
+    .map((slot, idx) => {
+      const sub = printJobSlotTotals(slot);
+      return `
+        <div class="stack gap-1" data-slot-idx="${idx}" style="padding-bottom:0.5rem;border-bottom:1px solid var(--line, rgba(0,0,0,0.08))">
+          <label class="field"><span>Filament ${idx + 1}${idx === 0 ? '' : ' (optional)'} <span class="muted pjs-subtotal">${sub.g || sub.m ? `= ${escapeHtml(sub.g.toFixed(1))}g / ${escapeHtml(sub.m.toFixed(2))}m per copy` : ''}</span></span>
             <select class="pjs-filament">
               <option value="">${idx === 0 ? '— Choose —' : '— None —'}</option>
               ${printJobFilamentOptions(filaments, slot.inHouseFilamentId)}
             </select>
           </label>
-          <label class="field"><span>Grams (Per Copy)</span><input class="pjs-grams" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.grams))}" /></label>
-          <label class="field"><span>Meters (Per Copy)</span><input class="pjs-meters" type="number" min="0" step="0.01" value="${escapeAttr(String(slot.meters))}" /></label>
-        </div>`)
+          <div class="grid-4">
+            ${PRINT_JOB_ROLES.map((r) => `
+              <div class="field"><span>${r.label} (g / m)</span>
+                <div style="display:flex;gap:0.3rem">
+                  <input class="pjs-role" data-field="${r.key}G" type="number" min="0" step="0.01" placeholder="g" aria-label="${r.label} grams" value="${escapeAttr(String(slot[`${r.key}G`]))}" style="min-width:0" />
+                  <input class="pjs-role" data-field="${r.key}M" type="number" min="0" step="0.01" placeholder="m" aria-label="${r.label} metres" value="${escapeAttr(String(slot[`${r.key}M`]))}" style="min-width:0" />
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    })
     .join('');
 
-  const totalGrams = draft.slots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0);
-  const totalMeters = draft.slots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0);
+  const printJobTotalsHtml = () => {
+    const t = draft.slots.reduce((acc, s) => { const x = printJobSlotTotals(s); return { g: acc.g + x.g, m: acc.m + x.m }; }, { g: 0, m: 0 });
+    return `Totals (Per Copy, Incl. Tower/Purge/Supports): <strong>${escapeHtml(t.g.toFixed(1))}g</strong> · <strong>${escapeHtml(t.m.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
+  };
 
   const preview = draft.preview;
   const stockWarningsHtml = (warnings) => (warnings && warnings.length
@@ -5355,7 +5450,7 @@ async function renderPrintJobs() {
   const previewHtml = preview ? `
       <div class="panel stack gap-2" style="background:var(--panel-2, transparent)">
         <div class="section-head"><h3>Validation Result</h3></div>
-        <p>Filament cost: ${formatRand(preview.filamentCost)} · Power: ${formatRand(preview.powerCost)} · Labour: ${formatRand(preview.labourCost)} · Running: ${formatRand(preview.runningCost)}</p>
+        <p>Filament cost: ${formatRand(preview.filamentCost)} · Power: ${formatRand(preview.powerCost)}${preview.printer ? ` <span class="muted">(${escapeHtml(preview.printer.name)}, ${escapeHtml(String(preview.printer.watts))}W × ${escapeHtml(preview.printTimeHours.toFixed(2))}h @ ${formatRand(settings.electricityRate)}/kWh)</span>` : ''} · Labour: ${formatRand(preview.labourCost)} · Running: ${formatRand(preview.runningCost)}</p>
         <p><strong>Total cost: ${formatRand(preview.totalCost)} — Markup: ${formatRand(preview.markupAmount)} — Selling price: ${formatRand(preview.sellingPrice)}${(preview.quantity || 1) > 1 ? ` (${preview.quantity} copies — ${formatRand(Math.round((preview.sellingPrice / preview.quantity) * 100) / 100)} each)` : ''}</strong></p>
         ${stockWarningsHtml(preview.stockWarnings)}
       </div>` : '';
@@ -5373,7 +5468,7 @@ async function renderPrintJobs() {
     .map(
       (j) => `
         <tr data-id="${escapeAttr(j.id)}">
-          <td>${j.referenceImagePath ? `<img src="${escapeAttr(j.referenceImagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:0.5rem" />` : ''}${escapeHtml(j.itemName)}${(j.quantity || 1) > 1 ? ` <span class="muted">×${j.quantity}</span>` : ''}</td>
+          <td>${j.referenceImagePath ? `<img src="${escapeAttr(j.referenceImagePath)}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;vertical-align:middle;margin-right:0.5rem" />` : ''}${escapeHtml(j.itemName)}${(j.quantity || 1) > 1 ? ` <span class="muted">×${j.quantity}</span>` : ''}${j.printerName ? `<div class="muted" style="font-size:0.75rem">${escapeHtml(j.printerName)}</div>` : ''}</td>
           <td style="font-size:0.8rem">
             <div class="stack gap-1">
               <div>
@@ -5453,10 +5548,17 @@ async function renderPrintJobs() {
             <div><button type="button" class="btn small" id="pj-new-roll-save">Save Roll</button></div>
           </div>
         </div>
-        <p class="muted" style="font-size:0.85rem">Totals (Per Copy): <strong>${escapeHtml(totalGrams.toFixed(1))}g</strong> · <strong>${escapeHtml(totalMeters.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)</p>
+        <p class="muted" id="pj-totals" style="font-size:0.85rem">${printJobTotalsHtml()}</p>
 
         <div class="grid-4">
-          <label class="field"><span>Print Time</span>
+          <label class="field"><span>Printer</span>
+            <select id="pj-printer">
+              ${printers.length
+                ? printers.map((p) => `<option value="${escapeAttr(p.id)}" ${p.id === draft.printerId ? 'selected' : ''}>${escapeHtml(p.name)} (${escapeHtml(String(p.watts))}W)</option>`).join('')
+                : '<option value="">— Add printers in Settings —</option>'}
+            </select>
+          </label>
+          <label class="field"><span>Print Time (Per Copy)</span>
             <div class="grid-2" style="gap:0.4rem">
               <input id="pj-time-h" type="number" min="0" step="1" placeholder="Hours" value="${escapeAttr(String(draft.printTimeHours))}" />
               <input id="pj-time-m" type="number" min="0" max="59" step="1" placeholder="Minutes" value="${escapeAttr(String(draft.printTimeMins))}" />
@@ -5464,6 +5566,8 @@ async function renderPrintJobs() {
           </label>
           <label class="field"><span>Design (hrs)</span><input id="pj-design-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.designHours))}" /></label>
           <label class="field"><span>Setup (hrs)</span><input id="pj-setup-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.setupHours))}" /></label>
+        </div>
+        <div class="grid-4">
           <label class="field"><span>Post-processing (hrs, Per Copy)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
         </div>
         <div class="grid-3">
@@ -5521,23 +5625,37 @@ async function renderPrintJobs() {
       draft.preview = null;
       renderPrintJobs();
     });
-    row.querySelector('.pjs-grams').addEventListener('input', (e) => { draft.slots[idx].grams = e.target.value; renderTotalsOnly(); });
-    row.querySelector('.pjs-meters').addEventListener('input', (e) => { draft.slots[idx].meters = e.target.value; renderTotalsOnly(); });
+    row.querySelectorAll('.pjs-role').forEach((input) => {
+      input.addEventListener('input', (e) => {
+        draft.slots[idx][e.target.dataset.field] = e.target.value;
+        renderTotalsOnly(row, idx);
+      });
+    });
   });
 
-  function renderTotalsOnly() {
+  // A different printer changes power cost, so an on-screen Validation
+  // Result would be stale -- drop it (same as picking a different filament).
+  $('#pj-printer').addEventListener('change', () => {
+    syncFormIntoDraft();
+    draft.preview = null;
+    renderPrintJobs();
+  });
+
+  function renderTotalsOnly(row, idx) {
     // Cheap live-total update without a full re-render on every keystroke;
     // a full renderPrintJobs() still happens on blur-triggering actions
     // (filament pick, validate, log) so the totals never drift stale.
-    const g = draft.slots.reduce((sum, s) => sum + (Number(s.grams) || 0), 0);
-    const m = draft.slots.reduce((sum, s) => sum + (Number(s.meters) || 0), 0);
-    const el = document.querySelector('#view-print-jobs .muted');
-    if (el) el.innerHTML = `Totals: <strong>${escapeHtml(g.toFixed(1))}g</strong> · <strong>${escapeHtml(m.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
+    const el = $('#pj-totals');
+    if (el) el.innerHTML = printJobTotalsHtml();
+    const sub = printJobSlotTotals(draft.slots[idx]);
+    const subEl = row.querySelector('.pjs-subtotal');
+    if (subEl) subEl.textContent = sub.g || sub.m ? `= ${sub.g.toFixed(1)}g / ${sub.m.toFixed(2)}m per copy` : '';
   }
 
   function syncFormIntoDraft() {
     draft.itemName = $('#pj-name').value;
     draft.quantity = $('#pj-qty').value;
+    draft.printerId = $('#pj-printer').value;
     draft.printTimeHours = $('#pj-time-h').value;
     draft.printTimeMins = $('#pj-time-m').value;
     draft.designHours = $('#pj-design-hrs').value;
@@ -5604,7 +5722,8 @@ async function renderPrintJobs() {
       if (fileInput.files[0]) await uploadPrintJobAsset(printJob.id, 'file', fileInput.files[0]);
       if (imageInput.files[0]) await uploadPrintJobAsset(printJob.id, 'image', imageInput.files[0]);
 
-      state.newPrintJob = blankPrintJob();
+      // Keep the printer picked -- consecutive jobs usually run on the same one.
+      state.newPrintJob = { ...blankPrintJob(), printerId: draft.printerId };
       await renderPrintJobs();
     } catch (ex) {
       toast(ex.message);

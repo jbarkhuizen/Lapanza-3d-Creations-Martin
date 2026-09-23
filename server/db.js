@@ -1017,6 +1017,39 @@ function ensurePrintJobColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'reference_image_original_name')) {
     db.exec('ALTER TABLE print_jobs ADD COLUMN reference_image_original_name TEXT');
   }
+  // Per-printer power draw (2026-09-23): the printer a job ran on, snapshotted
+  // by name + watts at log time -- same "cost is a snapshot, never re-priced"
+  // rule as power_cost itself, so renaming/re-rating a printer in Settings
+  // never rewrites history. NULL on rows logged before this existed (they
+  // were costed with the old single printerPowerDraw setting).
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'printer_id')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN printer_id TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'printer_name')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN printer_name TEXT');
+  }
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'printer_watts')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN printer_watts REAL');
+  }
+  // Per-colour role breakdown (2026-09-23): model / prime tower / purge /
+  // supports, each grams + metres. print_job_filaments.grams/meters stay the
+  // slot TOTAL (sum of the four) so every existing reader -- stock
+  // decrement, cost, "filament used" -- keeps working unchanged. Pre-existing
+  // rows backfill as 0 across the board: their total was never split, so
+  // there is no honest role breakdown to recover.
+  const roleColumns = {
+    model_g: 'ALTER TABLE print_job_filaments ADD COLUMN model_g REAL NOT NULL DEFAULT 0',
+    model_m: 'ALTER TABLE print_job_filaments ADD COLUMN model_m REAL NOT NULL DEFAULT 0',
+    tower_g: 'ALTER TABLE print_job_filaments ADD COLUMN tower_g REAL NOT NULL DEFAULT 0',
+    tower_m: 'ALTER TABLE print_job_filaments ADD COLUMN tower_m REAL NOT NULL DEFAULT 0',
+    purge_g: 'ALTER TABLE print_job_filaments ADD COLUMN purge_g REAL NOT NULL DEFAULT 0',
+    purge_m: 'ALTER TABLE print_job_filaments ADD COLUMN purge_m REAL NOT NULL DEFAULT 0',
+    support_g: 'ALTER TABLE print_job_filaments ADD COLUMN support_g REAL NOT NULL DEFAULT 0',
+    support_m: 'ALTER TABLE print_job_filaments ADD COLUMN support_m REAL NOT NULL DEFAULT 0',
+  };
+  for (const [col, sql] of Object.entries(roleColumns)) {
+    if (!hasColumn(db, 'PRAGMA table_info(print_job_filaments)', col)) db.exec(sql);
+  }
   // Idempotent -- matches nothing on a second run since no row still has
   // the old lowercase values after the first.
   db.exec("UPDATE print_jobs SET status = 'Printed' WHERE status = 'printed'");
