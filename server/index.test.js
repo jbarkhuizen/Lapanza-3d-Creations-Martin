@@ -1807,10 +1807,18 @@ test('client invoice route serves own orders only; tracking rides along in order
   assert.strictEqual(anon.status, 401);
 
   // Tracking number set by admin appears in the client's order history.
-  await request(app).put(`/api/orders/${orderId}/tracking`).set('Cookie', adminCookie).send({ trackingNumber: 'PUD123456' });
+  const tracked = await request(app).put(`/api/orders/${orderId}/tracking`).set('Cookie', adminCookie).send({ trackingNumber: 'PUD123456' });
+  // Todo #168: the response says what happened to the customer email --
+  // sent on the first save (or a reason if the test mailer refused it)...
+  assert.strictEqual(typeof tracked.body.shippedEmail?.sent, 'boolean');
+  if (tracked.body.shippedEmail.sent) assert.strictEqual(tracked.body.shippedEmail.to, 'invoice-owner@example.com');
+  else assert.ok(tracked.body.shippedEmail.reason);
+  // ...and a later edit of the number explicitly reports it did NOT re-mail.
+  const retracked = await request(app).put(`/api/orders/${orderId}/tracking`).set('Cookie', adminCookie).send({ trackingNumber: 'PUD123457' });
+  assert.deepStrictEqual(retracked.body.shippedEmail, { sent: false, reason: 'the customer was already emailed when a tracking number was first saved' });
   const history = await request(app).get('/api/client/orders').set('Cookie', owner.cookie);
   const row = history.body.orders.find((o) => o.id === orderId);
-  assert.strictEqual(row.tracking_number, 'PUD123456');
+  assert.strictEqual(row.tracking_number, 'PUD123457');
 });
 
 test('buy-again re-resolves own past orders at current prices; foreign orders 404 (#96)', async (t) => {

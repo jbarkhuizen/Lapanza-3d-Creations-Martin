@@ -301,37 +301,7 @@ export function createPrintJob(data, db = getDb()) {
       printer_watts: cost.printer?.watts ?? null,
     });
 
-    const insertSlot = db.prepare(
-      `INSERT INTO print_job_filaments
-        (id, print_job_id, in_house_filament_id, grams, meters, cost, slot_order,
-         model_g, model_m, tower_g, tower_m, purge_g, purge_m, support_g, support_m)
-       VALUES
-        (@id, @print_job_id, @in_house_filament_id, @grams, @meters, @cost, @slot_order,
-         @model_g, @model_m, @tower_g, @tower_m, @purge_g, @purge_m, @support_g, @support_m)`,
-    );
-    // Slot rows store what was PHYSICALLY consumed for the whole batch
-    // (per-copy input x quantity) -- keeps every existing "grams used"
-    // reader truthful without needing to know about quantity. The role
-    // breakdown follows the same rule (owner decision: tower/purge are
-    // entered per copy too, not per plate).
-    slots.forEach((slot, i) => {
-      const q = cost.quantity;
-      insertSlot.run({
-        model_g: slot.roles.modelG * q, model_m: slot.roles.modelM * q,
-        tower_g: slot.roles.towerG * q, tower_m: slot.roles.towerM * q,
-        purge_g: slot.roles.purgeG * q, purge_m: slot.roles.purgeM * q,
-        support_g: slot.roles.supportG * q, support_m: slot.roles.supportM * q,
-        id: randomUUID(),
-        print_job_id: id,
-        in_house_filament_id: slot.inHouseFilamentId,
-        grams: slot.grams * cost.quantity,
-        meters: slot.meters * cost.quantity,
-        cost: cost.slotCosts[i],
-        slot_order: slot.slotOrder,
-      });
-      incrementInHouseFilamentUsage(slot.inHouseFilamentId, { usedG: slot.grams * cost.quantity, usedM: slot.meters * cost.quantity }, db);
-    });
-
+    writeJobSlots(id, slots, cost, db);
     return id;
   });
 
@@ -339,6 +309,121 @@ export function createPrintJob(data, db = getDb()) {
   const job = getPrintJob(jobId, db);
   // Transient, not persisted -- matches orders.js's _lowStock convention for
   // a warning attached to the response but never stored on the row itself.
+  if (warnings.length) job._stockWarnings = warnings;
+  return job;
+}
+
+// Slot rows store what was PHYSICALLY consumed for the whole batch
+// (per-copy input x quantity) -- keeps every existing "grams used" reader
+// truthful without needing to know about quantity. The role breakdown
+// follows the same rule (owner decision: tower/purge are entered per copy
+// too, not per plate). Also charges that consumption to in-house stock.
+// Must run inside the caller's transaction.
+function writeJobSlots(jobId, slots, cost, db) {
+  const insertSlot = db.prepare(
+    `INSERT INTO print_job_filaments
+      (id, print_job_id, in_house_filament_id, grams, meters, cost, slot_order,
+       model_g, model_m, tower_g, tower_m, purge_g, purge_m, support_g, support_m)
+     VALUES
+      (@id, @print_job_id, @in_house_filament_id, @grams, @meters, @cost, @slot_order,
+       @model_g, @model_m, @tower_g, @tower_m, @purge_g, @purge_m, @support_g, @support_m)`,
+  );
+  const q = cost.quantity;
+  slots.forEach((slot, i) => {
+    insertSlot.run({
+      model_g: slot.roles.modelG * q, model_m: slot.roles.modelM * q,
+      tower_g: slot.roles.towerG * q, tower_m: slot.roles.towerM * q,
+      purge_g: slot.roles.purgeG * q, purge_m: slot.roles.purgeM * q,
+      support_g: slot.roles.supportG * q, support_m: slot.roles.supportM * q,
+      id: randomUUID(),
+      print_job_id: jobId,
+      in_house_filament_id: slot.inHouseFilamentId,
+      grams: slot.grams * q,
+      meters: slot.meters * q,
+      cost: cost.slotCosts[i],
+      slot_order: slot.slotOrder,
+    });
+    incrementInHouseFilamentUsage(slot.inHouseFilamentId, { usedG: slot.grams * q, usedM: slot.meters * q }, db);
+  });
+}
+
+// Todo #170: full edit / re-estimate of an already-logged job -- same
+// inputs and same costing as createPrintJob, recomputed against TODAY's
+// settings and roll prices. Stock is corrected by handing back what the
+// old version of the job consumed and charging the new amounts, in one
+// transaction, so in-house stock only ever moves by the difference. The
+// hand-back is clamped at 0 because historically-imported jobs (scripts/
+// import-historical-print-jobs.mjs) never charged stock in the first place.
+// Kept untouched: created_at, attachments, and any "List for sale" link.
+export function editPrintJob(id, data, db = getDb()) {
+  const existing = getPrintJob(id, db);
+  if (!existing) return null;
+  if (!data.itemName || !String(data.itemName).trim()) throw new Error('Item name is required');
+  const settings = getSettings(db);
+  const slots = resolveSlots(data.filaments, db);
+  const cost = computeJobCost(data, settings, slots);
+
+  // This job's own previous consumption is about to be handed back, so it
+  // counts as available when deciding whether the new amounts exceed stock.
+  const handedBack = new Map();
+  existing.filaments.forEach((f) => handedBack.set(f.inHouseFilamentId, (handedBack.get(f.inHouseFilamentId) || 0) + (f.grams || 0)));
+  const warnings = stockWarnings(
+    slots.map((s) => ({ ...s, remainingG: s.remainingG + (handedBack.get(s.inHouseFilamentId) || 0) })),
+    cost.quantity,
+  );
+
+  const recommendedSellingPrice = positiveOr(data.recommendedSellingPrice, cost.sellingPrice);
+  const finalSellingPrice = positiveOr(data.finalSellingPrice, recommendedSellingPrice);
+
+  db.transaction(() => {
+    const giveBack = db.prepare(
+      'UPDATE in_house_filament SET used_g = MAX(0, used_g - ?), used_m = MAX(0, used_m - ?), updated_at = ? WHERE id = ?',
+    );
+    const now = new Date().toISOString();
+    existing.filaments.forEach((f) => giveBack.run(f.grams || 0, f.meters || 0, now, f.inHouseFilamentId));
+    db.prepare('DELETE FROM print_job_filaments WHERE print_job_id = ?').run(id);
+
+    db.prepare(
+      `UPDATE print_jobs SET
+         item_name = @item_name, quantity = @quantity, total_grams = @total_grams, total_meters = @total_meters,
+         print_time_minutes = @print_time_minutes, design_hours = @design_hours, setup_hours = @setup_hours,
+         post_processing_hours = @post_processing_hours, markup_pct = @markup_pct, filament_cost = @filament_cost,
+         power_cost = @power_cost, labour_cost = @labour_cost, running_cost = @running_cost, total_cost = @total_cost,
+         markup_amount = @markup_amount, selling_price = @selling_price, recommended_selling_price = @recommended_selling_price,
+         final_selling_price = @final_selling_price, status = @status, date_printed = @date_printed,
+         printer_id = @printer_id, printer_name = @printer_name, printer_watts = @printer_watts
+       WHERE id = @id`,
+    ).run({
+      id,
+      item_name: String(data.itemName).trim(),
+      quantity: cost.quantity,
+      total_grams: cost.totalGrams,
+      total_meters: cost.totalMeters,
+      print_time_minutes: Number(data.printTimeMinutes) || 0,
+      design_hours: Number(data.designHours) || 0,
+      setup_hours: Number(data.setupHours) || 0,
+      post_processing_hours: Number(data.postProcessingHours) || 0,
+      markup_pct: cost.markupPct,
+      filament_cost: cost.filamentCost,
+      power_cost: cost.powerCost,
+      labour_cost: cost.labourCost,
+      running_cost: cost.runningCost,
+      total_cost: cost.totalCost,
+      markup_amount: cost.markupAmount,
+      selling_price: cost.sellingPrice,
+      recommended_selling_price: recommendedSellingPrice,
+      final_selling_price: finalSellingPrice,
+      status: STATUSES.includes(data.status) ? data.status : existing.status,
+      date_printed: data.datePrinted || existing.datePrinted,
+      printer_id: cost.printer?.id ?? null,
+      printer_name: cost.printer?.name ?? null,
+      printer_watts: cost.printer?.watts ?? null,
+    });
+
+    writeJobSlots(id, slots, cost, db);
+  })();
+
+  const job = getPrintJob(id, db);
   if (warnings.length) job._stockWarnings = warnings;
   return job;
 }

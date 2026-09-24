@@ -13,6 +13,7 @@ import {
   listPrintJobs,
   deletePrintJob,
   updatePrintJob,
+  editPrintJob,
   listPrintJobForSale,
   updatePrintJobListing,
   setPrintJobFile,
@@ -411,5 +412,41 @@ test('updatePrintJob edits Recommended and Final independently; blank keeps the 
   const fin = updatePrintJob(job.id, { finalSellingPrice: 95, recommendedSellingPrice: '' }, db);
   assert.strictEqual(fin.recommendedSellingPrice, 85);
   assert.strictEqual(fin.finalSellingPrice, 95);
+  db.close();
+});
+
+// Todo #170: edit / re-estimate
+test('editPrintJob re-costs the job and moves in-house stock only by the difference', () => {
+  const db = openDb(':memory:');
+  const a = makeFilament(db, { colorName: 'Red' });
+  const b = makeFilament(db, { colorName: 'Blue' });
+  const job = createPrintJob({ itemName: 'Estimate Me', status: 'Estimate', quantity: 2, filaments: [{ inHouseFilamentId: a.id, modelG: 50, modelM: 16 }], printTimeMinutes: 60 }, db);
+  const used = (id) => db.prepare('SELECT used_g, used_m FROM in_house_filament WHERE id = ?').get(id);
+  assert.strictEqual(used(a.id).used_g, 100);
+
+  const edited = editPrintJob(job.id, {
+    itemName: 'Estimate Me v2', status: 'Printed', quantity: 2, printTimeMinutes: 90,
+    filaments: [{ inHouseFilamentId: a.id, modelG: 30, modelM: 10 }, { inHouseFilamentId: b.id, modelG: 10, purgeG: 5, modelM: 3 }],
+  }, db);
+  assert.strictEqual(edited.id, job.id);
+  assert.strictEqual(edited.itemName, 'Estimate Me v2');
+  assert.strictEqual(edited.status, 'Printed');
+  assert.strictEqual(edited.createdAt, job.createdAt);
+  assert.strictEqual(edited.totalGrams, 90); // (30 + 15) x 2
+  assert.strictEqual(edited.filaments.length, 2);
+  assert.strictEqual(used(a.id).used_g, 60); // 100 handed back, 60 charged
+  assert.strictEqual(used(b.id).used_g, 30);
+  assert.ok(edited.totalCost !== job.totalCost);
+  db.close();
+});
+
+test('editPrintJob never drives usage below zero (historically-imported jobs never charged stock)', () => {
+  const db = openDb(':memory:');
+  const a = makeFilament(db);
+  const job = createPrintJob({ itemName: 'Imported', filaments: [{ inHouseFilamentId: a.id, modelG: 80 }] }, db);
+  db.prepare('UPDATE in_house_filament SET used_g = 0, used_m = 0 WHERE id = ?').run(a.id); // simulate import: no stock charged
+  editPrintJob(job.id, { itemName: 'Imported', filaments: [{ inHouseFilamentId: a.id, modelG: 20 }] }, db);
+  assert.strictEqual(db.prepare('SELECT used_g FROM in_house_filament WHERE id = ?').get(a.id).used_g, 20);
+  assert.strictEqual(editPrintJob('missing', { itemName: 'x', filaments: [{ inHouseFilamentId: a.id, modelG: 1 }] }, db), null);
   db.close();
 });

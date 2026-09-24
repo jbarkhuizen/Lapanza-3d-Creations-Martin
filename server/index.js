@@ -155,6 +155,7 @@ import {
   listPrintJobs,
   getPrintJob,
   createPrintJob,
+  editPrintJob,
   updatePrintJob,
   deletePrintJob,
   previewPrintJobCost,
@@ -2353,6 +2354,19 @@ app.post('/api/print-jobs', requireAuth, (req, res) => {
   }
 });
 
+// Todo #170: full edit / re-estimate (PATCH below stays the lightweight
+// status/price-only update the table's inline cells use).
+app.put('/api/print-jobs/:id', requireAuth, (req, res) => {
+  try {
+    const job = editPrintJob(req.params.id, req.body || {});
+    if (!job) return res.status(404).json({ error: 'Print job not found' });
+    recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Print job "${job.itemName}" edited/re-costed: totalCost=${formatRand(job.totalCost)}, finalSellingPrice=${formatRand(job.finalSellingPrice)}` });
+    res.json({ printJob: job });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 app.patch('/api/print-jobs/:id', requireAuth, (req, res) => {
   const job = updatePrintJob(req.params.id, req.body || {});
   if (!job) return res.status(404).json({ error: 'Print job not found' });
@@ -3020,14 +3034,26 @@ app.put('/api/orders/:id/tracking', requireAuth, async (req, res) => {
   const order = updateOrderTracking(req.params.id, (req.body || {}).trackingNumber);
   if (!order) return res.status(404).json({ error: 'Order not found' });
   recordAuditEvent({ eventType: AUDIT_EVENTS.ORDER_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Order ${order.id}: tracking number set to "${order.trackingNumber}"` });
-  if (!previous?.trackingNumber && order.trackingNumber && order.client?.email) {
+  // Todo #168: report what happened to the customer email, so the admin
+  // gets an explicit "saved + emailed" (or "saved, NOT emailed -- why")
+  // confirmation instead of a generic "Order updated".
+  let shippedEmail;
+  if (!order.trackingNumber) {
+    shippedEmail = { sent: false, reason: 'tracking number cleared' };
+  } else if (previous?.trackingNumber) {
+    shippedEmail = { sent: false, reason: 'the customer was already emailed when a tracking number was first saved' };
+  } else if (!order.client?.email) {
+    shippedEmail = { sent: false, reason: 'no customer email address on this order' };
+  } else {
     try {
       await sendOrderShippedEmail(order);
+      shippedEmail = { sent: true, to: order.client.email };
     } catch (err) {
       logEmailFailure(`Order ${order.id} shipped email`, err, req);
+      shippedEmail = { sent: false, reason: 'the email could not be sent -- try "Resend confirmation email" or contact the customer directly' };
     }
   }
-  res.json({ order });
+  res.json({ order, shippedEmail });
 });
 
 // Backlog #97: customer's own invoice, on demand -- same renderer as the

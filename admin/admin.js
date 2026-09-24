@@ -4148,6 +4148,26 @@ async function openOrderDetail(id) {
   await renderOrderDetail(id);
 }
 
+// Todo #168: one-shot banner shown after saving a tracking number --
+// consumed on render, so it disappears on the next navigation/re-render.
+function orderSaveNoticeHtml(order) {
+  const notice = state.orderSaveNotice;
+  if (!notice || notice.orderId !== order.id) return '';
+  state.orderSaveNotice = null;
+  const email = notice.shippedEmail || {};
+  const ok = !notice.trackingNumber || email.sent;
+  const headline = notice.trackingNumber
+    ? `✓ Tracking number <strong>${escapeHtml(notice.trackingNumber)}</strong> saved for this order.`
+    : '✓ Tracking number cleared for this order.';
+  const emailLine = email.sent
+    ? `✓ "Order shipped" email with the tracking number sent to <strong>${escapeHtml(email.to)}</strong>.`
+    : email.reason ? `Customer was <strong>not</strong> emailed: ${escapeHtml(email.reason)}.` : '';
+  return `
+        <div role="status" class="panel" style="padding:0.75rem 1rem;border-left:4px solid ${ok ? '#3fa36b' : '#d9a441'};font-size:0.9rem;line-height:1.6">
+          ${headline}${emailLine ? `<br />${emailLine}` : ''}
+        </div>`;
+}
+
 async function renderOrderDetail(id, editClient = false) {
   const { order } = await api(`/api/orders/${id}`);
   // Instruction sheets available for attaching to this order's customer
@@ -4193,6 +4213,7 @@ async function renderOrderDetail(id, editClient = false) {
           <label class="field"><span>Tracking Number</span><input id="order-tracking" value="${escapeAttr(order.trackingNumber || '')}" /></label>
           <div class="field"><span>&nbsp;</span><button class="btn btn-primary" id="save-order" type="button">Save</button></div>
         </div>
+        ${orderSaveNoticeHtml(order)}
         <p class="muted" style="font-size:0.85rem">
           Confirmation email: ${order.confirmationEmailSentAt ? `sent ${escapeHtml(formatDate(order.confirmationEmailSentAt))}` : 'not sent'}
           &nbsp;·&nbsp; <button class="btn small" id="resend-email" type="button">${order.confirmationEmailSentAt ? 'Resend' : 'Send'} confirmation email</button>
@@ -4338,11 +4359,18 @@ async function renderOrderDetail(id, editClient = false) {
     try {
       const status = $('#order-status').value;
       if (status !== order.status) await api(`/api/orders/${order.id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
-      const trackingNumber = $('#order-tracking').value;
+      const trackingNumber = $('#order-tracking').value.trim();
+      state.orderSaveNotice = null;
       if (trackingNumber !== (order.trackingNumber || '')) {
-        await api(`/api/orders/${order.id}/tracking`, { method: 'PUT', body: JSON.stringify({ trackingNumber }) });
+        const { shippedEmail } = await api(`/api/orders/${order.id}/tracking`, { method: 'PUT', body: JSON.stringify({ trackingNumber }) });
+        // Todo #168: an explicit confirmation that stays on the page (a
+        // toast disappears in ~3s) -- saved, and whether the customer was
+        // emailed, and if not, why.
+        state.orderSaveNotice = { orderId: order.id, trackingNumber, shippedEmail };
       }
-      toast('Order updated');
+      toast(state.orderSaveNotice
+        ? (state.orderSaveNotice.shippedEmail?.sent ? 'Tracking number saved — customer emailed' : 'Tracking number saved')
+        : 'Order updated');
       await renderOrderDetail(order.id);
     } catch (ex) {
       toast(ex.message);
@@ -5364,6 +5392,40 @@ function blankPrintJob() {
   };
 }
 
+// Todo #170: turn a logged job back into an editable form draft. Slot rows
+// store whole-batch amounts, the form works per copy -- so divide by
+// quantity. Jobs logged before the per-role breakdown existed have only a
+// total, which goes into Model.
+function printJobToDraft(job) {
+  const q = job.quantity || 1;
+  const per = (v) => (v ? String(Math.round((v / q) * 100) / 100) : '');
+  const draft = blankPrintJob();
+  draft.itemName = job.itemName;
+  draft.quantity = q;
+  draft.printerId = job.printerId || '';
+  draft.printTimeHours = Math.floor((job.printTimeMinutes || 0) / 60);
+  draft.printTimeMins = (job.printTimeMinutes || 0) % 60;
+  draft.designHours = job.designHours || 0;
+  draft.setupHours = job.setupHours || 0;
+  draft.postProcessingHours = job.postProcessingHours || 0;
+  draft.markupPct = job.markupPct ?? '';
+  draft.status = job.status;
+  draft.recommendedSellingPrice = job.recommendedSellingPrice ?? '';
+  draft.finalSellingPrice = job.finalSellingPrice ?? '';
+  job.filaments.forEach((f, i) => {
+    const slot = draft.slots[i];
+    slot.inHouseFilamentId = f.inHouseFilamentId;
+    const hasRoles = PRINT_JOB_ROLES.some((r) => f[`${r.key}G`] || f[`${r.key}M`]);
+    if (hasRoles) {
+      PRINT_JOB_ROLES.forEach((r) => { slot[`${r.key}G`] = per(f[`${r.key}G`]); slot[`${r.key}M`] = per(f[`${r.key}M`]); });
+    } else {
+      slot.modelG = per(f.grams);
+      slot.modelM = per(f.meters);
+    }
+  });
+  return draft;
+}
+
 function printJobFilamentOptions(filaments, selectedId) {
   return filaments
     .map((f) => `<option value="${escapeAttr(f.id)}" ${selectedId === f.id ? 'selected' : ''}>${escapeHtml(f.filamentType)} — ${escapeHtml(f.colorName)} (${escapeHtml(f.remainingG.toFixed(0))}g left)</option>`)
@@ -5406,11 +5468,15 @@ async function renderPrintJobs() {
     api('/api/settings'),
   ]);
   // Review #5 (todo #144): archived rolls never appear in the picker.
-  const filaments = allFilaments.filter((f) => !f.archived);
+  // (A roll the draft already uses stays listed even if archived since, so
+  // editing an older job doesn't silently drop that filament.)
+  const draftRollIds = new Set(draft.slots.map((s) => s.inHouseFilamentId).filter(Boolean));
+  const filaments = allFilaments.filter((f) => !f.archived || draftRollIds.has(f.id));
+  const editingJob = state.editingPrintJobId ? printJobs.find((j) => j.id === state.editingPrintJobId) : null;
   // Retired printers drop out of the picker, same rule as archived rolls --
   // unless the current draft already points at one.
   const printers = (settings.printers || []).filter((p) => p.active || p.id === draft.printerId);
-  if (!draft.printerId && printers.length) draft.printerId = printers[0].id;
+  if ((!draft.printerId || !printers.some((p) => p.id === draft.printerId)) && printers.length) draft.printerId = printers[0].id;
 
   // Compact single line per colour (owner choice): Model / Tower / Purge /
   // Supports, each a grams + metres pair, all PER COPY like the rest of the
@@ -5445,9 +5511,38 @@ async function renderPrintJobs() {
     })
     .join('');
 
-  const printJobTotalsHtml = () => {
-    const t = draft.slots.reduce((acc, s) => { const x = printJobSlotTotals(s); return { g: acc.g + x.g, m: acc.m + x.m }; }, { g: 0, m: 0 });
-    return `All Filaments (Per Copy, Incl. Purge/Tower/Supports): <strong>${escapeHtml(t.m.toFixed(2))}m</strong> · <strong>${escapeHtml(t.g.toFixed(1))}g</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
+  // Grand-total row under Filament 4 (owner request): each role column
+  // summed across all four colours, plus the overall total -- per copy.
+  const grandTotals = () => {
+    const t = { totalM: 0, totalG: 0 };
+    PRINT_JOB_ROLES.forEach((r) => { t[`${r.key}M`] = 0; t[`${r.key}G`] = 0; });
+    draft.slots.forEach((slot) => {
+      PRINT_JOB_ROLES.forEach((r) => {
+        t[`${r.key}M`] += Number(slot[`${r.key}M`]) || 0;
+        t[`${r.key}G`] += Number(slot[`${r.key}G`]) || 0;
+      });
+    });
+    PRINT_JOB_ROLES.forEach((r) => { t.totalM += t[`${r.key}M`]; t.totalG += t[`${r.key}G`]; });
+    return t;
+  };
+  const fmtGrand = (key, v) => (key.endsWith('M') ? v.toFixed(2) : v.toFixed(1));
+  const grandTotalCell = (label, keyM, keyG, t) => `
+              <div class="field"><span>${label}</span>
+                <div style="display:flex;gap:0.3rem">
+                  <input data-grand="${keyM}" type="text" readonly tabindex="-1" aria-label="${label} metres" value="${escapeAttr(fmtGrand(keyM, t[keyM]))}" style="min-width:0;font-weight:650" />
+                  <input data-grand="${keyG}" type="text" readonly tabindex="-1" aria-label="${label} grams" value="${escapeAttr(fmtGrand(keyG, t[keyG]))}" style="min-width:0;font-weight:650" />
+                </div>
+              </div>`;
+  const grandTotalsRowHtml = () => {
+    const t = grandTotals();
+    return `
+        <div class="stack gap-2" style="padding:0.75rem;border-radius:10px;background:var(--bg-elevated, rgba(127,127,127,0.08))">
+          <div class="field" style="margin:0"><span>All Filaments — Total (Per Copy, ${escapeHtml(String(draft.slots.filter((sl) => sl.inHouseFilamentId).length))} Selected)</span></div>
+          <div class="grid-5">
+            ${PRINT_JOB_ROLES.map((r) => grandTotalCell(`${r.label} (m / g)`, `${r.key}M`, `${r.key}G`, t)).join('')}
+            ${grandTotalCell('Grand Total (m / g)', 'totalM', 'totalG', t)}
+          </div>
+        </div>`;
   };
 
   const preview = draft.preview;
@@ -5508,6 +5603,7 @@ async function renderPrintJobs() {
           <td>${escapeHtml(formatDate(j.datePrinted || j.createdAt))}</td>
           <td>
             <button class="btn small" data-action="${j.listingItemId ? 'update-listing' : 'list-for-sale'}" type="button">${j.listingItemId ? 'Update listing' : 'List for sale'}</button>
+            <button class="btn small" data-action="edit-job" type="button">Edit</button>
             <button class="btn small btn-danger" data-action="delete-job" type="button">Delete</button>
           </td>
         </tr>`,
@@ -5534,13 +5630,15 @@ async function renderPrintJobs() {
   $('#view-print-jobs').innerHTML = `
     <div class="stack gap-4">
       <div class="panel stack gap-4">
-        <div class="section-head"><h3>Log a Print Job</h3></div>
+        <div class="section-head"><h3>${editingJob ? `Edit Print Job — ${escapeHtml(editingJob.itemName)}` : 'Log a Print Job'}</h3></div>
+        ${editingJob ? '<p class="muted" style="margin:0;font-size:0.85rem">Editing re-costs this job with today\'s rates and roll prices. In-house stock is adjusted by the difference only. The date, attachments and any "List for sale" link are kept.</p>' : ''}
         <div class="grid-4">
           <label class="field" style="grid-column:span 3"><span>Item / File Name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
           <label class="field"><span>Quantity (Copies)</span><input id="pj-qty" type="number" min="1" step="1" value="${escapeAttr(String(draft.quantity || 1))}" /></label>
         </div>
 
         <div class="stack gap-3">${slotRows}</div>
+        ${grandTotalsRowHtml()}
         <div>
           <button type="button" class="btn small" id="pj-new-roll-toggle">+ New In-House Roll</button>
           <div id="pj-new-roll-form" class="hidden panel stack gap-2" style="margin-top:0.5rem;padding:0.75rem">
@@ -5558,7 +5656,6 @@ async function renderPrintJobs() {
             <div><button type="button" class="btn small" id="pj-new-roll-save">Save Roll</button></div>
           </div>
         </div>
-        <p class="muted" id="pj-totals" style="font-size:0.85rem">${printJobTotalsHtml()}</p>
 
         <div class="grid-4">
           <label class="field"><span>Printer</span>
@@ -5632,7 +5729,8 @@ async function renderPrintJobs() {
 
         <div class="row-card-actions">
           <button class="btn" id="validate-job" type="button">Validate</button>
-          <button class="btn btn-primary" id="log-job" type="button">Log job &amp; compute cost</button>
+          <button class="btn btn-primary" id="log-job" type="button">${editingJob ? 'Save changes &amp; re-cost' : 'Log job &amp; compute cost'}</button>
+          ${editingJob ? '<button class="btn btn-ghost" id="cancel-edit-job" type="button">Cancel edit</button>' : ''}
         </div>
       </div>
       ${listingPanelHtml}
@@ -5676,8 +5774,8 @@ async function renderPrintJobs() {
     // Cheap live-total update without a full re-render on every keystroke;
     // a full renderPrintJobs() still happens on blur-triggering actions
     // (filament pick, validate, log) so the totals never drift stale.
-    const el = $('#pj-totals');
-    if (el) el.innerHTML = printJobTotalsHtml();
+    const t = grandTotals();
+    $$('[data-grand]').forEach((input) => { input.value = fmtGrand(input.dataset.grand, t[input.dataset.grand]); });
     const sub = printJobSlotTotals(draft.slots[idx]);
     row.querySelector('.pjs-total-m').value = sub.m.toFixed(2);
     row.querySelector('.pjs-total-g').value = sub.g.toFixed(1);
@@ -5763,16 +5861,19 @@ async function renderPrintJobs() {
     syncFormIntoDraft();
     if (!draft.itemName.trim()) return toast('Item name is required');
     try {
-      const { printJob } = await api('/api/print-jobs', { method: 'POST', body: JSON.stringify(readPrintJobPayload(draft)) });
+      const { printJob } = editingJob
+        ? await api(`/api/print-jobs/${editingJob.id}`, { method: 'PUT', body: JSON.stringify(readPrintJobPayload(draft)) })
+        : await api('/api/print-jobs', { method: 'POST', body: JSON.stringify(readPrintJobPayload(draft)) });
       const warningSuffix = printJob._stockWarnings?.length
         ? ` — ⚠ exceeds recorded stock: ${printJob._stockWarnings.map((w) => w.name).join(', ')}`
         : '';
-      toast(`Cost: ${formatRand(printJob.totalCost)} — Minimum: ${formatRand(printJob.sellingPrice)} · Recommended: ${formatRand(printJob.recommendedSellingPrice)} · Final: ${formatRand(printJob.finalSellingPrice)}${warningSuffix}`);
+      toast(`${editingJob ? 'Updated. ' : ''}Cost: ${formatRand(printJob.totalCost)} — Minimum: ${formatRand(printJob.sellingPrice)} · Recommended: ${formatRand(printJob.recommendedSellingPrice)} · Final: ${formatRand(printJob.finalSellingPrice)}${warningSuffix}`);
 
       if (draft.modelFile) await uploadPrintJobAsset(printJob.id, 'file', draft.modelFile);
       if (draft.modelImage) await uploadPrintJobAsset(printJob.id, 'image', draft.modelImage);
 
       // Keep the printer picked -- consecutive jobs usually run on the same one.
+      state.editingPrintJobId = null;
       state.newPrintJob = { ...blankPrintJob(), printerId: draft.printerId };
       await renderPrintJobs();
     } catch (ex) {
@@ -5780,12 +5881,33 @@ async function renderPrintJobs() {
     }
   });
 
+  $('#cancel-edit-job')?.addEventListener('click', () => {
+    state.editingPrintJobId = null;
+    state.newPrintJob = { ...blankPrintJob(), printerId: draft.printerId };
+    renderPrintJobs();
+  });
+
   $$('#view-print-jobs tbody tr[data-id]').forEach((tr) => {
     const jobId = tr.dataset.id;
+
+    tr.querySelector('[data-action="edit-job"]').addEventListener('click', async () => {
+      const job = printJobs.find((j) => j.id === jobId);
+      if (job.filaments.length > MAX_PRINT_JOB_FILAMENT_SLOTS) {
+        return toast(`This job uses ${job.filaments.length} filaments -- the form holds ${MAX_PRINT_JOB_FILAMENT_SLOTS}, so it can't be edited here.`);
+      }
+      state.editingPrintJobId = jobId;
+      state.newPrintJob = printJobToDraft(job);
+      await renderPrintJobs();
+      $('#view-print-jobs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     tr.querySelector('[data-action="delete-job"]').addEventListener('click', async () => {
       if (!confirm('Delete this print job?')) return;
       await api(`/api/print-jobs/${jobId}`, { method: 'DELETE' });
+      if (state.editingPrintJobId === jobId) {
+        state.editingPrintJobId = null;
+        state.newPrintJob = blankPrintJob();
+      }
       await renderPrintJobs();
     });
 
