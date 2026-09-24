@@ -123,7 +123,7 @@ function deliveryNote(kind) {
 const SITE = {
   name: 'Lapanza 3D Creative Lab',
   whatsapp:
-    'https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%20new%203D%20site.',
+    'https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%203D%20site.',
   email: 'lapanzaonline@gmail.com',
   phone: '082 663 9608',
   phoneTel: '+27826639608',

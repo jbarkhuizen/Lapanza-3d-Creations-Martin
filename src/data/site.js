@@ -12,7 +12,7 @@ export const SITE = {
   address: '23 Gladiator Rd, Pierre van Ryneveld, Centurion',
   hours: 'By appointment',
   whatsapp:
-    'https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%20new%203D%20site.',
+    'https://api.whatsapp.com/send?phone=27826639608&text=Hello%20Lapanza%2C%20I%20am%20contacting%20you%20from%20your%203D%20site.',
   social: {
     facebook: 'https://www.facebook.com/profile.php?id=61591435717039',
     instagram: 'https://www.instagram.com/lapanza_beauty_lifestyle/',
