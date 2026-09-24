@@ -1017,6 +1017,17 @@ function ensurePrintJobColumns(db) {
   if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'reference_image_original_name')) {
     db.exec('ALTER TABLE print_jobs ADD COLUMN reference_image_original_name TEXT');
   }
+  // Recommended vs Final selling price (2026-09-24, owner request): the
+  // admin-editable price that used to be labelled "Final Selling Price" is
+  // now "Recommended Selling Price", and a separate Final Selling Price
+  // (what "List for sale" actually uses) sits beside it. Backfilled ONCE,
+  // at column creation, from final_selling_price -- every existing job's
+  // typed price becomes both its recommendation and its final price, so
+  // nothing already listed changes.
+  if (!hasColumn(db, 'PRAGMA table_info(print_jobs)', 'recommended_selling_price')) {
+    db.exec('ALTER TABLE print_jobs ADD COLUMN recommended_selling_price REAL');
+    db.exec('UPDATE print_jobs SET recommended_selling_price = COALESCE(final_selling_price, selling_price)');
+  }
   // Per-printer power draw (2026-09-23): the printer a job ran on, snapshotted
   // by name + watts at log time -- same "cost is a snapshot, never re-priced"
   // rule as power_cost itself, so renaming/re-rating a printer in Settings

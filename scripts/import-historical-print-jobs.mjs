@@ -138,11 +138,11 @@ function run() {
     `INSERT INTO print_jobs
       (id, item_name, total_grams, total_meters, print_time_minutes, design_hours, setup_hours, post_processing_hours,
        markup_pct, filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price,
-       final_selling_price, status, date_printed, created_at)
+       final_selling_price, recommended_selling_price, status, date_printed, created_at)
      VALUES
       (@id, @item_name, @total_grams, @total_meters, @print_time_minutes, 0, 0, 0,
        @markup_pct, @filament_cost, @power_cost, 0, @running_cost, @total_cost, @markup_amount, @selling_price,
-       @final_selling_price, 'Printed', @date_printed, @date_printed)`,
+       @final_selling_price, @final_selling_price, 'Printed', @date_printed, @date_printed)`,
   );
   const insertSlot = db.prepare(
     `INSERT INTO print_job_filaments (id, print_job_id, in_house_filament_id, grams, meters, cost, slot_order)

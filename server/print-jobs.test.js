@@ -383,3 +383,33 @@ test('createPrintJob sums model/tower/purge/support into the slot total, stores 
   assert.strictEqual(job.powerCost, 1.99); // 1h x 2 x 0.2kW x R4.97 = 1.988
   db.close();
 });
+
+// Recommended vs Final selling price (2026-09-24)
+test('createPrintJob: blank Recommended defaults to the minimum, blank Final defaults to Recommended', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const base = { itemName: 'Priced Widget', filaments: [{ inHouseFilamentId: f.id, modelG: 50, modelM: 16.75 }], printTimeMinutes: 30 };
+  const blank = createPrintJob(base, db);
+  assert.strictEqual(blank.recommendedSellingPrice, blank.sellingPrice);
+  assert.strictEqual(blank.finalSellingPrice, blank.sellingPrice);
+  const recOnly = createPrintJob({ ...base, recommendedSellingPrice: 120 }, db);
+  assert.strictEqual(recOnly.recommendedSellingPrice, 120);
+  assert.strictEqual(recOnly.finalSellingPrice, 120);
+  const both = createPrintJob({ ...base, recommendedSellingPrice: 120, finalSellingPrice: 99 }, db);
+  assert.strictEqual(both.recommendedSellingPrice, 120);
+  assert.strictEqual(both.finalSellingPrice, 99);
+  db.close();
+});
+
+test('updatePrintJob edits Recommended and Final independently; blank keeps the existing value', () => {
+  const db = openDb(':memory:');
+  const f = makeFilament(db);
+  const job = createPrintJob({ itemName: 'Edit Widget', filaments: [{ inHouseFilamentId: f.id, modelG: 10 }], recommendedSellingPrice: 80, finalSellingPrice: 90 }, db);
+  const rec = updatePrintJob(job.id, { recommendedSellingPrice: 85 }, db);
+  assert.strictEqual(rec.recommendedSellingPrice, 85);
+  assert.strictEqual(rec.finalSellingPrice, 90);
+  const fin = updatePrintJob(job.id, { finalSellingPrice: 95, recommendedSellingPrice: '' }, db);
+  assert.strictEqual(fin.recommendedSellingPrice, 85);
+  assert.strictEqual(fin.finalSellingPrice, 95);
+  db.close();
+});

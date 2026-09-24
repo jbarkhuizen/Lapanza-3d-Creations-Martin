@@ -201,7 +201,10 @@ code {
 .nav-divider { border: 0; border-top: 1px solid var(--line); margin: 0.5rem 0.4rem; }
 .sidebar-foot { display: grid; gap: 0.45rem; }
 
-.main { padding: 1.5rem 1.75rem 3rem; }
+/* min-width:0 -- as a grid item, .main otherwise defaults to min-width:auto
+   and grows to its widest child's min-content, pushing every admin page a
+   little past the viewport (horizontal scrollbar). */
+.main { padding: 1.5rem 1.75rem 3rem; min-width: 0; }
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -469,6 +472,14 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
 }
+.grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+@media (max-width: 1100px) {
+  .grid-5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .field { display: flex; flex-direction: column; gap: 0.35rem; }
 .field span, .field-label {
   font-size: 0.78rem;
@@ -619,7 +630,7 @@ table.todo-table tr.desc-expanded .todo-desc-text { -webkit-line-clamp: unset; d
     border-bottom: 1px solid var(--line);
   }
   .sidebar-nav { flex-direction: row; flex-wrap: wrap; }
-  .stats, .editor-layout, .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .stats, .editor-layout, .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
 }
 
 /* #139: rich-text editor (product descriptions / details / colour notes) */

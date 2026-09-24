@@ -34,9 +34,12 @@ function rowToJob(row, filamentRows = []) {
     // Purely computed (totalCost + markup) -- the floor, never overridden.
     // Labelled "Minimum Selling Price" in the admin UI.
     sellingPrice: row.selling_price,
-    // Admin-editable, defaults to sellingPrice at creation if not supplied.
-    // What actually gets used as the price if/when this job is listed for
-    // sale (see listPrintJobForSale below).
+    // Admin-editable suggestion, defaults to sellingPrice at creation if not
+    // supplied. Labelled "Recommended Selling Price" (2026-09-24).
+    recommendedSellingPrice: row.recommended_selling_price ?? row.final_selling_price,
+    // Admin-editable, defaults to recommendedSellingPrice at creation if not
+    // supplied. What actually gets used as the price if/when this job is
+    // listed for sale (see listPrintJobForSale below).
     finalSellingPrice: row.final_selling_price,
     referenceFilePath: row.reference_file_path,
     referenceImagePath: row.reference_image_path,
@@ -133,6 +136,11 @@ export function computeJobCost(input, settings, resolvedSlots) {
     markupAmount,
     sellingPrice,
   };
+}
+
+function positiveOr(value, fallback) {
+  const n = Number(value);
+  return value !== undefined && value !== null && value !== '' && Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 function round2(value) {
@@ -249,8 +257,9 @@ export function createPrintJob(data, db = getDb()) {
   // common case of just accepting the calculated price without typing it
   // again, while still letting an admin override it (rounding up, charging
   // more for a popular design, etc).
-  const finalSellingPriceInput = Number(data.finalSellingPrice);
-  const finalSellingPrice = Number.isFinite(finalSellingPriceInput) && finalSellingPriceInput > 0 ? finalSellingPriceInput : cost.sellingPrice;
+  // Blank Recommended -> the computed minimum; blank Final -> Recommended.
+  const recommendedSellingPrice = positiveOr(data.recommendedSellingPrice, cost.sellingPrice);
+  const finalSellingPrice = positiveOr(data.finalSellingPrice, recommendedSellingPrice);
 
   const id = randomUUID();
   const now = new Date().toISOString();
@@ -259,11 +268,11 @@ export function createPrintJob(data, db = getDb()) {
       `INSERT INTO print_jobs
         (id, item_name, quantity, total_grams, total_meters, print_time_minutes, design_hours, setup_hours, post_processing_hours,
          markup_pct, filament_cost, power_cost, labour_cost, running_cost, total_cost, markup_amount, selling_price,
-         final_selling_price, status, date_printed, created_at, printer_id, printer_name, printer_watts)
+         final_selling_price, recommended_selling_price, status, date_printed, created_at, printer_id, printer_name, printer_watts)
        VALUES
         (@id, @item_name, @quantity, @total_grams, @total_meters, @print_time_minutes, @design_hours, @setup_hours, @post_processing_hours,
          @markup_pct, @filament_cost, @power_cost, @labour_cost, @running_cost, @total_cost, @markup_amount, @selling_price,
-         @final_selling_price, @status, @date_printed, @created_at, @printer_id, @printer_name, @printer_watts)`,
+         @final_selling_price, @recommended_selling_price, @status, @date_printed, @created_at, @printer_id, @printer_name, @printer_watts)`,
     ).run({
       id,
       item_name: String(data.itemName).trim(),
@@ -282,6 +291,7 @@ export function createPrintJob(data, db = getDb()) {
       total_cost: cost.totalCost,
       markup_amount: cost.markupAmount,
       final_selling_price: finalSellingPrice,
+      recommended_selling_price: recommendedSellingPrice,
       selling_price: cost.sellingPrice,
       status: data.status === 'Estimate' ? 'Estimate' : 'Printed',
       date_printed: data.datePrinted || now,
@@ -337,11 +347,16 @@ export function updatePrintJob(id, data, db = getDb()) {
   const existing = db.prepare('SELECT * FROM print_jobs WHERE id = ?').get(id);
   if (!existing) return null;
   const status = data.status !== undefined && STATUSES.includes(data.status) ? data.status : existing.status;
-  const finalSellingPrice =
-    data.finalSellingPrice !== undefined && Number(data.finalSellingPrice) > 0
-      ? Number(data.finalSellingPrice)
-      : existing.final_selling_price;
-  db.prepare('UPDATE print_jobs SET status = ?, final_selling_price = ? WHERE id = ?').run(status, finalSellingPrice, id);
+  // Either price can be edited on its own (inline table cells); a blank or
+  // non-positive value keeps whatever was already set.
+  const finalSellingPrice = positiveOr(data.finalSellingPrice, existing.final_selling_price);
+  const recommendedSellingPrice = positiveOr(data.recommendedSellingPrice, existing.recommended_selling_price);
+  db.prepare('UPDATE print_jobs SET status = ?, final_selling_price = ?, recommended_selling_price = ? WHERE id = ?').run(
+    status,
+    finalSellingPrice,
+    recommendedSellingPrice,
+    id,
+  );
   return getPrintJob(id, db);
 }
 

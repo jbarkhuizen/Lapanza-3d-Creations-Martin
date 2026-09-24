@@ -2356,7 +2356,7 @@ app.post('/api/print-jobs', requireAuth, (req, res) => {
 app.patch('/api/print-jobs/:id', requireAuth, (req, res) => {
   const job = updatePrintJob(req.params.id, req.body || {});
   if (!job) return res.status(404).json({ error: 'Print job not found' });
-  recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Print job "${job.itemName}": status=${job.status}, finalSellingPrice=${formatRand(job.finalSellingPrice)}` });
+  recordAuditEvent({ eventType: AUDIT_EVENTS.STOCK_UPDATED, adminId: req.adminId, username: req.adminUsername, ...requestMeta(req), detail: `Print job "${job.itemName}": status=${job.status}, recommendedSellingPrice=${formatRand(job.recommendedSellingPrice)}, finalSellingPrice=${formatRand(job.finalSellingPrice)}` });
   res.json({ printJob: job });
 });
 

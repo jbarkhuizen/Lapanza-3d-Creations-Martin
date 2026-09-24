@@ -5328,8 +5328,8 @@ const MAX_PRINT_JOB_FILAMENT_SLOTS = 4;
 // server/print-jobs.js. A slot's total grams/meters is the sum of all four.
 const PRINT_JOB_ROLES = [
   { key: 'model', label: 'Model' },
-  { key: 'tower', label: 'Tower' },
   { key: 'purge', label: 'Purge' },
+  { key: 'tower', label: 'Tower' },
   { key: 'support', label: 'Supports' },
 ];
 
@@ -5358,7 +5358,7 @@ function blankPrintJob() {
     // combined into the single printTimeMinutes the API/DB actually store
     // (see readPrintJobPayload) only when the payload is built.
     printTimeHours: 0, printTimeMins: 0, designHours: 0, setupHours: 0, postProcessingHours: 0, markupPct: '',
-    status: 'Printed', finalSellingPrice: '',
+    status: 'Printed', recommendedSellingPrice: '', finalSellingPrice: '',
     modelFile: null, modelImage: null,
     preview: null,
   };
@@ -5392,6 +5392,7 @@ function readPrintJobPayload(draft) {
     postProcessingHours: Number(draft.postProcessingHours) || 0,
     markupPct: draft.markupPct === '' ? undefined : Number(draft.markupPct),
     status: draft.status,
+    recommendedSellingPrice: draft.recommendedSellingPrice === '' ? undefined : Number(draft.recommendedSellingPrice),
     finalSellingPrice: draft.finalSellingPrice === '' ? undefined : Number(draft.finalSellingPrice),
   };
 }
@@ -5418,21 +5419,27 @@ async function renderPrintJobs() {
     .map((slot, idx) => {
       const sub = printJobSlotTotals(slot);
       return `
-        <div class="stack gap-1" data-slot-idx="${idx}" style="padding-bottom:0.5rem;border-bottom:1px solid var(--line, rgba(0,0,0,0.08))">
-          <label class="field"><span>Filament ${idx + 1}${idx === 0 ? '' : ' (optional)'} <span class="muted pjs-subtotal">${sub.g || sub.m ? `= ${escapeHtml(sub.g.toFixed(1))}g / ${escapeHtml(sub.m.toFixed(2))}m per copy` : ''}</span></span>
+        <div class="stack gap-2" data-slot-idx="${idx}" style="padding-bottom:0.75rem;border-bottom:1px solid var(--line, rgba(0,0,0,0.08))">
+          <label class="field"><span>Filament ${idx + 1}${idx === 0 ? '' : ' (optional)'}</span>
             <select class="pjs-filament">
               <option value="">${idx === 0 ? '— Choose —' : '— None —'}</option>
               ${printJobFilamentOptions(filaments, slot.inHouseFilamentId)}
             </select>
           </label>
-          <div class="grid-4">
+          <div class="grid-5">
             ${PRINT_JOB_ROLES.map((r) => `
-              <div class="field"><span>${r.label} (g / m)</span>
+              <div class="field"><span>${r.label} (m / g)</span>
                 <div style="display:flex;gap:0.3rem">
-                  <input class="pjs-role" data-field="${r.key}G" type="number" min="0" step="0.01" placeholder="g" aria-label="${r.label} grams" value="${escapeAttr(String(slot[`${r.key}G`]))}" style="min-width:0" />
                   <input class="pjs-role" data-field="${r.key}M" type="number" min="0" step="0.01" placeholder="m" aria-label="${r.label} metres" value="${escapeAttr(String(slot[`${r.key}M`]))}" style="min-width:0" />
+                  <input class="pjs-role" data-field="${r.key}G" type="number" min="0" step="0.01" placeholder="g" aria-label="${r.label} grams" value="${escapeAttr(String(slot[`${r.key}G`]))}" style="min-width:0" />
                 </div>
               </div>`).join('')}
+            <div class="field"><span>Total (m / g, Per Copy)</span>
+              <div style="display:flex;gap:0.3rem">
+                <input class="pjs-total-m" type="text" readonly tabindex="-1" aria-label="Total metres" value="${escapeAttr(sub.m.toFixed(2))}" style="min-width:0;font-weight:650" />
+                <input class="pjs-total-g" type="text" readonly tabindex="-1" aria-label="Total grams" value="${escapeAttr(sub.g.toFixed(1))}" style="min-width:0;font-weight:650" />
+              </div>
+            </div>
           </div>
         </div>`;
     })
@@ -5440,7 +5447,7 @@ async function renderPrintJobs() {
 
   const printJobTotalsHtml = () => {
     const t = draft.slots.reduce((acc, s) => { const x = printJobSlotTotals(s); return { g: acc.g + x.g, m: acc.m + x.m }; }, { g: 0, m: 0 });
-    return `Totals (Per Copy, Incl. Tower/Purge/Supports): <strong>${escapeHtml(t.g.toFixed(1))}g</strong> · <strong>${escapeHtml(t.m.toFixed(2))}m</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
+    return `All Filaments (Per Copy, Incl. Purge/Tower/Supports): <strong>${escapeHtml(t.m.toFixed(2))}m</strong> · <strong>${escapeHtml(t.g.toFixed(1))}g</strong> across ${escapeHtml(String(draft.slots.filter((s) => s.inHouseFilamentId).length))} filament(s)`;
   };
 
   const preview = draft.preview;
@@ -5451,7 +5458,7 @@ async function renderPrintJobs() {
       <div class="panel stack gap-2" style="background:var(--panel-2, transparent)">
         <div class="section-head"><h3>Validation Result</h3></div>
         <p>Filament cost: ${formatRand(preview.filamentCost)} · Power: ${formatRand(preview.powerCost)}${preview.printer ? ` <span class="muted">(${escapeHtml(preview.printer.name)}, ${escapeHtml(String(preview.printer.watts))}W × ${escapeHtml(preview.printTimeHours.toFixed(2))}h @ ${formatRand(settings.electricityRate)}/kWh)</span>` : ''} · Labour: ${formatRand(preview.labourCost)} · Running: ${formatRand(preview.runningCost)}</p>
-        <p><strong>Total cost: ${formatRand(preview.totalCost)} — Markup: ${formatRand(preview.markupAmount)} — Selling price: ${formatRand(preview.sellingPrice)}${(preview.quantity || 1) > 1 ? ` (${preview.quantity} copies — ${formatRand(Math.round((preview.sellingPrice / preview.quantity) * 100) / 100)} each)` : ''}</strong></p>
+        <p><strong>Total cost: ${formatRand(preview.totalCost)} — Markup: ${formatRand(preview.markupAmount)} — Minimum selling price: ${formatRand(preview.sellingPrice)}${(preview.quantity || 1) > 1 ? ` (${preview.quantity} copies — ${formatRand(Math.round((preview.sellingPrice / preview.quantity) * 100) / 100)} each)` : ''}</strong></p>
         ${stockWarningsHtml(preview.stockWarnings)}
       </div>` : '';
 
@@ -5487,10 +5494,11 @@ async function renderPrintJobs() {
               </div>
             </div>
           </td>
-          <td>${escapeHtml(j.totalGrams.toFixed(1))}g / ${escapeHtml(j.totalMeters.toFixed(2))}m</td>
+          <td>${escapeHtml(j.totalMeters.toFixed(2))}m / ${escapeHtml(j.totalGrams.toFixed(1))}g</td>
           <td>${formatRand(j.totalCost)}</td>
           <td>${formatRand(j.sellingPrice)}</td>
-          <td><span class="muted" style="margin-right:0.25rem">R</span><input class="pj-final-price-cell" type="number" min="0" step="0.01" value="${escapeAttr(String(j.finalSellingPrice ?? ''))}" style="width:80px" /></td>
+          <td style="white-space:nowrap"><span class="muted" style="margin-right:0.25rem">R</span><input class="pj-price-cell" data-price-field="recommendedSellingPrice" type="number" min="0" step="0.01" value="${escapeAttr(String(j.recommendedSellingPrice ?? ''))}" style="width:80px" /></td>
+          <td style="white-space:nowrap"><span class="muted" style="margin-right:0.25rem">R</span><input class="pj-price-cell" data-price-field="finalSellingPrice" type="number" min="0" step="0.01" value="${escapeAttr(String(j.finalSellingPrice ?? ''))}" style="width:80px" /></td>
           <td>
             <select class="pj-status-cell">
               <option value="Printed" ${j.status === 'Printed' ? 'selected' : ''}>Printed</option>
@@ -5525,12 +5533,14 @@ async function renderPrintJobs() {
 
   $('#view-print-jobs').innerHTML = `
     <div class="stack gap-4">
-      <div class="panel stack gap-3" style="max-width:900px">
+      <div class="panel stack gap-4">
         <div class="section-head"><h3>Log a Print Job</h3></div>
-        <label class="field"><span>Item / File Name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
-        <label class="field"><span>Quantity (Copies Printed — Filament, Print Time &amp; Post-processing Below Are Per Copy)</span><input id="pj-qty" type="number" min="1" step="1" value="${escapeAttr(String(draft.quantity || 1))}" /></label>
+        <div class="grid-4">
+          <label class="field" style="grid-column:span 3"><span>Item / File Name</span><input id="pj-name" value="${escapeAttr(draft.itemName)}" /></label>
+          <label class="field"><span>Quantity (Copies)</span><input id="pj-qty" type="number" min="1" step="1" value="${escapeAttr(String(draft.quantity || 1))}" /></label>
+        </div>
 
-        <div class="stack gap-2">${slotRows}</div>
+        <div class="stack gap-3">${slotRows}</div>
         <div>
           <button type="button" class="btn small" id="pj-new-roll-toggle">+ New In-House Roll</button>
           <div id="pj-new-roll-form" class="hidden panel stack gap-2" style="margin-top:0.5rem;padding:0.75rem">
@@ -5569,30 +5579,51 @@ async function renderPrintJobs() {
         </div>
         <div class="grid-4">
           <label class="field"><span>Post-processing (hrs, Per Copy)</span><input id="pj-post-hrs" type="number" min="0" step="0.25" value="${escapeAttr(String(draft.postProcessingHours))}" /></label>
-        </div>
-        <div class="grid-3">
-          <label class="field"><span>Markup Override (Fraction, Blank = Settings Default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
+          <label class="field"><span>Markup Override (Blank = Default)</span><input id="pj-markup" type="number" min="0" step="0.05" value="${escapeAttr(String(draft.markupPct))}" placeholder="e.g. 0.25 = 25%" /></label>
           <label class="field"><span>Status</span>
             <select id="pj-status">
               <option value="Printed" ${draft.status === 'Printed' ? 'selected' : ''}>Printed</option>
               <option value="Estimate" ${draft.status === 'Estimate' ? 'selected' : ''}>Estimate</option>
             </select>
           </label>
-          <label class="field"><span>Final Selling Price (Blank = Minimum Selling Price)</span>
+        </div>
+        <div class="grid-4" style="align-items:end">
+          <div class="field"><span>Minimum Selling Price (Calculated)</span>
             <div style="display:flex;align-items:center;gap:0.4rem">
               <span class="muted">R</span>
-              <input id="pj-final-price" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.finalSellingPrice))}" placeholder="${preview ? escapeAttr(String(preview.sellingPrice)) : '0.00'}" style="flex:1" />
+              <input type="text" readonly tabindex="-1" value="${preview ? escapeAttr(preview.sellingPrice.toFixed(2)) : ''}" placeholder="Click Validate" style="flex:1" />
+            </div>
+          </div>
+          <label class="field"><span>Recommended Selling Price</span>
+            <div style="display:flex;align-items:center;gap:0.4rem">
+              <span class="muted">R</span>
+              <input id="pj-recommended-price" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.recommendedSellingPrice))}" placeholder="${preview ? escapeAttr(String(preview.sellingPrice)) : '0.00'}" style="flex:1" />
+            </div>
+          </label>
+          <label class="field"><span>Final Selling Price</span>
+            <div style="display:flex;align-items:center;gap:0.4rem">
+              <span class="muted">R</span>
+              <input id="pj-final-price" type="number" min="0" step="0.01" value="${escapeAttr(String(draft.finalSellingPrice))}" placeholder="${escapeAttr(String(draft.recommendedSellingPrice || (preview ? preview.sellingPrice : '0.00')))}" style="flex:1" />
             </div>
           </label>
         </div>
+        <p class="muted" style="margin:-0.5rem 0 0;font-size:0.8rem">Blank Recommended = Minimum · Blank Final = Recommended · <strong>Final</strong> is the price used when you "List for sale".</p>
 
         <div class="grid-2">
           <div class="field"><span>Model File (Optional) — STL/3MF/OBJ/gcode/zip/PDF</span>
-            <label class="btn small" for="pj-model-file">Choose File</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <label class="btn small" for="pj-model-file">${draft.modelFile ? 'Replace File' : 'Choose File'}</label>
+              <span class="muted" style="font-size:0.85rem">${draft.modelFile ? escapeHtml(draft.modelFile.name) : 'No file chosen'}</span>
+              ${draft.modelFile ? '<button type="button" class="btn small btn-ghost" data-clear-asset="modelFile">Remove</button>' : ''}
+            </div>
             <input type="file" class="hidden" id="pj-model-file" accept=".stl,.3mf,.obj,.gcode,.zip,.pdf" />
           </div>
           <div class="field"><span>Reference Photo (Optional)</span>
-            <label class="btn small" for="pj-model-image">Choose File</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+              <label class="btn small" for="pj-model-image">${draft.modelImage ? 'Replace Photo' : 'Choose File'}</label>
+              <span class="muted" style="font-size:0.85rem">${draft.modelImage ? escapeHtml(draft.modelImage.name) : 'No photo chosen'}</span>
+              ${draft.modelImage ? '<button type="button" class="btn small btn-ghost" data-clear-asset="modelImage">Remove</button>' : ''}
+            </div>
             <input type="file" class="hidden" id="pj-model-image" accept="image/jpeg,image/png,image/webp" />
           </div>
         </div>
@@ -5607,8 +5638,8 @@ async function renderPrintJobs() {
       ${listingPanelHtml}
       <div class="panel table-wrap">
         <table class="catalog">
-          <thead><tr><th>Item</th><th>Attachments</th><th>Filament used</th><th>Cost</th><th>Min. selling price</th><th>Final selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="9"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
+          <thead><tr><th>Item</th><th>Attachments</th><th>Filament used (m / g)</th><th>Cost</th><th>Min. selling price</th><th>Recommended selling price</th><th>Final selling price</th><th>Status</th><th>Date</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="10"><div class="empty">No print jobs logged yet</div></td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -5648,8 +5679,8 @@ async function renderPrintJobs() {
     const el = $('#pj-totals');
     if (el) el.innerHTML = printJobTotalsHtml();
     const sub = printJobSlotTotals(draft.slots[idx]);
-    const subEl = row.querySelector('.pjs-subtotal');
-    if (subEl) subEl.textContent = sub.g || sub.m ? `= ${sub.g.toFixed(1)}g / ${sub.m.toFixed(2)}m per copy` : '';
+    row.querySelector('.pjs-total-m').value = sub.m.toFixed(2);
+    row.querySelector('.pjs-total-g').value = sub.g.toFixed(1);
   }
 
   function syncFormIntoDraft() {
@@ -5663,8 +5694,29 @@ async function renderPrintJobs() {
     draft.postProcessingHours = $('#pj-post-hrs').value;
     draft.markupPct = $('#pj-markup').value;
     draft.status = $('#pj-status').value;
+    draft.recommendedSellingPrice = $('#pj-recommended-price').value;
     draft.finalSellingPrice = $('#pj-final-price').value;
   }
+
+  // The chosen File objects live on the draft, not just in the <input>:
+  // every re-render (Validate, picking a filament/printer, + New Roll)
+  // rebuilds the form and a file input's selection can't be restored, which
+  // is how attachments chosen before Validate were silently never uploaded.
+  [['#pj-model-file', 'modelFile'], ['#pj-model-image', 'modelImage']].forEach(([sel, key]) => {
+    $(sel).addEventListener('change', (e) => {
+      if (!e.target.files[0]) return;
+      syncFormIntoDraft();
+      draft[key] = e.target.files[0];
+      renderPrintJobs();
+    });
+  });
+  $$('[data-clear-asset]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      syncFormIntoDraft();
+      draft[btn.dataset.clearAsset] = null;
+      renderPrintJobs();
+    });
+  });
 
   // Backlog #135: log a brand-new in-house roll without leaving the
   // print-job form. On save, the new roll auto-selects into the first
@@ -5715,12 +5767,10 @@ async function renderPrintJobs() {
       const warningSuffix = printJob._stockWarnings?.length
         ? ` — ⚠ exceeds recorded stock: ${printJob._stockWarnings.map((w) => w.name).join(', ')}`
         : '';
-      toast(`Cost: ${formatRand(printJob.totalCost)} — Minimum selling price: ${formatRand(printJob.sellingPrice)}${warningSuffix}`);
+      toast(`Cost: ${formatRand(printJob.totalCost)} — Minimum: ${formatRand(printJob.sellingPrice)} · Recommended: ${formatRand(printJob.recommendedSellingPrice)} · Final: ${formatRand(printJob.finalSellingPrice)}${warningSuffix}`);
 
-      const fileInput = $('#pj-model-file');
-      const imageInput = $('#pj-model-image');
-      if (fileInput.files[0]) await uploadPrintJobAsset(printJob.id, 'file', fileInput.files[0]);
-      if (imageInput.files[0]) await uploadPrintJobAsset(printJob.id, 'image', imageInput.files[0]);
+      if (draft.modelFile) await uploadPrintJobAsset(printJob.id, 'file', draft.modelFile);
+      if (draft.modelImage) await uploadPrintJobAsset(printJob.id, 'image', draft.modelImage);
 
       // Keep the printer picked -- consecutive jobs usually run on the same one.
       state.newPrintJob = { ...blankPrintJob(), printerId: draft.printerId };
@@ -5769,15 +5819,18 @@ async function renderPrintJobs() {
         await renderPrintJobs();
       }
     });
-    tr.querySelector('.pj-final-price-cell').addEventListener('blur', async (e) => {
-      const value = Number(e.target.value);
-      if (!value || value <= 0) return; // ignore an accidental clear -- keeps whatever price was already set
-      try {
-        await api(`/api/print-jobs/${jobId}`, { method: 'PATCH', body: JSON.stringify({ finalSellingPrice: value }) });
-        toast('Final selling price updated');
-      } catch (ex) {
-        toast(ex.message);
-      }
+    tr.querySelectorAll('.pj-price-cell').forEach((input) => {
+      input.addEventListener('blur', async (e) => {
+        const value = Number(e.target.value);
+        if (!value || value <= 0) return; // ignore an accidental clear -- keeps whatever price was already set
+        const field = e.target.dataset.priceField;
+        try {
+          await api(`/api/print-jobs/${jobId}`, { method: 'PATCH', body: JSON.stringify({ [field]: value }) });
+          toast(field === 'finalSellingPrice' ? 'Final selling price updated' : 'Recommended selling price updated');
+        } catch (ex) {
+          toast(ex.message);
+        }
+      });
     });
 
     const listBtn = tr.querySelector('[data-action="list-for-sale"]');
